@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Счёт на оплату</title>
+
+<style>
+body {
+    font-family: Arial;
+    font-size: 13px;
+    padding: 30px;
+    color: #000;
+    width: 190mm;
+    margin: auto;
+}
+
+.top-block {
+    display: flex;
+    justify-content: space-between;
+}
+
+.warning {
+    width: 600px;
+    text-align: right;
+    white-space: normal;
+    word-break: keep-all;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+td, th {
+    border: 1px solid #000;
+    padding: 6px;
+}
+
+.no-border td {
+    border: none;
+}
+
+.center { text-align: center; }
+.right { text-align: right; }
+.bold { font-weight: bold; }
+
+h2 {
+    margin: 20px 0 10px 0;
+}
+
+hr {
+    margin: 10px 0;
+}
+
+.totals {
+    width: 300px;
+    margin-left: auto;
+    margin-top: 10px;
+}
+
+.totals div {
+    display: flex;
+    justify-content: space-between;
+}
+
+@page {
+    size: A4 portrait;
+    margin: 15mm;
+}
+
+@media print {
+    body {
+        width: 210mm;
+    }
+}
+
+.btn-pdf {
+    padding: 10px 20px;
+    background: black;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+@media print {
+    .btn-pdf {
+        display: none;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- 🔝 ВЕРХ -->
+<div class="top-block">
+    <div></div>
+
+    <div class="warning">
+        Внимание! Оплата данного счета означает согласие с условиями поставки товара.<br>
+        Уведомление об оплате обязательно, в противном случае не гарантируется наличие<br>
+        товара на складе. Товар отпускается по факту прихода денег на р/с Поставщика<br>
+		самовывозом, при наличии доверенности и документов удостоверяющих личность.
+    </div>
+</div>
+
+<br>
+
+<div class="bold">Образец платежного поручения</div>
+
+<table>
+<tr>
+<td style="width:50%;">
+<b>Бенефициар:</b><br>
+{{ company.name }}
+</td>
+
+<td class="center" style="width:25%;">
+<b>ИИК</b><br>
+{{ company.iik }}
+</td>
+
+<td class="center" style="width:25%;">
+<b>Кбе</b><br>
+{{ company.kbe or "19" }}
+</td>
+</tr>
+
+<tr>
+<td>
+БИН: {{ company.bin }}<br>
+Банк бенефициара:<br>
+{{ company.bank }}
+</td>
+
+<td class="center">
+<b>БИК</b><br>
+{{ company.bik }}
+</td>
+
+<td class="center">
+<b>Код назначения платежа</b><br>
+{{ company.knp or "890" }}
+</td>
+</tr>
+</table>
+
+<h2>
+Счет на оплату №{{ sale.id }} от {{ sale_date }}
+</h2>
+
+<hr>
+
+<table class="no-border">
+<tr>
+<td style="width:150px;"><b>Поставщик:</b></td>
+<td>{{ company.name }}, {{ company.address or "" }}</td>
+</tr>
+
+<tr>
+<td><b>Покупатель:</b></td>
+<td>
+ИИН/БИН: {{ client.iin or "" }},
+{{ client.company_name or client.full_name }},
+{{ client.address or "" }}
+</td>
+</tr>
+
+<tr>
+<td><b>Договор:</b></td>
+<td>{{ sale.contract or "Без договора" }}</td>
+</tr>
+</table>
+
+<br>
+
+<!-- 🔥 ТАБЛИЦА -->
+<table>
+<tr class="center bold">
+<td style="width:40px;">№</td>
+<td style="width:60px;">Код</td>
+<td>Наименование</td>
+<td style="width:80px;">Кол-во</td>
+<td style="width:80px;">Ед.изм.</td>
+<td style="width:120px;">Цена</td>
+<td style="width:120px;">Сумма</td>
+</tr>
+
+{% for i in items %}
+<tr>
+<td class="center">{{ loop.index }}</td>
+<td class="center">{{ i.code or "1" }}</td>
+<td>{{ i.name }}</td>
+<td class="center">{{ i.quantity }}</td>
+<td class="center">{{ i.unit or "Услуга" }}</td>
+<td class="right">{{ i.price }}</td>
+<td class="right">{{ i.total }}</td>
+</tr>
+{% endfor %}
+</table>
+
+<!-- 💰 ИТОГИ СПРАВА -->
+<div class="totals">
+    <div>
+        <span class="bold">Итого:</span>
+        <span class="bold">{{ sale.total_amount }}</span>
+    </div>
+    <div>
+        <span>В том числе НДС:</span>
+        <span>{{ sale.nds or "0" }}</span>
+    </div>
+</div>
+
+<br>
+
+<div>
+Всего наименований {{ items|length }}, на сумму {{ sale.total_amount }} KZT
+</div>
+
+<div>
+Всего к оплате: <b>{{ total_text }}</b>
+</div>
+
+<hr>
+
+<table class="no-border">
+<tr>
+<td style="width:150px;">Исполнитель</td>
+<td>___________________________ / {{ director_short }} /</td>
+</tr>
+</table>
+
+<div style="margin-top:20px; text-align:right;">
+    <button onclick="downloadPDF()" class="btn-pdf">
+        📄 Скачать/Печать
+    </button>
+</div>
+
+</body>
+
+<script>
+function downloadPDF() {
+    window.print();
+}
+</script>
+
+</html>

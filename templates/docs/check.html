@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Чек</title>
+
+<style>
+body {
+    width: 280px;
+    margin: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.center { text-align: center; }
+.line { border-top: 1px dashed #000; margin: 10px 0; }
+
+.item {
+    display: flex;
+    justify-content: space-between;
+}
+
+.bold {
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="center">
+    <div style="font-size:18px; font-weight:700;">
+        {{ company.name }}
+    </div>
+    <div>{{ company.address }}</div>
+    <div>{{ company.phone }}</div>
+</div>
+
+<div class="line"></div>
+
+<div>
+    <div><b>Дата:</b> {{ check_date }}</div>
+    <div><b>№ заказа:</b> {{ sale.id }}</div>
+    <div><b>Кассир:</b> Администратор</div>
+    <div><b>БИН:</b> {{ company.bin }}</div>
+</div>
+
+<div class="line"></div>
+
+{% for i in items %}
+<div style="margin-bottom:10px;">
+    <div class="bold">{{ i.name }}</div>
+
+    <div class="item">
+        <span>{{ i.quantity }} × {{ i.price }}</span>
+        <span>{{ i.total }} ₸</span>
+    </div>
+</div>
+{% endfor %}
+
+<div class="line"></div>
+
+<div class="item bold">
+    <span>ИТОГО</span>
+    <span>{{ sale.total_amount }} ₸</span>
+</div>
+
+<div class="item">
+    <span>Оплачено</span>
+    <span>{{ sale.total_amount }} ₸</span>
+</div>
+
+<div class="item">
+    <span>Сдача</span>
+    <span>0 ₸</span>
+</div>
+
+<div class="line"></div>
+
+<div class="center">
+    Спасибо за покупку!
+</div>
+
+</body>
+</html>

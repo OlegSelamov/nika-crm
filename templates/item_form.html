@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Добавить позицию</h2>
+
+<form method="POST" enctype="multipart/form-data">
+
+<!-- 🔥 НАЗВАНИЕ -->
+<input 
+    name="name" 
+    list="itemsList"
+    value="{{ item.name if item else '' }}"
+    placeholder="Название"
+>
+
+<!-- 🔥 СПИСОК С ДАННЫМИ -->
+<datalist id="itemsList">
+    {% for i in items %}
+        <option 
+            value="{{ i.name }}"
+            data-price="{{ i.retail_price }}"
+            data-category="{{ i.category }}"
+            data-description="{{ i.description }}"
+        >
+    {% endfor %}
+</datalist>
+
+<!-- 🔥 КАТЕГОРИЯ -->
+<select name="category" id="category">
+    <option {% if item and item.category == 'Туризм' %}selected{% endif %}>Туризм</option>
+    <option {% if item and item.category == 'Услуга' %}selected{% endif %}>Услуга</option>
+    <option {% if item and item.category == 'Товар' %}selected{% endif %}>Товар</option>
+</select>
+
+<!-- 🔥 ОПИСАНИЕ -->
+<textarea 
+    name="description" 
+    placeholder="Опишите товар / услугу"
+>{{ item.description if item else '' }}</textarea>
+
+<!-- 🔥 ЦЕНЫ -->
+<input name="retail_price" id="retail_price" value="{{ item.retail_price if item else '' }}" placeholder="Цена розница">
+
+<input name="wholesale_price" value="{{ item.wholesale_price if item else '' }}" placeholder="Цена опт">
+
+<input name="purchase_price" value="{{ item.purchase_price if item else '' }}" placeholder="Цена закупа">
+
+<input name="discount_percent" value="{{ item.discount_percent if item else '' }}" placeholder="Скидка %">
+
+<input name="barcode" value="{{ item.barcode if item else '' }}" placeholder="Штрихкод">
+
+<label>Фото:</label>
+<input type="file" name="images" multiple><br><br>
+
+<button class="btn">Сохранить</button>
+
+</form>
+
+<!-- 🔥 JS АВТОПОДСТАНОВКА -->
+<script>
+document.querySelector("input[name='name']").addEventListener("input", function() {
+
+    const value = this.value;
+    const options = document.querySelectorAll("#itemsList option");
+
+    options.forEach(option => {
+        if (option.value === value) {
+
+            // цена
+            document.getElementById("retail_price").value = option.dataset.price || "";
+
+            // категория
+            document.getElementById("category").value = option.dataset.category || "";
+
+            // описание 🔥
+            document.getElementById("description").value = option.dataset.description || "";
+        }
+    });
+
+});
+</script>
+
+{% endblock %}

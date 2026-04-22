@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Пользователи</h2>
+
+<form method="POST" class="card" style="max-width:500px; display:grid; gap:10px;">
+    <input name="username" placeholder="Логин" required>
+    <input name="password" placeholder="Пароль" required>
+
+    <select name="role">
+        <option value="cashier">Кассир</option>
+        <option value="admin">Админ</option>
+    </select>
+
+    <select name="company_id">
+        <option value="">Без компании</option>
+        {% for c in companies %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+        {% endfor %}
+    </select>
+
+    <label style="display:flex; gap:8px; align-items:center;">
+        <input type="checkbox" name="is_super_admin" value="1" style="width:auto;">
+        Супер-админ
+    </label>
+
+    <button class="btn">Добавить пользователя</button>
+</form>
+
+<br>
+
+<table class="table">
+    <tr>
+        <th>ID</th>
+        <th>Логин</th>
+        <th>Роль</th>
+        <th>Компания</th>
+        <th>Супер-админ</th>
+		<th>Действия</th>
+    </tr>
+
+    {% for u in users %}
+    <tr>
+        <td>{{ u.id }}</td>
+        <td>{{ u.username }}</td>
+        <td>{{ u.role }}</td>
+        <td>{{ u.company_name or "-" }}</td>
+        <td>{{ "Да" if u.is_super_admin else "Нет" }}</td>
+		<td>
+			{% if not u.is_creator %}
+			<a href="/users/delete/{{ u.id }}"
+			   onclick="return confirm('Удалить пользователя?')"
+			   style="color:red;">
+			   Удалить
+			</a>
+			{% else %}
+			<span style="color:gray;">Создатель</span>
+			{% endif %}
+		</td>
+    </tr>
+    {% endfor %}
+</table>
+
+{% endblock %}

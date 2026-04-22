@@ -1,0 +1,1211 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="sales-grid">
+
+    <!-- ЛЕВАЯ ЧАСТЬ -->
+    <div class="left-side">
+
+        <!-- ПОИСК -->
+		<div class="top-bar">
+
+			<input id="clientSearch" placeholder="Поиск клиента..." onclick="openClientSheet()" readonly>
+
+			<div class="search-box">
+
+				<input id="search" placeholder="Поиск товара..." autocomplete="off">
+
+				<div id="itemsList" class="items-dropdown"></div>
+
+			</div>
+
+		</div>
+
+        <!-- КОРЗИНА -->
+        <div class="cart-box">
+            <table class="cart-table">
+                <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Кол-во</th>
+                        <th>Цена</th>
+						<th>Действия</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="cart"></tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <!-- ПРАВАЯ ЧАСТЬ -->
+		<div class="payment-box">
+
+			<div class="total-title">ИТОГО</div>
+
+			<div id="totalAmount" class="total-amount">
+				0 ₸
+			</div>
+
+			<div class="payment-methods">
+
+				<input id="cashInput" placeholder="Наличные" class="pay-input" onclick="fillPayment('cash')">
+				<input id="cardInput" placeholder="Карта" class="pay-input" onclick="fillPayment('card')">
+				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" onclick="fillPayment('kaspi')">
+
+			</div>
+
+			<button class="pay-btn" onclick="pay()">ОПЛАТА</button>
+			<button class="pay-btn" style="background:#3b82f6" onclick="createInvoiceSale()">СЧЁТ (БЕЗНАЛ)</button>
+
+		</div>
+	
+<div id="clientSheet" class="sheet">
+    <div class="sheet-content">
+
+        <div class="client-picker">
+
+            <!-- 🔍 ЛЕВАЯ ЧАСТЬ -->
+            <div class="picker-left">
+
+                <h3>Выбор клиента</h3>
+
+                <input id="clientSearchInput" placeholder="Поиск клиента..." oninput="filterClients()">
+
+                <div id="clientList" class="client-table-box"></div>
+
+            </div>
+
+            <!-- 👤 ПРАВАЯ ЧАСТЬ -->
+            <div class="picker-right">
+
+                <div class="selected-title">Данные клиента</div>
+
+                <div id="selectedClient" class="selected-client">
+                    <div class="empty">Выберите клиента</div>
+                </div>
+
+                <button class="btn btn-primary" onclick="confirmClient()">
+                    Выбрать
+                </button>
+
+                <button onclick="closeClientSheet()" class="btn btn-close">
+                    Закрыть
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+</div>
+
+<div id="saleModal" class="modal">
+
+    <div class="modal-box">
+
+        <!-- 🔝 HEADER -->
+        <div class="modal-header">
+            <b id="saleTitle">Чек</b>
+            <button onclick="closeSaleModal()">✕</button>
+        </div>
+
+        <!-- 📄 BODY -->
+        <div id="saleBody" class="modal-body">
+            Загрузка...
+        </div>
+
+        <!-- 🔻 FOOTER -->
+        <div class="modal-footer">
+            <button onclick="printCheck()" class="btn">🖨 Печать</button>
+			<button onclick="downloadPDF()" class="btn">📸 Сохранить</button>
+        </div>
+
+    </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+let cart = [];
+let selectedClientData = null;
+let selectedClient = null;
+
+let company = {}; // 👈 вот сюда
+
+fetch("/api/company/active")
+.then(res => res.json())
+.then(data => {
+    company = data;
+});
+
+// загрузка товаров
+fetch("/api/items")
+.then(res => res.json())
+.then(data => {
+    let html = "";
+
+    data.forEach(i => {
+        html += `
+            <div class="item-card" onclick="addToCart(${i.id}, '${i.name}', ${i.retail_price || 0})">
+
+                <div class="item-image">
+                    <img src="${i.image || '/static/img/no-image.png'}">
+
+                    ${i.discount_percent ? `
+                        <div class="discount-badge">-${i.discount_percent}%</div>
+                    ` : ""}
+                </div>
+
+                <div class="item-info">
+
+                    <div class="item-name">
+                        ${i.name}
+                    </div>
+
+                    <div class="item-price-block">
+
+                        ${i.old_price ? `
+                            <div class="old-price">${i.old_price} ₸</div>
+                        ` : ""}
+
+                        <div class="new-price">
+                            ${i.retail_price || 0} ₸
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+        `;
+    });
+
+    document.getElementById("itemsList").innerHTML = html;
+});
+
+// добавление в корзину
+function addToCart(id, name, price) {
+    cart.push({ id, name, price, qty: 1 });
+    renderCart();
+	document.getElementById("itemsList").style.display = "none";
+    document.getElementById("search").value = "";
+}
+
+// отрисовка корзины
+function renderCart() {
+    let html = "";
+    let total = 0;
+
+    cart.forEach((item, index) => {
+        let qty = item.qty || 1;
+        let sum = item.price * qty;
+
+        total += sum;
+
+        html += `
+            <tr>
+                <td>${item.name}</td>
+                <td>
+                    <button type="button" onclick="changeQty(${index}, -1)">-</button>
+                    ${qty}
+                    <button type="button" onclick="changeQty(${index}, 1)">+</button>
+                </td>
+                <td>${sum} тг</td>
+                <td>
+                    <button type="button" onclick="removeItem(${index})">❌</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    document.getElementById("cart").innerHTML = html;
+	document.getElementById("totalAmount").innerText =
+		total.toLocaleString("ru-RU") + " ₸";
+}
+
+function changeQty(index, delta) {
+    cart[index].qty = (cart[index].qty || 1) + delta;
+
+    if (cart[index].qty <= 0) {
+        cart.splice(index, 1);
+    }
+
+    renderCart();
+}
+
+function removeItem(i) {
+    cart.splice(i, 1);
+    renderCart();
+}
+
+// оплата
+function pay() {
+
+    if (!selectedClient) {
+        alert("Сначала выбери клиента");
+        return;
+    }
+
+    let cash = document.getElementById("cashInput").value || 0;
+    let card = document.getElementById("cardInput").value || 0;
+    let kaspi = document.getElementById("kaspiInput").value || 0;
+
+    fetch("/sales/pay", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            client_id: selectedClient,
+            cart: cart,
+            cash: cash,
+            card: card,
+            kaspi: kaspi,
+            company_id: null
+        })
+    })
+    .then(res => res.json().catch(() => null))
+    .then(data => {
+
+        if (!data) {
+            alert("Ошибка ответа сервера");
+            return;
+        }
+
+        openSaleModal(data.sale_id);
+
+        cart = [];
+        renderCart();
+
+    })
+    .catch(err => {
+        console.error("PAY ERROR:", err);
+    });
+}
+
+function searchItems(query) {
+    fetch("/api/items")
+    .then(res => res.json())
+    .then(data => {
+        let html = "";
+
+        data.forEach(i => {
+            if (
+                i.name.toLowerCase().includes(query.toLowerCase()) ||
+                (i.barcode && i.barcode.includes(query))
+            ) {
+				html += `
+					<div class="item-card" onclick="addToCart(${i.id}, '${i.name}', ${i.retail_price || 0})">
+
+						<div class="item-image">
+							<img src="${i.image || '/static/img/no-image.png'}">
+							
+							${i.discount_percent ? `
+								<div class="discount-badge">-${i.discount_percent}%</div>
+							` : ""}
+						</div>
+
+						<div class="item-info">
+
+							<div class="item-name">
+								${i.name}
+							</div>
+
+							<div class="item-price-block">
+
+								${i.old_price ? `
+									<div class="old-price">${i.old_price} ₸</div>
+								` : ""}
+
+								<div class="new-price">
+									${i.retail_price || 0} ₸
+								</div>
+
+							</div>
+
+						</div>
+
+					</div>
+				`;
+            }
+        });
+
+        document.getElementById("itemsList").innerHTML = html;
+        document.getElementById("itemsList").style.display = "block";
+    });
+}
+
+// шторка выбора клиента
+function openClientSheet() {
+    document.getElementById("clientSheet").classList.add("active");
+    loadClients();
+}
+
+function closeClientSheet() {
+    document.getElementById("clientSheet").classList.remove("active");
+}
+
+function loadClients() {
+
+    fetch("/api/clients")
+    .then(res => res.json())
+    .then(data => {
+
+        let html = "<table class='client-table'>";
+
+        data.forEach(c => {
+
+            const company = c.company_name || "Без компании";
+            const name = c.full_name || "";
+
+            html += `
+                <tr onclick='selectClient(${JSON.stringify(c)})'>
+                    <td>
+                        <div style="display:flex; justify-content:space-between;">
+                            
+                            <span style="font-weight:600;">
+                                ${company}
+                            </span>
+
+                            <span style="color:#64748b;">
+                                ${name}
+                            </span>
+
+                        </div>
+
+                        <div style="font-size:12px; color:#94a3b8;">
+                            ${c.phone || ""}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += "</table>";
+
+        document.getElementById("clientList").innerHTML = html;
+		
+    });
+}
+
+function filterClients() {
+    const input = document.getElementById("clientSearchInput");
+    const query = input.value.toLowerCase().trim();
+
+    const rows = document.querySelectorAll("#clientList tr");
+
+    rows.forEach(row => {
+
+        // 🔥 берем ТОЛЬКО текст без HTML
+        const text = row.textContent.toLowerCase();
+
+        if (text.includes(query)) {
+            row.style.display = "";
+        } else {
+            row.style.display = "none";
+        }
+
+    });
+}
+
+function selectClient(client) {
+
+    selectedClientData = client;
+
+    document.getElementById("selectedClient").innerHTML = `
+        <b>${client.company_name || ""}</b><br>
+        ${client.full_name || ""}<br>
+        📞 ${client.phone || ""}<br>
+        🆔 ${client.iin || ""}<br>
+        📍 ${client.address || ""}
+    `;
+}
+
+function confirmClient() {
+
+    if (!selectedClientData) {
+        alert("Выберите клиента");
+        return;
+    }
+
+    selectedClient = selectedClientData.id;
+
+    document.getElementById("clientSearch").value = selectedClientData.full_name;
+
+    closeClientSheet();
+}
+
+const searchInput = document.getElementById("search");
+const itemsBox = document.getElementById("itemsList");
+
+if (searchInput) {
+
+    searchInput.addEventListener("input", function () {
+
+        const query = this.value.toLowerCase().trim();
+
+        if (!query) {
+            itemsBox.style.display = "none";
+            return;
+        }
+
+        itemsBox.style.display = "grid";
+
+        let hasVisible = false;
+
+        document.querySelectorAll("#itemsList .item-card").forEach(el => {
+
+            const text = el.innerText.toLowerCase();
+            const match = text.includes(query);
+
+            el.style.display = match ? "" : "none";
+
+            if (match) hasVisible = true;
+        });
+
+        if (!hasVisible) {
+            itemsBox.style.display = "grid";
+        }
+    });
+
+    // 🔥 клик вне — закрывает
+    document.addEventListener("click", function(e) {
+        if (!e.target.closest(".search-box")) {
+            itemsBox.style.display = "none";
+        }
+    });
+}
+
+function fillPayment(type) {
+
+    let total = parseInt(document.getElementById("totalAmount").innerText.replace(/\D/g, ""));
+
+    let cash = parseInt(document.getElementById("cashInput").value || 0);
+    let card = parseInt(document.getElementById("cardInput").value || 0);
+    let kaspi = parseInt(document.getElementById("kaspiInput").value || 0);
+
+    let currentSum = cash + card + kaspi;
+
+    let remaining = total - currentSum;
+
+    if (remaining <= 0) {
+        return;
+    }
+
+    if (type === "cash") {
+        document.getElementById("cashInput").value = cash + remaining;
+    }
+
+    if (type === "card") {
+        document.getElementById("cardInput").value = card + remaining;
+    }
+
+    if (type === "kaspi") {
+        document.getElementById("kaspiInput").value = kaspi + remaining;
+    }
+}
+
+function sendAssistant(text) {
+
+    fetch("/api/agent/command", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            text: text
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        console.log("ASSISTANT:", data);
+
+        // 👉 если есть ответ (диалог)
+        if (data.reply) {
+            alert(data.reply); // пока просто
+            return;
+        }
+
+        // 👉 если успех
+        if (data.success) {
+            alert(data.message || "Готово");
+            location.reload();
+            return;
+        }
+
+    });
+}
+
+function openSaleModal(id) {
+
+    const modal = document.getElementById("saleModal");
+    const body = document.getElementById("saleBody");
+
+    if (!modal || !body) {
+        console.error("Модалка не найдена");
+        return;
+    }
+
+    modal.style.display = "flex";
+    body.innerHTML = "Загрузка...";
+
+    fetch("/api/sale/" + id)
+        .then(res => res.json())
+        .then(data => {
+
+			let html = `
+				<div style="text-align:center; margin-bottom:15px;">
+					<div style="font-size:18px; font-weight:700;">
+						${company.name || "Организация"}
+					</div>
+					<div style="font-size:13px; color:#666;">
+						${company.address || ""}
+					</div>
+					<div style="font-size:13px; color:#666;">
+						${company.phone || ""}
+					</div>
+				</div>
+
+				<div style="font-size:13px; margin-bottom:10px;">
+					<div><b>Дата:</b> ${formatDate(data.created_at)}</div>
+					<div><b>№ заказа:</b> ${data.id}</div>
+					<div><b>Кассир:</b> Администратор</div>
+					<div><b>БИН:</b> ${company.bin || ""}</div>
+				</div>
+
+				<hr>
+			`;
+
+            data.items.forEach(item => {
+                html += `
+                    <div style="margin-bottom:10px;">
+                        <div style="font-weight:600;">
+                            ${item.name}
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; font-size:13px; color:#555;">
+                            <span>${item.quantity} × ${item.price}</span>
+                            <span>${item.total} ₸</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                <hr>
+
+                <div style="display:flex; justify-content:space-between; margin-top:10px;">
+                    <b>ИТОГО</b>
+                    <b>${data.total_amount} ₸</b>
+                </div>
+				
+				<div style="margin-top:10px; font-size:13px;">
+					${data.cash > 0 ? `
+						<div style="display:flex; justify-content:space-between;">
+							<span>Наличные</span>
+							<span>${data.cash} ₸</span>
+						</div>
+					` : ""}
+
+					${data.card > 0 ? `
+						<div style="display:flex; justify-content:space-between;">
+							<span>Карта</span>
+							<span>${data.card} ₸</span>
+						</div>
+					` : ""}
+
+					${data.kaspi > 0 ? `
+						<div style="display:flex; justify-content:space-between;">
+							<span>Kaspi</span>
+							<span>${data.kaspi} ₸</span>
+						</div>
+					` : ""}
+				</div>
+
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Оплачено</span>
+                    <span>${data.total_amount} ₸</span>
+                </div>
+
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Сдача</span>
+                    <span>0 ₸</span>
+                </div>
+
+                <hr>
+
+                <div style="text-align:center; font-size:12px; color:#666;">
+                    Спасибо за покупку!
+                </div>
+            `;
+
+            body.innerHTML = html;
+
+        })
+        .catch(err => {
+            console.error("SALE LOAD ERROR:", err);
+            body.innerHTML = "Ошибка загрузки чека";
+        });
+}
+
+function closeSaleModal() {
+    document.getElementById("saleModal").style.display = "none";
+}
+
+function formatDate(dateStr) {
+
+    if (!dateStr) return "";
+
+    const date = new Date(dateStr);
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+
+    return `${day}.${month}.${year}, ${hours}:${minutes}`;
+}
+
+function printCheck() {
+    window.print();
+}
+
+function downloadPDF() {
+
+    const element = document.getElementById("saleBody");
+
+    // 🔥 делаем чек узким и центрируем
+    element.style.width = "302px";
+    element.style.margin = "0 auto";
+    element.style.fontFamily = "Courier New, monospace";
+    element.style.fontSize = "12px";
+    element.style.display = "block";
+
+    const opt = {
+        margin: 0, // 🔥 убираем боковые отступы
+        filename: 'check.pdf',
+        image: { type: 'jpeg', quality: 1 },
+        html2canvas: { 
+            scale: 2,
+            useCORS: true
+        },
+        jsPDF: {
+            unit: 'mm',
+            format: [80, 200],
+            orientation: 'portrait'
+        }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+
+        // возвращаем как было
+        element.style.width = "";
+        element.style.margin = "";
+        element.style.fontFamily = "";
+        element.style.fontSize = "";
+        element.style.display = "";
+
+    });
+}
+
+function createInvoiceSale() {
+
+    if (!selectedClient) {
+        alert("Сначала выбери клиента");
+        return;
+    }
+
+    fetch("/sales/create-invoice", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            client_id: selectedClient,
+            cart: cart,
+            company_id: 1
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        if (!data.success) {
+            alert("Ошибка");
+            return;
+        }
+
+        // 🔥 открываем счет
+        window.open(`/docs/invoice/${data.sale_id}`, "_blank");
+
+        // очищаем
+        cart = [];
+        renderCart();
+
+    });
+}
+
+</script>
+
+<style>
+
+.sales-container {
+    display: flex;
+    gap: 20px;
+}
+
+.sales-left {
+    width: 30%;
+}
+
+.sales-center {
+    width: 40%;
+}
+
+.sales-right {
+    width: 30%;
+    background: #f5f5f5;
+    padding: 15px;
+    border-radius: 10px;
+}
+
+.item {
+    padding: 10px;
+    background: #fff;
+    margin-bottom: 5px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.item:hover {
+    background: #eee;
+}
+
+.cart-item {
+    padding: 10px;
+    background: #fff;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+.pay-btn {
+    width: 100%;
+    padding: 15px;
+    background: green;
+    color: white;
+    border: none;
+    margin-top: 10px;
+    font-size: 18px;
+}
+
+.items-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 10px;
+}
+
+.cart-table {
+    width: 100%;
+    background: white;
+    border-radius: 10px;
+    margin-top: 20px;
+    table-layout: fixed;
+}
+
+.cart-table td, .cart-table th {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.cart-table th:nth-child(1),
+.cart-table td:nth-child(1) {
+    width: 30%;
+}
+
+.cart-table th:nth-child(2),
+.cart-table td:nth-child(2) {
+    width: 15%;
+    text-align: center;
+}
+
+.cart-table th:nth-child(3),
+.cart-table td:nth-child(3) {
+    width: 15%;
+    text-align: right;
+}
+
+.cart-table th:nth-child(4),
+.cart-table td:nth-child(4) {
+    width: 40%;
+    text-align: center;
+}
+
+.cart-table tr:hover {
+    background: #f5f5f5;
+}
+
+.cart-table button {
+    border: none;
+    background: #eee;
+    padding: 3px 7px;
+    margin: 0 2px;
+    cursor: pointer;
+}
+
+.cart-table button:hover {
+    background: #ddd;
+}
+
+.sales-grid {
+    display: grid;
+    grid-template-columns: 60% 35%;
+    height: calc(100vh - 60px);
+    gap: 15px;
+}
+
+.left-side {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+/* 🔥 БОЛЬШОЙ БЛОК */
+.items-box {
+    background: white;
+    border-radius: 10px;
+    margin-top: 10px;
+    height: 120px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* 🔥 КОРЗИНА */
+.cart-box {
+    background: white;
+    border-radius: 10px;
+    margin-top: 10px;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.cart-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.cart-table td, .cart-table th {
+    padding: 6px;
+    border-bottom: 1px solid #eee;
+}
+
+/* 🔥 СПИСОК ТОВАРОВ */
+.item-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+
+.item-row:hover {
+    background: #f5f5f5;
+}
+
+/* ПРАВАЯ */
+.right-side {
+    background: #f5f5f5;
+    border-radius: 10px;
+    padding: 15px;
+}
+
+.right-side input {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 10px;
+}
+
+.pay-btn {
+    width: 100%;
+    padding: 15px;
+    background: green;
+    color: white;
+    border: none;
+    font-size: 18px;
+}
+
+.top-bar {
+    display: flex;
+    gap: 10px;
+}
+
+#clientSearch {
+    width: 40%;
+}
+
+#search {
+    width: 60%;
+}
+
+.client-row {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+
+.client-row:hover {
+    background: #f5f5f5;
+}
+
+.search-box {
+    position: relative;
+    width: 100%;
+}
+
+/* 🔥 ВЫПАДАЮЩИЙ СПИСОК */
+.items-dropdown {
+    position: absolute;
+    top: 110%;
+    left: 0;
+
+    width: 100%;
+    max-height: 300px;
+
+    overflow-y: auto;
+
+    background: white;
+    border-radius: 12px;
+
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+
+    padding: 10px;
+
+    display: none;
+    z-index: 999;
+
+    /* 🔥 ВОТ ГЛАВНОЕ */
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 в ряд */
+    gap: 10px;
+}
+
+.item-card {
+	width: 100px; /* 🔥 меньше */
+	background: white;
+	border-radius: 12px;
+	overflow: hidden;
+	cursor: pointer;
+	border: 1px solid #eee;
+	transition: 0.2s;
+}
+
+.item-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+/* 🔥 КАРТИНКА */
+.item-image {
+	position: relative;
+	height: 80px;
+	background: #f5f5f5;
+}
+
+.item-image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* 🔥 СКИДКА */
+.discount-badge {
+	position: absolute;
+	top: 5px;
+	left: 5px;
+	background: red;
+	color: white;
+	font-size: 11px;
+	padding: 2px 6px;
+	border-radius: 6px;
+}
+
+/* 🔥 ИНФО */
+.item-info {
+	padding: 8px;
+}
+
+.item-name {
+	font-size: 11px;
+	height: 28px;
+	overflow: hidden;
+}
+
+.item-price-block {
+	margin-top: 5px;
+}
+
+.old-price {
+	font-size: 11px;
+	color: #999;
+	text-decoration: line-through;
+}
+
+.new-price {
+	font-size: 12px;
+}
+
+/* 🔥 СЕТКА */
+.items-box {
+	background: white;
+	border-radius: 10px;
+	margin-top: 10px;
+
+	max-height: 220px;   /* 🔥 стало больше */
+	overflow-y: auto;
+
+	padding: 10px;
+
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.payment-box {
+    padding: 20px;
+}
+
+.total-title {
+    font-size: 14px;
+    color: #64748b;
+}
+
+.total-amount {
+    font-size: 32px;
+    font-weight: bold;
+    margin: 10px 0 20px;
+}
+
+.pay-input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    margin-bottom: 10px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.pay-input:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+.pay-btn {
+    width: 100%;
+    padding: 14px;
+    background: green;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+}
+
+.modal-box {
+    width: 500px;
+    height: 80vh;
+    background: white;
+    border-radius: 16px;
+
+    display: flex;
+    flex-direction: column; /* 🔥 ключ */
+}
+
+.modal-header {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #eee;
+}
+
+.modal-body {
+    flex: 1;              /* 🔥 занимает всё место */
+    overflow-y: auto;     /* 🔥 скролл */
+    padding: 15px;
+}
+
+.modal-footer {
+    padding: 15px;
+    border-top: 1px solid #eee;
+
+    display: flex;
+    gap: 10px;
+}
+
+.modal-footer button {
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: #22c55e;
+    color: white;
+    font-weight: 600;
+}
+
+@media print {
+
+    body * {
+        visibility: hidden;
+    }
+
+    #saleBody, #saleBody * {
+        visibility: visible;
+    }
+
+    #saleBody {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 280px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+    }
+
+    .modal-footer {
+        display: none; /* кнопки не печатаем */
+    }
+
+}
+
+.receipt {
+    margin: 0 auto;
+}
+
+</style>
+
+{% endblock %}

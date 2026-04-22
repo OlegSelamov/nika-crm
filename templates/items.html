@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Каталог</h2>
+
+<a class="btn" href="/items/add">+ Добавить</a>
+
+<br><br>
+
+<table class="client-table">
+
+<tr>
+    <th style="width:70px;">Фото</th>
+    <th>Название</th>
+    <th style="width:120px;">Цена</th>
+    <th style="width:80px;">Скидка</th>
+    <th style="width:120px;">Ед.изм.</th>
+    <th style="width:120px;">Действия</th>
+</tr>
+
+{% for i in items %}
+<tr>
+
+    <td>
+        {% if i.image %}
+            <img src="{{ i.image }}" class="table-img">
+        {% else %}
+            <img src="/static/img/no-photo.png" class="table-img">
+        {% endif %}
+    </td>
+
+    <td>{{ i.name }}</td>
+    <td>{{ i.retail_price or 0 }} тг</td>
+    <td>{{ i.discount_percent or 0 }}%</td>
+    <td>{{ i.category }}</td>
+
+    <td>
+        <a href="/items/{{ i.id }}/edit" class="btn btn-edit">✏️</a>
+        <a href="/items/{{ i.id }}/delete" class="btn btn-close">🗑</a>
+    </td>
+
+</tr>
+{% endfor %}
+
+</table>
+
+{% endblock %}

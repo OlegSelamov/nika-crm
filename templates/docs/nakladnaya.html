@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Накладная на отпуск запасов на сторону</title>
+    <style>
+        body {
+            font-family: "Times New Roman", serif;
+            font-size: 11pt;
+            margin: 20px;
+        }
+
+        #main-wrapper {
+            width: 100%;
+        }
+
+        #main-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #header-table,
+        #second-table,
+        #details-table,
+        #footer-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10pt;
+        }
+
+        .centered {
+            text-align: center;
+        }
+
+        .bordered {
+            border: 1px solid #000;
+            padding: 2px 3px;
+        }
+
+        #header-table-header {
+            font-size: 8pt;
+            text-align: left;
+        }
+
+        #header-table-header2 {
+            font-size: 9pt;
+            text-align: right;
+            font-weight: bold;
+        }
+
+        #main-header {
+            margin-top: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        #details-table th,
+        #details-table td {
+            border: 1px solid #000;
+            padding: 2px 3px;
+        }
+
+        #footer-table td {
+            padding: 2px 3px;
+            vertical-align: top;
+        }
+
+        .lheight {
+            line-height: 1.2;
+        }
+
+        .left-bordered {
+            border-left: 1px solid #000;
+        }
+
+        .clear-fix {
+            clear: both;
+        }
+    </style>
+</head>
+<body>
+
+<main id="wrapper">
+    <div id="middle">
+        <div id="content">
+            <div id="colLeft">
+
+                <div id="main-wrapper">
+
+                    <table id="main-table">
+                        <tr>
+                            <td>
+
+                                <!-- HEADER TABLE -->
+                                <table id="header-table">
+                                    <tr>
+                                        <td colspan="3">
+                                            <div id="header-table-header">
+                                                Приложение 26<br>
+                                                к приказу Министра финансов<br>
+                                                Республики Казахстан<br>
+                                                от 20 декабря 2012 года № 562
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="3">
+                                            <div id="header-table-header2">
+                                                Форма З-2
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2">
+                                            Организация (индивидуальный предприниматель):<br>
+                                            {{ header.sender_name }}
+                                        </td>
+                                        <td style="vertical-align: top;">
+                                            ИИН/БИН:<br>
+                                            {{ header.bin }}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="3">
+                                            <table style="float: right; border-collapse: collapse;">
+                                                <tr>
+                                                    <td class="centered bordered">Номер документа</td>
+                                                    <td class="centered bordered">Дата составления</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="centered bordered">{{ header.doc_number }}</td>
+                                                    <td class="centered bordered">{{ header.doc_date }}</td>
+                                                </tr>
+                                            </table>
+                                            <div class="clear-fix"></div>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <!-- MAIN TITLE -->
+                                <div id="main-header">
+                                    НАКЛАДНАЯ НА ОТПУСК ЗАПАСОВ НА СТОРОНУ
+                                </div>
+
+                                <!-- SECOND TABLE (sender/receiver/responsible/transport/ttn) -->
+                                <table id="second-table">
+                                    <tr>
+                                        <td class="bordered">Организация (индивидуальный предприниматель) - отправитель</td>
+                                        <td class="bordered">Организация (индивидуальный предприниматель) - получатель</td>
+                                        <td class="bordered">Ответственный за поставку (Ф.И.О.)</td>
+                                        <td class="bordered">Транспортная организация</td>
+                                        <td class="bordered">Товарно-транспортная накладная (номер, дата)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="bordered">{{ header.sender_short }}</td>
+                                        <td class="bordered">{{ header.receiver_short }}</td>
+                                        <td class="bordered">{{ header.responsible }}</td>
+                                        <td class="bordered">{{ header.transport_org }}</td>
+                                        <td class="bordered">{{ header.ttn }}</td>
+                                    </tr>
+                                </table>
+
+                                <br>
+
+                                <!-- DETAILS TABLE (items) -->
+                                <table id="details-table">
+                                    <tr>
+                                        <td class="centered" rowspan="2">№</td>
+                                        <td class="centered" rowspan="2" style="width: 100%;">Наименование, характеристика</td>
+                                        <td class="centered" rowspan="2">Номенкла-турный номер</td>
+                                        <td class="centered" rowspan="2">Ед. изм.</td>
+                                        <td class="centered" colspan="2">Количество</td>
+                                        <td class="centered" rowspan="2" style="white-space: nowrap;">Цена за ед.</td>
+                                        <td class="centered" rowspan="2" style="white-space: nowrap;">Сумма с НДС</td>
+                                        <td class="centered" rowspan="2" style="white-space: nowrap;">Сумма НДС</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="centered">подлежит отпуску</td>
+                                        <td class="centered">отпущено</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="centered">1</td>
+                                        <td class="centered">2</td>
+                                        <td class="centered">3</td>
+                                        <td class="centered">4</td>
+                                        <td class="centered">5</td>
+                                        <td class="centered">6</td>
+                                        <td class="centered">7</td>
+                                        <td class="centered">8</td>
+                                        <td class="centered">9</td>
+                                    </tr>
+
+                                    {# СТРОКИ ТОВАРОВ #}
+                                    {% for item in items %}
+                                    <tr>
+                                        <td class="centered">{{ loop.index }}</td>
+                                        <td>{{ item.name }}</td>
+                                        <td class="centered">{{ item.code }}</td>
+                                        <td class="centered">{{ item.unit }}</td>
+                                        <td class="centered">{{ "%.3f"|format(item.qty_plan) }}</td>
+                                        <td class="centered">{{ "%.3f"|format(item.qty_fact) }}</td>
+                                        <td class="centered">{{ "%.2f"|format(item.price) }}</td>
+                                        <td class="centered">{{ "%.2f"|format(item.amount) }}</td>
+                                        <td class="centered">{{ "%.2f"|format(item.vat) }}</td>
+                                    </tr>
+                                    {% endfor %}
+
+                                    <tr id="itog-row">
+                                        <td colspan="4" style="text-align: right;border: none;">Итого</td>
+                                        <td class="centered">{{ "%.3f"|format(totals.qty_plan) }}</td>
+                                        <td class="centered">{{ "%.3f"|format(totals.qty_fact) }}</td>
+                                        <td class="centered">x</td>
+                                        <td class="centered">{{ "%.2f"|format(totals.amount) }}</td>
+                                        <td class="centered">{{ "%.2f"|format(totals.vat) }}</td>
+                                    </tr>
+                                </table>
+
+                                <br><br>
+
+                                <!-- FOOTER TABLE -->
+                                <table id="footer-table">
+                                    <tr>
+                                        <td colspan="7">
+                                            Всего отпущено количество запасов (прописью)
+                                            <span id="item-count-propisyu">{{ totals.qty_words }}</span>
+                                            на сумму (прописью), в KZT
+                                            <span id="sum-propisyu">{{ totals.amount_words }}</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Отпуск разрешил</td>
+                                        <td class="centered">{{ header.razreshil_dolzhnost or "" }}</td>
+                                        <td class="centered lheight">__________<br>подпись</td>
+                                        <td class="centered">{{ header.razreshil_fio or "" }}</td>
+                                        <td class="centered left-bordered">По доверенности</td>
+                                        <td class="centered" colspan="2">{{ header.doverennost or "" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Главный бухгалтер</td>
+                                        <td class="centered lheight">__________<br>подпись</td>
+                                        <td class="centered" colspan="2">{{ header.glavbuh_fio or "" }}</td>
+                                        <td class="centered left-bordered">выданной</td>
+                                        <td class="centered">{{ header.doverennost_vydan_komu or "" }}</td>
+                                        <td class="centered">{{ header.doverennost_vydan_kem or "" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Отпустил</td>
+                                        <td class="centered lheight">__________<br>подпись</td>
+                                        <td class="centered" colspan="2">{{ header.otpustil_fio or "" }}</td>
+                                        <td class="centered left-bordered">Запасы получил</td>
+                                        <td class="centered lheight">__________<br>подпись</td>
+                                        <td class="centered">{{ header.poluchil_fio or "" }}</td>
+                                    </tr>
+                                </table>
+
+                            </td>
+                        </tr>
+                    </table>
+
+                </div>
+
+            </div>
+        </div>
+    </div>
+</main>
+
+</body>
+</html>

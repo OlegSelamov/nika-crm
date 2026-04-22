@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Мой профиль</h2>
+
+<div class="card" style="max-width:500px;">
+    <p><b>Логин:</b> {{ session.get("username") }}</p>
+    <p><b>Роль:</b> {{ session.get("role") }}</p>
+</div>
+
+{% endblock %}

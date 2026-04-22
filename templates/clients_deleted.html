@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Удалённые клиенты</h1>
+
+<div class="table-wrap">
+    <table class="client-table">
+        <tr>
+            <th>ФИО</th>
+            <th>Телефон</th>
+            <th>Статус</th>
+            <th>Действия</th>
+        </tr>
+
+        {% for c in clients %}
+        <tr>
+            <td>{{ c.full_name }}</td>
+            <td>{{ c.phone }}</td>
+            <td>{{ c.status }}</td>
+		<td>
+			<a href="/clients/{{ c.id }}/restore" class="btn btn-edit">↩</a>
+			<a href="/clients/{{ c.id }}/delete_permanently" class="btn btn-close">🗑</a>
+		</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

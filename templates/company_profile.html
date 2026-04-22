@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Профиль компании</h2>
+
+<div class="card" style="max-width:600px;">
+    <p><b>Название:</b> {{ company.name }}</p>
+    <p><b>БИН:</b> {{ company.bin }}</p>
+    <p><b>Банк:</b> {{ company.bank }}</p>
+    <p><b>Директор:</b> {{ company.director }}</p>
+</div>
+
+{% endblock %}

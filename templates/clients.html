@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Клиенты</h1>
+
+<a class="btn" href="/clients/add">+ Добавить клиента</a>
+
+<br><br>
+
+<input 
+    id="clientSearchMain" 
+    placeholder="Поиск клиента..." 
+    class="search-input"
+>
+
+<div class="table-wrap">
+    <table class="client-table" id="clientsTable">
+      <tr>
+          <th>Компания / Клиент</th>
+          <th>Телефон</th>
+          <th>Статус</th>
+		  <th>Действия</th>
+      </tr>
+
+	  {% for c in clients %}
+	  <tr class="client-row"
+		  data-id="{{ c.id }}"
+		  data-name="{{ c.full_name }}"
+		  data-phone="{{ c.phone }}"
+		  data-status="{{ c.status }}"
+		  data-address="{{ c.address }}"
+		  data-category="{{ c.category }}"
+		  data-comment="{{ c.comment }}"
+		  data-date="{{ c.created_at }}"
+		  data-iin="{{ c.iin or '' }}"
+		  data-company="{{ c.company_name or '' }}"
+		  data-photo="{{ c.photo or '' }}"
+		  data-comment-photos="{{ c.comment_photos or '' }}">
+
+		  <td>
+			  <div style="font-weight:600;">
+				  {{ c.company_name or "Без компании" }}
+			  </div>
+
+			  <div style="font-size:13px; color:#64748b;">
+			   	  {{ c.full_name }}
+			  </div>
+		  </td>
+
+		  <td>
+			  {{ c.phone }}
+		  </td>
+
+		  <td>
+			  {{ c.status }}
+		  </td>
+
+		  <td>
+			  <a href="/clients/{{ c.id }}/edit" class="btn btn-edit" onclick="event.stopPropagation()">✏️</a>
+			  <a href="/clients/{{ c.id }}/delete" class="btn btn-close" onclick="event.stopPropagation()">🗑</a>
+		  </td>
+
+	  </tr>
+	  {% endfor %}
+      </table>
+</div>
+
+<script>
+let currentClientId = null;
+
+function openClient(id, name, phone, status, address, category, comment, created_at, iin, company, photo, commentPhotos) {
+
+    console.log("CLICK OK");
+
+    currentClientId = id;
+
+    document.getElementById("sheetName").innerText = name;
+    document.getElementById("sheetPhone").innerText = phone;
+    document.getElementById("sheetAddress").innerText = address;
+    document.getElementById("sheetCategory").innerText = category;
+    document.getElementById("sheetComment").innerText = comment;
+	document.getElementById("sheetDeals").style.display = "none";
+	document.getElementById("dealsArrow").innerText = "▼";
+    
+	let statusEl = document.getElementById("sheetStatus");
+
+	statusEl.innerText = status;
+
+	if (status === "Новый") {
+		statusEl.style.background = "#ff4d4d";
+		statusEl.style.color = "white";
+	} else if (status === "В работе") {
+		statusEl.style.background = "#ffa500";
+		statusEl.style.color = "white";
+	} else if (status === "Завершен") {
+		statusEl.style.background = "#28a745";
+		statusEl.style.color = "white";
+	} else {
+		statusEl.style.background = "#ccc";
+	}
+	
+	document.getElementById("sheetIin").innerText = iin || "-";
+	document.getElementById("sheetCompany").innerText = company || "-";
+
+	const photoEl = document.getElementById("sheetPhoto");
+
+	if (photo) {
+		photoEl.src = photo;
+	} else {
+		photoEl.src = "/static/img/no-photo.png";
+	}
+
+	const commentPhotosWrap = document.getElementById("sheetCommentPhotos");
+	commentPhotosWrap.innerHTML = "";
+
+	if (commentPhotos) {
+		commentPhotos.split("|").forEach(src => {
+			if (src.trim()) {
+				commentPhotosWrap.innerHTML += `
+					<img src="${src}" style="width:90px;height:90px;object-fit:cover;border-radius:10px;margin:4px;">
+				`;
+			}
+		});
+	}
+
+    document.getElementById("editBtn").href = "/clients/" + id + "/edit";
+
+	// 👉 ЗАГРУЖАЕМ ПРОДАЖИ (НОВАЯ ЧИСТАЯ ЛОГИКА)
+	fetch("/api/client/" + id + "/sales")
+		.then(res => {
+			if (!res.ok) throw new Error("API error");
+			return res.json();
+		})
+		.then(sales => {
+
+			let dealsHtml = "";
+			let total = 0;
+			let paid = 0;
+
+			sales.forEach(s => {
+
+				const amount = Number(s.total_amount) || 0;
+				const paidAmount = Number(s.paid_amount) || 0;
+
+				total += amount;
+				paid += paidAmount;
+
+				// дата
+				let date = "Без даты";
+
+				if (s.created_at) {
+					try {
+						date = new Date(s.created_at.replace(" ", "T"))
+							.toLocaleString("ru-RU");
+					} catch(e) {
+						date = s.created_at;
+					}
+				}
+
+				dealsHtml += `
+					<div class="deal-card" data-id="${s.id}" style="cursor:pointer;">
+
+						<div class="deal-top">
+							<span>Продажа #${s.id}</span>
+
+							<span class="${s.status === 'Оплачено' ? 'ok' : 'bad'}">
+								${s.status}
+							</span>
+						</div>
+
+						<div class="deal-date">${date}</div>
+
+						<div class="deal-price">${amount} ₸</div>
+
+					</div>
+				`;
+			});
+
+			if (!dealsHtml) {
+				dealsHtml = "<div class='empty'>Нет продаж</div>";
+			}
+
+			document.getElementById("sheetDeals").innerHTML = dealsHtml;
+			document.getElementById("sheetDeals").style.display = "block";
+
+			// 💰 ФИНАНСЫ
+			document.getElementById("sheetFinance").innerHTML = `
+				<div class="finance-cards">
+					<div class="finance-card total">
+						<div class="f-title">Всего</div>
+						<div class="f-value">${total} ₸</div>
+					</div>
+
+					<div class="finance-card paid">
+						<div class="f-title">Оплачено</div>
+						<div class="f-value">${paid} ₸</div>
+					</div>
+
+					<div class="finance-card debt">
+						<div class="f-title">Долг</div>
+						<div class="f-value">${total - paid} ₸</div>
+					</div>
+				</div>
+			`;
+
+			// 👉 клики по продажам
+			document.querySelectorAll(".deal-card").forEach(el => {
+				el.addEventListener("click", function() {
+					openSale(this.dataset.id);
+				});
+			});
+
+		})
+		.catch(err => {
+			console.error("FETCH SALES ERROR:", err);
+		});
+
+
+	// 👉 ВЫБОР ТОВАРОВ (ОСТАВЛЯЕМ ОТДЕЛЬНО)
+	fetch("/api/items")
+		.then(res => res.json())
+		.then(items => {
+
+			let select = document.getElementById("itemSelect");
+
+			if (select) {
+				select.innerHTML = "<option value=''>Выбери позицию</option>";
+
+				items.forEach(i => {
+					select.innerHTML += `
+						<option value="${i.id}">
+							${i.name} (${i.retail_price || i.price || 0} ₸)
+						</option>
+					`;
+				});
+			}
+
+		})
+		.catch(err => {
+			console.error("ITEMS ERROR:", err);
+		});
+
+	document.getElementById("clientSheet").classList.add("active");
+
+	// 🔥 ДОБАВЛЯЕМ ПРОКРУТКУ
+	setTimeout(() => {
+		window.scrollTo({
+			top: document.body.scrollHeight,
+			behavior: "smooth"
+		});
+	}, 100);
+
+function showServiceForm() {
+    document.getElementById("serviceForm").style.display = "block";
+}
+
+function closeSheet() {
+    document.getElementById("clientSheet").classList.remove("active");
+}
+
+function openSale(id) {
+
+    fetch("/api/sale/" + id)
+        .then(res => res.json())
+        .then(data => {
+
+            let html = "";
+
+            data.items.forEach(i => {
+                html += `
+                    <div style="margin-bottom:10px;">
+                        <b>${i.name}</b><br>
+                        ${i.qty} шт × ${i.price} ₸
+                    </div>
+                `;
+            });
+
+            html += `
+                <hr>
+                <div><b>Оплата:</b> ${data.payment_type}</div>
+                <div><b>Сумма:</b> ${data.total_amount} ₸</div>
+            `;
+
+            document.getElementById("saleDetails").innerHTML = html;
+            document.getElementById("saleModal").classList.add("active");
+        });
+}
+
+function closeSale() {
+    document.getElementById("saleModal").classList.remove("active");
+}
+
+function toggleDeals() {
+
+    const block = document.getElementById("sheetDeals");
+    const arrow = document.getElementById("dealsArrow");
+
+    if (block.style.display === "none") {
+        block.style.display = "block";
+        arrow.innerText = "▲";
+    } else {
+        block.style.display = "none";
+        arrow.innerText = "▼";
+    }
+}
+
+const mainSearch = document.getElementById("clientSearchMain");
+
+if (mainSearch) {
+    mainSearch.addEventListener("input", function () {
+        const query = this.value.toLowerCase().trim();
+        const queryNumbers = query.replace(/\D/g, "");
+
+        document.querySelectorAll("#clientsTable tr.client-row").forEach(row => {
+            const name = (row.dataset.name || "").toLowerCase();
+            const phone = (row.dataset.phone || "").toLowerCase();
+            const company = (row.dataset.company || "").toLowerCase();
+            const iin = (row.dataset.iin || "").toLowerCase();
+            const numbers = phone.replace(/\D/g, "");
+
+            const matchText =
+                name.includes(query) ||
+                company.includes(query) ||
+                phone.includes(query) ||
+                iin.includes(query);
+
+            const matchPhone = queryNumbers && numbers.includes(queryNumbers);
+
+            row.style.display = (matchText || matchPhone || query === "") ? "" : "none";
+        });
+    });
+}
+</script>
+
+<script>
+document.querySelectorAll(".client-row").forEach(row => {
+    row.addEventListener("click", function() {
+
+        const id = this.dataset.id;
+
+        window.location.href = "/clients/" + id;
+
+    });
+});
+</script>
+
+{% endblock %}

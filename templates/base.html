@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<meta charset="UTF-8">
+	<title>{{ title or "Nika Business CRM" }}</title>
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<!-- 🔵 Иконка сайта -->
+	<link rel="icon" type="image/png" href="/static/img/logo-mini.png">
+
+	<!-- 📱 Для мобильных -->
+	<link rel="apple-touch-icon" href="/static/img/logo-mini.png">
+
+	<!-- 🔍 Описание -->
+	<meta name="description" content="Nika Business — CRM система для продаж, клиентов и автоматизации бизнеса">
+
+	<!-- 🎨 Цвет вкладки -->
+	<meta name="theme-color" content="#2d6cdf">
+
+    <style>
+        :root {
+            --bg-main: #f4f7fb;
+            --bg-soft: rgba(255, 255, 255, 0.72);
+            --bg-card: rgba(255, 255, 255, 0.82);
+            --line: rgba(255, 255, 255, 0.35);
+
+            --sidebar-1: #0f172a;
+            --sidebar-2: #1e293b;
+            --sidebar-3: #312e81;
+
+            --accent-1: #6366f1;
+            --accent-2: #8b5cf6;
+            --accent-3: #06b6d4;
+
+            --text-main: #111827;
+            --text-soft: #64748b;
+            --text-light: #e5eefc;
+
+            --success: #16a34a;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+
+            --shadow-main: 0 20px 50px rgba(15, 23, 42, 0.12);
+            --shadow-soft: 0 10px 25px rgba(15, 23, 42, 0.08);
+            --radius-xl: 24px;
+            --radius-lg: 18px;
+            --radius-md: 14px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            color: var(--text-main);
+            background:
+                linear-gradient(rgba(244,247,251,0.9), rgba(244,247,251,0.92)),
+                url("/static/img/crm-bg.jpg") center center / cover no-repeat fixed;
+            min-height: 100vh;
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 240px;
+			min-width: 240px;
+            height: 100vh;
+            position: fixed;
+			transition: width 0.3s ease;
+            top: 0;
+            left: 0;
+            padding: 22px 18px;
+			padding-bottom: 40px;
+            color: white;
+            background:
+                linear-gradient(180deg, rgba(15,23,42,0.97) 0%, rgba(30,41,59,0.96) 45%, rgba(49,46,129,0.93) 100%);
+            box-shadow: 10px 0 30px rgba(2, 6, 23, 0.18);
+            border-right: 1px solid rgba(255,255,255,0.08);
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .brand-box {
+            padding: 18px 16px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(6,182,212,0.16));
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+            margin-bottom: 24px;
+        }
+
+        .brand-title {
+            margin: 0;
+            font-size: 31px;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1.1;
+        }
+
+        .brand-subtitle {
+            margin-top: 8px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.72);
+        }
+
+        .menu-section {
+            margin-bottom: 6px;
+        }
+
+        .menu-caption {
+            font-size: 10px;
+			margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1.3px;
+            color: rgba(255,255,255,0.45);
+            margin: 0 0 10px 10px;
+        }
+
+        .sidebar a,
+        .submenu,
+        .menu-title-static {
+            display: flex;
+            align-items: center;
+            min-height: 46px;
+            color: var(--text-light);
+            text-decoration: none;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            border-radius: 14px;
+            transition: 0.25s ease;
+            font-size: 15px;
+            border: 1px solid transparent;
+        }
+
+        .sidebar a:hover,
+        .submenu:hover {
+            background: linear-gradient(90deg, rgba(99,102,241,0.22), rgba(6,182,212,0.16));
+            border: 1px solid rgba(255,255,255,0.08);
+            transform: translateX(4px);
+        }
+
+        .sidebar a.active {
+            background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+            color: white;
+            box-shadow: 0 10px 22px rgba(99, 102, 241, 0.35);
+        }
+
+        .menu-group {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .menu-title {
+            font-weight: bold;
+            margin-bottom: 6px;
+            color: #fff;
+            padding: 10px 10px 4px 10px;
+            font-size: 15px;
+        }
+
+        .submenu {
+            padding-left: 18px;
+            font-size: 14px;
+            opacity: 0.96;
+        }
+
+        .logout-link {
+            margin-top: 18px;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.18);
+        }
+
+        .logout-link:hover {
+            background: rgba(239, 68, 68, 0.18);
+        }
+
+		.content {
+			margin-left: 240px;
+			padding: 28px;
+			width: calc(100% - 240px);
+			transition: margin-left 0.3s ease, width 0.3s ease;
+			max-width: 100%;
+			flex: 1;
+		}
+		
+		.sidebar.collapsed ~ .content {
+			margin-left: 80px;
+			width: calc(100% - 80px);
+		}
+
+        .page-shell {
+            min-height: calc(100vh - 56px);
+            border-radius: 30px;
+            padding: 24px;
+            background: rgba(255,255,255,0.22);
+            border: 1px solid rgba(255,255,255,0.35);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: var(--shadow-main);
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 18px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .page-title {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .page-note {
+            margin-top: 6px;
+            color: var(--text-soft);
+            font-size: 14px;
+        }
+
+        .top-panel {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .glass-box,
+        .card,
+        table,
+        .sheet,
+        .finance-block {
+            background: var(--bg-card);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255,255,255,0.45);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .card {
+            padding: 20px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card.image-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(rgba(15,23,42,0.45), rgba(15,23,42,0.18)),
+                url("/static/img/card-bg.jpg") center center / cover no-repeat;
+            opacity: 0.18;
+            pointer-events: none;
+        }
+
+        .card > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 14px 12px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+        }
+
+        th {
+            background: linear-gradient(90deg, rgba(99,102,241,0.12), rgba(6,182,212,0.08));
+            color: #1e293b;
+            font-weight: 700;
+        }
+
+        tr:hover td {
+            background: rgba(99,102,241,0.03);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+            color: white;
+            padding: 11px 18px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 10px 22px rgba(99, 102, 241, 0.22);
+            transition: 0.25s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 30px rgba(99, 102, 241, 0.28);
+        }
+
+        .btn.small {
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
+        .btn-edit {
+            background: linear-gradient(90deg, #22c55e, #16a34a);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 10px;
+            text-decoration: none;
+            display: inline-block;
+            border: none;
+        }
+
+        .btn-close {
+            background: linear-gradient(90deg, #ef4444, #dc2626);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 10px;
+            text-decoration: none;
+            display: inline-block;
+            border: none;
+        }
+
+        .btn-add {
+            background: linear-gradient(90deg, #8b5cf6, #6366f1);
+            color: white;
+        }
+
+        .gray {
+            background: linear-gradient(90deg, #94a3b8, #64748b);
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(148,163,184,0.25);
+            background: rgba(255,255,255,0.75);
+            color: #0f172a;
+            outline: none;
+            transition: 0.2s ease;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            border-color: rgba(99,102,241,0.45);
+            box-shadow: 0 0 0 4px rgba(99,102,241,0.08);
+            background: rgba(255,255,255,0.92);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .client-table {
+            width: 100%;
+            max-width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+        }
+
+        .client-table th,
+        .client-table td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+            text-overflow: ellipsis;
+            overflow: hidden;
+            white-space: nowrap;
+			text-align: left;
+			vertical-align: middle;
+        }
+
+        .client-table th:nth-child(1),
+        .client-table td:nth-child(1) { width: 30%; }
+
+        .client-table th:nth-child(2),
+        .client-table td:nth-child(2) { width: 20%; }
+
+        .client-table th:nth-child(3),
+        .client-table td:nth-child(3) { width: 15%; }
+
+        .client-table th:nth-child(4),
+        .client-table td:nth-child(4) { width: 20%; }
+
+        .client-table th:nth-child(5),
+        .client-table td:nth-child(5) { width: 15%; }
+		
+		.table-img {
+			width: 50px;
+			height: 50px;
+			object-fit: cover;
+			border-radius: 8px;
+		}
+		
+		/* === ВЫБОР КЛИЕНТА === */
+
+		.client-picker {
+			display: grid;
+			grid-template-columns: 2fr 1fr;
+			gap: 20px;
+			width: 100%;
+		}
+
+		.picker-left {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+
+		.picker-right {
+			background: #f1f5f9;
+			border-radius: 16px;
+			padding: 16px;
+		}
+
+		.client-table-box {
+			background: white;
+			border-radius: 12px;
+			max-height: 420px;
+			overflow-y: auto;
+		}
+
+		.client-table {
+			width: 100%;
+			border-collapse: collapse;
+		}
+
+		.client-table tr {
+			cursor: pointer;
+		}
+
+		.client-table td {
+			padding: 10px;
+			border-bottom: 1px solid #eee;
+		}
+
+		.client-table tr:hover {
+			background: #eef2ff;
+		}
+
+		.selected-client {
+			background: white;
+			border-radius: 12px;
+			padding: 12px;
+			min-height: 120px;
+			margin: 10px 0;
+		}
+
+		.selected-title {
+			font-weight: bold;
+		}
+
+		.empty {
+			color: #94a3b8;
+		}
+
+		.sheet-head .company {
+			font-weight: 700;
+			font-size: 18px;
+		}
+
+		.sheet-head .name {
+			color: #64748b;
+			font-size: 16px;
+		}
+		
+		.search-input {
+			width: 300px;
+			padding: 10px;
+			border-radius: 10px;
+			border: 1px solid #ddd;
+			margin-bottom: 10px;
+		}
+		
+		/* === ШТОРКА === */
+		.sheet {
+			position: fixed;
+			left: 0;
+			bottom: 0;
+
+			width: 100%;
+			height: 85vh;
+
+			transform: translateY(100%);
+			opacity: 0;
+			pointer-events: none; /* 🔥 не кликается */
+
+			background: #f8fafc;
+			border-top-left-radius: 24px;
+			border-top-right-radius: 24px;
+
+			box-shadow: 0 -20px 60px rgba(0,0,0,0.25);
+
+			transition: all 0.3s ease;
+			z-index: 9999;
+
+			display: flex;
+			flex-direction: column;
+		}
+
+		.sheet.active {
+			transform: translateY(0);
+			opacity: 1;
+			pointer-events: auto; /* 🔥 включается */
+		}
+
+		/* СТАТУС */
+		.status-badge {
+			padding: 4px 8px;
+			border-radius: 6px;
+			font-size: 12px;
+			font-weight: 600;
+		}
+
+		/* === ФИНАНСЫ === */
+		.finance-cards {
+			display: flex;
+			gap: 12px;
+		}
+
+		.finance-card {
+			flex: 1;
+			padding: 14px;
+			border-radius: 14px;
+			color: white;
+			font-weight: 600;
+		}
+
+		.finance-card .f-title {
+			font-size: 13px;
+			opacity: 0.8;
+		}
+
+		.finance-card .f-value {
+			font-size: 18px;
+		}
+
+		/* цвета */
+		.finance-card.total {
+			background: linear-gradient(135deg, #6366f1, #8b5cf6);
+		}
+
+		.finance-card.paid {
+			background: linear-gradient(135deg, #22c55e, #16a34a);
+		}
+
+		.finance-card.debt {
+			background: linear-gradient(135deg, #ef4444, #dc2626);
+		}
+		
+		.deal-card {
+			background: #f1f5f9;
+			border-radius: 12px;
+			padding: 12px;
+			margin-bottom: 10px;
+			transition: 0.2s;
+		}
+		
+		.deal-date {
+			font-size: 12px;
+			color: #94a3b8;
+			margin-top: 3px;
+		}
+
+		.deal-card:hover {
+			background: #e2e8f0;
+		}
+
+		.deal-top {
+			display: flex;
+			justify-content: space-between;
+			font-size: 13px;
+		}
+
+		.deal-price {
+			font-size: 18px;
+			font-weight: bold;
+			margin-top: 6px;
+		}
+
+		/* статусы */
+		.ok {
+			color: #22c55e;
+			font-weight: 600;
+		}
+
+		.bad {
+			color: #ef4444;
+			font-weight: 600;
+		}
+
+		.empty {
+			color: #94a3b8;
+			text-align: center;
+		}
+
+		/* === КОММЕНТАРИЙ === */
+			flex: 1;
+			min-width: 160px;
+		}
+
+		/* === ГАЛЕРЕЯ === */
+		.sheet-gallery {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+		}
+
+		.sheet-gallery img {
+			width: 70px;
+			height: 70px;
+			object-fit: cover;
+			border-radius: 10px;
+		}
+
+		/* === КНОПКИ === */
+		.sheet-actions {
+			display: flex;
+			gap: 12px;
+			margin-top: 15px;
+		}
+
+		.sheet-actions .btn {
+			flex: 1;
+			height: 48px;
+			font-size: 14px;
+		}
+		
+		.sale-modal {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+
+			background: rgba(0,0,0,0.4);
+			display: none;
+
+			justify-content: center;
+			align-items: center;
+
+			z-index: 99999;
+		}
+		
+        .finance-block {
+            margin-top: 10px;
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.82);
+            font-size: 14px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(220px, 1fr));
+            gap: 18px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            padding: 18px;
+            border-radius: 20px;
+            color: white;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .stat-card.blue {
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+        }
+
+        .stat-card.purple {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+        }
+
+        .stat-card.cyan {
+            background: linear-gradient(135deg, #06b6d4, #3b82f6);
+        }
+
+        .stat-label {
+            font-size: 13px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        @media (max-width: 1100px) {
+            .sidebar {
+                width: 220px;
+            }
+
+            .content {
+                margin-left: 220px;
+                width: calc(100% - 220px);
+                padding: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: relative;
+                width: 100%;
+                height: auto;
+                border-right: none;
+            }
+
+            .content {
+                margin-left: 0;
+                width: 100%;
+                padding: 14px;
+            }
+
+            .layout {
+                flex-direction: column;
+            }
+
+            .page-shell {
+                padding: 16px;
+                border-radius: 20px;
+            }
+
+            .brand-title {
+                font-size: 26px;
+            }
+        }
+		
+		.sidebar-logo {
+			display: flex;
+			align-items: center;
+			justify-content: flex-start;
+			gap: 2px;
+			padding: 8px 4px;
+			overflow: hidden;
+		}
+
+		.logo-mark {
+			width: 48px;
+			height: 54px;
+			flex-shrink: 0;
+			object-fit: contain;
+			filter: drop-shadow(0 5px 15px rgba(0,0,0,0.2));
+			transition: transform 0.3s ease;
+		}
+
+		.logo-mark:hover {
+			transform: scale(1.05);
+		}
+
+		.logo-text-wrap {
+			overflow: hidden;
+			white-space: nowrap;
+			transition: 0.3s ease;
+		}
+
+		.logo-name {
+			font-size: 16px;
+			font-weight: 800;
+			color: #fff;
+			line-height: 1.1;
+
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis; /* 🔥 добавь */
+			max-width: 140px;        /* 🔥 ограничение */
+		}
+
+		.logo-sub {
+			font-size: 10px;
+			color: rgba(255,255,255,0.72);
+			margin-top: 4px;
+			white-space: nowrap;
+		}
+		
+		.text,
+		.logo-text-wrap,
+		.menu-caption,
+		.menu-title {
+			transition: opacity 0.2s ease, transform 0.2s ease, 
+			max-width 0.28s ease, 
+			margin 0.28s ease;
+			display: inline-block;
+			white-space: nowrap;
+			overflow: hidden;
+		}
+
+		.sidebar-logo img {
+			filter: drop-shadow(0 5px 15px rgba(0,0,0,0.2));
+			max-width: 100%;
+			height: auto;
+			object-fit: contain;
+		    transition: 0.3s;
+		}
+		
+		.sidebar-logo img:hover {
+			transform: scale(1.05);
+		}
+		
+		/* sidebar база */
+		.sidebar {
+			width: 240px;
+			min-width: 240px;
+			height: 100vh;
+			overflow-y: auto;
+			overflow-x: hidden;
+			scrollbar-width: none;
+			transition: background 0.3s ease;
+			line-height: 1.2;
+			position: fixed;
+			top: 0;
+			left: 0;
+		}
+		
+		.sidebar::-webkit-scrollbar {
+			display: none;
+		}
+		
+		.sidebar.collapsed {
+			width: 100px;
+			min-width: 100px;
+			box-shadow: 5px 0 15px rgba(2, 6, 23, 0.12);
+		}
+
+		/* кнопка */
+		.toggle-btn {
+			color: white;
+			font-size: 20px;
+			padding: 10px 15px;
+			cursor: pointer;
+		}
+
+		/* скрываем подпись */
+		.sidebar.collapsed .logo-sub {
+			display: none;
+		}
+		
+		.sidebar.collapsed .text,
+		.sidebar.collapsed .logo-text-wrap,
+		.sidebar.collapsed .menu-caption,
+		.sidebar.collapsed .menu-title {
+			opacity: 0;
+			transform: translateX(-10px);
+			width: 0;
+			min-width: 0;
+			margin: 0;
+			padding: 0;
+			overflow: hidden;
+			pointer-events: none;
+		}
+		
+		.sidebar.collapsed a,
+		.sidebar.collapsed .submenu {
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			padding: 10px 0; /* 🔥 убрали боковые отступы */
+		}
+		
+		.sidebar .text,
+		.sidebar .logo-text-wrap,
+		.sidebar .menu-caption,
+		.sidebar .menu-title {
+			opacity: 1;
+			transform: translateX(0);
+			max-width: 220px;
+		}
+		
+		.sidebar a,
+		.submenu,
+		.menu-title-static {
+			display: flex;
+			align-items: center;
+			height: 46px;
+			color: var(--text-light);
+			text-decoration: none;
+			padding: 10px 14px;
+			margin-bottom: 8px;
+			border-radius: 14px;
+			transition: background 0.25s ease, border 0.25s ease, transform 0.25s ease;
+			font-size: 15px;
+			border: 1px solid transparent;
+			overflow: hidden;
+		}
+		
+		.menu-icon {
+			width: 32px;
+			height: 32px;
+			min-width: 22px;
+			object-fit: contain;
+			flex-shrink: 0;
+		}
+		
+		.text {
+			display: inline-block;
+			white-space: nowrap;
+			overflow: hidden;
+		}
+		
+		/* выравнивание */
+		.sidebar a {
+			display: flex;
+			align-items: center;
+			gap: 5px;
+			padding: 10px 10px;
+			font-size: 13px;
+		}
+
+		/* иконки */
+		.icon {
+			font-size: 18px;
+			min-width: 25px;
+			text-align: center;
+		}
+		
+		body {
+			margin: 0;
+			overflow-x: hidden; /* только по горизонтали */
+			overflow-y: auto;
+		}
+
+		.layout {
+			display: flex;
+			min-height: 100vh; /* 🔥 вместо height */
+		}
+		
+		#agent-box {
+			position: fixed;
+			bottom: 20px;
+			right: 20px;
+			display: flex;
+			gap: 8px;
+
+			background: rgba(15, 23, 42, 0.85);
+			padding: 10px;
+			border-radius: 14px;
+
+			box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+			backdrop-filter: blur(10px);
+
+			z-index: 99999; /* 🔥 очень важно */
+		}
+
+		#agent-input {
+			padding: 8px 10px;
+			border-radius: 8px;
+			border: none;
+			outline: none;
+			width: 160px;
+		}
+
+		#agent-box button {
+			border: none;
+			padding: 8px 10px;
+			border-radius: 8px;
+			cursor: pointer;
+			background: linear-gradient(90deg, #6366f1, #8b5cf6);
+			color: white;
+			font-weight: bold;
+		}
+		
+		.client-page {
+			max-width: 1100px;
+			margin: auto;
+		}
+
+		.client-top {
+			display: flex;
+			justify-content: space-between;
+			gap: 30px;
+			margin-bottom: 30px;
+		}
+
+		.client-info {
+			flex: 1;
+		}
+
+		.company {
+			font-size: 14px;
+			color: #888;
+		}
+
+		.name {
+			font-size: 24px;
+			font-weight: bold;
+		}
+
+		.status {
+			display: inline-block;
+			padding: 6px 12px;
+			border-radius: 10px;
+			margin: 10px 0;
+			background: #eee;
+		}
+
+		.client-photo img {
+			width: 160px;
+			height: 160px;
+			object-fit: cover;
+			border-radius: 12px;
+		}
+
+		.block {
+			margin-bottom: 30px;
+		}
+
+		.title {
+			font-weight: bold;
+			margin-bottom: 10px;
+		}
+
+		.finance {
+			display: flex;
+			gap: 10px;
+		}
+
+		.card {
+			padding: 10px;
+			border-radius: 10px;
+			background: #f1f1f1;
+		}
+
+		.deal-card {
+			border: 1px solid #eee;
+			padding: 10px;
+			border-radius: 10px;
+			margin-bottom: 10px;
+		}
+
+		.gallery img {
+			width: 90px;
+			height: 90px;
+			object-fit: cover;
+			margin: 5px;
+			border-radius: 8px;
+		}
+
+    </style>
+</head>
+
+<body>
+{% if not session.get("user_id") %}
+    <script>
+        window.location.href = "/login";
+    </script>
+{% endif %}
+
+<div class="layout">
+	<div class="sidebar" id="sidebar">
+
+		<!-- 🔘 кнопка -->
+		<div class="toggle-btn" onclick="toggleSidebar()">☰</div>
+			<div style="margin:10px 0; font-size:12px; color:#94a3b8;">
+				👤 {{ session.get("username") }}
+
+				{% if session.get("is_creator") %}
+					(создатель системы 🔥)
+				{% elif session.get("is_super_admin") %}
+					(владелец системы)
+				{% elif session.get("role") == "admin" %}
+					(админ компании)
+				{% else %}
+					(кассир)
+				{% endif %}
+			</div>
+
+			<div class="sidebar-logo">
+				<img src="/static/img/logo-mini.png" class="logo-mark">
+
+				<div class="logo-text-wrap">
+					<div class="logo-name">Nika Business</div>
+					<div class="logo-sub">CRM / Продажи / Клиенты</div>
+				</div>
+			</div>
+		
+
+		<div class="menu-section">
+			<div class="menu-caption">Основное</div>
+
+			<a href="/dashboard">
+				<img src="/static/icons/home.png" class="menu-icon">
+				<span class="text">Главная</span>
+			</a>
+
+			<a href="/sales">
+				<img src="/static/icons/sales.png" class="menu-icon">
+				<span class="text">Продажи</span>
+			</a>
+
+			<a href="/items">
+				<img src="/static/icons/items.png" class="menu-icon">
+				<span class="text">Каталог</span>
+			</a>
+
+			<a href="/tasks">
+				<img src="/static/icons/tasks.png" class="menu-icon">
+				<span class="text">Задачи</span>
+			</a>
+		</div>
+
+        <div class="menu-section">
+            <div class="menu-caption">Клиенты</div>
+            <div class="menu-group">
+                <div class="menu-title">Клиенты</div>
+				<a href="/clients" class="submenu">
+					<img src="/static/icons/clients.png" class="menu-icon">
+					<span class="text">Активные</span>
+				</a>
+
+				<a href="/clients/deleted" class="submenu">
+					<img src="/static/icons/trash.png" class="menu-icon">
+					<span class="text">Удалённые</span>
+				</a>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-caption">Система</div>
+			{% if session.get("is_super_admin") %}
+			<a href="/companies">
+				<img src="/static/icons/company.png" class="menu-icon">
+				<span class="text">Организации</span>
+			</a>
+			{% endif %}
+			
+			{% if session.get("is_super_admin") %}
+			<a href="/users">
+				<img src="/static/icons/clients.png" class="menu-icon">
+				<span class="text">Пользователи</span>
+			</a>
+			{% endif %}
+
+			<a href="/logout" class="logout-link">
+				<img src="/static/icons/logout.png" class="menu-icon">
+				<span class="text">Выход ({{ session.get("username") }})</span>
+			</a>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="page-shell">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+<div id="agent-box">
+    <input type="text" id="agent-input" placeholder="Введите команду...">
+    <button onclick="sendCommand()">▶</button>
+    <button onclick="startVoice()">🎤</button>
+	<button onclick="toggleVoice()">🔊</button>
+</div>
+
+<script>
+// ================== SIDEBAR ==================
+function toggleSidebar() {
+    const sidebar = document.getElementById("sidebar");
+
+    sidebar.classList.toggle("collapsed");
+
+    localStorage.setItem(
+        "sidebarCollapsed",
+        sidebar.classList.contains("collapsed")
+    );
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    const sidebar = document.getElementById("sidebar");
+
+    if (localStorage.getItem("sidebarCollapsed") === "true") {
+        sidebar.classList.add("collapsed");
+    }
+
+    loadVoices();
+});
+
+// ================== ГОЛОС ==================
+let voiceEnabled = true;
+let selectedVoice = null;
+
+const phrases = {
+    open: ["Открываю", "Сейчас покажу", "Перехожу", "Уже открываю"],
+    search: ["Секунду, ищу", "Нашла, сейчас покажу", "Ищу в базе", "Проверяю"],
+    error: ["Я не совсем поняла", "Повтори пожалуйста", "Попробуй сказать иначе"]
+};
+
+function say(type) {
+    const arr = phrases[type] || ["Готово"];
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function loadVoices() {
+    const voices = speechSynthesis.getVoices();
+
+    if (!voices.length) return;
+
+    selectedVoice =
+        voices.find(v => v.name.includes("Google") && v.lang.includes("ru")) ||
+        voices.find(v => v.lang.includes("ru")) ||
+        voices[0];
+
+    console.log("Голос:", selectedVoice.name);
+}
+
+window.speechSynthesis.onvoiceschanged = loadVoices;
+
+function speak(text, callback = null) {
+
+    // 🔥 останавливаем микрофон
+    if (recognition) {
+        recognition.stop();
+    }
+
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "ru-RU";
+
+    utter.onend = () => {
+        console.log("Ассистент договорил");
+
+        // 👉 после ответа можно снова включить микрофон
+        if (callback) {
+            callback();
+        }
+    };
+
+    speechSynthesis.speak(utter);
+}
+
+function toggleVoice() {
+    voiceEnabled = !voiceEnabled;
+
+    if (voiceEnabled) {
+        speak("Голос включен");
+    } else {
+        speechSynthesis.cancel();
+    }
+}
+
+// ================== АГЕНТ ==================
+function sendCommand() {
+    const input = document.getElementById("agent-input");
+    const text = input.value.trim();
+
+    if (!text) {
+        speak("Скажи команду");
+        return;
+    }
+
+    fetch("/api/agent/command", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({text: text})
+    })
+    .then(res => res.json())
+	.then(data => {
+
+		console.log("ASSISTANT:", data);
+
+		// 👉 диалог (вопрос ассистента)
+		if (data.reply) {
+			speak(data.reply, () => {
+				setTimeout(() => {
+					startVoice();
+				}, 500);
+			});
+			return;
+		}
+
+		// 👉 ошибка
+		if (data.error) {
+			speak("Ошибка: " + data.error);
+			return;
+		}
+
+		// 👉 успех (конец диалога)
+		if (data.success) {
+			speak(data.message || "Готово");
+
+			// 🔥 микрофон НЕ включаем обратно
+			location.reload();
+			return;
+		}
+
+		if (data.action === "redirect") {
+			speak(say("open") + " раздел", () => {
+				window.location.href = data.url;
+			});
+		}
+
+		if (data.action === "search_client") {
+			speak(say("search") + " " + data.query, () => {
+				window.location.href = "/clients?search=" + encodeURIComponent(data.query);
+			});
+		}
+
+		if (data.action === "error") {
+			speak(say("error"));
+			alert(data.message);
+		}
+
+		if (data.action === "create_client") {
+			speak("Создаю клиента " + data.name);
+
+			fetch("/clients/add", {
+				method: "POST",
+				body: new URLSearchParams({
+					full_name: data.name,
+					phone: data.phone,
+					status: "Новый",
+					payment: "Не оплачено"
+				})
+			})
+			.then(res => {
+				if (res.ok) {
+					speak("Клиент создан");
+				} else {
+					speak("Не удалось создать клиента");
+				}
+			})
+			.catch(() => {
+				speak("Ошибка при создании клиента");
+			});
+		}
+
+		if (data.action === "create_sale_smart") {
+			speak("Ищу клиента " + data.client_name);
+
+			openClientSheet();
+
+			setTimeout(() => {
+				const input = document.getElementById("clientSearchInput");
+				input.value = data.client_name;
+				filterClients();
+			}, 300);
+		}
+
+		if (data.action === "get_revenue") {
+			fetch("/api/revenue")
+			.then(res => res.json())
+			.then(res => {
+				speak("Сегодня выручка " + res.total + " тенге");
+			});
+		}
+
+	});
+
+    input.value = "";
+}
+
+// ================== ГОЛОС (НЕ ОБРЫВАЕТ РЕЧЬ) ==================
+
+let recognition;
+let silenceTimer;
+
+function startVoice() {
+
+    if (!('webkitSpeechRecognition' in window)) {
+        alert("Браузер не поддерживает голос");
+        return;
+    }
+
+    recognition = new webkitSpeechRecognition();
+    recognition.lang = "ru-RU";
+    recognition.continuous = true; // 🔥 ВАЖНО
+    recognition.interimResults = false;
+
+    let finalText = "";
+
+	if (!window.voiceStarted) {
+		speak("Говори");
+		window.voiceStarted = true;
+	}
+
+    recognition.start();
+
+    recognition.onresult = function(event) {
+
+        let text = event.results[event.results.length - 1][0].transcript;
+
+        finalText += " " + text;
+
+        console.log("Речь:", finalText);
+
+        // 🔥 если ты замолчал → считаем что закончил
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+
+            recognition.stop();
+
+            finalText = finalText.trim();
+
+            if (finalText.length === 0) {
+                speak("Я не услышала");
+                return;
+            }
+
+            document.getElementById("agent-input").value = finalText;
+
+            sendCommand();
+
+        }, 1500); // 👉 можно 1500–2500
+
+    };
+
+    recognition.onerror = function(e) {
+        console.log("Ошибка:", e);
+    };
+
+    recognition.onend = function() {
+        console.log("Микрофон выключен");
+    };
+}
+</script>
+
+</body>
+</html>

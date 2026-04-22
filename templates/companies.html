@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Организации</h2>
+
+<form method="POST" action="/companies/add" class="card">
+
+    <input name="name" placeholder="Название">
+	<input name="director" placeholder="ФИО директора">
+    <input name="bin" placeholder="БИН / ИИН">
+    <input name="address" placeholder="Адрес">
+    <input name="phone" placeholder="Телефон">
+	<input name="iik" placeholder="ИИК (IBAN)">
+    <input name="bik" placeholder="БИК">
+    <input name="bank" placeholder="Банк">
+	<input name="kbe" placeholder="КБЕ (например 19)">
+	<input name="knp" placeholder="КНП (например 890)">
+
+    <button class="btn">Добавить</button>
+
+</form>
+
+<br>
+
+<table class="table">
+    <tr>
+        <th>Название</th>
+        <th>БИН</th>
+        <th>Телефон</th>
+        <th>Статус</th>
+        <th></th>
+    </tr>
+
+    {% for c in companies %}
+    <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ c.bin }}</td>
+        <td>{{ c.phone }}</td>
+
+        <td>
+            {% if c.is_active %}
+                <span style="color:green;">Активна</span>
+            {% endif %}
+        </td>
+
+		<td style="display:flex; gap:10px;">
+			<a href="/companies/activate/{{ c.id }}">Выбрать</a>
+
+			<a href="/companies/delete/{{ c.id }}"
+			   onclick="return confirm('Удалить организацию?')"
+			   style="color:red;">
+				Удалить
+			</a>
+		</td>
+    </tr>
+    {% endfor %}
+
+</table>
+
+{% endblock %}

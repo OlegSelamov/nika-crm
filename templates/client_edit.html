@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card client-form-card">
+    <div class="form-head">
+        <h2>Редактировать клиента</h2>
+        <div class="form-subtitle">Обновление данных клиента</div>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" class="client-form-grid">
+
+        <div class="form-group">
+            <label>Наименование ИП / Организации</label>
+            <input name="company_name" value="{{ client.company_name }}">
+        </div>
+
+        <div class="form-group">
+            <label>ФИО</label>
+            <input name="full_name" value="{{ client.full_name }}">
+        </div>
+
+        <div class="form-group">
+            <label>ИИН</label>
+            <input name="iin" value="{{ client.iin }}">
+        </div>
+
+        <div class="form-group">
+            <label>Телефон</label>
+            <input name="phone" value="{{ client.phone }}">
+        </div>
+
+        <div class="form-group">
+            <label>Адрес</label>
+            <input name="address" value="{{ client.address }}">
+        </div>
+
+        <div class="form-group">
+            <label>Статус</label>
+            <select name="status">
+                <option {% if client.status == 'Новый' %}selected{% endif %}>Новый</option>
+                <option {% if client.status == 'В работе' %}selected{% endif %}>В работе</option>
+                <option {% if client.status == 'Ожидание' %}selected{% endif %}>Ожидание</option>
+                <option {% if client.status == 'Завершен' %}selected{% endif %}>Завершен</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Категория</label>
+            <select name="category">
+                <option {% if client.category == 'Клиент' %}selected{% endif %}>Клиент</option>
+                <option {% if client.category == 'Предприниматель' %}selected{% endif %}>Предприниматель</option>
+                <option {% if client.category == 'Партнер' %}selected{% endif %}>Партнер</option>
+                <option {% if client.category == 'Другое' %}selected{% endif %}>Другое</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Оплата</label>
+            <select name="payment">
+                <option {% if client.payment == 'Наличные' %}selected{% endif %}>Наличные</option>
+                <option {% if client.payment == 'Безнал' %}selected{% endif %}>Безнал</option>
+                <option {% if client.payment == 'Kaspi QR' %}selected{% endif %}>Kaspi QR</option>
+                <option {% if client.payment == 'Не оплачено' %}selected{% endif %}>Не оплачено</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Основное фото клиента</label>
+            <input type="file" name="photo" accept="image/*">
+        </div>
+
+        <div class="form-group">
+            <label>Фото к комментарию</label>
+            <input type="file" name="comment_photos" accept="image/*" multiple>
+        </div>
+
+        <div class="form-group full-width">
+            <label>Комментарий</label>
+            <textarea name="comment">{{ client.comment }}</textarea>
+        </div>
+
+        <div class="form-actions full-width">
+            <button class="btn">Сохранить</button>
+            <a href="/clients" class="btn gray">Отмена</a>
+        </div>
+
+    </form>
+</div>
+
+{% endblock %}

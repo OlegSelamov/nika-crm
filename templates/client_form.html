@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card client-form-card">
+    <div class="form-head">
+        <h2>Добавить клиента</h2>
+        <div class="form-subtitle">Основная информация, документы и вложения</div>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" class="client-form-grid">
+        <div class="form-group">
+            <label>Наименование ИП / Организации</label>
+            <input name="company_name" placeholder="Например: ИП Айдана / ТОО Nika Business">
+        </div>
+		
+        <div class="form-group">
+            <label>ФИО</label>
+            <input name="full_name" required>
+        </div>
+		
+        <div class="form-group">
+            <label>ИИН</label>
+            <input name="iin" maxlength="12" placeholder="Например: 990101300123">
+        </div>
+
+        <div class="form-group">
+            <label>Телефон</label>
+            <input name="phone">
+        </div>
+
+        <div class="form-group">
+            <label>Адрес</label>
+            <input name="address">
+        </div>
+
+        <div class="form-group">
+            <label>Статус</label>
+            <select name="status">
+                <option>Новый</option>
+                <option>В работе</option>
+                <option>Ожидание</option>
+                <option>Завершен</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Категория</label>
+            <select name="category">
+                <option>Клиент</option>
+                <option>Предприниматель</option>
+                <option>Партнер</option>
+                <option>Другое</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Оплата</label>
+            <select name="payment">
+                <option>Наличные</option>
+                <option>Безнал</option>
+                <option>Kaspi QR</option>
+                <option>Не оплачено</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Основное фото клиента</label>
+            <input type="file" name="photo" accept="image/*">
+        </div>
+
+        <div class="form-group">
+            <label>Фото к комментарию</label>
+            <input type="file" name="comment_photos" accept="image/*" multiple>
+        </div>
+
+        <div class="form-group full-width">
+            <label>Комментарий</label>
+            <textarea name="comment" rows="5"></textarea>
+        </div>
+
+        <div class="form-actions full-width">
+            <button class="btn" type="submit">Сохранить</button>
+            <a href="/clients" class="btn gray">Отмена</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.client-form-card {
+    max-width: 1100px;
+    margin: 0 auto;
+    border-radius: 22px;
+}
+
+.form-head {
+    margin-bottom: 18px;
+}
+
+.form-head h2 {
+    margin: 0 0 6px;
+}
+
+.form-subtitle {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.client-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 18px;
+}
+
+.client-form-grid .form-group {
+    margin-bottom: 0;
+}
+
+.client-form-grid .full-width {
+    grid-column: 1 / -1;
+}
+
+.client-form-grid textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+input[type="file"] {
+    padding: 9px;
+    background: white;
+}
+
+@media (max-width: 768px) {
+    .client-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .client-form-grid .full-width {
+        grid-column: auto;
+    }
+}
+</style>
+
+{% endblock %}
