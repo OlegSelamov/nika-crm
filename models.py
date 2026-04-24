@@ -296,5 +296,10 @@ def init_db():
         cur.execute("ALTER TABLE clients ADD COLUMN company_id INTEGER")
     except:
         pass
+        
+    try:
+        cur.execute("ALTER TABLE items ADD COLUMN company_id INTEGER")
+    except:
+        pass
     conn.commit()
     conn.close()

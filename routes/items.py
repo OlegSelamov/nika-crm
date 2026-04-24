@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect
 from models import get_db
 from werkzeug.utils import secure_filename
+from flask import session
 import os
 import uuid
 
@@ -16,7 +17,8 @@ def items():
          WHERE item_id = items.id 
          LIMIT 1) as image
     FROM items
-    """).fetchall()
+    WHERE items.company_id = ?
+    """, (session.get("company_id"),)).fetchall()
     conn.close()
     return render_template("items.html", items=items)
 
@@ -25,10 +27,12 @@ def add_item():
     if request.method == "POST":
         conn = get_db()
 
+        company_id = session.get("company_id")
+
         conn.execute("""
             INSERT INTO items 
-            (name, category, description, retail_price, wholesale_price, purchase_price, discount_percent, barcode)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (name, category, description, retail_price, wholesale_price, purchase_price, discount_percent, barcode, company_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             request.form["name"],
             request.form["category"],
@@ -37,7 +41,8 @@ def add_item():
             request.form.get("wholesale_price"),
             request.form.get("purchase_price"),
             request.form.get("discount_percent"),
-            request.form.get("barcode")
+            request.form.get("barcode"),
+            company_id
         ))
 
         item_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -85,7 +90,7 @@ def edit_item(item_id):
                 purchase_price = ?,
                 discount_percent = ?,
                 barcode = ?
-            WHERE id = ?
+            WHERE id = ? AND company_id = ?
         """, (
             request.form["name"],
             request.form["category"],
@@ -95,7 +100,8 @@ def edit_item(item_id):
             request.form.get("purchase_price"),
             request.form.get("discount_percent"),
             request.form.get("barcode"),
-            item_id
+            item_id,
+            session.get("company_id")
         ))
 
         conn.commit()
@@ -103,8 +109,8 @@ def edit_item(item_id):
         return redirect("/items")
 
     item = conn.execute(
-        "SELECT * FROM items WHERE id = ?",
-        (item_id,)
+        "SELECT * FROM items WHERE id = ? AND company_id = ?",
+        (item_id, session.get("company_id"))
     ).fetchone()
 
     conn.close()
@@ -116,8 +122,8 @@ def delete_item(item_id):
     conn = get_db()
 
     conn.execute(
-        "DELETE FROM items WHERE id = ?",
-        (item_id,)
+        "DELETE FROM items WHERE id = ? AND company_id = ?",
+        (item_id, session.get("company_id"))
     )
 
     conn.commit()
@@ -128,12 +134,17 @@ def delete_item(item_id):
 @items_bp.route("/api/items")
 def api_items():
     conn = get_db()
+
     items = conn.execute("""
     SELECT 
         items.*,
-        (SELECT image FROM item_images WHERE item_id = items.id LIMIT 1) as image
+        (SELECT image FROM item_images 
+         WHERE item_id = items.id 
+         LIMIT 1) as image
     FROM items
-    """).fetchall()
+    WHERE items.company_id = ?
+    """, (session.get("company_id"),)).fetchall()
+
     conn.close()
 
     return [dict(i) for i in items]

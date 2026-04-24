@@ -30,10 +30,11 @@ def add_sale():
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO sales (client_id, total_amount, paid_amount, status, created_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO sales (client_id, company_id, total_amount, paid_amount, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
     """, (
         request.form["client_id"],
+        session.get("company_id"),
         0,
         0,
         "Новая",
@@ -130,8 +131,8 @@ def get_sale(sale_id):
     conn.row_factory = sqlite3.Row
 
     sale = conn.execute(
-        "SELECT * FROM sales WHERE id = ?",
-        (sale_id,)
+        "SELECT * FROM sales WHERE id = ? AND company_id = ?",
+        (sale_id, session.get("company_id"))
     ).fetchone()
 
     if not sale:
@@ -186,7 +187,8 @@ def smart_sale(payload=None):
     cur = conn.cursor()
 
     clients = cur.execute(
-        "SELECT id, full_name FROM clients"
+        "SELECT id, full_name FROM clients WHERE company_id = ?",
+        (session.get("company_id"),)
     ).fetchall()
 
     client = None
@@ -212,7 +214,8 @@ def smart_sale(payload=None):
         return jsonify({"success": False, "error": f"client not found: {client_name}"})
 
     items = cur.execute(
-        "SELECT id, retail_price, name FROM items"
+        "SELECT id, retail_price, name FROM items WHERE company_id = ?",
+        (session.get("company_id"),)
     ).fetchall()
 
     item = None
@@ -238,11 +241,12 @@ def smart_sale(payload=None):
         return jsonify({"success": False, "error": f"item not found: {item_name}"})
 
     cur.execute("""
-        INSERT INTO sales (client_id, total_amount, paid_amount, status, created_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO sales (client_id, company_id, total_amount, paid_amount, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
     """, (
-        client["id"] if hasattr(client, "keys") else client[0],
-        item["retail_price"] if hasattr(item, "keys") else item[1],
+        client["id"],
+        session.get("company_id"),
+        item["retail_price"],
         0,
         "Новая",
         datetime.now()
@@ -276,7 +280,7 @@ def create_invoice():
 
     client_id = data.get("client_id")
     cart = data.get("cart", [])
-    company_id = data.get("company_id")
+    company_id = session.get("company_id")
 
     conn = get_db()
 
@@ -344,8 +348,8 @@ def get_sale_data(sale_id):
     conn = get_db()
 
     sale = conn.execute(
-        "SELECT * FROM sales WHERE id = ?",
-        (sale_id,)
+        "SELECT * FROM sales WHERE id = ? AND company_id = ?",
+        (sale_id, session.get("company_id"))
     ).fetchone()
 
     items = conn.execute(
@@ -354,8 +358,8 @@ def get_sale_data(sale_id):
     ).fetchall()
 
     client = conn.execute(
-        "SELECT * FROM clients WHERE id = ?",
-        (sale["client_id"],)
+        "SELECT * FROM clients WHERE id = ? AND company_id = ?",
+        (sale["client_id"], session.get("company_id"))
     ).fetchone()
 
     conn.close()
@@ -454,8 +458,8 @@ def mark_paid():
     conn = get_db()
 
     sale = conn.execute(
-        "SELECT * FROM sales WHERE id = ?",
-        (sale_id,)
+        "SELECT * FROM sales WHERE id = ? AND company_id = ?",
+        (sale_id, session.get("company_id"))
     ).fetchone()
 
     if not sale:
@@ -468,8 +472,8 @@ def mark_paid():
             status = 'Оплачено',
             paid_amount = total_amount,
             paid_at = ?
-        WHERE id = ?
-    """, (datetime.now().isoformat(), sale_id))
+        WHERE id = ? AND company_id = ?
+    """, (datetime.now().isoformat(), sale_id, session.get("company_id")))
 
     conn.commit()
     conn.close()

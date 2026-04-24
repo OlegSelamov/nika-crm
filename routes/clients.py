@@ -118,9 +118,9 @@ def client_detail(client_id):
 
     sales = conn.execute("""
         SELECT * FROM sales
-        WHERE client_id = ?
+        WHERE client_id = ? AND company_id = ?
         ORDER BY id DESC
-    """, (client_id,)).fetchall()
+    """, (client_id, session.get("company_id"))).fetchall()
 
     conn.close()
 
@@ -168,19 +168,20 @@ def api_client(client_id):
     conn = get_db()
 
     client = conn.execute(
-        "SELECT * FROM clients WHERE id = ?",
-        (client_id,)
+        "SELECT * FROM clients WHERE id = ? AND company_id = ?",
+        (client_id, session.get("company_id"))
     ).fetchone()
 
     deals = conn.execute("""
         SELECT * FROM sales
-        WHERE client_id = ?
+        WHERE client_id = ? AND company_id = ?
         ORDER BY id DESC
-    """, (client_id,)).fetchall()
+    """, (client_id, session.get("company_id"))).fetchall()
 
     # 🔥 ВАЖНО: сначала берём services
     items = conn.execute(
-        "SELECT * FROM items"
+        "SELECT * FROM items WHERE company_id = ?",
+        (session.get("company_id"),)
     ).fetchall()
 
     # ❗ И ТОЛЬКО ПОТОМ закрываем
@@ -197,13 +198,18 @@ def edit_client(client_id):
     conn = get_db()
 
     if request.method == "POST":
+
         old_client = conn.execute(
-            "SELECT * FROM clients WHERE id = ?",
-            (client_id,)
+            "SELECT * FROM clients WHERE id = ? AND company_id = ?",
+            (client_id, session.get("company_id"))
         ).fetchone()
 
-        photo_path = old_client["photo"] if old_client and "photo" in old_client.keys() else ""
-        old_comment_photos = old_client["comment_photos"] if old_client and "comment_photos" in old_client.keys() else ""
+        if not old_client:
+            conn.close()
+            return "Нет доступа"
+
+        photo_path = old_client["photo"] or ""
+        old_comment_photos = old_client["comment_photos"] or ""
         comment_photo_paths = old_comment_photos.split("|") if old_comment_photos else []
 
         photo = request.files.get("photo")
@@ -227,7 +233,7 @@ def edit_client(client_id):
             UPDATE clients
             SET full_name = ?, phone = ?, iin = ?, company_name = ?, status = ?,
                 category = ?, payment = ?, comment = ?, address = ?, photo = ?, comment_photos = ?
-            WHERE id = ?
+            WHERE id = ? AND company_id = ?
         """, (
             request.form["full_name"],
             request.form.get("phone", ""),
@@ -240,16 +246,18 @@ def edit_client(client_id):
             request.form.get("address", ""),
             photo_path,
             "|".join([p for p in comment_photo_paths if p]),
-            client_id
+            client_id,
+            session.get("company_id")
         ))
 
         conn.commit()
         conn.close()
         return {"status": "ok"}
 
+    # GET
     client = conn.execute(
-        "SELECT * FROM clients WHERE id = ?",
-        (client_id,)
+        "SELECT * FROM clients WHERE id = ? AND company_id = ?",
+        (client_id, session.get("company_id"))
     ).fetchone()
 
     conn.close()
@@ -264,8 +272,8 @@ def delete_client(client_id):
     conn = get_db()
 
     conn.execute(
-        "UPDATE clients SET is_deleted = 1 WHERE id = ?",
-        (client_id,)
+        "UPDATE clients SET is_deleted = 1 WHERE id = ? AND company_id = ?",
+        (client_id, session.get("company_id"))
     )
 
     conn.commit()
@@ -277,7 +285,8 @@ def delete_client(client_id):
 def deleted_clients():
     conn = get_db()
     data = conn.execute(
-        "SELECT * FROM clients WHERE is_deleted = 1 ORDER BY id DESC"
+        "SELECT * FROM clients WHERE is_deleted = 1 AND company_id = ? ORDER BY id DESC",
+        (session.get("company_id"),)
     ).fetchall()
     conn.close()
     return render_template("clients_deleted.html", clients=data)
@@ -287,8 +296,8 @@ def restore_client(client_id):
     conn = get_db()
     
     conn.execute(
-        "UPDATE clients SET is_deleted = 0 WHERE id = ?",
-        (client_id,)
+        "UPDATE clients SET is_deleted = 0 WHERE id = ? AND company_id = ?",
+        (client_id, session.get("company_id"))
     )
     
     conn.commit()
@@ -300,10 +309,10 @@ def restore_client(client_id):
 def delete_client_permanently(client_id):
     conn = get_db()
 
-    conn.execute(
-        "DELETE FROM clients WHERE id = ?",
-        (client_id,)
-    )
+    (conn.execute(
+        "DELETE FROM clients WHERE id = ? AND company_id = ?",
+        (client_id, session.get("company_id"))
+    ))
 
     conn.commit()
     conn.close()
@@ -337,9 +346,9 @@ def client_sales(id):
 
     sales = conn.execute("""
         SELECT * FROM sales
-        WHERE client_id = ?
+        WHERE client_id = ? AND company_id = ?
         ORDER BY id DESC
-    """, (id,)).fetchall()
+    """, (id, session.get("company_id"))).fetchall()
 
     conn.close()
 

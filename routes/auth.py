@@ -192,7 +192,7 @@ def register():
         conn.execute("""
             INSERT INTO users (username, password, role, company_id)
             VALUES (?, ?, ?, ?)
-        """, (username, password, "owner", company_id))
+        """, (username, password, "admin", company_id))
 
         conn.commit()
         conn.close()
