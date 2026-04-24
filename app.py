@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template
 from routes.dashboard import dashboard_bp
 from routes.clients import clients_bp
 from routes.tasks import tasks_bp

@@ -1,23 +1,144 @@
-<form method="POST">
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Регистрация — Nika Business</title>
 
-    <h3>Компания</h3>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial;
+            background: linear-gradient(135deg, #0f172a, #1e3a8a);
+            display: flex;
+            justify-content: center;
+            color: #333;
+			padding: 40px 0;
+			overflow-y: auto;
+        }
 
-    <input name="name" placeholder="Название" required><br>
-    <input name="director" placeholder="ФИО директора"><br>
-    <input name="bin" placeholder="БИН / ИИН"><br>
-    <input name="address" placeholder="Адрес"><br>
-    <input name="phone" placeholder="Телефон"><br>
-    <input name="iik" placeholder="ИИК (IBAN)"><br>
-    <input name="bik" placeholder="БИК"><br>
-    <input name="bank" placeholder="Банк"><br>
-    <input name="kbe" placeholder="КБЕ"><br>
-    <input name="knp" placeholder="КНП"><br>
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 420px;
+			max-width: 95%;
+			max-height: none;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
 
-    <h3>Аккаунт</h3>
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
 
-    <input name="username" placeholder="Логин" required><br>
-    <input name="password" type="password" placeholder="Пароль" required><br>
+        h3 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 16px;
+            color: #555;
+        }
 
-    <button type="submit">Зарегистрироваться</button>
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+        }
 
-</form>
+        input:focus {
+            outline: none;
+            border-color: #6366f1;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #6366f1;
+            border: none;
+            color: white;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #4f46e5;
+        }
+
+        .bottom {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .bottom a {
+            color: #6366f1;
+            text-decoration: none;
+        }
+
+        .bottom a:hover {
+            text-decoration: underline;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .row input {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+
+    <h2>Nika Business</h2>
+
+    <form method="POST">
+
+        <h3>Компания</h3>
+
+        <input name="name" placeholder="Название компании" required>
+        <input name="director" placeholder="ФИО директора">
+
+        <div class="row">
+            <input name="bin" placeholder="БИН">
+            <input name="phone" placeholder="Телефон">
+        </div>
+
+        <input name="address" placeholder="Адрес">
+
+        <div class="row">
+            <input name="iik" placeholder="ИИК">
+            <input name="bik" placeholder="БИК">
+        </div>
+
+        <input name="bank" placeholder="Банк">
+
+        <div class="row">
+            <input name="kbe" placeholder="КБЕ">
+            <input name="knp" placeholder="КНП">
+        </div>
+
+        <h3>Аккаунт</h3>
+
+        <input name="username" placeholder="Логин" required>
+        <input name="password" type="password" placeholder="Пароль" required>
+
+        <button type="submit">Создать компанию</button>
+
+    </form>
+
+    <div class="bottom">
+        Уже есть аккаунт? <a href="/login">Войти</a>
+    </div>
+
+</div>
+
+</body>
+</html>
