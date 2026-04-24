@@ -2,10 +2,12 @@ import os
 import sqlite3
 from datetime import datetime
 
-DATABASE = "/data/database.db"
-
-if not os.path.exists("/data"):
-    os.makedirs("/data")
+# если есть диск (на Render)
+if os.path.exists("/data"):
+    DATABASE = "/data/database.db"
+else:
+    # локально
+    DATABASE = "database.db"
 
 def get_db():
     conn = sqlite3.connect(DATABASE, timeout=5)

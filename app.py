@@ -72,6 +72,10 @@ def check_company_access():
         from datetime import datetime
         if datetime.now() > datetime.fromisoformat(company["paid_until"]):
             return "Доступ приостановлен. Оплатите подписку"
+            
+@app.route("/")
+def landing():
+    return render_template("landing.html")
 
 if __name__ == "__main__":
     init_db()

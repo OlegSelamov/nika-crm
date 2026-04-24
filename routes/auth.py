@@ -158,3 +158,45 @@ def delete_user(user_id):
     conn.close()
 
     return redirect("/users")
+    
+@auth_bp.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        conn = get_db()
+
+        # 🔐 пользователь
+        username = request.form["username"]
+        password = request.form["password"]
+
+        # 🏢 компания (твоя форма)
+        name = request.form["name"]
+        director = request.form.get("director")
+        bin = request.form.get("bin")
+        address = request.form.get("address")
+        phone = request.form.get("phone")
+        iik = request.form.get("iik")
+        bik = request.form.get("bik")
+        bank = request.form.get("bank")
+        kbe = request.form.get("kbe")
+        knp = request.form.get("knp")
+
+        # 1. создаём компанию
+        conn.execute("""
+            INSERT INTO companies (name, director, bin, address, phone, iik, bik, bank, kbe, knp, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """, (name, director, bin, address, phone, iik, bik, bank, kbe, knp))
+
+        company_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # 2. создаём владельца
+        conn.execute("""
+            INSERT INTO users (username, password, role, company_id)
+            VALUES (?, ?, ?, ?)
+        """, (username, password, "owner", company_id))
+
+        conn.commit()
+        conn.close()
+
+        return redirect("/login")
+
+    return render_template("register.html")
