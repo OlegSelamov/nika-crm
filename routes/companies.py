@@ -47,6 +47,16 @@ def add_company():
         request.form.get("knp"),
         request.form.get("director"),
     ))
+    
+    # получаем ID созданной компании
+    company_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    # 🔥 привязываем текущего пользователя к этой компании
+    conn.execute(
+        "UPDATE users SET company_id = ? WHERE id = ?",
+        (company_id, session["user_id"])
+    )
+    
     conn.commit()
     conn.close()
     return redirect("/companies")
