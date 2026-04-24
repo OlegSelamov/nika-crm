@@ -28,22 +28,6 @@ app.register_blueprint(companies_bp)
 app.register_blueprint(agent_bp)
 app.register_blueprint(voice_bp)
 app.register_blueprint(auth_bp)
-
-@app.route("/")
-def index():
-    if not session.get("user_id"):
-        return redirect("/login")
-
-    # 👑 супер админ
-    if session.get("is_super_admin"):
-        return redirect("/companies")
-
-    # 🏢 админ
-    if session.get("role") == "admin":
-        return redirect("/company/profile")
-
-    # 👤 кассир
-    return redirect("/profile")
     
 @app.before_request
 def check_company_access():
