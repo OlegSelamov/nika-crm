@@ -251,6 +251,8 @@ function openClient(id, name, phone, status, address, category, comment, created
 		});
 	}, 100);
 
+}
+
 function showServiceForm() {
     document.getElementById("serviceForm").style.display = "block";
 }
@@ -309,39 +311,37 @@ const mainSearch = document.getElementById("clientSearchMain");
 
 if (mainSearch) {
     mainSearch.addEventListener("input", function () {
+
         const query = this.value.toLowerCase().trim();
-        const queryNumbers = query.replace(/\D/g, "");
 
-        document.querySelectorAll("#clientsTable tr.client-row").forEach(row => {
-            const name = (row.dataset.name || "").toLowerCase();
-            const phone = (row.dataset.phone || "").toLowerCase();
-            const company = (row.dataset.company || "").toLowerCase();
-            const iin = (row.dataset.iin || "").toLowerCase();
-            const numbers = phone.replace(/\D/g, "");
+        const rows = document.querySelectorAll("#clientsTable tr.client-row");
 
-            const matchText =
-                name.includes(query) ||
-                company.includes(query) ||
-                phone.includes(query) ||
-                iin.includes(query);
+        rows.forEach(row => {
 
-            const matchPhone = queryNumbers && numbers.includes(queryNumbers);
+            // 🔥 БЕРЕМ РЕАЛЬНЫЙ ТЕКСТ СТРОКИ
+            const text = row.innerText.toLowerCase();
 
-            row.style.display = (matchText || matchPhone || query === "") ? "" : "none";
+            if (text.includes(query)) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+
         });
+
     });
 }
 </script>
 
 <script>
 document.querySelectorAll(".client-row").forEach(row => {
-    row.addEventListener("click", function() {
+	row.addEventListener("click", function(e) {
 
-        const id = this.dataset.id;
+		if (e.target.closest("a")) return;
 
-        window.location.href = "/clients/" + id;
-
-    });
+		const id = this.dataset.id;
+		window.location.href = "/clients/" + id;
+	});
 });
 </script>
 

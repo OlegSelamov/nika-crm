@@ -24,9 +24,21 @@ def clients():
     if search:
         clients = conn.execute("""
             SELECT * FROM clients
-            WHERE full_name LIKE ? AND company_id = ?
+            WHERE company_id = ?
+            AND (
+                full_name LIKE ?
+                OR phone LIKE ?
+                OR company_name LIKE ?
+                OR iin LIKE ?
+            )
             ORDER BY id DESC
-        """, (f"%{search}%", session.get("company_id"))).fetchall()
+        """, (
+            session.get("company_id"),
+            f"%{search}%",
+            f"%{search}%",
+            f"%{search}%",
+            f"%{search}%"
+        )).fetchall()
     else:
         clients = conn.execute("""
             SELECT * FROM clients
