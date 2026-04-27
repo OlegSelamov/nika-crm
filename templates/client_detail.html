@@ -773,40 +773,53 @@ function openSaleModal(id) {
         .then(res => res.json())
         .then(data => {
 
-            let buttons = "";
+			let buttons = "";
 
-            if (data.sale_type === "cash") {
-                if (data.status === "Оплачено") {
-                    buttons += `
-                        <a href="/docs/check/${data.id}" target="_blank" class="btn">
-                            🧾 Чек
-                        </a>
-                        <a href="/docs/nakladnaya/${data.id}" target="_blank" class="btn">
-                            📦 Накладная
-                        </a>
-                    `;
-                } else {
-                    buttons += `
-                        <div style="color:#64748b;">Документы появятся после оплаты</div>
-                    `;
-                }
-            }
+			// 🔥 СЧЕТ-ФАКТУРА ВСЕГДА
+			buttons += `
+				<a href="/docs/schet-factura/${data.id}" target="_blank" class="btn">
+					🧾 Счёт-фактура
+				</a>
+			`;
 
-            if (data.sale_type === "invoice") {
-                buttons += `
-                    <a href="/docs/invoice/${data.id}" target="_blank" class="btn">
-                        📄 Счёт на оплату
-                    </a>
-                `;
+			// 💰 КАССА
+			if (data.sale_type === "cash") {
 
-                if (data.status === "Оплачено") {
-                    buttons += `
-                        <a href="/docs/nakladnaya/${data.id}" target="_blank" class="btn">
-                            📦 Накладная
-                        </a>
-                    `;
-                }
-            }
+				if (data.status === "Оплачено") {
+
+					buttons += `
+						<a href="/docs/check/${data.id}" target="_blank" class="btn">
+							🧾 Чек
+						</a>
+					`;
+
+					buttons += `
+						<a href="/docs/nakladnaya/${data.id}" target="_blank" class="btn">
+							📦 Накладная
+						</a>
+					`;
+
+				}
+
+			}
+
+			// 🏦 БЕЗНАЛ
+			if (data.sale_type === "invoice") {
+
+				buttons += `
+					<a href="/docs/invoice/${data.id}" target="_blank" class="btn">
+						📄 Счёт на оплату
+					</a>
+				`;
+
+				if (data.status === "Оплачено") {
+					buttons += `
+						<a href="/docs/nakladnaya/${data.id}" target="_blank" class="btn">
+							📦 Накладная
+						</a>
+					`;
+				}
+			}
 
             let html = `
                 <div style="display:flex; flex-direction:column; gap:12px;">

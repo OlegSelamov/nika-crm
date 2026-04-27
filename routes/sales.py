@@ -584,3 +584,25 @@ def nakladnaya(sale_id):
         items=new_items,
         totals=totals
     )
+    
+@sales_bp.route("/docs/schet-factura/<int:sale_id>")
+def schet_factura(sale_id):
+
+    sale, items, client = get_sale_data(sale_id)
+
+    conn = get_db()
+    company = conn.execute(
+        "SELECT * FROM companies WHERE is_active = 1 LIMIT 1"
+    ).fetchone()
+    conn.close()
+
+    if not company:
+        return "Нет компании"
+
+    return render_template(
+        "docs/schet_factura.html",
+        sale=sale,
+        items=items,
+        client=client,
+        company=company
+    )

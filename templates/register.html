@@ -1,136 +1,227 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Регистрация — Nika Business</title>
+<meta charset="UTF-8">
+<title>Регистрация — Nika Business</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial;
-            background: linear-gradient(135deg, #0f172a, #1e3a8a);
-            display: flex;
-            justify-content: center;
-            color: #333;
-			padding: 40px 0;
-			overflow-y: auto;
-        }
+<style>
+* {
+    box-sizing: border-box;
+}
 
-        .card {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            width: 420px;
-			max-width: 95%;
-			max-height: none;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        }
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #0f172a, #1e3a8a);
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+}
 
-        h2 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
+/* КАРТОЧКА */
+.card {
+	background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(10px);
+    padding: 25px;
+    border-radius: 20px;
+    width: 820px;
+    max-width: 100%;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+}
 
-        h3 {
-            margin-top: 20px;
-            margin-bottom: 10px;
-            font-size: 16px;
-            color: #555;
-        }
+/* ЗАГОЛОВОК */
+h2 {
+    text-align: center;
+    margin-bottom: 25px;
+}
 
-        input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            font-size: 14px;
-        }
+/* GRID */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
 
-        input:focus {
-            outline: none;
-            border-color: #6366f1;
-        }
+/* БЛОК */
+.block h3 {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
 
-        button {
-            width: 100%;
-            padding: 14px;
-            background: #6366f1;
-            border: none;
-            color: white;
-            border-radius: 10px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
+.block {
+    display: flex;
+    flex-direction: column;
+}
 
-        button:hover {
-            background: #4f46e5;
-        }
+/* INPUT */
+input {
+    width: 100%;
+    padding: 11px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    font-size: 13px;
+    outline: none;
+    transition: 0.2s;
+	height: 42px;
+}
 
-        .bottom {
-            text-align: center;
-            margin-top: 15px;
-            font-size: 14px;
-        }
+input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
 
-        .bottom a {
-            color: #6366f1;
-            text-decoration: none;
-        }
+/* ROW */
+.row {
+    display: flex;
+    gap: 8px;
+}
 
-        .bottom a:hover {
-            text-decoration: underline;
-        }
+.row input {
+    flex: 1;
+}
 
-        .row {
-            display: flex;
-            gap: 10px;
-        }
+/* КНОПКА */
+button {
+    width: 100%;
+    padding: 13px;
+    background: linear-gradient(135deg, #6366f1, #3b82f6);
+    border: none;
+    color: white;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.3s;
+    margin-top: 10px;
+}
 
-        .row input {
-            flex: 1;
-        }
-    </style>
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px rgba(59,130,246,0.3);
+}
+
+/* КНОПКА НА ВСЮ ШИРИНУ */
+.full {
+    grid-column: span 2;
+}
+
+/* НИЗ */
+.bottom {
+    text-align: center;
+    margin-top: 18px;
+    font-size: 14px;
+    color: #64748b;
+}
+
+.bottom a {
+    color: #6366f1;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.logo {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 8px;
+}
+
+.logo span {
+    color: #3b82f6;
+}
+
+.logo img {
+    height: 50px; /* регулируй размер */
+    object-fit: contain;
+}
+
+.logo-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 25px;
+}
+
+.logo-box {
+    background: linear-gradient(135deg, #0f172a, #1e3a8a);
+    padding: 14px 24px;
+    border-radius: 16px;
+    box-shadow: 0 0 25px rgba(59,130,246,0.3);
+}
+
+.logo-box img {
+    height: 36px;
+    display: block;
+}
+
+/* MOBILE */
+@media(max-width:768px){
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    .full {
+        grid-column: span 1;
+    }
+}
+</style>
 </head>
+
 <body>
 
 <div class="card">
 
-    <h2>Nika Business</h2>
+	<div class="logo">Nika <span>Business</span></div>
 
     <form method="POST">
 
-        <h3>Компания</h3>
+        <div class="form-grid">
 
-        <input name="name" placeholder="Название компании" required>
-        <input name="director" placeholder="ФИО директора">
+            <!-- ЛЕВАЯ КОЛОНКА -->
+            <div class="block">
+                <h3>Компания</h3>
 
-        <div class="row">
-            <input name="bin" placeholder="БИН">
-            <input name="phone" placeholder="Телефон">
+                <input name="name" placeholder="Название компании" required>
+                <input name="director" placeholder="ФИО директора">
+
+                <div class="row">
+                    <input name="bin" placeholder="БИН">
+                    <input name="phone" placeholder="Телефон">
+                </div>
+
+                <input name="address" placeholder="Адрес">
+            </div>
+
+            <!-- ПРАВАЯ КОЛОНКА -->
+            <div class="block">
+                <h3>Реквизиты</h3>
+
+                <div class="row">
+                    <input name="iik" placeholder="ИИК">
+                    <input name="bik" placeholder="БИК">
+                </div>
+
+                <input name="bank" placeholder="Банк">
+
+                <div class="row">
+                    <input name="kbe" placeholder="КБЕ">
+                    <input name="knp" placeholder="КНП">
+                </div>
+
+                <h3>Аккаунт</h3>
+
+                <input name="username" placeholder="Логин" required>
+                <input name="password" type="password" placeholder="Пароль" required>
+            </div>
+
+            <!-- КНОПКА -->
+            <div class="full">
+                <button type="submit">Создать компанию</button>
+            </div>
+
         </div>
-
-        <input name="address" placeholder="Адрес">
-
-        <div class="row">
-            <input name="iik" placeholder="ИИК">
-            <input name="bik" placeholder="БИК">
-        </div>
-
-        <input name="bank" placeholder="Банк">
-
-        <div class="row">
-            <input name="kbe" placeholder="КБЕ">
-            <input name="knp" placeholder="КНП">
-        </div>
-
-        <h3>Аккаунт</h3>
-
-        <input name="username" placeholder="Логин" required>
-        <input name="password" type="password" placeholder="Пароль" required>
-
-        <button type="submit">Создать компанию</button>
 
     </form>
 
