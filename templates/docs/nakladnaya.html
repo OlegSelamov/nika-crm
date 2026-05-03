@@ -1,269 +1,435 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Накладная на отпуск запасов на сторону</title>
-    <style>
-        body {
-            font-family: "Times New Roman", serif;
-            font-size: 11pt;
-            margin: 20px;
-        }
+<meta charset="UTF-8">
+<title>Накладная</title>
 
-        #main-wrapper {
-            width: 100%;
-        }
+<style>
+body {
+    font-family: "Times New Roman";
+    font-size: 11px;
+    margin: 25px;
+}
 
-        #main-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
+/* --- ОБЩИЕ --- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
 
-        #header-table,
-        #second-table,
-        #details-table,
-        #footer-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10pt;
-        }
+td {
+    vertical-align: top;
+}
 
-        .centered {
-            text-align: center;
-        }
+/* --- ШАПКА --- */
+.header-left {
+    font-size: 9px;
+}
 
-        .bordered {
-            border: 1px solid #000;
-            padding: 2px 3px;
-        }
+.header-right {
+    text-align: right;
+    font-weight: bold;
+}
 
-        #header-table-header {
-            font-size: 8pt;
-            text-align: left;
-        }
+.doc-box {
+    float: right;
+    border: 1px solid #000;
+}
 
-        #header-table-header2 {
-            font-size: 9pt;
-            text-align: right;
-            font-weight: bold;
-        }
+.doc-box td {
+    border: 1px solid #000;
+    text-align: center;
+    padding: 3px;
+}
 
-        #main-header {
-            margin-top: 10px;
-            margin-bottom: 10px;
-            text-align: center;
-            font-weight: bold;
-        }
+/* --- ЗАГОЛОВОК --- */
+.title {
+    text-align: center;
+    font-weight: bold;
+    margin: 10px 0;
+}
 
-        #details-table th,
-        #details-table td {
-            border: 1px solid #000;
-            padding: 2px 3px;
-        }
+/* --- ВТОРАЯ ТАБЛИЦА --- */
+.block td {
+    border: 1px solid #000;
+    padding: 3px;
+    font-size: 10px;
+}
 
-        #footer-table td {
-            padding: 2px 3px;
-            vertical-align: top;
-        }
+/* --- ТАБЛИЦА ТОВАРОВ --- */
+.items th, .items td {
+    border: 1px solid #000;
+    padding: 3px;
+    text-align: center;
+}
 
-        .lheight {
-            line-height: 1.2;
-        }
+.items th {
+    font-weight: normal;
+}
 
-        .left-bordered {
-            border-left: 1px solid #000;
-        }
+.items td.name {
+    text-align: left;
+}
 
-        .clear-fix {
-            clear: both;
-        }
-    </style>
+/* --- ИТОГО --- */
+.itogo td {
+    border: none;
+    font-weight: bold;
+}
+
+/* --- ПОДПИСИ --- */
+.line {
+    border-bottom: 1px solid #000;
+    display: inline-block;
+    width: 100%;
+    height: 12px;
+}
+
+.sign td {
+    padding-top: 10px;
+}
+
+.small {
+    font-size: 9px;
+}
+</style>
+
 </head>
+
 <body>
 
-<main id="wrapper">
-    <div id="middle">
-        <div id="content">
-            <div id="colLeft">
+<!-- ШАПКА -->
+<div style="width:100%; position: relative;">
 
-                <div id="main-wrapper">
-
-                    <table id="main-table">
-                        <tr>
-                            <td>
-
-                                <!-- HEADER TABLE -->
-                                <table id="header-table">
-                                    <tr>
-                                        <td colspan="3">
-                                            <div id="header-table-header">
-                                                Приложение 26<br>
-                                                к приказу Министра финансов<br>
-                                                Республики Казахстан<br>
-                                                от 20 декабря 2012 года № 562
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="3">
-                                            <div id="header-table-header2">
-                                                Форма З-2
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="2">
-                                            Организация (индивидуальный предприниматель):<br>
-                                            {{ header.sender_name }}
-                                        </td>
-                                        <td style="vertical-align: top;">
-                                            ИИН/БИН:<br>
-                                            {{ header.bin }}
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="3">
-                                            <table style="float: right; border-collapse: collapse;">
-                                                <tr>
-                                                    <td class="centered bordered">Номер документа</td>
-                                                    <td class="centered bordered">Дата составления</td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="centered bordered">{{ header.doc_number }}</td>
-                                                    <td class="centered bordered">{{ header.doc_date }}</td>
-                                                </tr>
-                                            </table>
-                                            <div class="clear-fix"></div>
-                                        </td>
-                                    </tr>
-                                </table>
-
-                                <!-- MAIN TITLE -->
-                                <div id="main-header">
-                                    НАКЛАДНАЯ НА ОТПУСК ЗАПАСОВ НА СТОРОНУ
-                                </div>
-
-                                <!-- SECOND TABLE (sender/receiver/responsible/transport/ttn) -->
-                                <table id="second-table">
-                                    <tr>
-                                        <td class="bordered">Организация (индивидуальный предприниматель) - отправитель</td>
-                                        <td class="bordered">Организация (индивидуальный предприниматель) - получатель</td>
-                                        <td class="bordered">Ответственный за поставку (Ф.И.О.)</td>
-                                        <td class="bordered">Транспортная организация</td>
-                                        <td class="bordered">Товарно-транспортная накладная (номер, дата)</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="bordered">{{ header.sender_short }}</td>
-                                        <td class="bordered">{{ header.receiver_short }}</td>
-                                        <td class="bordered">{{ header.responsible }}</td>
-                                        <td class="bordered">{{ header.transport_org }}</td>
-                                        <td class="bordered">{{ header.ttn }}</td>
-                                    </tr>
-                                </table>
-
-                                <br>
-
-                                <!-- DETAILS TABLE (items) -->
-                                <table id="details-table">
-                                    <tr>
-                                        <td class="centered" rowspan="2">№</td>
-                                        <td class="centered" rowspan="2" style="width: 100%;">Наименование, характеристика</td>
-                                        <td class="centered" rowspan="2">Номенкла-турный номер</td>
-                                        <td class="centered" rowspan="2">Ед. изм.</td>
-                                        <td class="centered" colspan="2">Количество</td>
-                                        <td class="centered" rowspan="2" style="white-space: nowrap;">Цена за ед.</td>
-                                        <td class="centered" rowspan="2" style="white-space: nowrap;">Сумма с НДС</td>
-                                        <td class="centered" rowspan="2" style="white-space: nowrap;">Сумма НДС</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="centered">подлежит отпуску</td>
-                                        <td class="centered">отпущено</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="centered">1</td>
-                                        <td class="centered">2</td>
-                                        <td class="centered">3</td>
-                                        <td class="centered">4</td>
-                                        <td class="centered">5</td>
-                                        <td class="centered">6</td>
-                                        <td class="centered">7</td>
-                                        <td class="centered">8</td>
-                                        <td class="centered">9</td>
-                                    </tr>
-
-                                    {# СТРОКИ ТОВАРОВ #}
-                                    {% for item in items %}
-                                    <tr>
-                                        <td class="centered">{{ loop.index }}</td>
-                                        <td>{{ item.name }}</td>
-                                        <td class="centered">{{ item.code }}</td>
-                                        <td class="centered">{{ item.unit }}</td>
-                                        <td class="centered">{{ "%.3f"|format(item.qty_plan) }}</td>
-                                        <td class="centered">{{ "%.3f"|format(item.qty_fact) }}</td>
-                                        <td class="centered">{{ "%.2f"|format(item.price) }}</td>
-                                        <td class="centered">{{ "%.2f"|format(item.amount) }}</td>
-                                        <td class="centered">{{ "%.2f"|format(item.vat) }}</td>
-                                    </tr>
-                                    {% endfor %}
-
-                                    <tr id="itog-row">
-                                        <td colspan="4" style="text-align: right;border: none;">Итого</td>
-                                        <td class="centered">{{ "%.3f"|format(totals.qty_plan) }}</td>
-                                        <td class="centered">{{ "%.3f"|format(totals.qty_fact) }}</td>
-                                        <td class="centered">x</td>
-                                        <td class="centered">{{ "%.2f"|format(totals.amount) }}</td>
-                                        <td class="centered">{{ "%.2f"|format(totals.vat) }}</td>
-                                    </tr>
-                                </table>
-
-                                <br><br>
-
-                                <!-- FOOTER TABLE -->
-                                <table id="footer-table">
-                                    <tr>
-                                        <td colspan="7">
-                                            Всего отпущено количество запасов (прописью)
-                                            <span id="item-count-propisyu">{{ totals.qty_words }}</span>
-                                            на сумму (прописью), в KZT
-                                            <span id="sum-propisyu">{{ totals.amount_words }}</span>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Отпуск разрешил</td>
-                                        <td class="centered">{{ header.razreshil_dolzhnost or "" }}</td>
-                                        <td class="centered lheight">__________<br>подпись</td>
-                                        <td class="centered">{{ header.razreshil_fio or "" }}</td>
-                                        <td class="centered left-bordered">По доверенности</td>
-                                        <td class="centered" colspan="2">{{ header.doverennost or "" }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Главный бухгалтер</td>
-                                        <td class="centered lheight">__________<br>подпись</td>
-                                        <td class="centered" colspan="2">{{ header.glavbuh_fio or "" }}</td>
-                                        <td class="centered left-bordered">выданной</td>
-                                        <td class="centered">{{ header.doverennost_vydan_komu or "" }}</td>
-                                        <td class="centered">{{ header.doverennost_vydan_kem or "" }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Отпустил</td>
-                                        <td class="centered lheight">__________<br>подпись</td>
-                                        <td class="centered" colspan="2">{{ header.otpustil_fio or "" }}</td>
-                                        <td class="centered left-bordered">Запасы получил</td>
-                                        <td class="centered lheight">__________<br>подпись</td>
-                                        <td class="centered">{{ header.poluchil_fio or "" }}</td>
-                                    </tr>
-                                </table>
-
-                            </td>
-                        </tr>
-                    </table>
-
-                </div>
-
-            </div>
-        </div>
+    <!-- ПРАВЫЙ ВЕРХ -->
+    <div style="float: right; text-align: right; font-size: 9px;">
+        Приложение 26<br>
+        к приказу Министра финансов<br>
+        Республики Казахстан<br>
+        от 20 декабря 2012 года № 562
     </div>
-</main>
+
+    <div style="clear: both;"></div>
+
+    <!-- ФОРМА -->
+    <div style="float: right; text-align: right; font-weight: bold; margin-top: 5px;">
+        Форма З-2
+    </div>
+
+</div>
+
+<br>
+
+<div style="margin-top: 20px;">
+
+    <!-- СТРОКА -->
+    <div style="display: flex; align-items: center;">
+
+        <!-- ЛЕВАЯ ПОДПИСЬ -->
+        <div style="font-size: 10px; white-space: nowrap; margin-right: 10px;">
+            Организация (индивидуальный предприниматель)
+        </div>
+
+        <!-- ЛИНИЯ С ТЕКСТОМ -->
+        <div style="flex: 1; border-bottom: 1px solid #000; position: relative; height: 20px; margin-right: 15px;">
+            <span style="
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                bottom: 0;
+				width: 100%;
+                font-weight: bold;
+				white-space: normal;
+				text-align: center;
+            ">
+                {{ header.sender_name }}, {{ header.sender_address }}
+            </span>
+        </div>
+
+        <!-- ИИН/БИН -->
+        <div style="font-size: 10px; margin-right: 5px;">
+            ИИН/БИН
+        </div>
+
+        <!-- РАМКА -->
+        <div style="
+            border: 1px solid #000;
+            padding: 5px 10px;
+            min-width: 140px;
+            text-align: center;
+            font-weight: bold;
+        ">
+            {{ header.bin }}
+        </div>
+
+    </div>
+
+</div>
+
+<br>
+
+<!-- НОМЕР ДОКУМЕНТА -->
+<div style="width:100%; margin-top: 10px;">
+
+    <table class="doc-box" style="
+        width: auto;
+        float: right;
+        border-collapse: collapse;
+        font-size: 10px;
+    ">
+        <tr>
+            <td style="border:1px solid #000; padding:3px 8px;">Номер документа</td>
+            <td style="border:1px solid #000; padding:3px 8px;">Дата составления</td>
+        </tr>
+        <tr>
+            <td style="border:1px solid #000; padding:3px 8px; text-align:center;">
+                {{ header.doc_number }}
+            </td>
+            <td style="border:1px solid #000; padding:3px 8px; text-align:center;">
+                {{ header.doc_date }}
+            </td>
+        </tr>
+    </table>
+
+    <div style="clear: both;"></div>
+
+</div>
+
+<div style="clear: both;"></div>
+
+<div class="title">
+НАКЛАДНАЯ НА ОТПУСК ЗАПАСОВ НА СТОРОНУ
+</div>
+
+<!-- БЛОК ОТПРАВИТЕЛЬ -->
+<table class="block">
+<tr>
+<td>Организация (индивидуальный
+предприниматель) - отправитель</td>
+<td>Организация (индивидуальный
+предприниматель) - получатель</td>
+<td>Ответственный за поставку (Ф.И.О.) </td>
+<td>Транспортная организация</td>
+<td>Товарно-транспортная накладная (номер,
+дата)
+</td>
+</tr>
+
+<tr>
+<td>{{ header.sender_short }}</td>
+<td>{{ header.receiver_short }}</td>
+<td>{{ header.responsible }}</td>
+<td>{{ header.transport_org }}</td>
+<td>{{ header.ttn }}</td>
+</tr>
+</table>
+
+<br>
+
+<!-- ТАБЛИЦА -->
+<table class="items">
+<tr>
+<th rowspan="2" style="width:30px;">Номер по порядку</th>
+<th rowspan="2">Наименование, характеристика</th>
+<th rowspan="2" style="width:80px;">Номенкла-<br>турный номер</th>
+<th rowspan="2" style="width:60px;">Единица измерения</th>
+<th colspan="2" style="width:120px;">Количество</th>
+<th rowspan="2" style="width:90px;">Цена за единицу, в KZT </th>
+<th rowspan="2" style="width:110px;">Сумма с НДС, в KZT</th>
+<th rowspan="2" style="width:90px;">Сумма НДС, в KZT</th>
+</tr>
+
+<tr>
+<th>подлежит отпуску </th>
+<th>отпущено</th>
+</tr>
+
+<tr class="small">
+<td>1</td><td>2</td><td>3</td><td>4</td>
+<td>5</td><td>6</td><td>7</td><td>8</td><td>9</td>
+</tr>
+
+{% for item in items %}
+<tr>
+<td>{{ loop.index }}</td>
+<td class="name">{{ item.name }}</td>
+<td>{{ item.code }}</td>
+<td>{{ item.unit }}</td>
+<td>{{ item.qty_plan }}</td>
+<td>{{ item.qty_fact }}</td>
+<td>{{ "{:,.2f}".format(item.price).replace(",", " ") }}</td>
+<td>{{ "{:,.2f}".format(item.amount).replace(",", " ") }}</td>
+<td>{{ "{:,.2f}".format(item.vat).replace(",", " ") }}</td>
+</tr>
+{% endfor %}
+
+<!-- ИТОГО ВНЕ ТАБЛИЦЫ -->
+<tr>
+    <td colspan="4" style="
+        text-align: right;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+        border-bottom: none;
+        font-weight: bold;
+    ">
+        Итого
+    </td>
+
+    <td style="border-top:none;">{{ totals.qty_plan }}</td>
+    <td style="border-top:none;">{{ totals.qty_fact }}</td>
+    <td style="border-top:none;">x</td>
+    <td style="border-top:none;">{{ "{:,.2f}".format(totals.amount).replace(",", " ") }}</td>
+    <td style="border-top:none;">{{ "{:,.2f}".format(totals.vat).replace(",", " ") }}</td>
+</tr>
+</table>
+
+<div style="margin-top: 30px; font-size: 10px;">
+
+    <!-- ПРОПИСЬ -->
+    <div style="margin-bottom: 20px;">
+        Всего отпущено количество запасов (прописью)
+        <span style="display:inline-block; width:250px; border-bottom:1px solid #000; text-align:center;">
+            {{ totals.qty_words }}
+        </span>
+        на сумму (прописью), в KZT
+        <span style="display:inline-block; width:250px; border-bottom:1px solid #000; text-align:center;">
+            {{ totals.amount_words }}
+        </span>
+    </div>
+
+    <div style="display: flex;">
+
+        <!-- ЛЕВАЯ ЧАСТЬ -->
+		<div style="width: 60%; padding-right: 20px; border-right: 1px solid #000; font-size:10px;">
+
+			<!-- ОТПУСК РАЗРЕШИЛ -->
+			<div style="margin-bottom: 18px;">
+				<div style="display:flex; align-items:flex-end; gap:6px;">
+					<span style="white-space:nowrap;">Отпуск разрешил</span>
+
+					<!-- ДОЛЖНОСТЬ -->
+					<div style="flex:1; border-bottom:1px solid #000; height:18px; display:flex; align-items:flex-end; justify-content:center;">
+						{{ header.razreshil_dolzhnost or "Директор" }}
+					</div>
+
+					<span>/</span>
+
+					<!-- ПОДПИСЬ -->
+					<div style="flex:1; border-bottom:1px solid #000; height:18px;"></div>
+
+					<span>/</span>
+
+					<!-- ФИО -->
+					<div style="flex:1; border-bottom:1px solid #000; height:18px; display:flex; align-items:flex-end; justify-content:center;">
+						{{ header.responsible }}
+					</div>
+				</div>
+
+				<!-- ПОДПИСИ СНИЗУ -->
+				<div style="display:flex; font-size:9px; margin-top:2px;">
+					<div style="flex:1; text-align:center;">должность</div>
+					<div style="flex:1; text-align:center;">подпись</div>
+					<div style="flex:1; text-align:center;">расшифровка подписи</div>
+				</div>
+			</div>
+
+			<!-- ГЛАВБУХ -->
+			<div style="margin-bottom: 18px;">
+				<div style="display:flex; align-items:flex-end; gap:6px;">
+					<span style="white-space:nowrap;">Главный бухгалтер</span>
+
+					<!-- ПОДПИСЬ -->
+					<div style="flex:1; border-bottom:1px solid #000; height:18px;"></div>
+
+					<span>/</span>
+
+					<!-- ФИО -->
+					<div style="flex:1; border-bottom:1px solid #000; height:18px; display:flex; align-items:flex-end; justify-content:center;">
+						{{ header.glavbuh_fio }}
+					</div>
+				</div>
+
+				<div style="display:flex; font-size:9px; margin-top:2px;">
+					<div style="flex:1; text-align:center;">подпись</div>
+					<div style="flex:1; text-align:center;">расшифровка подписи</div>
+				</div>
+
+				<div style="margin-top:5px;">М.П.</div>
+			</div>
+
+			<!-- ОТПУСТИЛ -->
+			<div>
+				<div style="display:flex; align-items:flex-end; gap:6px;">
+					<span style="white-space:nowrap;">Отпустил</span>
+
+					<!-- ПОДПИСЬ -->
+					<div style="flex:1; border-bottom:1px solid #000; height:18px;"></div>
+
+					<span>/</span>
+
+					<!-- ФИО -->
+					<div style="flex:1; border-bottom:1px solid #000; height:18px; display:flex; align-items:flex-end; justify-content:center;">
+						{{ header.responsible }}
+					</div>
+				</div>
+
+				<div style="display:flex; font-size:9px; margin-top:2px;">
+					<div style="flex:1; text-align:center;">подпись</div>
+					<div style="flex:1; text-align:center;">расшифровка подписи</div>
+				</div>
+			</div>
+
+		</div>
+
+
+        <!-- ПРАВАЯ ЧАСТЬ -->
+		<div style="width: 40%; padding-left: 20px;">
+
+			<!-- ПО ДОВЕРЕННОСТИ -->
+			<div style="margin-bottom: 15px;">
+				По доверенности
+
+				<!-- ВОТ ТУТ ИСПРАВЛЕНИЕ -->
+				<div style="display:flex; align-items:center; margin-top:5px;">
+					выданной
+
+					<div style="flex:1; border-bottom:1px solid #000; margin-left:10px;">
+						{{ header.doverennost_vydan_kem }}
+					</div>
+				</div>
+				
+				<div style="margin-top:8px; border-bottom:1px solid #000; height:18px;"></div>
+				
+			</div>
+
+			<!-- ЗАПАСЫ ПОЛУЧИЛ -->
+			<div style="margin-top: 30px;">
+
+				<!-- ВОТ ТУТ ИСПРАВЛЕНИЕ -->
+				<div style="display:flex; align-items:center;">
+					Запасы получил
+
+					<div style="flex:1; border-bottom:1px solid #000; margin-left:10px;"></div>
+
+					<div style="margin: 0 5px;">/</div>
+
+					<div style="flex:1; border-bottom:1px solid #000; text-align:center;">
+						{{ header.poluchil_fio }}
+					</div>
+				</div>
+
+				<div style="display:flex; font-size:9px;">
+					<div style="flex:1; text-align:center;">подпись</div>
+					<div style="flex:1; text-align:center;">расшифровка подписи</div>
+				</div>
+			</div>
+
+		</div>
+
+    </div>
+
+</div>
 
 </body>
 </html>

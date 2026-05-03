@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, redirect
 from models import get_db
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 from flask import session
 
@@ -374,26 +374,35 @@ def number_to_words_kz(n):
             "пятьдесят", "шестьдесят", "семьдесят",
             "восемьдесят", "девяносто"]
 
+    teens = ["десять", "одиннадцать", "двенадцать", "тринадцать",
+             "четырнадцать", "пятнадцать", "шестнадцать",
+             "семнадцать", "восемнадцать", "девятнадцать"]
+
     hundreds = ["", "сто", "двести", "триста", "четыреста",
                 "пятьсот", "шестьсот", "семьсот",
                 "восемьсот", "девятьсот"]
 
-    def convert(num):
-        return f"{hundreds[num//100]} {tens[(num%100)//10]} {units[num%10]}".strip()
+    def words(num):
+        if num < 10:
+            return units[num]
+        elif num < 20:
+            return teens[num - 10]
+        elif num < 100:
+            return tens[num // 10] + " " + units[num % 10]
+        else:
+            return hundreds[num // 100] + " " + words(num % 100)
 
     if n == 0:
         return "ноль"
 
-    thousands = n // 1000
-    rest = n % 1000
-
     result = ""
 
-    if thousands:
-        result += convert(thousands) + " тысяч "
+    if n >= 1000:
+        result += words(n // 1000) + " тысяч "
+        n = n % 1000
 
-    if rest:
-        result += convert(rest)
+    if n > 0:
+        result += words(n)
 
     return result.strip()
     
@@ -438,11 +447,22 @@ def invoice(sale_id):
     total = int(sale["total_amount"])
     total_text = number_to_words_kz(total) + " тенге 00 тиын"
     director_short = format_fio(company["director"])
+    
+    new_items = []
+
+    for i in items:
+        new_items.append({
+            "name": i["name"],
+            "quantity": i["quantity"],
+            "price": i["price"],
+            "total": i["total"],
+            "unit": "шт"   # ← ЖЁСТКО ФИКСИРУЕМ
+        })
 
     return render_template(
         "docs/invoice.html",
         sale=sale,
-        items=items,
+        items=new_items,
         client=client,
         company=company,
         sale_date=sale_date,
@@ -538,6 +558,7 @@ def nakladnaya(sale_id):
     # 🔥 HEADER
     header = {
         "sender_name": company["name"],
+        "sender_address": company["address"],
         "sender_short": company["name"],
         "receiver_short": client["company_name"] or client["full_name"],
         "bin": company["bin"],
@@ -558,7 +579,7 @@ def nakladnaya(sale_id):
         new_items.append({
             "name": i["name"],
             "code": i["item_id"],
-            "unit": i["unit"] or "шт",
+            "unit": "шт",
             "qty_plan": i["quantity"],
             "qty_fact": i["quantity"],
             "price": i["price"],
@@ -575,7 +596,7 @@ def nakladnaya(sale_id):
         "amount": total_amount,
         "vat": 0,
         "qty_words": number_to_words_kz(sum(i["quantity"] for i in items)),
-        "amount_words": number_to_words_kz(total_amount) + " тенге"
+        "amount_words": number_to_words_kz(total_amount) + " тенге 00 тиын"
     }
 
     return render_template(
@@ -598,11 +619,176 @@ def schet_factura(sale_id):
 
     if not company:
         return "Нет компании"
+        
+    payment_type = "наличный расчет"
+
+    if sale["sale_type"] == "cash":
+        # проверяем способы оплаты
+        if sale.get("card_amount", 0) > 0 or sale.get("kaspi_amount", 0) > 0:
+            payment_type = "безналичный расчет"
+        else:
+            payment_type = "наличный расчет"
+    else:
+        payment_type = "безналичный расчет"
+        
+    date_obj = datetime.fromisoformat(sale["created_at"])
+    sale_date = date_obj.strftime("%d.%m.%Y")
 
     return render_template(
         "docs/schet_factura.html",
         sale=sale,
         items=items,
         client=client,
-        company=company
+        company=company,
+        payment_type=payment_type,
+        sale_date=sale_date
     )
+    
+@sales_bp.route("/analytics")
+def analytics():
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+
+    company_id = session.get("company_id")
+
+    # 📅 ФИЛЬТР ДАТ
+    date_from = request.args.get("from")
+    date_to = request.args.get("to")
+
+    if not date_from or not date_to:
+        date_to = datetime.now().strftime("%Y-%m-%d")
+        date_from = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+
+    # 📈 ГРАФИК
+    chart_data = conn.execute("""
+        SELECT DATE(created_at) as date, SUM(total_amount) as total
+        FROM sales
+        WHERE company_id = ?
+        AND DATE(created_at) BETWEEN ? AND ?
+        GROUP BY DATE(created_at)
+        ORDER BY date
+    """, (company_id, date_from, date_to)).fetchall()
+
+    chart_labels = [row["date"] for row in chart_data]
+    chart_values = [row["total"] or 0 for row in chart_data]
+
+    # 💰 СУММЫ
+    total = sum(chart_values)
+
+    # 🏆 ТОП КЛИЕНТЫ
+    top_clients = conn.execute("""
+        SELECT clients.full_name, SUM(sales.total_amount) as total
+        FROM sales
+        JOIN clients ON sales.client_id = clients.id
+        WHERE sales.company_id = ?
+        AND DATE(sales.created_at) BETWEEN ? AND ?
+        GROUP BY clients.id
+        ORDER BY total DESC
+        LIMIT 5
+    """, (company_id, date_from, date_to)).fetchall()
+
+    # 📦 ТОП ТОВАРЫ
+    top_items = conn.execute("""
+        SELECT name, SUM(total) as total
+        FROM sale_items
+        WHERE sale_id IN (
+            SELECT id FROM sales 
+            WHERE company_id = ?
+            AND DATE(created_at) BETWEEN ? AND ?
+        )
+        GROUP BY name
+        ORDER BY total DESC
+        LIMIT 5
+    """, (company_id, date_from, date_to)).fetchall()
+
+    # 💳 ОПЛАТЫ
+    payments = conn.execute("""
+        SELECT 
+            SUM(cash_amount) as cash,
+            SUM(card_amount) as card,
+            SUM(kaspi_amount) as kaspi
+        FROM sales
+        WHERE company_id = ?
+        AND DATE(created_at) BETWEEN ? AND ?
+    """, (company_id, date_from, date_to)).fetchone()
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    today = conn.execute("""
+        SELECT SUM(total_amount) as total
+        FROM sales
+        WHERE company_id = ?
+        AND DATE(created_at) = ?
+    """, (company_id, today_str)).fetchone()["total"] or 0
+
+    conn.close()
+
+    return render_template(
+        "analytics.html",
+        chart_labels=chart_labels,
+        chart_values=chart_values,
+        total=total,
+        top_clients=top_clients,
+        top_items=top_items,
+        payments=payments,
+        date_from=date_from,
+        date_to=date_to,
+        today=today,
+    )
+    
+@sales_bp.route("/api/barcode", methods=["POST"])
+def barcode():
+    data = request.get_json()
+    code = data.get("barcode")
+
+    conn = get_db()
+
+    item = conn.execute(
+        "SELECT * FROM items WHERE barcode = ? AND company_id = ?",
+        (code, session.get("company_id"))
+    ).fetchone()
+
+    conn.close()
+
+    if item:
+        return {
+            "found": True,
+            "id": item["id"],
+            "name": item["name"],
+            "price": item["retail_price"]
+        }
+
+    return {"found": False}
+    
+@sales_bp.route("/api/add-item", methods=["POST"])
+def add_item_api():
+    data = request.get_json()
+
+    conn = get_db()
+
+    cur = conn.execute("""
+        INSERT INTO items (name, retail_price, barcode, company_id)
+        VALUES (?, ?, ?, ?)
+    """, (
+        data["name"],
+        data["price"],
+        data["barcode"],
+        session.get("company_id")
+    ))
+
+    conn.commit()
+
+    item_id = cur.lastrowid
+
+    item = conn.execute(
+        "SELECT * FROM items WHERE id = ?",
+        (item_id,)
+    ).fetchone()
+
+    conn.close()
+
+    return {
+        "id": item["id"],
+        "name": item["name"],
+        "price": item["retail_price"]
+    }

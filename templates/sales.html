@@ -15,6 +15,7 @@
 			<div class="search-box">
 
 				<input id="search" placeholder="Поиск товара..." autocomplete="off">
+				<button onclick="openScanner()" class="btn">📷</button>
 
 				<div id="itemsList" class="items-dropdown"></div>
 
@@ -129,7 +130,44 @@
 
 </div>
 
+<div id="scannerModal" style="
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.7);
+    z-index:9999;
+    justify-content:center;
+    align-items:center;
+">
+    <div style="background:white; padding:20px; border-radius:12px;">
+        <div id="reader" style="width:300px;"></div>
+        <button onclick="closeScanner()">Закрыть</button>
+    </div>
+</div>
+
+<div id="addItemModal" style="
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.7);
+    z-index:9999;
+    justify-content:center;
+    align-items:center;
+">
+
+<div style="background:white; padding:20px; border-radius:12px; width:300px;">
+
+    <input id="newName" placeholder="Название">
+    <input id="newPrice" placeholder="Цена">
+    <input id="newBarcode">
+
+    <button onclick="saveNewItem()">Сохранить</button>
+
+</div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
 
 <script>
 let cart = [];
@@ -751,6 +789,84 @@ function createInvoiceSale() {
         renderCart();
 
     });
+}
+
+let scanner;
+
+function openScanner() {
+
+    document.getElementById("scannerModal").style.display = "flex";
+
+    scanner = new Html5Qrcode("reader");
+
+    Html5Qrcode.getCameras().then(devices => {
+
+        scanner.start(
+            devices[0].id,
+            { fps: 10, qrbox: 250 },
+            onScanSuccess
+        );
+
+    });
+}
+
+function closeScanner() {
+    document.getElementById("scannerModal").style.display = "none";
+    if (scanner) scanner.stop();
+}
+
+function onScanSuccess(code) {
+
+    closeScanner();
+
+    fetch("/api/barcode", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ barcode: code })
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        if (data.found) {
+
+            // 🔥 ДОБАВЛЯЕМ В ТВОЮ КОРЗИНУ
+            addToCart(data.id, data.name, data.price);
+
+        } else {
+
+            // 🔥 ОТКРЫВАЕМ ДОБАВЛЕНИЕ
+            openAddItemModal(code);
+
+        }
+
+    });
+
+}
+
+function openAddItemModal(barcode) {
+    document.getElementById("addItemModal").style.display = "flex";
+    document.getElementById("newBarcode").value = barcode;
+}
+
+function saveNewItem() {
+
+    fetch("/api/add-item", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            name: document.getElementById("newName").value,
+            price: document.getElementById("newPrice").value,
+            barcode: document.getElementById("newBarcode").value
+        })
+    })
+    .then(res => res.json())
+    .then(item => {
+
+        addToCart(item.id, item.name, item.price);
+        document.getElementById("addItemModal").style.display = "none";
+
+    });
+
 }
 
 </script>

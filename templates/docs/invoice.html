@@ -193,8 +193,8 @@ hr {
 <td>{{ i.name }}</td>
 <td class="center">{{ i.quantity }}</td>
 <td class="center">{{ i.unit or "Услуга" }}</td>
-<td class="right">{{ i.price }}</td>
-<td class="right">{{ i.total }}</td>
+<td class="right">{{ "{:,.2f}".format(i.price).replace(",", " ") }}</td>
+<td class="right">{{ "{:,.2f}".format(i.total).replace(",", " ") }}</td>
 </tr>
 {% endfor %}
 </table>
@@ -203,7 +203,7 @@ hr {
 <div class="totals">
     <div>
         <span class="bold">Итого:</span>
-        <span class="bold">{{ sale.total_amount }}</span>
+        <span class="bold">{{ "{:,.2f}".format(sale.total_amount).replace(",", " ") }}</span>
     </div>
     <div>
         <span>В том числе НДС:</span>
@@ -214,7 +214,7 @@ hr {
 <br>
 
 <div>
-Всего наименований {{ items|length }}, на сумму {{ sale.total_amount }} KZT
+Всего наименований {{ items|length }}, на сумму {{ "{:,.2f}".format(sale.total_amount).replace(",", " ") }} KZT
 </div>
 
 <div>

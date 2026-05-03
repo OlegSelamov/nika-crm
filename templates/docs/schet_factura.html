@@ -2,313 +2,334 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Счет-фактура № {{ sale.id }}</title>
+<title>Счет-фактура</title>
 
 <style>
 @page {
     size: A4 portrait;
-    margin: 8mm;
-}
-
-* {
-    box-sizing: border-box;
+    margin: 10mm;
 }
 
 body {
     font-family: "Times New Roman", serif;
     font-size: 10px;
-    color: #000;
     margin: 0;
-    background: #fff;
 }
 
-.invoice-page {
+.page {
     width: 100%;
     max-width: 190mm;
-    margin: 0 auto;
+    margin: auto;
 }
 
-#main-header {
+.title {
     text-align: center;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
+/* строки как в PDF */
+.row {
+    display: flex;
+    margin-bottom: 5px;
 }
 
-#second-table td {
-    padding: 3px 4px;
-    vertical-align: top;
-    height: 22px;
-}
-
-.bordered-bottom {
-    border-bottom: 1px solid #000;
-}
-
-.bordered-right {
-    border-right: 1px solid #000;
-}
-
-.bordered-left {
-    border-left: 1px solid #000;
-}
-
-.under-note {
-    font-size: 8px;
-    text-align: center;
-    color: #333;
-    padding-top: 1px;
-}
-
-#details-table {
-    margin-top: 8px;
-    font-size: 8px;
-}
-
-#details-table td,
-#details-table th {
-    border: 1px solid #000;
-    padding: 2px;
-    vertical-align: middle;
-}
-
-.centered {
-    text-align: center;
-}
-
-.no-wrap {
+.label {
     white-space: nowrap;
 }
 
-#footer-table {
-    margin-top: 22px;
+.value {
+    flex: 1;
+    border-bottom: 1px solid #000;
+    margin-left: 5px;
+    padding-left: 5px;
+}
+
+/* таблица */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+td, th {
+    border: 1px solid #000;
+    padding: 3px;
+    text-align: center;
+}
+
+.left {
+    text-align: left;
+}
+
+/* подписи */
+.signatures {
+    margin-top: 25px;
+}
+
+.sign-row {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.sign-block {
+    flex: 1;
+    border-bottom: 1px solid #000;
+    margin-right: 10px;
+    padding-bottom: 3px;
+}
+
+.sign-block:last-child {
+    margin-right: 0;
+}
+
+.note {
+    font-size: 9px;
+    margin-top: 10px;
+}
+
+.sf-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
     font-size: 10px;
 }
 
-#footer-table td {
-    padding: 4px;
-    height: 28px;
-    vertical-align: top;
+.sf-table th,
+.sf-table td {
+    border: 1px solid #000;
+    padding: 3px;
+    text-align: center;
 }
 
-.print-btn {
-    margin: 15px auto;
-    display: block;
-    padding: 8px 18px;
-    cursor: pointer;
+.sf-table .left {
+    text-align: left;
 }
 
-@media print {
-    .print-btn {
-        display: none;
-    }
+.sf-table .right {
+    text-align: right;
+}
 
-    body {
-        zoom: 0.95;
-    }
+.sf-table .numbers td {
+    font-size: 8px;
+}
+
+.sign-block {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 25px;
+}
+
+.sign-left, .sign-right {
+    width: 48%;
+}
+
+.sign-line {
+    border-bottom: 1px solid #000;
+    height: 18px;
+    margin-top: 3px;
+}
+
+.sign-note {
+    font-size: 8px;
+    text-align: center;
+}
+
+.note {
+    margin-top: 15px;
+    font-size: 9px;
 }
 </style>
 </head>
 
 <body>
 
-<button class="print-btn" onclick="window.print()">Печать</button>
+<div class="page">
 
-<div class="invoice-page">
+<div class="title">
+Счет-фактура № {{ sale.id }} от {{ sale_date }}
+</div>
 
-    <div id="main-header">
-        Счет-фактура № {{ sale.id }} от {{ sale.created_at }}
+<div class="row">
+    <div class="label">Дата совершения оборота:</div>
+    <div class="value">{{ sale_date }}</div>
+</div>
+
+<div class="row">
+    <div class="label">Поставщик:</div>
+    <div class="value">
+        {{ company.name }}
+    </div>
+</div>
+
+<div class="row">
+    <div class="label">БИН и адрес места нахождения поставщика:</div>
+    <div class="value">
+        ИИН/БИН: {{ company.bin }}, {{ company.address }}
+    </div>
+</div>
+
+<div class="row">
+    <div class="label">ИИК поставщика:</div>
+    <div class="value">
+        {{ company.iik }}, в банке {{ company.bank }}, БИК {{ company.bik }}
+    </div>
+</div>
+
+<div class="row">
+    <div class="label">Договор (контракт) на поставку товаров (работ, услуг):</div>
+    <div class="value">Без договора</div>
+</div>
+
+<div class="row">
+    <div class="label">Условия оплаты по договору (контракту):</div>
+    <div class="value">{{ payment_type }}</div>
+</div>
+
+<div class="row">
+    <div class="label">Пункт назначения поставляемых товаров (работ, услуг): </div>
+    <div class="value"></div>
+</div>
+
+<div class="row">
+    <div class="label">Поставка товаров (работ,услуг) осуществлена по доверенности: </div>
+    <div class="value">Без доверенности</div>
+</div>
+
+<div class="row">
+    <div class="label">Способ отправления: </div>
+    <div class="value">Самовывоз</div>
+</div>
+
+<div class="row">
+    <div class="label">Товарно-транспортная накладная: </div>
+    <div class="value"></div>
+</div>
+
+<div class="row">
+    <div class="label">Грузоотправитель:</div>
+    <div class="value">
+        {{ company.bin }}, {{ company.name }}, {{ company.address }}
+    </div>
+</div>
+
+<div class="row">
+    <div class="label">Грузополучатель:</div>
+    <div class="value">
+        {{ client.iin }}, {{ client.company_name or client.full_name }}, {{ client.address }}
+    </div>
+</div>
+
+<div class="row">
+    <div class="label">Получатель:</div>
+    <div class="value">
+        {{ client.company_name or client.full_name }}
+    </div>
+</div>
+
+<div class="row">
+    <div class="label">БИН и адрес места нахождения получателя:</div>
+    <div class="value">
+        ИИН/БИН: {{ client.iin }}, {{ client.address }}
+    </div>
+</div>
+
+<div class="row">
+    <div class="label">ИИК получателя:</div>
+    <div class="value">
+        
+    </div>
+</div>
+
+<table class="sf-table">
+    <tr>
+        <th rowspan="2">№ п/п</th>
+        <th rowspan="2">Наименование товаров (работ, услуг)</th>
+        <th rowspan="2">Ед. изм.</th>
+        <th rowspan="2">Кол-во (объем)</th>
+        <th rowspan="2">Цена (KZT)</th>
+        <th rowspan="2">Стоимость товаров (работ, услуг) без НДС</th>
+        <th colspan="2">НДС</th>
+        <th rowspan="2">Всего стоимость реализации</th>
+        <th colspan="2">Акциз</th>
+    </tr>
+    <tr>
+        <th>Ставка</th>
+        <th>Сумма</th>
+        <th>Ставка</th>
+        <th>Сумма</th>
+    </tr>
+
+    <tr class="numbers">
+        <td>1</td>
+        <td>2</td>
+        <td>3</td>
+        <td>4</td>
+        <td>5</td>
+        <td>6</td>
+        <td>7</td>
+        <td>8</td>
+        <td>9</td>
+        <td>10</td>
+        <td>11</td>
+    </tr>
+
+    {% set total = 0 %}
+    {% for item in items %}
+    {% set total = total + item.total %}
+    <tr>
+        <td>{{ loop.index }}</td>
+        <td class="left">{{ item.name }}</td>
+        <td>шт</td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ "{:,.2f}".format(item.price) }}</td>
+        <td>{{ "{:,.2f}".format(item.total) }}</td>
+        <td>Без НДС</td>
+        <td>0,00</td>
+        <td>{{ "{:,.2f}".format(item.total) }}</td>
+        <td></td>
+        <td></td>
+    </tr>
+    {% endfor %}
+
+    <tr>
+        <td colspan="5" class="right"><b>Всего по счету:</b></td>
+        <td><b>{{ "{:,.2f}".format(total) }}</b></td>
+        <td></td>
+        <td><b>0,00</b></td>
+        <td><b>{{ "{:,.2f}".format(total) }}</b></td>
+        <td></td>
+        <td></td>
+    </tr>
+</table>
+
+<div class="sign-block">
+
+    <div class="sign-left">
+        <div><b>Руководитель:</b></div>
+        <div class="sign-line">{{ company.director }}</div>
+        <div class="sign-note">(Ф.И.О., подпись)</div>
+
+        <div style="margin-top:10px;"><b>Главный бухгалтер: не предусмотрен</b></div>
+        <div class="sign-line">Не предусмотрен</div>
+        <div class="sign-note">(Ф.И.О., подпись)</div>
     </div>
 
-    <table id="second-table">
-        <tr>
-            <td class="bordered-bottom">Дата совершения оборота:</td>
-            <td class="bordered-bottom" colspan="2">{{ sale.created_at }}</td>
-        </tr>
+    <div class="sign-right">
+        <div><b>ВЫДАЛ (ответственное лицо поставщика)</b></div>
+        <div class="sign-line"></div>
+        <div class="sign-note">(должность)</div>
 
-        <tr>
-            <td class="bordered-bottom">ИИН/БИН поставщика:<br>{{ company.bin or "" }}</td>
-            <td class="bordered-bottom">Наименование поставщика:<br>{{ company.name or "" }}</td>
-            <td class="bordered-bottom">Адрес места нахождения поставщика:<br>{{ company.address or "" }}</td>
-        </tr>
+        <div class="sign-line" style="margin-top:20px;"></div>
+        <div class="sign-note">(Ф.И.О., подпись)</div>
+    </div>
 
-        <tr>
-            <td class="bordered-bottom">ИИК поставщика:<br>{{ company.iik or "" }}</td>
-            <td class="bordered-bottom">в банке:<br>{{ company.bank_name or "" }}</td>
-            <td class="bordered-bottom">БИК банка:<br>{{ company.bik or "" }}</td>
-        </tr>
+</div>
 
-        <tr>
-            <td class="bordered-bottom">Договор (контракт) на поставку товаров (работ, услуг):</td>
-            <td class="bordered-bottom" colspan="2">Без договора</td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">Условия оплаты по договору (контракту):</td>
-            <td class="bordered-bottom" colspan="2">Безналичный расчет</td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">Пункт назначения поставляемых товаров (работ, услуг):</td>
-            <td class="bordered-bottom" colspan="2">{{ company.city or "" }}</td>
-        </tr>
-
-        <tr>
-            <td></td>
-            <td class="under-note" colspan="2">(государство, регион, область, город, район)</td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">Поставка товаров (работ, услуг) осуществлена по доверенности:</td>
-            <td class="bordered-bottom" colspan="2">Без доверенности</td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">Способ отправления:</td>
-            <td class="bordered-bottom" colspan="2">Самовывоз</td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">Товарно-транспортная накладная:</td>
-            <td class="bordered-bottom" colspan="2"></td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">Грузоотправитель:</td>
-            <td class="bordered-bottom" colspan="2">{{ company.bin or "" }}, {{ company.name or "" }}, {{ company.address or "" }}</td>
-        </tr>
-
-        <tr>
-            <td></td>
-            <td class="under-note" colspan="2">(БИН, наименование и адрес)</td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">ИИН/БИН получателя:<br>{{ client.iin or "" }}</td>
-            <td class="bordered-bottom">Наименование получателя:<br>{{ client.company_name or client.full_name or "" }}</td>
-            <td class="bordered-bottom">Адрес места нахождения получателя:<br>{{ client.address or "" }}</td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">ИИК получателя:<br></td>
-            <td class="bordered-bottom">в банке:<br></td>
-            <td class="bordered-bottom">БИК банка:<br></td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom">Грузополучатель:</td>
-            <td class="bordered-bottom" colspan="2">{{ client.iin or "" }}, {{ client.company_name or client.full_name or "" }}, {{ client.address or "" }}</td>
-        </tr>
-
-        <tr>
-            <td></td>
-            <td class="under-note" colspan="2">(БИН, наименование и адрес)</td>
-        </tr>
-    </table>
-
-    <table id="details-table">
-        <tr>
-            <td class="centered" rowspan="2">№</td>
-            <td class="centered" rowspan="2" style="width: 28%;">Наименование товаров (работ, услуг)</td>
-            <td class="centered" rowspan="2">Ед. изм.</td>
-            <td class="centered" rowspan="2">Кол-во</td>
-            <td class="centered" rowspan="2">Цена (KZT)</td>
-            <td class="centered" rowspan="2">Стоимость без НДС</td>
-            <td class="centered" colspan="2">НДС</td>
-            <td class="centered" rowspan="2">Всего стоимость реализации</td>
-            <td class="centered" colspan="2">Акциз</td>
-        </tr>
-
-        <tr>
-            <td class="centered">Ставка</td>
-            <td class="centered">Сумма</td>
-            <td class="centered">Ставка</td>
-            <td class="centered">Сумма</td>
-        </tr>
-
-        <tr>
-            <td class="centered">1</td>
-            <td class="centered">2</td>
-            <td class="centered">3</td>
-            <td class="centered">4</td>
-            <td class="centered">5</td>
-            <td class="centered">6</td>
-            <td class="centered">7</td>
-            <td class="centered">8</td>
-            <td class="centered">9</td>
-            <td class="centered">10</td>
-            <td class="centered">11</td>
-        </tr>
-
-        {% for item in items %}
-        <tr>
-            <td class="centered">{{ loop.index }}</td>
-            <td>{{ item.name }}</td>
-            <td class="centered">{{ item.unit or "шт" }}</td>
-            <td class="centered">{{ item.quantity }}</td>
-            <td class="centered no-wrap">{{ item.price }}</td>
-            <td class="centered no-wrap">{{ item.total }}</td>
-            <td class="centered">Без НДС</td>
-            <td class="centered">0</td>
-            <td class="centered no-wrap">{{ item.total }}</td>
-            <td class="centered"></td>
-            <td class="centered"></td>
-        </tr>
-        {% endfor %}
-
-        <tr>
-            <td colspan="5" style="border:none; font-weight:bold; text-align:right;">
-                Всего по счету:
-            </td>
-            <td class="centered no-wrap">{{ total }}</td>
-            <td></td>
-            <td class="centered no-wrap">0</td>
-            <td class="centered no-wrap">{{ total }}</td>
-            <td></td>
-            <td></td>
-        </tr>
-    </table>
-
-    <table id="footer-table">
-        <tr>
-            <td class="bordered-bottom bordered-right">
-                Руководитель:<br>{{ company.director or "" }}
-            </td>
-            <td class="bordered-bottom bordered-left">
-                ВЫДАЛ (ответственное лицо поставщика):<br>{{ company.director or "" }}
-            </td>
-        </tr>
-
-        <tr>
-            <td class="under-note bordered-right">(Ф.И.О., подпись)</td>
-            <td class="under-note bordered-left">(должность)</td>
-        </tr>
-
-        <tr>
-            <td class="bordered-bottom bordered-right">
-                Главный бухгалтер:<br>Не предусмотрен
-            </td>
-            <td class="bordered-bottom bordered-left"><br></td>
-        </tr>
-
-        <tr>
-            <td class="under-note bordered-right">(Ф.И.О., подпись)</td>
-            <td class="under-note bordered-left">(Ф.И.О., подпись)</td>
-        </tr>
-
-        <tr>
-            <td colspan="2">
-                Примечание: Без печати недействительно. Оригинал (первый экземпляр) - покупателю.
-                Копия (второй экземпляр) - поставщику.
-            </td>
-        </tr>
-    </table>
-
+<div class="note">
+    Примечание: Без печати недействительно. Оригинал (первый экземпляр) - покупателю.
+    Копия (второй экземпляр) - поставщику.
 </div>
 
 </body>

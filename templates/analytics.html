@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Аналитика</h1>
+        <div class="page-note">Статистика продаж и клиентов</div>
+    </div>
+</div>
+
+<form method="get" class="card" style="margin-bottom:15px;">
+    <div style="display:flex; gap:10px; align-items:center;">
+        <input type="date" name="from" value="{{ date_from }}">
+        <input type="date" name="to" value="{{ date_to }}">
+        <button class="btn">Применить</button>
+    </div>
+</form>
+
+<!-- 🔷 КАРТОЧКИ -->
+<div class="stats-grid">
+
+    <div class="stat-card blue">
+        <div class="stat-label">Общая выручка</div>
+        <div class="stat-value">
+            {{ "{:,.2f}".format(total).replace(",", " ") }} ₸
+        </div>
+    </div>
+
+    <div class="stat-card purple">
+        <div class="stat-label">Сегодня</div>
+        <div class="stat-value">
+            {{ "{:,.2f}".format(today or 0).replace(",", " ") }} ₸
+        </div>
+    </div>
+
+    <div class="stat-card cyan">
+        <div class="stat-label">Kaspi / Карта / Нал</div>
+        <div style="font-size:13px; margin-top:6px;">
+            💵 {{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }}<br>
+            💳 {{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }}<br>
+            📱 {{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }}
+        </div>
+    </div>
+
+</div>
+
+<div class="card">
+    <div class="title">График продаж</div>
+    <canvas id="chart"></canvas>
+</div>
+
+<!-- 🏆 ТОП КЛИЕНТЫ -->
+<div class="card">
+    <div class="title">Топ клиенты</div>
+
+    <table>
+        <tbody>
+        {% for c in top_clients %}
+            <tr>
+                <td>{{ c.full_name }}</td>
+                <td style="text-align:right;">
+                    {{ "{:,.2f}".format(c.total).replace(",", " ") }} ₸
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 📦 ТОП ТОВАРЫ -->
+<div class="card">
+    <div class="title">Топ товары</div>
+
+    <table>
+        <tbody>
+        {% for i in top_items %}
+            <tr>
+                <td>{{ i.name }}</td>
+                <td style="text-align:right;">
+                    {{ "{:,.2f}".format(i.total).replace(",", " ") }} ₸
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+new Chart(document.getElementById('chart'), {
+    type: 'line',
+    data: {
+        labels: {{ chart_labels | tojson }},
+        datasets: [{
+            data: {{ chart_values | tojson }},
+            borderWidth: 2,
+            tension: 0.3
+        }]
+    },
+    options: {
+        plugins: { legend: { display: false } }
+    }
+});
+</script>
+
+{% endblock %}

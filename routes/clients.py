@@ -139,10 +139,24 @@ def client_detail(client_id):
     if not client:
         return "Клиент не найден", 404
 
+    formatted_sales = []
+
+    for s in sales:
+        try:
+            dt = datetime.fromisoformat(s["created_at"])
+            date_str = dt.strftime("%d.%m.%Y %H:%M")
+        except:
+            date_str = s["created_at"]
+
+        new_s = dict(s)
+        new_s["date_str"] = date_str
+
+        formatted_sales.append(new_s)
+        
     return render_template(
         "client_detail.html",
         client=client,
-        sales=sales
+        sales=formatted_sales
     )
 
 

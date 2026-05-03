@@ -1,5 +1,138 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Главная панель</h1>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Главная</h1>
+        <div class="page-note">Обзор бизнеса</div>
+    </div>
+</div>
+
+<!-- 💰 КАРТОЧКИ -->
+<div class="stats-grid">
+
+    <div class="stat-card blue">
+        <div class="stat-label">Общая выручка</div>
+        <div class="stat-value">
+            {{ "{:,.2f}".format(total).replace(",", " ") }} ₸
+        </div>
+    </div>
+
+    <div class="stat-card purple">
+        <div class="stat-label">Сегодня</div>
+        <div class="stat-value">
+            {{ "{:,.2f}".format(today).replace(",", " ") }} ₸
+        </div>
+    </div>
+
+    <div class="stat-card cyan">
+        <div class="stat-label">Оплаты</div>
+        <div style="font-size:13px; margin-top:6px;">
+            💵 {{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }}<br>
+            💳 {{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }}<br>
+            📱 {{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }}
+        </div>
+    </div>
+
+</div>
+
+<div class="card">
+    <div class="title">График продаж</div>
+
+    <canvas id="salesChart" height="100"></canvas>
+</div>
+
+<!-- 🧾 ПОСЛЕДНИЕ ПРОДАЖИ -->
+<div class="card">
+    <div class="title">Последние продажи</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Клиент</th>
+                <th>Сумма</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sales %}
+            <tr>
+                <td>#{{ s.id }}</td>
+                <td>{{ s.full_name or "—" }}</td>
+                <td>
+                    {{ "{:,.2f}".format(s.total_amount).replace(",", " ") }} ₸
+                </td>
+                <td>
+                    <span class="{{ 'status-ok' if s.status == 'Оплачено' else 'status-bad' }}">
+                        {{ s.status }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+
+<div class="card">
+    <div class="title">Долги</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Клиент</th>
+                <th>Сумма</th>
+                <th>Долг</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in debts %}
+            <tr>
+                <td>{{ d.full_name }}</td>
+                <td>{{ d.total_amount }} ₸</td>
+                <td style="color:red;">
+                    {{ d.total_amount - d.paid_amount }} ₸
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <div class="title">Уведомления</div>
+
+    {% for n in notifications %}
+        <div style="padding:6px 0;">
+            🔔 {{ n }}
+        </div>
+    {% endfor %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const ctx = document.getElementById('salesChart');
+
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: {{ chart_labels | tojson }},
+        datasets: [{
+            label: 'Продажи',
+            data: {{ chart_values | tojson }},
+            borderWidth: 2,
+            tension: 0.3
+        }]
+    },
+    options: {
+        plugins: {
+            legend: { display: false }
+        }
+    }
+});
+</script>
+
 {% endblock %}
