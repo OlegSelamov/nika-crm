@@ -792,3 +792,20 @@ def add_item_api():
         "name": item["name"],
         "price": item["retail_price"]
     }
+    
+# 👉 хранение последнего скана
+last_barcode = None
+
+@sales_bp.route("/api/scan", methods=["POST"])
+def scan_barcode():
+    global last_barcode
+    data = request.json
+    last_barcode = data.get("code")
+    return {"success": True}
+
+@sales_bp.route("/api/get-scan")
+def get_scan():
+    global last_barcode
+    code = last_barcode
+    last_barcode = None
+    return {"code": code}

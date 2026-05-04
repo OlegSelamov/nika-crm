@@ -803,36 +803,29 @@ let selectedDeviceId = null;
 
 async function openScanner() {
 
+    try {
+        // 🔥 заставляем спросить доступ
+        await navigator.mediaDevices.getUserMedia({ video: true });
+    } catch (e) {
+        alert("Нет доступа к камере");
+        return;
+    }
+
     document.getElementById("scannerModal").style.display = "flex";
 
     codeReader = new ZXing.BrowserBarcodeReader();
 
-    const videoInputDevices = await codeReader.listVideoInputDevices();
-
-    if (!videoInputDevices.length) {
-        alert("Камера не найдена");
-        return;
-    }
-
-    // 🔥 умный выбор камеры
-    const backCamera = videoInputDevices.find(device =>
-        device.label.toLowerCase().includes('back')
-    );
-
-    selectedDeviceId = backCamera
-        ? backCamera.deviceId
-        : videoInputDevices[0].deviceId;
-
-    codeReader.decodeFromVideoDevice(selectedDeviceId, 'reader', (result, err) => {
+    codeReader.decodeFromConstraints({
+        video: {
+            facingMode: { ideal: "environment" }
+        }
+    }, 'reader', (result, err) => {
 
         if (result) {
 
             const code = result.text;
 
-            // 🔥 фильтр длины
             if (code.length < 8 || code.length > 14) return;
-
-            console.log("CAMERA Скан:", code);
 
             const beep = document.getElementById("beepSound");
             if (beep) {
@@ -840,8 +833,11 @@ async function openScanner() {
                 beep.play().catch(() => {});
             }
 
-            closeScanner();
-            handleBarcode(code);
+            fetch("/api/scan", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ code: code })
+            });
         }
 
     });
@@ -914,6 +910,29 @@ document.addEventListener("keydown", function(e) {
         barcodeBuffer += e.key;
     }
 });
+
+setInterval(() => {
+
+    fetch("/api/get-scan")
+    .then(res => res.json())
+    .then(data => {
+
+        if (data.code) {
+
+            console.log("С телефона:", data.code);
+
+            const beep = document.getElementById("beepSound");
+            if (beep) {
+                beep.currentTime = 0;
+                beep.play().catch(() => {});
+            }
+
+            handleBarcode(data.code);
+        }
+
+    });
+
+}, 300); // каждые 1 сек
 
 </script>
 
