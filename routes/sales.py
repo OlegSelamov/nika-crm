@@ -812,7 +812,7 @@ def get_scan():
     last_barcode = None
     return {"code": code}
  
- active_sessions = {}
+active_sessions = {}
 
 @sales_bp.route("/api/create-session")
 def create_session():
