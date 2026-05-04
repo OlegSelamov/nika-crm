@@ -895,10 +895,14 @@ async function openScanner() {
 			requestAnimationFrame(scanFrame);
 		}
 
-		scanFrame();
-            }
+        scanFrame();
 
-        });
+    } catch (err) {
+
+        console.error("CAMERA ERROR:", err);
+        alert("Не удалось запустить камеру");
+
+    }
 }
 
 function closeScanner() {
