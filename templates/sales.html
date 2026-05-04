@@ -803,17 +803,39 @@ let selectedDeviceId = null;
 
 async function openScanner() {
 
+    const readerEl = document.getElementById("reader");
     document.getElementById("scannerModal").style.display = "flex";
 
-    codeReader = new ZXing.BrowserBarcodeReader();
+    // 🔥 очищаем
+    readerEl.innerHTML = "";
+
+    // 🔥 создаём видео вручную
+    const video = document.createElement("video");
+    video.setAttribute("autoplay", true);
+    video.setAttribute("playsinline", true);
+    video.style.width = "100%";
+    video.style.height = "100%";
+
+    readerEl.appendChild(video);
 
     try {
 
-        await codeReader.decodeFromConstraints({
+        // 🔥 ВКЛЮЧАЕМ КАМЕРУ НАПРЯМУЮ
+        const stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: { ideal: "environment" }
             }
-        }, 'reader', (result, err) => {
+        });
+
+        video.srcObject = stream;
+
+        // 🔥 ждём пока реально появится картинка
+        await video.play();
+
+        // 🔥 запускаем ZXing ПОСЛЕ
+        codeReader = new ZXing.BrowserBarcodeReader();
+
+        codeReader.decodeFromVideoElement(video, (result, err) => {
 
             if (result) {
 
@@ -840,9 +862,8 @@ async function openScanner() {
 
     } catch (err) {
 
-        console.error("ZXING ERROR:", err);
-
-        alert("Камера не поддерживается или нет доступа");
+        console.error("CAMERA ERROR:", err);
+        alert("Не удалось запустить камеру");
 
     }
 }
@@ -850,6 +871,12 @@ async function openScanner() {
 function closeScanner() {
 
     document.getElementById("scannerModal").style.display = "none";
+
+    const video = document.querySelector("#reader video");
+
+    if (video && video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+    }
 
     if (codeReader) {
         codeReader.reset();
