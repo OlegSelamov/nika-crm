@@ -803,44 +803,48 @@ let selectedDeviceId = null;
 
 async function openScanner() {
 
-    try {
-        // 🔥 заставляем спросить доступ
-        await navigator.mediaDevices.getUserMedia({ video: true });
-    } catch (e) {
-        alert("Нет доступа к камере");
-        return;
-    }
-
     document.getElementById("scannerModal").style.display = "flex";
 
     codeReader = new ZXing.BrowserBarcodeReader();
 
-    codeReader.decodeFromConstraints({
-        video: {
-            facingMode: { ideal: "environment" }
-        }
-    }, 'reader', (result, err) => {
+    try {
 
-        if (result) {
+        await codeReader.decodeFromConstraints({
+            video: {
+                facingMode: { ideal: "environment" }
+            }
+        }, 'reader', (result, err) => {
 
-            const code = result.text;
+            if (result) {
 
-            if (code.length < 8 || code.length > 14) return;
+                const code = result.text;
 
-            const beep = document.getElementById("beepSound");
-            if (beep) {
-                beep.currentTime = 0;
-                beep.play().catch(() => {});
+                if (code.length < 8 || code.length > 14) return;
+
+                console.log("SCAN:", code);
+
+                const beep = document.getElementById("beepSound");
+                if (beep) {
+                    beep.currentTime = 0;
+                    beep.play().catch(() => {});
+                }
+
+                fetch("/api/scan", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ code: code })
+                });
             }
 
-            fetch("/api/scan", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ code: code })
-            });
-        }
+        });
 
-    });
+    } catch (err) {
+
+        console.error("ZXING ERROR:", err);
+
+        alert("Камера не поддерживается или нет доступа");
+
+    }
 }
 
 function closeScanner() {
