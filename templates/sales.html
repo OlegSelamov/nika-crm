@@ -162,7 +162,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 
 <audio id="beepSound" preload="auto">
     <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
@@ -228,7 +228,15 @@ fetch("/api/items")
 
 // добавление в корзину
 function addToCart(id, name, price) {
-    cart.push({ id, name, price, qty: 1 });
+
+    const existing = cart.find(i => i.id === id);
+
+    if (existing) {
+        existing.qty += 1;
+    } else {
+        cart.push({ id, name, price, qty: 1 });
+    }
+
     renderCart();
 	document.getElementById("itemsList").style.display = "none";
     document.getElementById("search").value = "";
@@ -790,119 +798,69 @@ function createInvoiceSale() {
     });
 }
 
-let scannerActive = false;
-let lastScannedCode = "";
-let lastScanTime = 0;
+let codeReader = null;
+let selectedDeviceId = null;
 
-function openScanner() {
-    const modal = document.getElementById("scannerModal");
-    const reader = document.getElementById("reader");
+async function openScanner() {
 
-    modal.style.display = "flex";
-    reader.innerHTML = "";
+    document.getElementById("scannerModal").style.display = "flex";
 
-    scannerActive = true;
-    lastScannedCode = "";
-    lastScanTime = 0;
+    codeReader = new ZXing.BrowserBarcodeReader();
 
-    Quagga.init({
-        inputStream: {
-            type: "LiveStream",
-            target: reader,
-            constraints: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
+    const videoInputDevices = await codeReader.listVideoInputDevices();
 
-                // 🔥 на телефоне включает заднюю камеру
-                facingMode: { ideal: "environment" }
-            }
-        },
-
-        locator: {
-            patchSize: "medium",
-            halfSample: true
-        },
-
-        numOfWorkers: navigator.hardwareConcurrency || 4,
-
-        frequency: 10,
-
-        decoder: {
-            readers: [
-                "ean_reader",
-                "ean_8_reader",
-                "code_128_reader",
-                "code_39_reader",
-                "upc_reader",
-                "upc_e_reader"
-            ]
-        },
-
-        locate: true
-
-    }, function(err) {
-        if (err) {
-            console.error("Ошибка камеры:", err);
-            alert("Не удалось открыть камеру. Проверь доступ к камере.");
-            closeScanner();
-            return;
-        }
-
-        Quagga.start();
-    });
-}
-
-Quagga.onDetected(function(result) {
-    if (!scannerActive) return;
-    if (!result || !result.codeResult || !result.codeResult.code) return;
-
-    const code = result.codeResult.code;
-    const now = Date.now();
-
-    // защита от повторного скана одного и того же кода
-    if (code === lastScannedCode && now - lastScanTime < 2000) {
+    if (!videoInputDevices.length) {
+        alert("Камера не найдена");
         return;
     }
 
-    lastScannedCode = code;
-    lastScanTime = now;
+    // 🔥 умный выбор камеры
+    const backCamera = videoInputDevices.find(device =>
+        device.label.toLowerCase().includes('back')
+    );
 
-    scannerActive = false;
+    selectedDeviceId = backCamera
+        ? backCamera.deviceId
+        : videoInputDevices[0].deviceId;
 
-    // 🔊 пик
-    const beep = document.getElementById("beepSound");
-    if (beep) {
-        beep.currentTime = 0;
-        beep.play().catch(() => {});
-    }
+    codeReader.decodeFromVideoDevice(selectedDeviceId, 'reader', (result, err) => {
 
-    Quagga.stop();
-    closeScanner();
+        if (result) {
 
-    handleBarcode(code);
-});
+            const code = result.text;
+
+            // 🔥 фильтр длины
+            if (code.length < 8 || code.length > 14) return;
+
+            console.log("CAMERA Скан:", code);
+
+            const beep = document.getElementById("beepSound");
+            if (beep) {
+                beep.currentTime = 0;
+                beep.play().catch(() => {});
+            }
+
+            closeScanner();
+            handleBarcode(code);
+        }
+
+    });
+}
 
 function closeScanner() {
+
     document.getElementById("scannerModal").style.display = "none";
 
-    try {
-        Quagga.stop();
-    } catch (e) {}
-
-    scannerActive = false;
+    if (codeReader) {
+        codeReader.reset();
+    }
 }
 
 function handleBarcode(code) {
-    console.log("Скан:", code);
-
     fetch("/api/barcode", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            barcode: code
-        })
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ barcode: code })
     })
     .then(res => res.json())
     .then(data => {
@@ -913,43 +871,49 @@ function handleBarcode(code) {
             openAddItemModal(code);
         }
 
-    })
-    .catch(err => {
-        console.error("BARCODE ERROR:", err);
-        alert("Ошибка поиска товара по штрих-коду");
     });
 }
 
-function openAddItemModal(barcode) {
-    document.getElementById("addItemModal").style.display = "flex";
-    document.getElementById("newBarcode").value = barcode;
-    document.getElementById("newName").focus();
-}
+let barcodeBuffer = "";
+let lastKeyTime = 0;
 
-function saveNewItem() {
-    fetch("/api/add-item", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            name: document.getElementById("newName").value,
-            price: document.getElementById("newPrice").value,
-            barcode: document.getElementById("newBarcode").value
-        })
-    })
-    .then(res => res.json())
-    .then(item => {
+document.addEventListener("keydown", function(e) {
 
-        addToCart(item.id, item.name, item.price);
+    const now = Date.now();
 
-        document.getElementById("addItemModal").style.display = "none";
-        document.getElementById("newName").value = "";
-        document.getElementById("newPrice").value = "";
-        document.getElementById("newBarcode").value = "";
+    // 🔥 если пауза большая — новый скан
+    if (now - lastKeyTime > 100) {
+        barcodeBuffer = "";
+    }
 
-    });
-}
+    lastKeyTime = now;
+
+    // 🔥 если нажали Enter → код готов
+    if (e.key === "Enter") {
+
+        if (barcodeBuffer.length >= 8) {
+
+            console.log("USB Скан:", barcodeBuffer);
+
+            // 🔊 пик
+            const beep = document.getElementById("beepSound");
+            if (beep) {
+                beep.currentTime = 0;
+                beep.play().catch(() => {});
+            }
+
+            handleBarcode(barcodeBuffer);
+        }
+
+        barcodeBuffer = "";
+        return;
+    }
+
+    // 🔥 только цифры
+    if (/[0-9]/.test(e.key)) {
+        barcodeBuffer += e.key;
+    }
+});
 
 </script>
 
