@@ -832,54 +832,73 @@ async function openScanner() {
         // 🔥 ждём пока реально появится картинка
         await video.play();
 
-        // 🔥 запускаем ZXing ПОСЛЕ
-		const hints = new Map();
+		// 🔥 НАТИВНЫЙ СКАНЕР БРАУЗЕРА — вместо ZXing
+		if (!("BarcodeDetector" in window)) {
+			alert("Этот браузер не поддерживает быстрый сканер. Попробуй Chrome на Android.");
+			return;
+		}
 
-		hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-			ZXing.BarcodeFormat.EAN_13,
-			ZXing.BarcodeFormat.EAN_8,
-			ZXing.BarcodeFormat.CODE_128,
-			ZXing.BarcodeFormat.CODE_39,
-			ZXing.BarcodeFormat.UPC_A,
-			ZXing.BarcodeFormat.UPC_E
-		]);
+		const barcodeDetector = new BarcodeDetector({
+			formats: [
+				"ean_13",
+				"ean_8",
+				"code_128",
+				"code_39",
+				"upc_a",
+				"upc_e"
+			]
+		});
 
-		hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+		let lastDetectedCode = "";
+		let lastDetectedTime = 0;
 
-		// 🔥 создаём сканер с настройками
-		codeReader = new ZXing.BrowserBarcodeReader(hints);
+		async function scanFrame() {
+			try {
+				const barcodes = await barcodeDetector.detect(video);
 
-        codeReader.decodeFromVideoElement(video, (result, err) => {
+				if (barcodes.length > 0) {
+					const code = barcodes[0].rawValue;
+					const now = Date.now();
 
-            if (result) {
+					if (code.length >= 8 && code.length <= 14) {
 
-                const code = result.text;
+						// защита от дублей
+						if (!(code === lastDetectedCode && now - lastDetectedTime < 1200)) {
 
-                if (code.length < 8 || code.length > 14) return;
+							lastDetectedCode = code;
+							lastDetectedTime = now;
 
-                console.log("SCAN:", code);
+							console.log("BARCODE DETECTOR:", code);
 
-                const beep = document.getElementById("beepSound");
-                if (beep) {
-                    beep.currentTime = 0;
-                    beep.play().catch(() => {});
-                }
+							const beep = document.getElementById("beepSound");
+							if (beep) {
+								beep.currentTime = 0;
+								beep.play().catch(() => {});
+							}
 
-                fetch("/api/scan", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ code: code })
-                });
+							if (navigator.vibrate) {
+								navigator.vibrate(120);
+							}
+
+							fetch("/api/scan", {
+								method: "POST",
+								headers: {"Content-Type": "application/json"},
+								body: JSON.stringify({ code: code })
+							});
+						}
+					}
+				}
+			} catch (err) {
+				console.log("SCAN FRAME ERROR:", err);
+			}
+
+			requestAnimationFrame(scanFrame);
+		}
+
+		scanFrame();
             }
 
         });
-
-    } catch (err) {
-
-        console.error("CAMERA ERROR:", err);
-        alert("Не удалось запустить камеру");
-
-    }
 }
 
 function closeScanner() {
@@ -892,9 +911,11 @@ function closeScanner() {
         video.srcObject.getTracks().forEach(track => track.stop());
     }
 
-    if (codeReader) {
-        codeReader.reset();
-    }
+	if (codeReader) {
+		try {
+			codeReader.reset();
+		} catch (e) {}
+	}
 }
 
 function handleBarcode(code) {
