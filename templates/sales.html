@@ -16,6 +16,7 @@
 
 				<input id="search" placeholder="Поиск товара..." autocomplete="off">
 				<button onclick="openScanner()" class="btn">📷</button>
+				<button onclick="showQR()" class="btn">📡</button>
 
 				<div id="itemsList" class="items-dropdown"></div>
 
@@ -159,10 +160,17 @@
     <button onclick="saveNewItem()">Сохранить</button>
 
 </div>
+
+<div id="qrBox" style="display:none; text-align:center; margin-top:10px;">
+    <h3>Подключить сканер</h3>
+    <img id="qrImg">
+</div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
 <audio id="beepSound" preload="auto">
     <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
@@ -1003,6 +1011,47 @@ setInterval(() => {
     });
 
 }, 300); // каждые 1 сек
+
+let sessionId = null;
+
+function showQR() {
+
+    fetch("/api/create-session")
+    .then(res => res.json())
+    .then(data => {
+
+        sessionId = data.session;
+
+        const url = window.location.origin + "/scanner?session=" + sessionId;
+
+        QRCode.toDataURL(url, function (err, urlImg) {
+            document.getElementById("qrImg").src = urlImg;
+            document.getElementById("qrBox").style.display = "block";
+        });
+
+        startListening();
+    });
+}
+
+function startListening() {
+
+    setInterval(() => {
+
+        if (!sessionId) return;
+
+        fetch("/api/get-scan/" + sessionId)
+        .then(res => res.json())
+        .then(data => {
+
+            if (data.code) {
+                handleBarcode(data.code);
+            }
+
+        });
+
+    }, 200);
+
+}
 
 </script>
 

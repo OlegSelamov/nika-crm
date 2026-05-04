@@ -1,8 +1,10 @@
 from flask import Blueprint, render_template, request, jsonify, redirect
 from models import get_db
 from datetime import datetime, timedelta
+from flask import render_template
 import sqlite3
 from flask import session
+import uuid
 
 sales_bp = Blueprint("sales", __name__)
 sales_api = Blueprint("sales_api", __name__)
@@ -809,3 +811,31 @@ def get_scan():
     code = last_barcode
     last_barcode = None
     return {"code": code}
+ 
+ active_sessions = {}
+
+@sales_bp.route("/api/create-session")
+def create_session():
+    session_id = str(uuid.uuid4())[:8]
+    active_sessions[session_id] = None
+    return {"session": session_id}
+
+@sales_bp.route("/api/scan/<session_id>", methods=["POST"])
+def scan_with_session(session_id):
+    data = request.json
+    code = data.get("code")
+
+    if session_id in active_sessions:
+        active_sessions[session_id] = code
+
+    return {"ok": True}
+
+@sales_bp.route("/api/get-scan/<session_id>")
+def get_scan_session(session_id):
+    code = active_sessions.get(session_id)
+    active_sessions[session_id] = None
+    return {"code": code}
+    
+@sales_bp.route("/scanner")
+def scanner_page():
+    return render_template("scanner.html")

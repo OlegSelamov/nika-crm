@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Сканер</title>
+</head>
+<body>
+
+<video id="video" autoplay playsinline style="width:100%"></video>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const session = params.get("session");
+
+const video = document.getElementById("video");
+
+navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" }
+})
+.then(stream => {
+    video.srcObject = stream;
+    video.play();
+});
+
+const detector = new BarcodeDetector({
+    formats: ["ean_13","ean_8","code_128"]
+});
+
+async function scan() {
+
+    const barcodes = await detector.detect(video);
+
+    if (barcodes.length > 0) {
+
+        const code = barcodes[0].rawValue;
+
+        fetch("/api/scan/" + session, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ code })
+        });
+
+        navigator.vibrate(100);
+    }
+
+    requestAnimationFrame(scan);
+}
+
+scan();
+</script>
+
+</body>
+</html>
