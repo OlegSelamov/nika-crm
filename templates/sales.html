@@ -130,18 +130,13 @@
 
 </div>
 
-<div id="scannerModal" style="
-    display:none;
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,0.7);
-    z-index:9999;
-    justify-content:center;
-    align-items:center;
-">
-    <div style="background:white; padding:20px; border-radius:12px;">
-        <div id="reader" style="width:300px;"></div>
-        <button onclick="closeScanner()">Закрыть</button>
+<div id="scannerModal" class="scanner-modal">
+    <div class="scanner-box">
+
+        <div id="reader"></div>
+
+        <button onclick="closeScanner()" class="btn">Закрыть</button>
+
     </div>
 </div>
 
@@ -167,7 +162,11 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+<audio id="beepSound" preload="auto">
+    <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+</audio>
 
 <script>
 let cart = [];
@@ -791,68 +790,148 @@ function createInvoiceSale() {
     });
 }
 
-let scanner;
+let scannerActive = false;
+let lastScannedCode = "";
+let lastScanTime = 0;
 
 function openScanner() {
+    const modal = document.getElementById("scannerModal");
+    const reader = document.getElementById("reader");
 
-    document.getElementById("scannerModal").style.display = "flex";
+    modal.style.display = "flex";
+    reader.innerHTML = "";
 
-    scanner = new Html5Qrcode("reader");
+    scannerActive = true;
+    lastScannedCode = "";
+    lastScanTime = 0;
 
-    Html5Qrcode.getCameras().then(devices => {
+    Quagga.init({
+        inputStream: {
+            type: "LiveStream",
+            target: reader,
+            constraints: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
 
-        scanner.start(
-            devices[0].id,
-            { fps: 10, qrbox: 250 },
-            onScanSuccess
-        );
+                // 🔥 на телефоне включает заднюю камеру
+                facingMode: { ideal: "environment" }
+            }
+        },
 
+        locator: {
+            patchSize: "medium",
+            halfSample: true
+        },
+
+        numOfWorkers: navigator.hardwareConcurrency || 4,
+
+        frequency: 10,
+
+        decoder: {
+            readers: [
+                "ean_reader",
+                "ean_8_reader",
+                "code_128_reader",
+                "code_39_reader",
+                "upc_reader",
+                "upc_e_reader"
+            ]
+        },
+
+        locate: true
+
+    }, function(err) {
+        if (err) {
+            console.error("Ошибка камеры:", err);
+            alert("Не удалось открыть камеру. Проверь доступ к камере.");
+            closeScanner();
+            return;
+        }
+
+        Quagga.start();
     });
 }
 
+Quagga.onDetected(function(result) {
+    if (!scannerActive) return;
+    if (!result || !result.codeResult || !result.codeResult.code) return;
+
+    const code = result.codeResult.code;
+    const now = Date.now();
+
+    // защита от повторного скана одного и того же кода
+    if (code === lastScannedCode && now - lastScanTime < 2000) {
+        return;
+    }
+
+    lastScannedCode = code;
+    lastScanTime = now;
+
+    scannerActive = false;
+
+    // 🔊 пик
+    const beep = document.getElementById("beepSound");
+    if (beep) {
+        beep.currentTime = 0;
+        beep.play().catch(() => {});
+    }
+
+    Quagga.stop();
+    closeScanner();
+
+    handleBarcode(code);
+});
+
 function closeScanner() {
     document.getElementById("scannerModal").style.display = "none";
-    if (scanner) scanner.stop();
+
+    try {
+        Quagga.stop();
+    } catch (e) {}
+
+    scannerActive = false;
 }
 
-function onScanSuccess(code) {
-
-    closeScanner();
+function handleBarcode(code) {
+    console.log("Скан:", code);
 
     fetch("/api/barcode", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ barcode: code })
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            barcode: code
+        })
     })
     .then(res => res.json())
     .then(data => {
 
         if (data.found) {
-
-            // 🔥 ДОБАВЛЯЕМ В ТВОЮ КОРЗИНУ
             addToCart(data.id, data.name, data.price);
-
         } else {
-
-            // 🔥 ОТКРЫВАЕМ ДОБАВЛЕНИЕ
             openAddItemModal(code);
-
         }
 
+    })
+    .catch(err => {
+        console.error("BARCODE ERROR:", err);
+        alert("Ошибка поиска товара по штрих-коду");
     });
-
 }
 
 function openAddItemModal(barcode) {
     document.getElementById("addItemModal").style.display = "flex";
     document.getElementById("newBarcode").value = barcode;
+    document.getElementById("newName").focus();
 }
 
 function saveNewItem() {
-
     fetch("/api/add-item", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: {
+            "Content-Type": "application/json"
+        },
         body: JSON.stringify({
             name: document.getElementById("newName").value,
             price: document.getElementById("newPrice").value,
@@ -863,10 +942,13 @@ function saveNewItem() {
     .then(item => {
 
         addToCart(item.id, item.name, item.price);
+
         document.getElementById("addItemModal").style.display = "none";
+        document.getElementById("newName").value = "";
+        document.getElementById("newPrice").value = "";
+        document.getElementById("newBarcode").value = "";
 
     });
-
 }
 
 </script>
@@ -1320,6 +1402,69 @@ function saveNewItem() {
 
 .receipt {
     margin: 0 auto;
+}
+
+/* 🔥 МОДАЛКА */
+.scanner-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 9999;
+
+    justify-content: center;
+    align-items: center;
+}
+
+/* 🔥 БЛОК */
+.scanner-box {
+    background: #000;
+    padding: 10px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+/* 🔥 ВИДЕО */
+#reader {
+    width: 420px;
+    height: 280px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+    background: #000;
+}
+
+#reader video,
+#reader canvas {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+}
+
+#reader::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 78%;
+    height: 95px;
+    transform: translate(-50%, -50%);
+    border: 3px solid #ff3333;
+    border-radius: 12px;
+    box-shadow: 0 0 0 999px rgba(0,0,0,0.35);
+    pointer-events: none;
+    z-index: 10;
+}
+
+@media (max-width: 600px) {
+    #reader {
+        width: 92vw;
+        height: 55vh;
+    }
+
+    .scanner-box {
+        width: 95vw;
+    }
 }
 
 </style>
