@@ -3,7 +3,11 @@
 <head>
     <title>Сканер</title>
 </head>
+
 <body>
+
+<video id="video" autoplay playsinline></video>
+<div class="scan-frame"></div>
 
 <video id="video" autoplay playsinline style="width:100%"></video>
 
@@ -13,40 +17,89 @@ const session = params.get("session");
 
 const video = document.getElementById("video");
 
+let lastCode = "";
+let lastTime = 0;
+
+// 🔥 включаем камеру
 navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" }
+    video: { facingMode: { ideal: "environment" } }
 })
 .then(stream => {
     video.srcObject = stream;
     video.play();
 });
 
+// 🔥 детектор
 const detector = new BarcodeDetector({
-    formats: ["ean_13","ean_8","code_128"]
+    formats: ["ean_13","ean_8","code_128","code_39","upc_a","upc_e"]
 });
 
 async function scan() {
 
-    const barcodes = await detector.detect(video);
+    try {
 
-    if (barcodes.length > 0) {
+        const barcodes = await detector.detect(video);
 
-        const code = barcodes[0].rawValue;
+        if (barcodes.length > 0) {
 
-        fetch("/api/scan/" + session, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ code })
-        });
+            const code = barcodes[0].rawValue;
+            const now = Date.now();
 
-        navigator.vibrate(100);
+            if (code.length >= 8 && code.length <= 14) {
+
+                if (!(code === lastCode && now - lastTime < 1200)) {
+
+                    lastCode = code;
+                    lastTime = now;
+
+                    console.log("SCAN:", code);
+
+                    // 🔊 пик
+                    if (navigator.vibrate) navigator.vibrate(120);
+
+                    fetch("/api/scan/" + session, {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({ code })
+                    });
+                }
+            }
+        }
+
+    } catch (e) {
+        console.log("SCAN ERROR", e);
     }
 
     requestAnimationFrame(scan);
 }
 
-scan();
+setTimeout(scan, 500);
 </script>
+
+<style>
+body {
+    margin:0;
+    background:black;
+}
+
+#video {
+    width:100%;
+    height:100vh;
+    object-fit:cover;
+}
+
+.scan-frame {
+    position:fixed;
+    top:50%;
+    left:50%;
+    width:80%;
+    height:120px;
+    transform:translate(-50%, -50%);
+    border:3px solid red;
+    border-radius:12px;
+    box-shadow:0 0 0 999px rgba(0,0,0,0.4);
+}
+</style>
 
 </body>
 </html>

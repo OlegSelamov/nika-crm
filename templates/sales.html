@@ -1040,13 +1040,13 @@ function showQR() {
             document.getElementById("qrBox").style.display = "block";
         });
 
-        startListening();
+        startListening(true);
     });
 }
 
-function startListening() {
+function startListening(autoClose = false) {
 
-    setInterval(() => {
+    const interval = setInterval(() => {
 
         if (!sessionId) return;
 
@@ -1055,7 +1055,14 @@ function startListening() {
         .then(data => {
 
             if (data.code) {
+
                 handleBarcode(data.code);
+
+                // 🔥 закрываем QR
+                if (autoClose) {
+                    document.getElementById("qrBox").style.display = "none";
+                }
+
             }
 
         });
