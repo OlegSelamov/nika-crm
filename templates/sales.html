@@ -833,7 +833,21 @@ async function openScanner() {
         await video.play();
 
         // 🔥 запускаем ZXing ПОСЛЕ
-        codeReader = new ZXing.BrowserBarcodeReader();
+		const hints = new Map();
+
+		hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+			ZXing.BarcodeFormat.EAN_13,
+			ZXing.BarcodeFormat.EAN_8,
+			ZXing.BarcodeFormat.CODE_128,
+			ZXing.BarcodeFormat.CODE_39,
+			ZXing.BarcodeFormat.UPC_A,
+			ZXing.BarcodeFormat.UPC_E
+		]);
+
+		hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+		// 🔥 создаём сканер с настройками
+		codeReader = new ZXing.BrowserBarcodeReader(hints);
 
         codeReader.decodeFromVideoElement(video, (result, err) => {
 
