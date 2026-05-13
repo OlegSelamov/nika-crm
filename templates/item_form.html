@@ -5,6 +5,7 @@
 <h2>Добавить позицию</h2>
 
 <form method="POST" enctype="multipart/form-data">
+<div class="item-grid">
 
 <!-- 🔥 НАЗВАНИЕ -->
 <input 
@@ -26,15 +27,102 @@
     {% endfor %}
 </datalist>
 
-<!-- 🔥 КАТЕГОРИЯ -->
-<select name="category" id="category">
-    <option {% if item and item.category == 'Туризм' %}selected{% endif %}>Туризм</option>
-    <option {% if item and item.category == 'Услуга' %}selected{% endif %}>Услуга</option>
-    <option {% if item and item.category == 'Товар' %}selected{% endif %}>Товар</option>
+<div class="category-wrapper">
+
+    <input
+        type="text"
+        name="category"
+        id="categoryInput"
+        placeholder="Категория"
+        autocomplete="off"
+        value="{{ item.category if item else '' }}"
+    >
+
+    <div id="categoryDropdown" class="category-dropdown">
+
+        {% for c in categories %}
+
+        <div
+            class="category-option"
+            onclick="selectCategory('{{ c['name'] }}', '{{ c['markup_percent'] }}')"
+        >
+
+            <div>
+                <b>{{ c['name'] }}</b>
+                <span class="markup">
+                    {{ c['markup_percent'] }}%
+                </span>
+            </div>
+
+            <button
+                type="button"
+                class="delete-category"
+                onclick="deleteCategory(event, {{ c['id'] }})"
+            >
+                🗑
+            </button>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+</div>
+
+<button type="button" class="btn" id="openCategoryModal">
+    + Категория
+</button>
+
+<div id="categoryModal" class="modal">
+
+    <div class="modal-content">
+
+        <h3>Добавить категорию</h3>
+
+        <input
+            type="text"
+            id="newCategoryName"
+            placeholder="Название категории"
+        >
+
+        <input
+            type="number"
+            id="newCategoryMarkup"
+            placeholder="Наценка %"
+        >
+
+        <button type="button" id="saveCategoryBtn">
+            Сохранить
+        </button>
+
+    </div>
+
+</div>
+
+<!-- 🔥 ЕД.ИЗМ. -->
+<select name="unit">
+
+    <option value="шт">шт</option>
+    <option value="услуга">услуга</option>
+    <option value="час">час</option>
+    <option value="день">день</option>
+    <option value="ночь">ночь</option>
+    <option value="тур">тур</option>
+    <option value="кг">кг</option>
+    <option value="литр">литр</option>
+    <option value="м²">м²</option>
+    <option value="м³">м³</option>
+    <option value="комплект">комплект</option>
+    <option value="человек">человек</option>
+    <option value="пассажир">пассажир</option>
+    <option value="месяц">месяц</option>
+
 </select>
 
 <!-- 🔥 ОПИСАНИЕ -->
-<textarea 
+<textarea
+    class="full"
     name="description" 
     placeholder="Опишите товар / услугу"
 >{{ item.description if item else '' }}</textarea>
@@ -44,41 +132,303 @@
 
 <input name="wholesale_price" value="{{ item.wholesale_price if item else '' }}" placeholder="Цена опт">
 
-<input name="purchase_price" value="{{ item.purchase_price if item else '' }}" placeholder="Цена закупа">
+<input name="purchase_price" id="purchase_price" value="{{ item.purchase_price if item else '' }}" placeholder="Цена закупа">
 
 <input name="discount_percent" value="{{ item.discount_percent if item else '' }}" placeholder="Скидка %">
 
 <input name="barcode" value="{{ item.barcode if item else '' }}" placeholder="Штрихкод">
 
-<label>Фото:</label>
-<input type="file" name="images" multiple><br><br>
+<div class="full">
+    <label>Фото:</label>
+    <input type="file" name="images" multiple>
+</div>
 
-<button class="btn">Сохранить</button>
+</div>
+    <button class="btn">Сохранить</button>
 
 </form>
 
-<!-- 🔥 JS АВТОПОДСТАНОВКА -->
 <script>
 document.querySelector("input[name='name']").addEventListener("input", function() {
-
     const value = this.value;
     const options = document.querySelectorAll("#itemsList option");
 
     options.forEach(option => {
         if (option.value === value) {
-
-            // цена
             document.getElementById("retail_price").value = option.dataset.price || "";
-
-            // категория
-            document.getElementById("category").value = option.dataset.category || "";
-
-            // описание 🔥
-            document.getElementById("description").value = option.dataset.description || "";
+            document.getElementById("categoryInput").value = option.dataset.category || "";
+            document.querySelector("textarea[name='description']").value = option.dataset.description || "";
         }
     });
-
 });
+
+const modal = document.getElementById("categoryModal");
+const categoryInput = document.getElementById("categoryInput");
+const categoryDropdown = document.getElementById("categoryDropdown");
+
+document.getElementById("openCategoryModal").addEventListener("click", () => {
+    modal.style.display = "flex";
+});
+
+categoryInput.addEventListener("focus", () => {
+    categoryDropdown.style.display = "block";
+});
+
+categoryInput.addEventListener("click", () => {
+    categoryDropdown.style.display = "block";
+});
+
+document.addEventListener("click", (e) => {
+    if (!e.target.closest(".category-wrapper")) {
+        categoryDropdown.style.display = "none";
+    }
+});
+
+async function deleteCategory(event, id) {
+    event.stopPropagation();
+
+    if (!confirm("Удалить категорию?")) return;
+
+    await fetch(`/delete_category/${id}`, {
+        method: "POST"
+    });
+
+    location.reload();
+}
+
+document.getElementById("saveCategoryBtn").addEventListener("click", async () => {
+    try {
+        const name = document.getElementById("newCategoryName").value.trim();
+        const markup = document.getElementById("newCategoryMarkup").value.trim();
+
+        if (!name) {
+            alert("Введите название категории");
+            return;
+        }
+
+        const response = await fetch("/add_category", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                name,
+                markup
+            })
+        });
+
+        const data = await response.json();
+
+        const div = document.createElement("div");
+        div.className = "category-option";
+		div.setAttribute(
+			"onclick",
+			`selectCategory('${data.name}', '${data.markup_percent || markup}')`
+		);
+
+        div.innerHTML = `
+            <div>
+                <b>${data.name}</b>
+                <span class="markup">${data.markup_percent || markup || 0}%</span>
+            </div>
+            <button
+                type="button"
+                class="delete-category"
+                onclick="deleteCategory(event, ${data.id})"
+            >
+                🗑
+            </button>
+        `;
+
+        categoryDropdown.appendChild(div);
+
+        categoryInput.value = data.name;
+
+        modal.style.display = "none";
+
+        document.getElementById("newCategoryName").value = "";
+        document.getElementById("newCategoryMarkup").value = "";
+
+        alert("Категория успешно добавлена");
+
+    } catch (error) {
+        console.error(error);
+        alert("Ошибка при добавлении категории");
+    }
+});
+
+let currentMarkup = 0;
+
+function selectCategory(name, markup) {
+
+    categoryInput.value = name;
+
+    currentMarkup = parseFloat(markup) || 0;
+
+    categoryDropdown.style.display = "none";
+
+    calculatePurchasePrice();
+}
+
+function calculatePurchasePrice(){
+
+    const retail =
+        parseFloat(
+            document.getElementById("retail_price").value
+        ) || 0;
+
+    if(retail <= 0) return;
+
+    const purchase =
+        retail - (retail * currentMarkup / 100);
+
+    document.getElementById("purchase_price").value =
+        Math.round(purchase);
+}
+
+document
+.getElementById("retail_price")
+.addEventListener("input", calculatePurchasePrice);
 </script>
+
+<style>
+.category-row{
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+
+.category-row input{
+    flex:1;
+}
+
+.modal{
+    display:none;
+
+    position:fixed;
+    inset:0;
+
+    background:rgba(0,0,0,0.5);
+
+    justify-content:center;
+    align-items:center;
+
+    z-index:999;
+}
+
+.modal-content{
+    width:350px;
+
+    background:white;
+
+    border-radius:12px;
+
+    padding:20px;
+
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+}
+
+.category-wrapper{
+    position:relative;
+}
+
+.category-dropdown{
+
+    position:absolute;
+
+    top:100%;
+    left:0;
+    right:0;
+
+    background:white;
+
+    border:1px solid #ddd;
+
+    border-radius:10px;
+
+    max-height:250px;
+
+    overflow:auto;
+
+    display:none;
+
+    z-index:999;
+}
+
+.category-option{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    padding:10px;
+
+    cursor:pointer;
+}
+
+.category-option:hover{
+    background:#f5f5f5;
+}
+
+.markup{
+    color:green;
+    margin-left:8px;
+}
+
+.delete-category{
+
+    border:none;
+    background:none;
+
+    cursor:pointer;
+
+    font-size:16px;
+}
+
+.item-grid{
+
+    display:grid;
+
+    grid-template-columns:1fr 1fr;
+
+    gap:16px;
+
+    margin-top:20px;
+}
+
+.item-grid input,
+.item-grid select,
+.item-grid textarea{
+
+    width:100%;
+
+    padding:12px;
+
+    border-radius:12px;
+
+    border:1px solid #ddd;
+
+    box-sizing:border-box;
+}
+
+.full{
+    grid-column:1/-1;
+}
+
+.item-grid textarea{
+    min-height:120px;
+}
+
+@media(max-width:768px){
+
+    .item-grid{
+        grid-template-columns:1fr;
+    }
+}
+</style>
 
 {% endblock %}

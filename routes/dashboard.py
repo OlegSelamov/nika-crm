@@ -92,9 +92,48 @@ def dashboard():
 
     for r in recent:
         notifications.append(f"Новая продажа #{r['id']}")
-        
-    conn.close()
-        
+      
+    
+    low_stock = conn.execute("""
+
+    SELECT
+        items.name,
+
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN stock_movements.movement_type='income'
+                    THEN stock_movements.quantity
+
+                    WHEN stock_movements.movement_type='sale'
+                    THEN -stock_movements.quantity
+
+                    WHEN stock_movements.movement_type='writeoff'
+                    THEN -stock_movements.quantity
+                END
+            ),
+            0
+        ) as stock
+
+    FROM items
+
+    LEFT JOIN stock_movements
+    ON items.id = stock_movements.item_id
+
+    WHERE items.company_id = ?
+
+    GROUP BY items.id
+
+    HAVING stock <= 5
+
+    ORDER BY stock ASC
+
+    """, (
+        session.get("company_id"),
+    )).fetchall() 
+
+    conn.close()   
+    
     return render_template(
         "dashboard.html",
         total=total,
@@ -104,5 +143,6 @@ def dashboard():
         chart_labels=chart_labels,
         chart_values=chart_values,
         debts=debts,
+        low_stock=low_stock,
         notifications=notifications
     )

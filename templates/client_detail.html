@@ -781,6 +781,12 @@ function openSaleModal(id) {
 					🧾 Счёт-фактура
 				</a>
 			`;
+			
+			buttons += `
+				<a href="/docs/act/${data.id}" target="_blank" class="btn">
+					📄 Акт
+				</a>
+			`;
 
 			// 💰 КАССА
 			if (data.sale_type === "cash") {

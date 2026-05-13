@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Списание товара</h1>
+        <div class="page-note">
+            Списание со склада
+        </div>
+    </div>
+</div>
+
+<div class="card">
+
+    <form method="POST" class="income-form">
+
+        <select name="item_id" required>
+
+            {% for item in items %}
+
+                <option value="{{ item.id }}">
+                    {{ item.name }}
+                </option>
+
+            {% endfor %}
+
+        </select>
+
+        <input
+            type="number"
+            step="0.001"
+            name="quantity"
+            placeholder="Количество"
+            required
+        >
+
+        <input
+            type="text"
+            name="comment"
+            placeholder="Причина списания"
+        >
+
+        <button class="btn">
+            Списать
+        </button>
+
+    </form>
+
+</div>
+
+<style>
+
+.income-form{
+
+    display:grid;
+
+    grid-template-columns:1fr 1fr;
+
+    gap:15px;
+
+    max-width:800px;
+}
+
+</style>
+
+{% endblock %}

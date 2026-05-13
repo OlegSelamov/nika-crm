@@ -1058,7 +1058,61 @@
 			margin: 5px;
 			border-radius: 8px;
 		}
+		
+		.stat-card.green{
+			background: linear-gradient(135deg, #16a34a, #22c55e);
+		}
 
+		.payments-card{
+
+			display:flex;
+
+			flex-direction:column;
+
+			justify-content:space-between;
+		}
+
+		.payment-list{
+
+			margin-top:14px;
+
+			display:flex;
+
+			flex-direction:column;
+
+			gap:10px;
+		}
+
+		.payment-item{
+
+			display:flex;
+
+			justify-content:space-between;
+
+			align-items:center;
+
+			padding:10px 12px;
+
+			border-radius:12px;
+
+			background:rgba(255,255,255,0.12);
+
+			backdrop-filter:blur(4px);
+		}
+
+		.payment-name{
+
+			font-size:13px;
+
+			opacity:0.9;
+		}
+
+		.payment-value{
+
+			font-weight:700;
+
+			font-size:14px;
+		}
     </style>
 </head>
 
@@ -1120,11 +1174,63 @@
 				<img src="/static/icons/items.png" class="menu-icon">
 				<span class="text">Каталог</span>
 			</a>
-
+			
 			<a href="/tasks">
 				<img src="/static/icons/tasks.png" class="menu-icon">
 				<span class="text">Задачи</span>
 			</a>
+		</div>
+			
+		<div class="menu-section">
+
+			<div class="menu-title">
+				Склад
+			</div>
+
+			<a href="/stock" class="menu-link">
+
+				<img
+					src="/static/icons/stock.png"
+					class="menu-icon"
+				>
+
+				<span class="text">Остатки</span>
+
+			</a>
+
+			<a href="/stock/income" class="menu-link">
+
+				<img
+					src="/static/icons/income.png"
+					class="menu-icon"
+				>
+
+				<span class="text">Приход товара</span>
+
+			</a>
+
+			<a href="/stock/writeoff" class="menu-link">
+
+				<img
+					src="/static/icons/writeoff.png"
+					class="menu-icon"
+				>
+
+				<span class="text">Списание</span>
+
+			</a>
+
+			<a href="/stock/movements" class="menu-link">
+
+				<img
+					src="/static/icons/movements.png"
+					class="menu-icon"
+				>
+
+				<span class="text">Движение товара</span>
+
+			</a>
+
 		</div>
 
         <div class="menu-section">

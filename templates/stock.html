@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Остатки склада</h1>
+        <div class="page-note">
+            Актуальные остатки товаров
+        </div>
+    </div>
+</div>
+
+<div class="card">
+
+    <table>
+
+        <thead>
+            <tr>
+                <th>Товар</th>
+                <th>Категория</th>
+                <th>Ед.</th>
+                <th>Остаток</th>
+                <th>Закуп</th>
+                <th>Розница</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        {% for item in items %}
+
+            <tr>
+
+                <td>
+                    {{ item.name }}
+                </td>
+
+                <td>
+                    {{ item.category }}
+                </td>
+
+                <td>
+                    {{ item.unit }}
+                </td>
+
+                <td>
+
+                    {% if item.stock <= 0 %}
+
+                        <span style="color:#ef4444;font-weight:bold;">
+                            {{ item.stock }}
+                        </span>
+
+                    {% elif item.stock <= 5 %}
+
+                        <span style="color:#f59e0b;font-weight:bold;">
+                            {{ item.stock }}
+                        </span>
+
+                    {% else %}
+
+                        <span style="color:#16a34a;font-weight:bold;">
+                            {{ item.stock }}
+                        </span>
+
+                    {% endif %}
+
+                </td>
+
+                <td>
+                    {{ "{:,.0f}".format(item.purchase_price or 0).replace(",", " ") }}
+                </td>
+
+                <td>
+                    {{ "{:,.0f}".format(item.retail_price or 0).replace(",", " ") }}
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}

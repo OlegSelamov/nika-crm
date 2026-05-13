@@ -26,14 +26,53 @@
         </div>
     </div>
 
-    <div class="stat-card cyan">
-        <div class="stat-label">Оплаты</div>
-        <div style="font-size:13px; margin-top:6px;">
-            💵 {{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }}<br>
-            💳 {{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }}<br>
-            📱 {{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }}
-        </div>
-    </div>
+	<div class="stat-card cyan payments-card">
+
+		<div class="stat-label">
+			Способы оплаты
+		</div>
+
+		<div class="payment-list">
+
+			<div class="payment-item">
+
+				<div class="payment-name">
+					Наличные
+				</div>
+
+				<div class="payment-value">
+					{{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }} ₸
+				</div>
+
+			</div>
+
+			<div class="payment-item">
+
+				<div class="payment-name">
+					Карта
+				</div>
+
+				<div class="payment-value">
+					{{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }} ₸
+				</div>
+
+			</div>
+
+			<div class="payment-item">
+
+				<div class="payment-name">
+					Kaspi
+				</div>
+
+				<div class="payment-value">
+					{{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }} ₸
+				</div>
+
+			</div>
+
+		</div>
+
+	</div>
 
 </div>
 
@@ -99,6 +138,45 @@
             {% endfor %}
         </tbody>
     </table>
+</div>
+
+<div class="card">
+
+    <div class="title">
+        ⚠ Низкие остатки
+    </div>
+
+    <table>
+
+        <thead>
+            <tr>
+                <th>Товар</th>
+                <th>Остаток</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        {% for item in low_stock %}
+
+            <tr>
+
+                <td>
+                    {{ item.name }}
+                </td>
+
+                <td style="color:#ef4444;font-weight:bold;">
+                    {{ item.stock }}
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
 </div>
 
 <div class="card">

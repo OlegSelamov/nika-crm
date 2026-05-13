@@ -281,7 +281,7 @@ td, th {
     <tr>
         <td>{{ loop.index }}</td>
         <td class="left">{{ item.name }}</td>
-        <td>шт</td>
+		<td>{{ item.unit or "шт" }}</td>
         <td>{{ item.quantity }}</td>
         <td>{{ "{:,.2f}".format(item.price) }}</td>
         <td>{{ "{:,.2f}".format(item.total) }}</td>

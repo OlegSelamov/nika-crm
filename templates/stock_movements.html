@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Движение товара</h1>
+        <div class="page-note">
+            История движения склада
+        </div>
+    </div>
+</div>
+
+<div class="card">
+
+    <table>
+
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Товар</th>
+                <th>Тип</th>
+                <th>Кол-во</th>
+                <th>Сумма</th>
+                <th>Дата</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        {% for row in rows %}
+
+            <tr>
+
+                <td>{{ row.id }}</td>
+
+                <td>{{ row.item_name }}</td>
+
+                <td>
+
+                    {% if row.movement_type == "income" %}
+                        <span style="color:#16a34a;font-weight:bold;">
+                            Приход
+                        </span>
+
+                    {% elif row.movement_type == "sale" %}
+                        <span style="color:#3b82f6;font-weight:bold;">
+                            Продажа
+                        </span>
+
+                    {% elif row.movement_type == "writeoff" %}
+                        <span style="color:#ef4444;font-weight:bold;">
+                            Списание
+                        </span>
+                    {% endif %}
+
+                </td>
+
+                <td>
+                    {{ row.quantity }}
+                </td>
+
+                <td>
+                    {{ "{:,.0f}".format(row.total or 0).replace(",", " ") }}
+                </td>
+
+                <td>
+                    {{ row.created_at[:16] if row.created_at }}
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Акт выполненных работ</title>
+
+<style>
+
+@page{
+    size:A4 landscape;
+    margin:10mm;
+}
+
+body{
+    font-family:"Times New Roman", serif;
+    font-size:11px;
+    margin:0;
+    color:#000;
+}
+
+.page{
+    width:100%;
+    margin:auto;
+	max-width:277mm;
+}
+
+/* верх */
+.top-right{
+    text-align:right;
+    font-size:10px;
+    line-height:1.2;
+}
+
+.form-title{
+    text-align:right;
+    margin-top:5px;
+    font-size:11px;
+}
+
+/* строки */
+.row{
+    display:flex;
+    align-items:flex-end;
+    margin-top:10px;
+    width:100%;
+}
+
+.label{
+    white-space:nowrap;
+    font-size:11px;
+}
+
+.line{
+    width:420px;
+    border-bottom:1px solid #000;
+    margin-left:0px;
+    margin-right:10px;
+    position:relative;
+    min-height:18px;
+}
+
+.line-text{
+    position:absolute;
+    width:100%;
+    bottom:0;
+    text-align:center;
+    font-weight:bold;
+    font-size:11px;
+    line-height:1.2;
+}
+
+/* boxes */
+.boxes{
+    width:170px;
+    margin-left:auto;
+}
+
+.box{
+    border:1px solid #000;
+    padding:6px 10px;
+    text-align:center;
+    font-weight:bold;
+    min-height:28px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+/* номер */
+.doc-table{
+    border-collapse:collapse;
+    width:150px;
+    font-size:10px;
+    table-layout:fixed;
+}
+
+.doc-table td{
+    border:1px solid #000;
+    padding:2px;
+    text-align:center;
+    word-break:break-word;
+    vertical-align:middle;
+}
+
+/* title */
+.title{
+    text-align:center;
+    font-size:18px;
+    font-weight:bold;
+    margin:20px 0 15px;
+}
+
+/* main table */
+.main-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:10px;
+	table-layout:fixed;
+}
+
+.main-table th,
+.main-table td{
+    border:1px solid #000;
+    padding:2px;
+    vertical-align:middle;
+}
+
+.main-table th{
+    font-weight:normal;
+}
+
+.center{
+    text-align:center;
+}
+
+.right{
+    text-align:right;
+}
+
+/* подписи */
+.signatures{
+    margin-top:20px;
+    font-size:10px;
+    width:100%;
+}
+
+.sign-row{
+    display:flex;
+    gap:40px;
+    width:1000px;
+    margin:0 auto;
+}
+
+.sign-block{
+    width:480px;
+}
+
+.sign-flex{
+    display:flex;
+    align-items:flex-end;
+    gap:3px;
+}
+
+.sign-line{
+    width:140px;
+    border-bottom:1px solid #000;
+    height:18px;
+}
+
+.sign-note{
+    display:flex;
+    font-size:9px;
+    margin-top:2px;
+}
+
+.sign-note div{
+    flex:1;
+    text-align:center;
+}
+
+.mp{
+    margin-top:20px;
+    font-weight:bold;
+}
+
+.small{
+    font-size:9px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="page">
+
+    <!-- верх -->
+    <div class="top-right">
+        Приложение 50<br>
+        к приказу Министра финансов<br>
+        Республики Казахстан<br>
+        от 20 декабря 2012 года №562
+    </div>
+
+    <div class="form-title">
+        Форма Р-1
+    </div>
+
+    <!-- заказчик -->
+	<div class="row">
+
+		<div style="width:80px;">Заказчик</div>
+
+		<div class="line" style="flex:0 0 650px;">
+            <div class="line-text">
+                {{ client.company_name or client.full_name }},
+                {{ client.address or "" }}
+            </div>
+        </div>
+
+		<div class="boxes">
+
+			<div style="
+				text-align:center;
+				font-size:11px;
+				margin-bottom:3px;
+				font-weight:bold;
+			">
+				ИИН/БИН
+			</div>
+
+			<div class="box">
+				{{ client.iin }}
+			</div>
+
+		</div>
+
+    </div>
+
+    <!-- исполнитель -->
+    <div class="row">
+
+        <div style="width:80px;">Исполнитель</div>
+
+        <div class="line" style="flex:0 0 650px;">
+            <div class="line-text">
+                {{ company.name }},
+                {{ company.address }}
+            </div>
+        </div>
+
+        <div class="boxes">
+            <div class="box">
+                {{ company.bin }}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- договор -->
+	<div style="
+		display:flex;
+		align-items:flex-start;
+		margin-top:10px;
+	">
+
+		<!-- ДОГОВОР -->
+		<div style="
+			display:flex;
+			align-items:flex-end;
+			width:72%;
+		">
+
+			<div style="
+				width:100px;
+				font-size:11px;
+			">
+				Договор (контракт)
+			</div>
+
+			<div class="line" style="width:460px;">
+				<div class="line-text" style="
+					text-align:left;
+					padding-left:5px;
+				">
+					№ {{ sale.id }} от {{ date }}
+				</div>
+			</div>
+
+		</div>
+		
+		<div style="
+			position:relative;
+			height:55px;
+			margin-top:0px;
+		">
+
+			<!-- TITLE -->
+			<div style="
+				position:absolute;
+				left:-600px;
+				top:26px;
+				width:520px;
+
+				text-align:center;
+				font-size:16px;
+				font-weight:bold;
+				line-height:1.2;
+			">
+				АКТ ВЫПОЛНЕННЫХ РАБОТ (ОКАЗАННЫХ УСЛУГ)
+			</div>
+
+			<!-- DOC TABLE -->
+			<table class="doc-table" style="
+				position:absolute;
+				right:15;
+				top:0;
+			">
+
+				<tr>
+					<td>Номер<br>документа</td>
+					<td>Дата<br>составления</td>
+				</tr>
+
+				<tr>
+					<td>{{ sale.id }}</td>
+					<td>{{ date }}</td>
+				</tr>
+
+			</table>
+
+		</div>
+
+	</div>
+
+    <!-- table -->
+	<table class="main-table">
+	
+		<colgroup>
+			<col style="width:40px">
+			<col style="width:290px">
+			<col style="width:90px">
+			<col style="width:190px">
+			<col style="width:70px">
+			<col style="width:90px">
+			<col style="width:90px">
+			<col style="width:100px">
+		</colgroup>
+
+		<!-- HEADER -->
+		<tr>
+
+			<th rowspan="2">
+				Номер<br>по<br>порядку
+			</th>
+
+			<th rowspan="2">
+				Наименование работ (услуг)
+				(в разрезе их подвидов
+				в соответствии с технической
+				спецификацией, заданием,
+				графиком выполнения работ
+				(услуг) при их наличии)
+			</th>
+
+			<th rowspan="2">
+				Дата выполнения<br>
+				работ (оказания услуг)
+			</th>
+
+			<th rowspan="2">
+				Сведения об отчете
+				о научных исследованиях,
+				маркетинговых,
+				консультационных и прочих услугах
+				(дата, номер,
+				количество страниц)
+				(при их наличии)
+			</th>
+
+			<th rowspan="2">
+				Единица<br>измерения
+			</th>
+
+			<th colspan="3">
+				Выполнено работ (оказано услуг)
+			</th>
+
+		</tr>
+
+		<!-- SUB HEADER -->
+		<tr>
+
+			<th>
+				количество
+			</th>
+
+			<th>
+				цена за единицу
+			</th>
+
+			<th>
+				стоимость
+			</th>
+
+		</tr>
+
+		<!-- NUMBERS -->
+		<tr class="small center">
+
+			<td>1</td>
+			<td>2</td>
+			<td>3</td>
+			<td>4</td>
+			<td>5</td>
+			<td>6</td>
+			<td>7</td>
+			<td>8</td>
+
+		</tr>
+
+		<!-- ITEMS -->
+		{% for item in items %}
+		<tr>
+
+			<td class="center">
+				{{ loop.index }}
+			</td>
+
+			<td>
+				{{ item.name }}
+			</td>
+
+			<td class="center">
+				{{ date }}
+			</td>
+
+			<td></td>
+
+			<td class="center">
+				{{ item.unit }}
+			</td>
+
+			<td class="center">
+				{{ item.quantity }}
+			</td>
+
+			<td class="right">
+				{{ "{:,.2f}".format(item.price).replace(",", " ") }}
+			</td>
+
+			<td class="right">
+				{{ "{:,.2f}".format(item.total).replace(",", " ") }}
+			</td>
+
+		</tr>
+		{% endfor %}
+
+	</table>
+	
+	<table class="main-table" style="margin-top:-1px;">
+
+		<colgroup>
+			<col style="width:40px">
+			<col style="width:290px">
+			<col style="width:90px">
+			<col style="width:190px">
+			<col style="width:70px">
+			<col style="width:90px">
+			<col style="width:90px">
+			<col style="width:100px">
+		</colgroup>
+
+		<tr>
+
+			<td colspan="5" style="
+				border:none;
+				text-align:right;
+				font-weight:bold;
+				padding-right:10px;
+			">
+				Итого
+			</td>
+
+			<td class="center">
+				{{ items|sum(attribute='quantity') }}
+			</td>
+
+			<td class="center">
+				x
+			</td>
+
+			<td class="right">
+				<b>{{ "{:,.2f}".format(total).replace(",", " ") }}</b>
+			</td>
+
+		</tr>
+
+	</table>
+
+	</div>
+
+	<!-- дополнительные строки -->
+
+	<div style="
+		width:1000px;
+		margin:8px auto 0 auto;
+		font-size:10px;
+	">
+
+		<!-- Сведения -->
+		<div style="
+			display:flex;
+			align-items:flex-end;
+			margin-bottom:6px;
+		">
+
+			<div style="white-space:nowrap;">
+				Сведения об использовании запасов, полученных от заказчика
+			</div>
+
+			<div style="
+				flex:1;
+				border-bottom:1px solid #000;
+				margin-left:8px;
+				height:12px;
+			"></div>
+
+		</div>
+
+		<!-- Приложение -->
+		<div style="line-height:1.3;">
+
+			<div>
+				Приложение: Перечень документации, в том числе отчет(ы)
+				о маркетинговых, научных исследованиях,
+				консультационных и прочих услугах (обязательны при его
+			</div>
+
+			<div style="
+				display:flex;
+				align-items:flex-end;
+				margin-top:2px;
+			">
+
+				<div style="white-space:nowrap;">
+					(их) наличии) на
+				</div>
+
+				<div style="
+					width:80px;
+					border-bottom:1px solid #000;
+					margin:0 6px;
+					height:12px;
+				"></div>
+
+				<div style="white-space:nowrap;">
+					страниц
+				</div>
+
+				<div style="
+					flex:1;
+					border-bottom:1px solid #000;
+					margin-left:6px;
+					height:12px;
+				"></div>
+
+			</div>
+
+		</div>
+
+	</div>
+
+    <!-- подписи -->
+    <div class="signatures">
+
+        <div class="sign-row">
+
+            <!-- исполнитель -->
+            <div class="sign-block">
+
+                <div class="sign-flex">
+
+                    <div style="white-space:nowrap;">
+                        Сдал (Исполнитель)
+                    </div>
+
+                    <div class="sign-line" style="text-align:center;">
+                        Директор
+                    </div>
+
+                    <div>/</div>
+
+                    <div class="sign-line"></div>
+
+                    <div>/</div>
+
+                    <div class="sign-line" style="text-align:center;">
+						{{ company.director.split()[0] }}
+						{{ company.director.split()[1][0] }}.
+						{{ company.director.split()[2][0] }}.
+                    </div>
+
+                </div>
+
+                <div class="sign-note">
+                    <div>должность</div>
+                    <div>подпись</div>
+                    <div>расшифровка подписи</div>
+                </div>
+
+                <div class="mp">
+                    М.П.
+                </div>
+
+            </div>
+
+            <!-- заказчик -->
+            <div class="sign-block">
+
+                <div class="sign-flex">
+
+                    <div style="white-space:nowrap;">
+                        Принял (Заказчик)
+                    </div>
+
+                    <div class="sign-line"></div>
+
+                    <div>/</div>
+
+                    <div class="sign-line"></div>
+
+                    <div>/</div>
+
+                    <div class="sign-line"></div>
+
+                </div>
+
+                <div class="sign-note">
+                    <div>должность</div>
+                    <div>подпись</div>
+                    <div>расшифровка подписи</div>
+                </div>
+
+                <div style="margin-top:20px;">
+                    Дата подписания (принятия) работ (услуг)
+                    <span style="display:inline-block; width:120px; border-bottom:1px solid #000;"></span>
+                </div>
+
+                <div class="mp">
+                    М.П.
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

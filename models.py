@@ -126,6 +126,38 @@ def init_db():
         price INTEGER,
         quantity INTEGER,
         total INTEGER
+        profit REAL DEFAULT 0
+    )
+    """)
+    
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER,
+        name TEXT,
+        markup_percent REAL DEFAULT 0
+    )
+    """)
+    
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        company_id INTEGER,
+
+        item_id INTEGER,
+
+        movement_type TEXT,
+
+        quantity REAL,
+
+        price REAL,
+
+        total REAL,
+
+        comment TEXT,
+
+        created_at TEXT
     )
     """)
     
@@ -214,6 +246,16 @@ def init_db():
         
     try:
         cur.execute("ALTER TABLE sale_items ADD COLUMN unit TEXT")
+    except:
+        pass
+        
+    try:
+        cur.execute("ALTER TABLE items ADD COLUMN unit TEXT")
+    except:
+        pass
+        
+    try:
+        cur.execute("ALTER TABLE items ADD COLUMN markup_percent REAL DEFAULT 0")
     except:
         pass
         

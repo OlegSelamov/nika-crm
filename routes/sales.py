@@ -106,9 +106,28 @@ def pay_sale():
         sale_id = cur.lastrowid
 
         for item in cart:
+
+            # 🔥 берём товар из базы
+            db_item = conn.execute(
+                "SELECT unit, purchase_price FROM items WHERE id = ?",
+                (item.get("id"),)
+            ).fetchone()
+
+            unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
+
+            purchase_price = (
+                db_item["purchase_price"]
+                if db_item and db_item["purchase_price"]
+                else 0
+            )
+
+            profit = (
+                item.get("price", 0) - purchase_price
+            ) * item.get("qty", 1)
+
             conn.execute("""
-                INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, unit)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, unit, profit)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 sale_id,
                 item.get("id"),
@@ -116,7 +135,30 @@ def pay_sale():
                 item.get("price", 0),
                 item.get("qty", 1),
                 item.get("price", 0) * item.get("qty", 1),
-                "шт"
+                unit,   # ✅ ТЕПЕРЬ НЕ "шт", А ИЗ КАТАЛОГА
+                profit
+            ))
+            
+            # 🔥 движение склада
+            conn.execute("""
+                INSERT INTO stock_movements (
+                    company_id,
+                    item_id,
+                    movement_type,
+                    quantity,
+                    price,
+                    total,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                company_id,
+                item.get("id"),
+                "sale",
+                item.get("qty", 1),
+                item.get("price", 0),
+                item.get("price", 0) * item.get("qty", 1),
+                datetime.now().isoformat()
             ))
 
         conn.commit()
@@ -315,12 +357,12 @@ def create_invoice():
 
     for item in cart:
         db_item = conn.execute(
-            "SELECT name, category FROM items WHERE id = ?",
+            "SELECT name, unit FROM items WHERE id = ?",
             (item.get("id"),)
         ).fetchone()
 
         name = db_item["name"] if db_item else "Товар"
-        unit = db_item["category"] if db_item and db_item["category"] else "шт"
+        unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
 
         qty = item.get("qty", 1)
         price = item.get("price", 0)
@@ -458,7 +500,7 @@ def invoice(sale_id):
             "quantity": i["quantity"],
             "price": i["price"],
             "total": i["total"],
-            "unit": "шт"   # ← ЖЁСТКО ФИКСИРУЕМ
+            "unit": i["unit"] if i["unit"] else "шт"
         })
 
     return render_template(
@@ -581,7 +623,7 @@ def nakladnaya(sale_id):
         new_items.append({
             "name": i["name"],
             "code": i["item_id"],
-            "unit": "шт",
+            "unit": i["unit"] if i["unit"] else "шт",
             "qty_plan": i["quantity"],
             "qty_fact": i["quantity"],
             "price": i["price"],
@@ -626,7 +668,7 @@ def schet_factura(sale_id):
 
     if sale["sale_type"] == "cash":
         # проверяем способы оплаты
-        if sale.get("card_amount", 0) > 0 or sale.get("kaspi_amount", 0) > 0:
+        if (sale["card_amount"] or 0) > 0 or (sale["kaspi_amount"] or 0) > 0:
             payment_type = "безналичный расчет"
         else:
             payment_type = "наличный расчет"
@@ -676,6 +718,23 @@ def analytics():
 
     # 💰 СУММЫ
     total = sum(chart_values)
+    
+    profit_row = conn.execute("""
+        SELECT SUM(profit) as profit
+        FROM sale_items
+        WHERE sale_id IN (
+            SELECT id
+            FROM sales
+            WHERE company_id = ?
+            AND DATE(created_at) BETWEEN ? AND ?
+        )
+    """, (
+        company_id,
+        date_from,
+        date_to
+    )).fetchone()
+
+    profit = profit_row["profit"] or 0
 
     # 🏆 ТОП КЛИЕНТЫ
     top_clients = conn.execute("""
@@ -736,6 +795,7 @@ def analytics():
         date_from=date_from,
         date_to=date_to,
         today=today,
+        profit=profit,
     )
     
 @sales_bp.route("/api/barcode", methods=["POST"])
@@ -839,3 +899,32 @@ def get_scan_session(session_id):
 @sales_bp.route("/scanner")
 def scanner_page():
     return render_template("scanner.html")
+    
+@sales_bp.route("/docs/act/<int:sale_id>")
+def act(sale_id):
+
+    conn = get_db()
+
+    sale = conn.execute("SELECT * FROM sales WHERE id = ?", (sale_id,)).fetchone()
+    items = conn.execute("SELECT * FROM sale_items WHERE sale_id = ?", (sale_id,)).fetchall()
+    company = conn.execute("SELECT * FROM companies WHERE is_active = 1 LIMIT 1").fetchone()
+    
+    company = dict(company) if company else {}
+    
+    client = conn.execute("SELECT * FROM clients WHERE id = ?", (sale["client_id"],)).fetchone()
+
+    sale = dict(sale)
+    company = dict(company)
+    client = dict(client)
+
+    total = sum(item["total"] or 0 for item in items)
+
+    return render_template(
+        "docs/act.html",
+        sale=sale,
+        items=items,
+        company=company,
+        client=client,
+        total=total,
+        date=datetime.now().strftime("%d.%m.%Y")
+    )

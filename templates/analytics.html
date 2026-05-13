@@ -21,27 +21,88 @@
 <div class="stats-grid">
 
     <div class="stat-card blue">
-        <div class="stat-label">Общая выручка</div>
+
+        <div class="stat-label">
+            Общая выручка
+        </div>
+
         <div class="stat-value">
             {{ "{:,.2f}".format(total).replace(",", " ") }} ₸
         </div>
+
+    </div>
+
+    <div class="stat-card green">
+
+        <div class="stat-label">
+            Чистая прибыль
+        </div>
+
+        <div class="stat-value">
+            {{ "{:,.2f}".format(profit).replace(",", " ") }} ₸
+        </div>
+
     </div>
 
     <div class="stat-card purple">
-        <div class="stat-label">Сегодня</div>
+
+        <div class="stat-label">
+            Сегодня
+        </div>
+
         <div class="stat-value">
             {{ "{:,.2f}".format(today or 0).replace(",", " ") }} ₸
         </div>
+
     </div>
 
-    <div class="stat-card cyan">
-        <div class="stat-label">Kaspi / Карта / Нал</div>
-        <div style="font-size:13px; margin-top:6px;">
-            💵 {{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }}<br>
-            💳 {{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }}<br>
-            📱 {{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }}
-        </div>
-    </div>
+	<div class="stat-card cyan payments-card">
+
+		<div class="stat-label">
+			Способы оплаты
+		</div>
+
+		<div class="payment-list">
+
+			<div class="payment-item">
+
+				<div class="payment-name">
+					Наличные
+				</div>
+
+				<div class="payment-value">
+					{{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }} ₸
+				</div>
+
+			</div>
+
+			<div class="payment-item">
+
+				<div class="payment-name">
+					Карта
+				</div>
+
+				<div class="payment-value">
+					{{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }} ₸
+				</div>
+
+			</div>
+
+			<div class="payment-item">
+
+				<div class="payment-name">
+					Kaspi
+				</div>
+
+				<div class="payment-value">
+					{{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }} ₸
+				</div>
+
+			</div>
+
+		</div>
+
+	</div>
 
 </div>
 

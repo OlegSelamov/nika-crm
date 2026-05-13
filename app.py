@@ -12,6 +12,7 @@ from routes.agent import agent_bp
 from routes.voice import voice_bp
 from routes.auth import auth_bp
 from models import get_db
+from routes.stock import stock_bp
 import os
 
 app = Flask(__name__)
@@ -28,6 +29,7 @@ app.register_blueprint(companies_bp)
 app.register_blueprint(agent_bp)
 app.register_blueprint(voice_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(stock_bp)
     
 @app.before_request
 def check_company_access():
@@ -60,6 +62,7 @@ def check_company_access():
 @app.route("/")
 def landing():
     return render_template("landing.html")
+    
 
 if __name__ == "__main__":
     init_db()
