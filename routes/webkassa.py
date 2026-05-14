@@ -20,7 +20,7 @@ WEBKASSA_API_KEY = os.getenv(
     "WEBKASSA_API_KEY"
 )
 
-BASE_URL = "https://kkm.webkassa.kz/api"
+BASE_URL = "https://api.webkassa.kz"
 
 
 class TLSAdapter(HTTPAdapter):
@@ -90,7 +90,7 @@ def test_webkassa():
     }
 
     response = session.post(
-        f"{BASE_URL}/checks",
+        f"{BASE_URL}/api/checks",
         json=data,
         headers=headers,
         verify=False
