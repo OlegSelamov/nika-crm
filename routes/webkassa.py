@@ -16,12 +16,6 @@ webkassa_bp = Blueprint(
     __name__
 )
 
-WEBKASSA_API_KEY = os.getenv(
-    "WEBKASSA_API_KEY"
-)
-
-BASE_URL = "https://api.webkassa.kz"
-
 
 class TLSAdapter(HTTPAdapter):
 
@@ -34,13 +28,13 @@ class TLSAdapter(HTTPAdapter):
     ):
 
         ctx = ssl.create_default_context()
-        
+
         ctx.check_hostname = False
 
-        # 🔥 старый TLS для WebKassa
-        ctx.set_ciphers("DEFAULT@SECLEVEL=0")
+        ctx.set_ciphers(
+            "DEFAULT@SECLEVEL=0"
+        )
 
-        # отключаем TLS 1.3
         ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
         pool_kwargs["ssl_context"] = ctx
@@ -61,47 +55,29 @@ session.mount(
 )
 
 
+API_KEY = os.getenv(
+    "WEBKASSA_API_KEY"
+)
+
+
 @webkassa_bp.route("/test-webkassa")
 def test_webkassa():
 
-    headers = {
-        "X-API-KEY": WEBKASSA_API_KEY,
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "operation": "buy",
-
-        "positions": [
-            {
-                "name": "Тест",
-                "price": 1000,
-                "quantity": 1,
-                "sum": 1000
-            }
-        ],
-
-        "payments": [
-            {
-                "type": "cash",
-                "sum": 1000
-            }
-        ]
-    }
-
     response = session.post(
-        f"{BASE_URL}/api/checks",
-        json=data,
-        headers=headers,
+
+        "https://devkkm.webkassa.kz/api/v4/Authorize",
+
+        json={
+            "apiKey": API_KEY
+        },
+
         verify=False
     )
 
     return f"""
-    STATUS: {response.status_code}
+STATUS:
+{response.status_code}
 
-    HEADERS:
-    {dict(response.headers)}
-
-    BODY:
-    {response.text}
-    """
+BODY:
+{response.text}
+"""
