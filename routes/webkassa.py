@@ -1,8 +1,11 @@
 import os
+import ssl
 import requests
 import urllib3
 
 from flask import Blueprint
+from requests.adapters import HTTPAdapter
+from urllib3 import poolmanager
 
 urllib3.disable_warnings(
     urllib3.exceptions.InsecureRequestWarning
@@ -20,6 +23,42 @@ WEBKASSA_API_KEY = os.getenv(
 BASE_URL = "https://kkm.webkassa.kz/api"
 
 
+class TLSAdapter(HTTPAdapter):
+
+    def init_poolmanager(
+        self,
+        connections,
+        maxsize,
+        block=False,
+        **pool_kwargs
+    ):
+
+        ctx = ssl.create_default_context()
+
+        # 🔥 старый TLS для WebKassa
+        ctx.set_ciphers("DEFAULT@SECLEVEL=0")
+
+        # отключаем TLS 1.3
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+
+        pool_kwargs["ssl_context"] = ctx
+
+        self.poolmanager = poolmanager.PoolManager(
+            num_pools=connections,
+            maxsize=maxsize,
+            block=block,
+            **pool_kwargs
+        )
+
+
+session = requests.Session()
+
+session.mount(
+    "https://",
+    TLSAdapter()
+)
+
+
 @webkassa_bp.route("/test-webkassa")
 def test_webkassa():
 
@@ -33,7 +72,7 @@ def test_webkassa():
 
         "positions": [
             {
-                "name": "Тестовый товар",
+                "name": "Тест",
                 "price": 1000,
                 "quantity": 1,
                 "sum": 1000
@@ -48,7 +87,7 @@ def test_webkassa():
         ]
     }
 
-    response = requests.post(
+    response = session.post(
         f"{BASE_URL}/checks",
         json=data,
         headers=headers,
