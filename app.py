@@ -66,5 +66,17 @@ def landing():
 
 if __name__ == "__main__":
     init_db()
+    conn = get_db()
+
+    try:
+        conn.execute("""
+            ALTER TABLE sale_items
+            ADD COLUMN profit REAL DEFAULT 0
+        """)
+        conn.commit()
+    except:
+        pass
+
+    conn.close()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=5000, debug=True)
