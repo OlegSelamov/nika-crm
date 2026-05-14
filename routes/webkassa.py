@@ -68,7 +68,7 @@ def test_webkassa():
         "https://devkkm.webkassa.kz/api/v4/Authorize",
 
         json={
-            "apiKey": API_KEY
+            "ApiKey": API_KEY
         },
 
         verify=False
