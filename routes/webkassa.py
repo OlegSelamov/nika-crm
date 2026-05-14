@@ -63,21 +63,4 @@ API_KEY = os.getenv(
 @webkassa_bp.route("/test-webkassa")
 def test_webkassa():
 
-    response = session.post(
-
-        "https://devkkm.webkassa.kz/api/v4/Authorize",
-
-        json={
-            "ApiKey": API_KEY
-        },
-
-        verify=False
-    )
-
-    return f"""
-STATUS:
-{response.status_code}
-
-BODY:
-{response.text}
-"""
+    return f"KEY: {API_KEY}"
