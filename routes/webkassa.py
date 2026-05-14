@@ -34,6 +34,8 @@ class TLSAdapter(HTTPAdapter):
     ):
 
         ctx = ssl.create_default_context()
+        
+        ctx.check_hostname = False
 
         # 🔥 старый TLS для WebKassa
         ctx.set_ciphers("DEFAULT@SECLEVEL=0")
