@@ -96,4 +96,12 @@ def test_webkassa():
         verify=False
     )
 
-    return response.text
+    return f"""
+    STATUS: {response.status_code}
+
+    HEADERS:
+    {dict(response.headers)}
+
+    BODY:
+    {response.text}
+    """
