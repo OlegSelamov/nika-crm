@@ -13,7 +13,11 @@ from routes.voice import voice_bp
 from routes.auth import auth_bp
 from models import get_db
 from routes.stock import stock_bp
+from routes.webkassa import webkassa_bp
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = "nika_super_secret_key"
@@ -30,6 +34,7 @@ app.register_blueprint(agent_bp)
 app.register_blueprint(voice_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(stock_bp)
+app.register_blueprint(webkassa_bp)
     
 @app.before_request
 def check_company_access():
