@@ -476,6 +476,8 @@ def invoice(sale_id):
     if sale["sale_type"] != "invoice":
         return "Счет доступен только для безналичной продажи"
 
+    conn = get_db()
+    
     company = conn.execute(
         "SELECT * FROM companies WHERE id = ?",
         (session.get("company_id"),)
