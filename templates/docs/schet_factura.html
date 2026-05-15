@@ -179,7 +179,7 @@ td, th {
 
 <div class="row">
     <div class="label">Договор (контракт) на поставку товаров (работ, услуг):</div>
-    <div class="value">Без договора</div>
+    <div class="value">№ {{ client.contract_number or "-" }} от {{ format_date_ru(client.contract_date) }}</div>
 </div>
 
 <div class="row">

@@ -1,3 +1,4 @@
+from routes.clients import format_date_ru
 from flask import Blueprint, render_template, request, jsonify, redirect
 from models import get_db
 from datetime import datetime, timedelta
@@ -513,7 +514,8 @@ def invoice(sale_id):
         company=company,
         sale_date=sale_date,
         total_text=total_text,
-        director_short=director_short
+        director_short=director_short,
+        format_date_ru=format_date_ru
     )
     
 @sales_bp.route("/sales/mark-paid", methods=["POST"])
@@ -654,7 +656,8 @@ def nakladnaya(sale_id):
         "docs/nakladnaya.html",
         header=header,
         items=new_items,
-        totals=totals
+        totals=totals,
+        format_date_ru=format_date_ru
     )
     
 @sales_bp.route("/docs/schet-factura/<int:sale_id>")
@@ -694,7 +697,8 @@ def schet_factura(sale_id):
         client=client,
         company=company,
         payment_type=payment_type,
-        sale_date=sale_date
+        sale_date=sale_date,
+        format_date_ru=format_date_ru
     )
     
 @sales_bp.route("/analytics")
@@ -938,5 +942,6 @@ def act(sale_id):
         company=company,
         client=client,
         total=total,
-        date=datetime.now().strftime("%d.%m.%Y")
+        date=datetime.now().strftime("%d.%m.%Y"),
+        format_date_ru=format_date_ru
     )

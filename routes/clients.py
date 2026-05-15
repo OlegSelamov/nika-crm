@@ -5,6 +5,20 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 import os
 
+def format_date_ru(date_str):
+
+    if not date_str:
+        return ""
+
+    try:
+        return datetime.strptime(
+            date_str,
+            "%Y-%m-%d"
+        ).strftime("%d.%m.%Y")
+
+    except:
+        return date_str
+
 UPLOAD_DIR = os.path.join("static", "uploads", "clients")
 COMMENT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "comments")
 
@@ -91,10 +105,23 @@ def add_client():
         conn.execute(
             """
             INSERT INTO clients (
-                full_name, phone, iin, company_name, status, category,
-                payment, comment, address, photo, comment_photos, created_at, company_id
+                full_name,
+                phone,
+                iin,
+                company_name,
+                status,
+                category,
+                payment,
+                comment,
+                address,
+                contract_number,
+                contract_date,
+                photo,
+                comment_photos,
+                created_at,
+                company_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 full_name,
@@ -106,6 +133,8 @@ def add_client():
                 payment,
                 comment,
                 address,
+                request.form.get("contract_number", ""),
+                request.form.get("contract_date", ""),
                 photo_path,
                 "|".join(comment_photo_paths),
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -257,8 +286,19 @@ def edit_client(client_id):
 
         conn.execute("""
             UPDATE clients
-            SET full_name = ?, phone = ?, iin = ?, company_name = ?, status = ?,
-                category = ?, payment = ?, comment = ?, address = ?, photo = ?, comment_photos = ?
+            SET full_name = ?, 
+                phone = ?, 
+                iin = ?, 
+                company_name = ?, 
+                status = ?,
+                category = ?, 
+                payment = ?, 
+                comment = ?, 
+                address = ?,
+                contract_number = ?,
+                contract_date = ?,
+                photo = ?, 
+                comment_photos = ?
             WHERE id = ? AND company_id = ?
         """, (
             request.form["full_name"],
@@ -270,6 +310,8 @@ def edit_client(client_id):
             request.form.get("payment", ""),
             request.form.get("comment", ""),
             request.form.get("address", ""),
+            request.form.get("contract_number", ""),
+            request.form.get("contract_date", ""),
             photo_path,
             "|".join([p for p in comment_photo_paths if p]),
             client_id,

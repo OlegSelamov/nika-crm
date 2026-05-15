@@ -167,8 +167,11 @@ hr {
 </tr>
 
 <tr>
-<td><b>Договор:</b></td>
-<td>{{ sale.contract or "Без договора" }}</td>
+    <td><b>Договор:</b></td>
+    <td>
+        № {{ client.contract_number or "-" }}
+        от {{ format_date_ru(client.contract_date) if client.contract_date else "-" }}
+    </td>
 </tr>
 </table>
 

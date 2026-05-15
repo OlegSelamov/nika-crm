@@ -23,6 +23,18 @@
             <label>ИИН</label>
             <input name="iin" maxlength="12" placeholder="Например: 990101300123">
         </div>
+		
+		<input
+			name="contract_number"
+			value="{{ client.contract_number if client else '' }}"
+			placeholder="Номер договора"
+		>
+
+		<input
+			type="date"
+			name="contract_date"
+			value="{{ client.contract_date if client else '' }}"
+		>
 
         <div class="form-group">
             <label>Телефон</label>
