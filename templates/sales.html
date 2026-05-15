@@ -796,7 +796,6 @@ function createInvoiceSale() {
         body: JSON.stringify({
             client_id: selectedClient,
             cart: cart,
-            company_id: 1
         })
     })
     .then(res => res.json())

@@ -476,9 +476,9 @@ def invoice(sale_id):
     if sale["sale_type"] != "invoice":
         return "Счет доступен только для безналичной продажи"
 
-    conn = get_db()
     company = conn.execute(
-        "SELECT * FROM companies WHERE is_active = 1 LIMIT 1"
+        "SELECT * FROM companies WHERE id = ?",
+        (session.get("company_id"),)
     ).fetchone()
     conn.close()
 
@@ -552,9 +552,12 @@ def check(sale_id):
         return "Чек доступен только для кассовой продажи"
 
     conn = get_db()
+
     company = conn.execute(
-        "SELECT * FROM companies WHERE is_active = 1 LIMIT 1"
+        "SELECT * FROM companies WHERE id = ?",
+        (session.get("company_id"),)
     ).fetchone()
+
     conn.close()
 
     if not company:
@@ -582,8 +585,10 @@ def nakladnaya(sale_id):
         return "Накладная доступна только после оплаты"
 
     conn = get_db()
+    
     company = conn.execute(
-        "SELECT * FROM companies WHERE is_active = 1 LIMIT 1"
+        "SELECT * FROM companies WHERE id = ?",
+        (session.get("company_id"),)
     ).fetchone()
     conn.close()
 
@@ -656,8 +661,10 @@ def schet_factura(sale_id):
     sale, items, client = get_sale_data(sale_id)
 
     conn = get_db()
+    
     company = conn.execute(
-        "SELECT * FROM companies WHERE is_active = 1 LIMIT 1"
+        "SELECT * FROM companies WHERE id = ?",
+        (session.get("company_id"),)
     ).fetchone()
     conn.close()
 
@@ -907,7 +914,10 @@ def act(sale_id):
 
     sale = conn.execute("SELECT * FROM sales WHERE id = ?", (sale_id,)).fetchone()
     items = conn.execute("SELECT * FROM sale_items WHERE sale_id = ?", (sale_id,)).fetchall()
-    company = conn.execute("SELECT * FROM companies WHERE is_active = 1 LIMIT 1").fetchone()
+    company = conn.execute(
+        "SELECT * FROM companies WHERE id = ?",
+        (session.get("company_id"),)
+    ).fetchone()
     
     company = dict(company) if company else {}
     

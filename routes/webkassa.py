@@ -63,21 +63,75 @@ API_KEY = os.getenv(
 @webkassa_bp.route("/test-webkassa")
 def test_webkassa():
 
+    headers = {
+        "x-api-key": API_KEY,
+        "Content-Type": "application/json"
+    }
+
     response = session.post(
 
-        "https://kkm.webkassa.kz/api/v4/Authorize",
+        "https://devkkm.webkassa.kz/api/v4/Authorize",
+
+        headers=headers,
 
         json={
-            "ApiKey": API_KEY
+
+            "Login": "shelamov1997@gmail.com",
+
+            "Password": "Kk12345#@",
+
+            "GrantType": "0000"
+
         },
 
         verify=False
     )
 
-    return f"""
-STATUS:
-{response.status_code}
+    data = response.json()
 
-BODY:
-{response.text}
-"""
+    token = data["Data"]["Token"]
+
+    headers = {
+        "x-api-key": API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    check_data = {
+
+        "Token": token,
+
+        "CashboxUniqueNumber": "SWK00035407",
+
+        "CheckData": {
+            "TypeOperation": 1
+        },
+
+        "Positions": [
+            {
+                "Count": 1,
+                "Price": 1000,
+                "Tax": 0,
+                "Text": "Тестовый товар"
+            }
+        ],
+
+        "Payments": [
+            {
+                "Sum": 1000,
+                "PaymentType": 0
+            }
+        ]
+    }
+    
+    check_response = session.post(
+
+        "https://devkkm.webkassa.kz/api/v4/Check",
+
+        headers=headers,
+
+        json=check_data,
+
+        verify=False
+    )
+
+    return str(check_response.json())
