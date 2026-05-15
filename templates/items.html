@@ -33,7 +33,7 @@
     <td>{{ i.name }}</td>
     <td>{{ i.retail_price or 0 }} тг</td>
     <td>{{ i.discount_percent or 0 }}%</td>
-    <td>{{ i.category }}</td>
+    <td>{{ i.unit or 'шт' }}</td>
 
     <td>
         <a href="/items/{{ i.id }}/edit" class="btn btn-edit">✏️</a>

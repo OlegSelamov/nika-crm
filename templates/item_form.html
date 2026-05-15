@@ -101,7 +101,7 @@
 </div>
 
 <!-- 🔥 ЕД.ИЗМ. -->
-<select name="unit">
+<select name="unit" id="unitSelect">
 
     <option value="шт">шт</option>
     <option value="услуга">услуга</option>
@@ -289,6 +289,14 @@ function calculatePurchasePrice(){
 document
 .getElementById("retail_price")
 .addEventListener("input", calculatePurchasePrice);
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    const currentUnit = "{{ item.unit if item else 'шт' }}";
+
+    document.getElementById("unitSelect").value = currentUnit;
+
+});
 </script>
 
 <style>
