@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect
 from models import get_db
 from datetime import datetime, timedelta
 from flask import render_template
+from num2words import num2words
 import sqlite3
 from flask import session
 import uuid
@@ -108,27 +109,28 @@ def pay_sale():
 
         for item in cart:
 
-            # 🔥 берём товар из базы
             db_item = conn.execute(
-                "SELECT unit, purchase_price FROM items WHERE id = ?",
+                "SELECT unit FROM items WHERE id = ?",
                 (item.get("id"),)
             ).fetchone()
 
-            unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
-
-            purchase_price = (
-                db_item["purchase_price"]
-                if db_item and db_item["purchase_price"]
-                else 0
+            unit = (
+                db_item["unit"]
+                if db_item and db_item["unit"]
+                else "шт"
             )
 
-            profit = (
-                item.get("price", 0) - purchase_price
-            ) * item.get("qty", 1)
-
             conn.execute("""
-                INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, unit, profit)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sale_items (
+                    sale_id,
+                    item_id,
+                    name,
+                    price,
+                    quantity,
+                    total,
+                    unit
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 sale_id,
                 item.get("id"),
@@ -136,31 +138,10 @@ def pay_sale():
                 item.get("price", 0),
                 item.get("qty", 1),
                 item.get("price", 0) * item.get("qty", 1),
-                unit,   # ✅ ТЕПЕРЬ НЕ "шт", А ИЗ КАТАЛОГА
-                profit
+                unit
             ))
-            
-            # 🔥 движение склада
-            conn.execute("""
-                INSERT INTO stock_movements (
-                    company_id,
-                    item_id,
-                    movement_type,
-                    quantity,
-                    price,
-                    total,
-                    created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                company_id,
-                item.get("id"),
-                "sale",
-                item.get("qty", 1),
-                item.get("price", 0),
-                item.get("price", 0) * item.get("qty", 1),
-                datetime.now().isoformat()
-            ))
+
+        process_sale(conn, sale_id)
 
         conn.commit()
 
@@ -411,45 +392,121 @@ def get_sale_data(sale_id):
 
     return sale, items, client
     
+def process_sale(conn, sale_id):
+
+    sale = conn.execute(
+        "SELECT * FROM sales WHERE id = ?",
+        (sale_id,)
+    ).fetchone()
+
+    if not sale:
+        return
+        
+    if sale["is_processed"] == 1:
+        return
+
+    items = conn.execute("""
+        SELECT *
+        FROM sale_items
+        WHERE sale_id = ?
+    """, (
+        sale_id,
+    )).fetchall()
+
+    for item in items:
+
+        db_item = conn.execute("""
+            SELECT unit, purchase_price
+            FROM items
+            WHERE id = ?
+        """, (
+            item["item_id"],
+        )).fetchone()
+
+        unit = (
+            db_item["unit"]
+            if db_item and db_item["unit"]
+            else "шт"
+        )
+
+        purchase_price = (
+            db_item["purchase_price"]
+            if db_item and db_item["purchase_price"]
+            else 0
+        )
+
+        profit = (
+            item["price"] - purchase_price
+        ) * item["quantity"]
+
+        # 🔥 обновляем profit
+        conn.execute("""
+            UPDATE sale_items
+            SET
+                unit = ?,
+                profit = ?
+            WHERE id = ?
+        """, (
+            unit,
+            profit,
+            item["id"]
+        ))
+
+        # 🔥 списываем остатки
+
+        conn.execute("""
+            UPDATE items
+            SET quantity = COALESCE(quantity, 0) - ?
+            WHERE id = ?
+        """, (
+            item["quantity"],
+            item["item_id"]
+        ))
+        
+        # 🔥 движение склада
+        conn.execute("""
+            INSERT INTO stock_movements (
+                company_id,
+                item_id,
+                movement_type,
+                quantity,
+                price,
+                total,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            sale["company_id"],
+            item["item_id"],
+            "sale",
+            item["quantity"],
+            item["price"],
+            item["total"],
+            datetime.now().isoformat()
+        ))
+    
+        # 🔥 помечаем как проведённую
+
+        conn.execute("""
+            UPDATE sales
+            SET is_processed = 1
+            WHERE id = ?
+        """, (
+            sale_id,
+        ))
+        
 def number_to_words_kz(n):
-    units = ["", "один", "два", "три", "четыре", "пять",
-             "шесть", "семь", "восемь", "девять"]
 
-    tens = ["", "", "двадцать", "тридцать", "сорок",
-            "пятьдесят", "шестьдесят", "семьдесят",
-            "восемьдесят", "девяносто"]
+    try:
 
-    teens = ["десять", "одиннадцать", "двенадцать", "тринадцать",
-             "четырнадцать", "пятнадцать", "шестнадцать",
-             "семнадцать", "восемнадцать", "девятнадцать"]
+        return num2words(
+            int(n),
+            lang="ru"
+        ).capitalize()
 
-    hundreds = ["", "сто", "двести", "триста", "четыреста",
-                "пятьсот", "шестьсот", "семьсот",
-                "восемьсот", "девятьсот"]
+    except:
 
-    def words(num):
-        if num < 10:
-            return units[num]
-        elif num < 20:
-            return teens[num - 10]
-        elif num < 100:
-            return tens[num // 10] + " " + units[num % 10]
-        else:
-            return hundreds[num // 100] + " " + words(num % 100)
-
-    if n == 0:
-        return "ноль"
-
-    result = ""
-
-    if n >= 1000:
-        result += words(n // 1000) + " тысяч "
-        n = n % 1000
-
-    if n > 0:
-        result += words(n)
-
-    return result.strip()
+        return str(n)
     
 def format_fio(fio):
     if not fio:
@@ -539,9 +596,17 @@ def mark_paid():
         SET 
             status = 'Оплачено',
             paid_amount = total_amount,
-            paid_at = ?
+            paid_at = ?,
+            sale_type = 'invoice',
+            card_amount = total_amount
         WHERE id = ? AND company_id = ?
-    """, (datetime.now().isoformat(), sale_id, session.get("company_id")))
+    """, (
+        datetime.now().isoformat(),
+        sale_id,
+        session.get("company_id")
+    ))
+    
+    process_sale(conn, sale_id)
 
     conn.commit()
     conn.close()
@@ -721,6 +786,7 @@ def analytics():
         SELECT DATE(created_at) as date, SUM(total_amount) as total
         FROM sales
         WHERE company_id = ?
+        AND sales.status = 'Оплачено'
         AND DATE(created_at) BETWEEN ? AND ?
         GROUP BY DATE(created_at)
         ORDER BY date
@@ -739,6 +805,7 @@ def analytics():
             SELECT id
             FROM sales
             WHERE company_id = ?
+            AND sales.status = 'Оплачено'
             AND DATE(created_at) BETWEEN ? AND ?
         )
     """, (
@@ -755,6 +822,7 @@ def analytics():
         FROM sales
         JOIN clients ON sales.client_id = clients.id
         WHERE sales.company_id = ?
+        AND sales.status = 'Оплачено'
         AND DATE(sales.created_at) BETWEEN ? AND ?
         GROUP BY clients.id
         ORDER BY total DESC
@@ -768,6 +836,7 @@ def analytics():
         WHERE sale_id IN (
             SELECT id FROM sales 
             WHERE company_id = ?
+            AND sales.status = 'Оплачено'
             AND DATE(created_at) BETWEEN ? AND ?
         )
         GROUP BY name
@@ -783,6 +852,7 @@ def analytics():
             SUM(kaspi_amount) as kaspi
         FROM sales
         WHERE company_id = ?
+        AND sales.status = 'Оплачено'
         AND DATE(created_at) BETWEEN ? AND ?
     """, (company_id, date_from, date_to)).fetchone()
     
@@ -792,6 +862,7 @@ def analytics():
         SELECT SUM(total_amount) as total
         FROM sales
         WHERE company_id = ?
+        AND sales.status = 'Оплачено'
         AND DATE(created_at) = ?
     """, (company_id, today_str)).fetchone()["total"] or 0
 

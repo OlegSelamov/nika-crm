@@ -353,6 +353,16 @@ def init_db():
         cur.execute("ALTER TABLE clients ADD COLUMN contract_date TEXT")
     except:
         pass
+        
+    try:
+        cur.execute("ALTER TABLE sales ADD COLUMN is_processed INTEGER DEFAULT 0;")
+    except:
+        pass
+        
+    try:
+        cur.execute("ALTER TABLE items ADD COLUMN quantity REAL DEFAULT 0;")
+    except:
+        pass
          
     conn.commit()
     conn.close()
