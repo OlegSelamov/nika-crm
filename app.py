@@ -68,28 +68,6 @@ def check_company_access():
 def landing():
     return render_template("landing.html")
     
-@app.route("/fix_render_db")
-def fix_render_db():
-
-    conn = get_db()
-
-    try:
-
-        conn.execute("""
-            ALTER TABLE items
-            ADD COLUMN quantity REAL DEFAULT 0
-        """)
-
-        conn.commit()
-
-        return "done"
-
-    except Exception as e:
-        return str(e)
-
-    finally:
-        conn.close()
-    
 if __name__ == "__main__":
     init_db()
     port = int(os.environ.get("PORT", 5000))
