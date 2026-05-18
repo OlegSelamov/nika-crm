@@ -22,39 +22,244 @@
 
 <br>
 
-<table class="table">
-    <tr>
-        <th>Название</th>
-        <th>БИН</th>
-        <th>Телефон</th>
-        <th>Статус</th>
-        <th></th>
-    </tr>
+<div class="desktop-table">
+	<table class="table">
+		<tr>
+			<th>Название</th>
+			<th>БИН</th>
+			<th>Телефон</th>
+			<th>Статус</th>
+			<th></th>
+		</tr>
 
-    {% for c in companies %}
-    <tr>
-        <td>{{ c.name }}</td>
-        <td>{{ c.bin }}</td>
-        <td>{{ c.phone }}</td>
+		{% for c in companies %}
+		<tr>
+			<td>{{ c.name }}</td>
+			<td>{{ c.bin }}</td>
+			<td>{{ c.phone }}</td>
 
-        <td>
-            {% if c.is_active %}
-                <span style="color:green;">Активна</span>
-            {% endif %}
-        </td>
+			<td>
+				{% if c.is_active %}
+					<span style="color:green;">Активна</span>
+				{% endif %}
+			</td>
 
-		<td style="display:flex; gap:10px;">
-			<a href="/companies/activate/{{ c.id }}">Выбрать</a>
+			<td style="display:flex; gap:10px;">
+				<a href="/companies/activate/{{ c.id }}">Выбрать</a>
+
+				<a href="/companies/delete/{{ c.id }}"
+				   onclick="return confirm('Удалить организацию?')"
+			       style="color:red;">
+					Удалить
+				</a>
+			</td>
+		</tr>
+		{% endfor %}
+
+	</table>
+</div>
+
+<div class="mobile-company-list">
+
+{% for c in companies %}
+
+	<div class="mobile-company-card">
+
+		<div class="mobile-company-top">
+
+			<div class="mobile-company-name">
+				{{ c.name }}
+			</div>
+
+			{% if c.is_active %}
+				<div class="company-badge">
+					Активна
+				</div>
+			{% endif %}
+
+		</div>
+
+		<div class="mobile-company-meta">
+			БИН: {{ c.bin }}
+		</div>
+
+		<div class="mobile-company-meta">
+			📞 {{ c.phone }}
+		</div>
+
+		<div class="mobile-company-actions">
+
+			<a href="/companies/activate/{{ c.id }}"
+			   class="btn btn-edit">
+
+				Выбрать
+
+			</a>
 
 			<a href="/companies/delete/{{ c.id }}"
-			   onclick="return confirm('Удалить организацию?')"
-			   style="color:red;">
-				Удалить
-			</a>
-		</td>
-    </tr>
-    {% endfor %}
+			   class="btn btn-close"
+			   onclick="return confirm('Удалить организацию?')">
 
-</table>
+				Удалить
+
+			</a>
+
+		</div>
+
+	</div>
+
+{% endfor %}
+
+</div>
+
+<style>
+
+/* ================= MOBILE COMPANIES ================= */
+
+.mobile-company-list{
+	display:none;
+}
+
+@media (max-width:768px){
+
+	/* title */
+
+	h2{
+		font-size:24px;
+		margin-bottom:14px;
+	}
+
+	/* form */
+
+	form.card{
+
+		display:flex !important;
+		flex-direction:column !important;
+
+		gap:12px;
+
+		padding:14px;
+
+		border-radius:20px;
+	}
+
+	form.card input{
+
+		height:48px;
+
+		border-radius:14px;
+
+		font-size:14px;
+
+		padding:0 14px;
+	}
+
+	form.card .btn{
+
+		height:50px;
+
+		border-radius:14px;
+
+		font-size:15px;
+		font-weight:700;
+	}
+
+	/* desktop */
+
+	.desktop-table{
+		display:none;
+	}
+
+	/* list */
+
+	.mobile-company-list{
+
+		display:flex;
+		flex-direction:column;
+
+		gap:12px;
+
+		margin-top:14px;
+	}
+
+	/* card */
+
+	.mobile-company-card{
+
+		background:white;
+
+		padding:14px;
+
+		border-radius:18px;
+
+		box-shadow:
+		0 4px 14px rgba(0,0,0,.06);
+	}
+
+	.mobile-company-top{
+
+		display:flex;
+
+		justify-content:space-between;
+
+		gap:10px;
+	}
+
+	.mobile-company-name{
+
+		font-size:15px;
+		font-weight:700;
+
+		flex:1;
+	}
+
+	.company-badge{
+
+		padding:4px 10px;
+
+		border-radius:999px;
+
+		background:#dcfce7;
+		color:#16a34a;
+
+		font-size:11px;
+		font-weight:700;
+	}
+
+	.mobile-company-meta{
+
+		margin-top:8px;
+
+		font-size:13px;
+
+		color:#475569;
+	}
+
+	.mobile-company-actions{
+
+		display:flex;
+
+		gap:8px;
+
+		margin-top:14px;
+	}
+
+	.mobile-company-actions .btn{
+
+		flex:1;
+
+		height:42px;
+
+		display:flex;
+		align-items:center;
+		justify-content:center;
+
+		border-radius:12px;
+
+		font-size:14px;
+	}
+}
+
+</style>
 
 {% endblock %}

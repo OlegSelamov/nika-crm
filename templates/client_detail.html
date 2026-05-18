@@ -125,9 +125,18 @@
 
     <div class="client-sections-grid">
 
-        <div class="section-card sales-section">
-            <div class="section-title">Продажи</div>
+        <div class="section-card sales-section collapsible-section">
+			<div class="section-title collapsible-title"
+				 onclick="toggleSalesSection()">
 
+				<span>Продажи</span>
+
+				<span id="salesArrow">▼</span>
+
+			</div>
+			
+			<div id="salesContent">
+			
             {% if sales %}
                 <div class="sales-list">
                     {% for s in sales %}
@@ -154,6 +163,7 @@
             {% else %}
                 <div class="empty-box">Нет продаж</div>
             {% endif %}
+			</div>
         </div>
 
         <div class="section-card comment-section">
@@ -698,6 +708,366 @@ select.edit-field:enabled {
     padding: 8px 0;
     border-bottom: 1px solid #eee;
 }
+
+/* ================= MOBILE CLIENT DETAIL ================= */
+
+@media (max-width:768px){
+
+	.client-detail-page{
+		padding-bottom:90px;
+	}
+
+	/* HEADER */
+
+	.client-header-card{
+
+		display:flex !important;
+		flex-direction:column !important;
+
+		padding:14px;
+
+		border-radius:22px;
+
+		gap:16px;
+	}
+
+	/* COMPANY */
+
+	.company-row{
+
+		flex-direction:column;
+		align-items:flex-start;
+
+		gap:10px;
+	}
+
+	.client-company,
+	input.client-company{
+
+		font-size:20px !important;
+		line-height:1.2;
+	}
+
+	.client-name,
+	input.client-name{
+
+		font-size:15px !important;
+	}
+
+	/* STATUS */
+
+	.client-status-badge{
+
+		width:100%;
+
+		height:42px;
+
+		border-radius:14px;
+
+		font-size:13px;
+	}
+
+	/* META */
+
+	.client-meta-grid{
+
+		grid-template-columns:1fr !important;
+
+		gap:10px;
+	}
+
+	.meta-item{
+
+		padding:10px;
+
+		border-radius:14px;
+	}
+
+	.meta-label{
+		font-size:11px;
+	}
+
+	.meta-value{
+		font-size:14px;
+	}
+
+	/* RIGHT */
+
+	.client-header-right{
+
+		width:100%;
+
+		align-items:center !important;
+	}
+
+	/* AVATAR */
+
+	.client-avatar-wrap{
+
+		width:120px;
+		height:120px;
+	}
+
+	.client-avatar{
+		border-radius:20px;
+	}
+
+	/* BUTTONS */
+
+	.client-actions{
+
+		width:100%;
+
+		display:grid;
+
+		grid-template-columns:1fr 1fr 1fr;
+
+		gap:8px;
+	}
+
+	.client-actions .btn{
+
+		height:44px;
+
+		padding:0 8px;
+
+		border-radius:12px;
+
+		font-size:13px;
+
+		display:flex;
+		align-items:center;
+		justify-content:center;
+	}
+
+	/* FINANCE */
+
+	.finance-cards-row{
+
+		grid-template-columns:1fr !important;
+
+		gap:10px;
+	}
+
+	.finance-box{
+
+		padding:14px;
+
+		border-radius:18px;
+	}
+
+	.finance-title{
+		font-size:12px;
+	}
+
+	.finance-value{
+		font-size:22px;
+	}
+
+	/* SECTIONS */
+
+	.client-sections-grid{
+
+		grid-template-columns:1fr !important;
+
+		gap:14px;
+	}
+
+	.section-card{
+
+		padding:14px;
+
+		border-radius:20px;
+	}
+
+	.section-title{
+
+		font-size:16px;
+		margin-bottom:12px;
+	}
+
+	/* SALES */
+
+	.sales-list{
+
+		max-height:none;
+
+		padding-right:0;
+	}
+
+	.sale-card{
+
+		padding:12px;
+
+		border-radius:16px;
+	}
+
+	.sale-top{
+
+		align-items:flex-start;
+
+		flex-direction:column;
+
+		gap:6px;
+	}
+
+	.sale-bottom{
+
+		margin-top:10px;
+	}
+
+	.sale-amount{
+
+		font-size:18px;
+	}
+
+	.sale-date{
+
+		font-size:11px;
+	}
+
+	/* COMMENT */
+
+	.comment-box{
+
+		min-height:120px;
+
+		font-size:14px;
+	}
+
+	/* GALLERY */
+
+	.gallery-grid{
+
+		grid-template-columns:
+		repeat(2,1fr);
+
+		gap:10px;
+	}
+
+	.gallery-image{
+
+		height:110px;
+
+		border-radius:14px;
+	}
+
+	/* MODAL */
+
+	.sale-modal{
+
+		padding:12px;
+	}
+
+	.sale-modal-content{
+
+		width:100% !important;
+
+		max-height:90vh;
+
+		border-radius:22px;
+
+		padding:16px;
+	}
+
+	.sale-modal-header{
+
+		align-items:center;
+	}
+
+	.sale-modal-header span{
+
+		font-size:18px;
+		font-weight:700;
+	}
+
+	/* INPUTS */
+
+	.edit-field:enabled{
+
+		height:44px;
+
+		font-size:14px;
+
+		border-radius:12px;
+	}
+
+	textarea.edit-field:enabled{
+
+		height:140px;
+		padding:12px;
+	}
+}
+
+/* ===== SMALL PHONES ===== */
+
+@media (max-width:420px){
+
+	.client-company,
+	input.client-company{
+
+		font-size:18px !important;
+	}
+
+	.finance-value{
+		font-size:20px;
+	}
+
+	.client-actions{
+
+		grid-template-columns:1fr;
+	}
+}
+
+/* ===== COLLAPSIBLE SALES ===== */
+
+.collapsible-title{
+
+	display:flex;
+
+	align-items:center;
+	justify-content:space-between;
+
+	cursor:pointer;
+
+	user-select:none;
+}
+
+#salesArrow{
+
+	font-size:14px;
+
+	transition:.25s ease;
+}
+
+#salesContent{
+
+	overflow:hidden;
+
+	transition:
+	max-height .3s ease,
+	opacity .25s ease;
+
+	max-height:1200px;
+
+	opacity:1;
+}
+
+/* CLOSED */
+
+.sales-section.closed #salesContent{
+
+	max-height:0;
+
+	opacity:0;
+
+	margin-top:0;
+}
+
+.sales-section.closed #salesArrow{
+
+	transform:rotate(-90deg);
+}
 </style>
 
 <script>
@@ -876,6 +1246,21 @@ function markPaid(id) {
 
 function closeSaleModal() {
     document.getElementById("saleModal").style.display = "none";
+}
+
+function toggleSalesSection(){
+
+	const section =
+		document.querySelector(".sales-section");
+
+	section.classList.toggle("closed");
+}
+
+if(window.innerWidth <= 768){
+
+	document
+	.querySelector(".sales-section")
+	.classList.add("closed");
 }
 
 </script>

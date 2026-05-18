@@ -2,6 +2,21 @@
 
 {% block content %}
 
+<style>
+.sales-page {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.sales-page.ready {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity .15s ease;
+}
+
+</style>
+
+<div class="sales-page">
 <div class="sales-grid">
 
     <!-- ЛЕВАЯ ЧАСТЬ -->
@@ -14,9 +29,14 @@
 
 			<div class="search-box">
 
-				<input id="search" placeholder="Поиск товара..." autocomplete="off">
-				<button onclick="openScanner()" class="btn">📷</button>
-				<button onclick="showQR()" class="btn">📡</button>
+				<div class="search-row">
+
+					<input id="search" placeholder="Поиск товара..." autocomplete="off">
+
+					<button onclick="openScanner()" class="btn">📷</button>
+					<button onclick="showQR()" class="btn">📡</button>
+
+				</div>
 
 				<div id="itemsList" class="items-dropdown"></div>
 
@@ -26,6 +46,7 @@
 
         <!-- КОРЗИНА -->
         <div class="cart-box">
+		    <div class="table-wrapper">
             <table class="cart-table">
                 <thead>
                     <tr>
@@ -38,6 +59,8 @@
                 </thead>
                 <tbody id="cart"></tbody>
             </table>
+			</div>
+			<div id="mobileCart" class="mobile-cart"></div>
         </div>
 
     </div>
@@ -59,8 +82,21 @@
 
 			</div>
 
-			<button class="pay-btn" onclick="pay()">ОПЛАТА</button>
-			<button class="pay-btn" style="background:#3b82f6" onclick="createInvoiceSale()">СЧЁТ (БЕЗНАЛ)</button>
+			<div class="payment-actions">
+
+				<button class="pay-btn" onclick="pay()">
+					ОПЛАТА
+				</button>
+
+				<button class="pay-btn"
+						style="background:#3b82f6"
+						onclick="createInvoiceSale()">
+
+					БЕЗНАЛ
+
+				</button>
+
+			</div>
 
 		</div>
 	
@@ -104,6 +140,7 @@
     </div>
 </div>
 
+</div>
 </div>
 
 <div id="saleModal" class="modal">
@@ -289,8 +326,58 @@ function renderCart() {
     });
 
     document.getElementById("cart").innerHTML = html;
+	    renderMobileCart();
 	document.getElementById("totalAmount").innerText =
 		total.toLocaleString("ru-RU") + " ₸";
+}
+
+function renderMobileCart() {
+
+	let html = "";
+
+	cart.forEach((item, index) => {
+
+		let qty = item.qty || 1;
+		let sum = item.price * qty;
+
+		html += `
+			<div class="mobile-cart-item">
+
+				<div class="mobile-cart-top">
+
+					<div class="mobile-cart-name">
+						${item.name}
+					</div>
+
+					<div class="mobile-cart-price">
+						${sum} ₸
+					</div>
+
+				</div>
+
+				<div class="mobile-cart-bottom">
+
+					<div class="mobile-qty">
+						<button onclick="changeQty(${index}, -1)">−</button>
+						<span>${qty}</span>
+						<button onclick="changeQty(${index}, 1)">+</button>
+					</div>
+
+					<button onclick="removeItem(${index})">
+						❌
+					</button>
+
+				</div>
+
+			</div>
+		`;
+	});
+
+	let mobile = document.getElementById("mobileCart");
+
+	if (mobile) {
+		mobile.innerHTML = html;
+	}
 }
 
 function changeQty(index, delta) {
@@ -421,7 +508,7 @@ function loadClients() {
     .then(res => res.json())
     .then(data => {
 
-        let html = "<table class='client-table'>";
+        let html = "<div class='table-wrapper'><table class='client-table'>";
 
         data.forEach(c => {
 
@@ -451,7 +538,7 @@ function loadClients() {
             `;
         });
 
-        html += "</table>";
+        html += "</table></div>";
 
         document.getElementById("clientList").innerHTML = html;
 		
@@ -1070,6 +1157,10 @@ function startListening(autoClose = false) {
 
 }
 
+window.addEventListener("load", function () {
+    document.querySelector(".sales-page").classList.add("ready");
+});
+
 </script>
 
 <style>
@@ -1290,8 +1381,22 @@ function startListening(autoClose = false) {
 }
 
 .search-box {
-    position: relative;
-    width: 100%;
+	position: relative;
+	width: 100%;
+}
+
+.search-row {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.search-row input {
+	flex: 1;
+}
+
+.search-box input {
+	flex: 1;
 }
 
 /* 🔥 ВЫПАДАЮЩИЙ СПИСОК */
@@ -1299,26 +1404,17 @@ function startListening(autoClose = false) {
     position: absolute;
     top: 110%;
     left: 0;
-
     width: 100%;
     max-height: 300px;
-
     overflow-y: auto;
-
     background: white;
     border-radius: 12px;
-
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-
     padding: 10px;
-
-    display: none;
     z-index: 999;
-
-    /* 🔥 ВОТ ГЛАВНОЕ */
-    display: grid;
-    grid-template-columns: repeat(4, 1fr); /* 4 в ряд */
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
+    display: none;
 }
 
 .item-card {
@@ -1584,6 +1680,230 @@ function startListening(autoClose = false) {
     .scanner-box {
         width: 95vw;
     }
+}
+
+.mobile-cart {
+	display: none;
+}
+
+/* ================= MOBILE SALES ================= */
+
+@media (max-width: 768px) {
+
+	/* GRID */
+
+	.sales-grid {
+		display: flex !important;
+		flex-direction: column !important;
+		height: auto !important;
+		gap: 10px !important;
+	}
+
+	.left-side,
+	.payment-box {
+		width: 100% !important;
+	}
+
+	/* TOP */
+
+	.top-bar {
+		display: grid !important;
+		grid-template-columns: 1fr !important;
+		gap: 8px !important;
+	}
+
+	#clientSearch,
+	#search {
+		width: 100% !important;
+		height: 42px;
+		font-size: 14px;
+	}
+
+	.search-box {
+		width: 100%;
+	}
+
+	/* КНОПКИ */
+
+	.search-box .btn {
+		width: 42px;
+		height: 42px;
+		padding: 0 !important;
+		font-size: 16px;
+	}
+
+	/* КОРЗИНА */
+
+	.cart-box {
+		margin-top: 0;
+		border-radius: 14px;
+		max-height: none;
+		overflow: visible;
+		padding: 8px;
+	}
+
+	/* ТАБЛИЦА */
+
+	.table-wrapper {
+		overflow-x: hidden !important;
+	}
+
+	.cart-table {
+		display: none;
+	}
+
+	/* МОБИЛЬНЫЕ КАРТОЧКИ */
+
+	.mobile-cart {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.mobile-cart-item {
+		background: white;
+		border-radius: 12px;
+		padding: 10px;
+		box-shadow: 0 3px 10px rgba(0,0,0,.06);
+	}
+
+	.mobile-cart-top {
+		display: flex;
+		justify-content: space-between;
+		gap: 10px;
+	}
+
+	.mobile-cart-name {
+		font-size: 13px;
+		font-weight: 600;
+		flex: 1;
+	}
+
+	.mobile-cart-price {
+		font-size: 14px;
+		font-weight: bold;
+		color: #6366f1;
+		white-space: nowrap;
+	}
+
+	.mobile-cart-bottom {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-top: 8px;
+	}
+
+	.mobile-qty {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.mobile-qty button {
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: 8px;
+		background: #eef2ff;
+		font-size: 16px;
+	}
+
+	/* ОПЛАТА */
+
+	.payment-box {
+		position: sticky;
+		bottom: 0;
+		background: rgba(255,255,255,.96);
+		backdrop-filter: blur(10px);
+		padding: 12px;
+		border-radius: 18px 18px 0 0;
+		box-shadow: 0 -5px 20px rgba(0,0,0,.08);
+		z-index: 50;
+	}
+
+	.total-title {
+		font-size: 12px;
+	}
+
+	.total-amount {
+		font-size: 28px;
+		margin: 5px 0 10px;
+	}
+
+	.payment-methods {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 6px;
+	}
+
+	.pay-input {
+		height: 40px;
+		padding: 6px;
+		font-size: 12px;
+		margin: 0;
+		text-align: center;
+	}
+
+	.pay-btn {
+		width: 100%;
+		height: 52px;
+		font-size: 15px;
+		font-weight: 700;
+		padding: 0 14px;
+		margin-top: 10px;
+		border-radius: 14px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	
+	.payment-box {
+		padding: 14px !important;
+	}
+
+	.payment-box .pay-btn:last-child {
+		margin-bottom: 4px;
+	}
+	
+	.payment-actions {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+		margin-top: 10px;
+	}
+
+	/* ВЫПАДАЮЩИЙ СПИСОК */
+
+	.items-dropdown {
+		grid-template-columns: repeat(2, 1fr);
+		max-height: 50vh;
+		padding: 8px;
+	}
+
+	.item-card {
+		width: 100%;
+	}
+
+	.item-image {
+		height: 70px;
+	}
+	
+	.payment-box .pay-btn {
+		flex: 1;
+		width: 100%;
+	}
+
+	.payment-box {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	/* СТРАНИЦА */
+
+	.sales-page {
+		padding-bottom: 120px;
+	}
 }
 
 </style>

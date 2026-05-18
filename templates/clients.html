@@ -14,7 +14,7 @@
     class="search-input"
 >
 
-<div class="table-wrap">
+<div class="table-wrap desktop-table">
     <table class="client-table" id="clientsTable">
       <tr>
           <th>Компания / Клиент</th>
@@ -64,6 +64,73 @@
 	  </tr>
 	  {% endfor %}
       </table>
+</div>
+
+<div class="mobile-clients-list">
+
+{% for c in clients %}
+
+	<div class="mobile-client-card"
+		 onclick="window.location.href='/clients/{{ c.id }}'">
+
+		<div class="mobile-client-top">
+
+			<div class="mobile-client-info">
+
+				<div class="mobile-company">
+					{{ c.company_name or "Без компании" }}
+				</div>
+
+				<div class="mobile-name">
+					{{ c.full_name }}
+				</div>
+
+			</div>
+
+			<div class="mobile-status
+				{% if c.status == 'Новый' %}
+					red
+				{% elif c.status == 'В работе' %}
+					orange
+				{% else %}
+					green
+				{% endif %}
+			">
+
+				{{ c.status }}
+
+			</div>
+
+		</div>
+
+		<div class="mobile-phone">
+			{{ c.phone }}
+		</div>
+
+		<div class="mobile-client-actions">
+
+			<a href="/clients/{{ c.id }}/edit"
+			   class="btn btn-edit"
+			   onclick="event.stopPropagation()">
+
+				Изменить
+
+			</a>
+
+			<a href="/clients/{{ c.id }}/delete"
+			   class="btn btn-close"
+			   onclick="event.stopPropagation()">
+
+				Удалить
+
+			</a>
+
+		</div>
+
+	</div>
+
+{% endfor %}
+
 </div>
 
 <script>
@@ -344,5 +411,180 @@ document.querySelectorAll(".client-row").forEach(row => {
 	});
 });
 </script>
+
+<style>
+
+/* ================= MOBILE CLIENTS ================= */
+
+.mobile-clients-list{
+	display:none;
+}
+
+@media (max-width:768px){
+
+	/* desktop */
+
+	.desktop-table{
+		display:none;
+	}
+
+	/* title */
+
+	h1{
+		font-size:26px;
+		margin-bottom:14px;
+	}
+
+	/* button */
+
+	.btn{
+		height:44px;
+		border-radius:12px;
+		font-size:14px;
+	}
+
+	/* search */
+
+	.search-input{
+
+		height:46px;
+
+		font-size:14px;
+
+		border-radius:14px;
+
+		margin-top:12px;
+	}
+
+	/* list */
+
+	.mobile-clients-list{
+
+		display:flex;
+		flex-direction:column;
+
+		gap:12px;
+
+		margin-top:14px;
+	}
+
+	/* card */
+
+	.mobile-client-card{
+
+		background:white;
+
+		padding:14px;
+
+		border-radius:18px;
+
+		box-shadow:
+		0 4px 14px rgba(0,0,0,.06);
+
+		cursor:pointer;
+	}
+
+	/* top */
+
+	.mobile-client-top{
+
+		display:flex;
+
+		justify-content:space-between;
+
+		gap:10px;
+	}
+
+	.mobile-company{
+
+		font-size:12px;
+
+		color:#64748b;
+	}
+
+	.mobile-name{
+
+		font-size:15px;
+		font-weight:700;
+
+		margin-top:3px;
+	}
+
+	/* phone */
+
+	.mobile-phone{
+
+		margin-top:10px;
+
+		font-size:13px;
+
+		color:#475569;
+	}
+
+	/* status */
+
+	.mobile-status{
+
+		padding:4px 10px;
+
+		border-radius:999px;
+
+		font-size:11px;
+		font-weight:700;
+
+		height:fit-content;
+
+		white-space:nowrap;
+	}
+
+	.red{
+		background:#fee2e2;
+		color:#ef4444;
+	}
+
+	.orange{
+		background:#fef3c7;
+		color:#f59e0b;
+	}
+
+	.green{
+		background:#dcfce7;
+		color:#16a34a;
+	}
+
+	/* buttons */
+
+	.mobile-client-actions{
+
+		display:flex;
+
+		gap:8px;
+
+		margin-top:12px;
+	}
+
+	.mobile-client-actions .btn{
+
+		flex:1;
+
+		display:flex;
+		align-items:center;
+		justify-content:center;
+
+		height:42px;
+
+		border-radius:12px;
+
+		font-size:14px;
+	}
+
+	/* page */
+
+	.page-shell{
+		padding:12px !important;
+	}
+}
+
+</style>
 
 {% endblock %}

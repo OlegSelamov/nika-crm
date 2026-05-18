@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Удалённые клиенты</h1>
 
-<div class="table-wrap">
+<div class="table-wrap desktop-table">
     <table class="client-table">
         <tr>
             <th>ФИО</th>
@@ -25,4 +25,129 @@
         {% endfor %}
     </table>
 </div>
+
+<div class="mobile-clients-list">
+
+{% for c in clients %}
+
+	<div class="mobile-client-card">
+
+		<div class="mobile-name">
+			{{ c.full_name }}
+		</div>
+
+		<div class="mobile-phone">
+			{{ c.phone }}
+		</div>
+
+		<div class="mobile-status">
+			{{ c.status }}
+		</div>
+
+		<div class="mobile-client-actions">
+
+			<a href="/clients/{{ c.id }}/restore"
+			   class="btn btn-edit">
+
+				Восстановить
+
+			</a>
+
+			<a href="/clients/{{ c.id }}/delete_permanently"
+			   class="btn btn-close">
+
+				Удалить
+
+			</a>
+
+		</div>
+
+	</div>
+
+{% endfor %}
+
+</div>
+
+<style>
+
+.mobile-clients-list{
+	display:none;
+}
+
+@media (max-width:768px){
+
+	.desktop-table{
+		display:none;
+	}
+
+	.mobile-clients-list{
+
+		display:flex;
+		flex-direction:column;
+
+		gap:12px;
+
+		margin-top:14px;
+	}
+
+	.mobile-client-card{
+
+		background:white;
+
+		padding:14px;
+
+		border-radius:18px;
+
+		box-shadow:
+		0 4px 14px rgba(0,0,0,.06);
+	}
+
+	.mobile-name{
+
+		font-size:15px;
+		font-weight:700;
+	}
+
+	.mobile-phone{
+
+		margin-top:8px;
+
+		font-size:13px;
+
+		color:#64748b;
+	}
+
+	.mobile-status{
+
+		margin-top:8px;
+
+		font-size:12px;
+
+		color:#475569;
+	}
+
+	.mobile-client-actions{
+
+		display:flex;
+
+		gap:8px;
+
+		margin-top:12px;
+	}
+
+	.mobile-client-actions .btn{
+
+		flex:1;
+
+		height:42px;
+
+		display:flex;
+		align-items:center;
+		justify-content:center;
+
+		border-radius:12px;
+	}
+}
+
+</style>
 {% endblock %}

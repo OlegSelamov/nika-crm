@@ -595,6 +595,425 @@ h2 {
     font-size: 14px;
     opacity: 0.8;
 }
+
+/* ================= PREMIUM MOBILE LANDING ================= */
+
+@media (max-width:768px){
+
+	/* BODY */
+
+	body{
+		overflow-x:hidden;
+	}
+
+	/* HEADER */
+
+	.header{
+
+		padding:14px 16px;
+
+		display:flex;
+		flex-direction:column;
+
+		align-items:center;
+
+		gap:14px;
+	}
+
+	.logo{
+
+		display:flex;
+		justify-content:center;
+
+		width:100%;
+	}
+
+	.logo img{
+		height:40px;
+	}
+
+	/* NAV */
+
+	.nav{
+
+		width:100%;
+
+		justify-content:center;
+
+		flex-wrap:wrap;
+
+		gap:10px;
+	}
+
+	.nav a{
+
+		font-size:13px;
+
+		padding:8px 12px;
+
+		border-radius:10px;
+
+		background:rgba(255,255,255,.08);
+	}
+
+	.login-btn{
+
+		padding:8px 14px;
+	}
+
+	/* HERO */
+
+	.hero{
+
+		min-height:100vh;
+
+		height:auto;
+
+		padding:
+		120px 18px 70px;
+	}
+
+	.hero-content{
+
+		max-width:100%;
+	}
+
+	.hero h1{
+
+		font-size:34px;
+
+		line-height:1.15;
+
+		margin-bottom:14px;
+	}
+
+	.hero p{
+
+		font-size:15px;
+
+		line-height:1.5;
+
+		color:#e2e8f0;
+	}
+
+	/* BUTTONS */
+
+	.buttons{
+
+		display:flex;
+		flex-direction:column;
+
+		gap:12px;
+
+		margin-top:24px;
+	}
+
+	.buttons .btn{
+
+		width:100%;
+
+		margin:0;
+
+		height:52px;
+
+		display:flex;
+		align-items:center;
+		justify-content:center;
+
+		border-radius:14px;
+
+		font-size:15px;
+	}
+
+	/* SECTION */
+
+	.section,
+	.problem,
+	.solution,
+	.cta{
+
+		padding:70px 16px;
+	}
+
+	h2{
+
+		font-size:28px;
+
+		line-height:1.2;
+	}
+
+	.problem-sub,
+	.solution-sub{
+
+		font-size:14px;
+
+		line-height:1.5;
+	}
+
+	/* CARDS */
+
+	.cards,
+	.features,
+	.pricing,
+	.problem-grid,
+	.solution-grid{
+
+		grid-template-columns:1fr !important;
+
+		gap:14px;
+	}
+
+	.card,
+	.problem-card,
+	.solution-card,
+	.price-card{
+
+		padding:20px;
+
+		border-radius:22px;
+
+		background:
+		linear-gradient(
+		180deg,
+		rgba(30,41,59,.96),
+		rgba(15,23,42,.92)
+		);
+
+		box-shadow:
+		0 10px 30px rgba(0,0,0,.18);
+	}
+
+	.card h3,
+	.problem-card h3,
+	.solution-card h3{
+
+		font-size:18px;
+	}
+
+	.card p,
+	.problem-card p,
+	.solution-card p{
+
+		font-size:14px;
+
+		line-height:1.5;
+	}
+
+	/* SCREEN */
+
+	.screen img{
+
+		border-radius:18px;
+
+		margin-top:24px;
+	}
+
+	/* FEATURES */
+
+	.features{
+
+		text-align:left;
+	}
+
+	/* PRICE */
+
+	.price{
+
+		font-size:22px !important;
+
+		word-break:break-word;
+	}
+	
+	.price-card ul{
+
+		padding-left:18px;
+
+		font-size:13px;
+	}
+
+	.price-card{
+
+		width:100% !important;
+
+		min-width:0 !important;
+
+		min-height:auto !important;
+
+		padding:18px 16px !important;
+	}
+
+	/* CTA */
+
+	.cta h2{
+
+		font-size:30px;
+	}
+
+	.cta .btn{
+
+		width:100%;
+
+		max-width:100%;
+
+		height:52px;
+
+		display:flex;
+		align-items:center;
+		justify-content:center;
+
+		padding:0 16px;
+
+		font-size:14px;
+
+		text-align:center;
+
+		line-height:1.2;
+
+		white-space:normal;
+	}
+	
+	.cta{
+		overflow:hidden;
+	}
+	
+	.btn{
+
+		min-width:0 !important;
+	}
+}
+
+
+
+/* ===== SMALL PHONES ===== */
+
+@media (max-width:420px){
+
+	.hero h1{
+		font-size:30px;
+	}
+
+	h2{
+		font-size:24px;
+	}
+
+	.hero p{
+		font-size:14px;
+	}
+
+	.card,
+	.problem-card,
+	.solution-card,
+	.price-card{
+
+		padding:18px;
+	}
+}
+
+/* ===== FIX MOBILE PRICING + FINAL CTA ===== */
+
+@media (max-width:768px){
+
+	/* тарифы компактнее */
+
+	.pricing-section{
+		padding:60px 14px !important;
+	}
+
+	.pricing-container{
+		width:100% !important;
+		max-width:100% !important;
+	}
+
+	.pricing-grid{
+		grid-template-columns:1fr !important;
+		gap:14px !important;
+		margin-top:22px !important;
+	}
+
+	.price-card{
+		width:100% !important;
+		min-width:0 !important;
+		min-height:auto !important;
+		padding:16px !important;
+		border-radius:18px !important;
+		transform:none !important;
+	}
+
+	.price-card.popular{
+		transform:none !important;
+	}
+
+	.price-card h3{
+		font-size:18px !important;
+		margin:0 0 8px !important;
+	}
+
+	.price{
+		font-size:21px !important;
+		margin:8px 0 10px !important;
+		line-height:1.2 !important;
+	}
+
+	.features-list p{
+		font-size:12px !important;
+		line-height:1.35 !important;
+		margin:5px 0 !important;
+	}
+
+	.price-card .btn{
+		width:100% !important;
+		height:44px !important;
+		margin:12px 0 0 !important;
+		padding:0 12px !important;
+		font-size:13px !important;
+		border-radius:12px !important;
+		display:flex !important;
+		align-items:center !important;
+		justify-content:center !important;
+	}
+
+	.badge{
+		position:static !important;
+		display:inline-block !important;
+		margin-bottom:10px !important;
+		font-size:10px !important;
+	}
+
+	/* последняя CTA секция */
+
+	.final-cta{
+		padding:60px 14px !important;
+		overflow:hidden !important;
+	}
+
+	.final-cta h2{
+		font-size:26px !important;
+		line-height:1.2 !important;
+	}
+
+	.final-sub{
+		font-size:14px !important;
+		line-height:1.45 !important;
+	}
+
+	.big-btn{
+		width:100% !important;
+		max-width:100% !important;
+		height:auto !important;
+		min-height:52px !important;
+		margin:18px 0 0 !important;
+		padding:14px 16px !important;
+		font-size:14px !important;
+		line-height:1.25 !important;
+		white-space:normal !important;
+		text-align:center !important;
+		display:flex !important;
+		align-items:center !important;
+		justify-content:center !important;
+		border-radius:14px !important;
+		box-sizing:border-box !important;
+	}
+}
 </style>
 </head>
 

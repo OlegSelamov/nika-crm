@@ -8,41 +8,329 @@
 
 <br><br>
 
-<table class="client-table">
+<div class="desktop-table">
+	<table class="client-table">
 
-<tr>
-    <th style="width:70px;">Фото</th>
-    <th>Название</th>
-    <th style="width:120px;">Цена</th>
-    <th style="width:80px;">Скидка</th>
-    <th style="width:120px;">Ед.изм.</th>
-    <th style="width:120px;">Действия</th>
-</tr>
+	<tr>
+		<th style="width:70px;">Фото</th>
+		<th>Название</th>
+		<th style="width:120px;">Цена</th>
+		<th style="width:80px;">Скидка</th>
+		<th style="width:120px;">Ед.изм.</th>
+		<th style="width:120px;">Действия</th>
+	</tr>
+
+	{% for i in items %}
+	<tr>
+
+		<td>
+			{% if i.image %}
+				<img src="{{ i.image }}" class="table-img">
+			{% else %}
+				<img src="/static/img/no-photo.png" class="table-img">
+			{% endif %}
+		</td>
+
+		<td>{{ i.name }}</td>
+		<td>{{ i.retail_price or 0 }} тг</td>
+		<td>{{ i.discount_percent or 0 }}%</td>
+		<td>{{ i.unit or 'шт' }}</td>
+
+		<td>
+			<a href="/items/{{ i.id }}/edit" class="btn btn-edit">✏️</a>
+			<a href="/items/{{ i.id }}/delete" class="btn btn-close">🗑</a>
+		</td>
+
+	</tr>
+	{% endfor %}
+
+	</table>
+</div>
+
+<div class="mobile-items-list">
 
 {% for i in items %}
-<tr>
 
-    <td>
-        {% if i.image %}
-            <img src="{{ i.image }}" class="table-img">
-        {% else %}
-            <img src="/static/img/no-photo.png" class="table-img">
-        {% endif %}
-    </td>
+	<div class="mobile-item-card">
 
-    <td>{{ i.name }}</td>
-    <td>{{ i.retail_price or 0 }} тг</td>
-    <td>{{ i.discount_percent or 0 }}%</td>
-    <td>{{ i.unit or 'шт' }}</td>
+		<div class="mobile-item-left">
 
-    <td>
-        <a href="/items/{{ i.id }}/edit" class="btn btn-edit">✏️</a>
-        <a href="/items/{{ i.id }}/delete" class="btn btn-close">🗑</a>
-    </td>
+			{% if i.image %}
+				<img src="{{ i.image }}" class="mobile-item-img">
+			{% else %}
+				<img src="/static/img/no-photo.png"
+					 class="mobile-item-img">
+			{% endif %}
 
-</tr>
+		</div>
+
+		<div class="mobile-item-body">
+
+			<div class="mobile-item-name">
+				{{ i.name }}
+			</div>
+
+			<div class="mobile-item-meta">
+
+				<div class="mobile-price">
+					{{ i.retail_price or 0 }} ₸
+				</div>
+
+				<div class="mobile-discount">
+					-{{ i.discount_percent or 0 }}%
+				</div>
+
+			</div>
+
+			<div class="mobile-unit">
+				{{ i.unit or 'шт' }}
+			</div>
+
+			<div class="mobile-actions">
+
+				<a href="/items/{{ i.id }}/edit"
+				   class="btn btn-edit">
+
+					Изменить
+
+				</a>
+
+				<a href="/items/{{ i.id }}/delete"
+				   class="btn btn-close">
+
+					Удалить
+
+				</a>
+
+			</div>
+
+		</div>
+
+	</div>
+
 {% endfor %}
 
-</table>
+</div>
+
+<style>
+
+/* ================= MOBILE ITEMS ================= */
+
+.mobile-items-list {
+	display: none;
+}
+
+@media (max-width:768px){
+
+	/* desktop */
+
+	.desktop-table {
+		display: none;
+	}
+
+	/* top */
+
+	h2 {
+		font-size: 24px;
+		margin-bottom: 12px;
+	}
+
+	/* add button */
+
+	.btn {
+		height: 44px;
+		font-size: 14px;
+		border-radius: 12px;
+	}
+
+	/* list */
+
+	.mobile-items-list {
+
+		display: flex;
+		flex-direction: column;
+
+		gap: 12px;
+
+		margin-top: 12px;
+	}
+
+	/* card */
+
+	.mobile-item-card {
+
+		display: flex;
+		gap: 12px;
+
+		padding: 12px;
+
+		border-radius: 18px;
+
+		background: rgba(255,255,255,.92);
+
+		box-shadow:
+		0 4px 14px rgba(0,0,0,.06);
+	}
+
+	/* image */
+
+	.mobile-item-img {
+
+		width: 84px;
+		height: 84px;
+
+		border-radius: 14px;
+
+		object-fit: cover;
+
+		background: #f1f5f9;
+	}
+
+	/* body */
+
+	.mobile-item-body {
+
+		flex: 1;
+
+		min-width: 0;
+	}
+
+	.mobile-item-name {
+
+		font-size: 14px;
+		font-weight: 700;
+
+		color: #0f172a;
+
+		line-height: 1.3;
+	}
+
+	/* meta */
+
+	.mobile-item-meta {
+
+		display: flex;
+		align-items: center;
+
+		gap: 8px;
+
+		margin-top: 8px;
+	}
+
+	.mobile-price {
+
+		font-size: 16px;
+		font-weight: 800;
+
+		color: #111827;
+	}
+
+	.mobile-discount {
+
+		font-size: 12px;
+
+		padding: 4px 8px;
+
+		border-radius: 999px;
+
+		background: rgba(239,68,68,.12);
+
+		color: #ef4444;
+
+		font-weight: 700;
+	}
+
+	.mobile-unit {
+
+		margin-top: 6px;
+
+		font-size: 12px;
+
+		color: #64748b;
+	}
+
+	/* buttons */
+
+	.mobile-actions {
+
+		display: flex;
+
+		gap: 8px;
+
+		margin-top: 10px;
+	}
+
+	.mobile-actions .btn {
+
+		flex: 1;
+
+		height: 42px;
+
+		display: flex;
+		align-items: center;
+		justify-content: center;
+
+		gap: 6px;
+
+		padding: 0 12px !important;
+
+		border-radius: 12px;
+
+		font-size: 15px;
+		font-weight: 600;
+
+		line-height: 1;
+
+		min-width: 0;
+	}
+	
+	.mobile-actions .btn-edit {
+
+		background: linear-gradient(
+		135deg,
+		#3b82f6,
+		#2563eb
+		);
+
+		color: white;
+	}
+
+	.mobile-actions .btn-close {
+
+		background: linear-gradient(
+		135deg,
+		#ef4444,
+		#dc2626
+		);
+
+		color: white;
+	}
+
+	/* shell */
+
+	.page-shell {
+		padding: 12px !important;
+	}
+}
+
+/* ===== SMALL PHONES ===== */
+
+@media (max-width:420px){
+
+	.mobile-item-img {
+		width: 72px;
+		height: 72px;
+	}
+
+	.mobile-item-name {
+		font-size: 13px;
+	}
+
+	.mobile-price {
+		font-size: 15px;
+	}
+}
+
+</style>
 
 {% endblock %}

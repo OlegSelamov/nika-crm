@@ -86,58 +86,127 @@
 <div class="card">
     <div class="title">Последние продажи</div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Клиент</th>
-                <th>Сумма</th>
-                <th>Статус</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for s in sales %}
-            <tr>
-                <td>#{{ s.id }}</td>
-                <td>{{ s.full_name or "—" }}</td>
-                <td>
-                    {{ "{:,.2f}".format(s.total_amount).replace(",", " ") }} ₸
-                </td>
-                <td>
-                    <span class="{{ 'status-ok' if s.status == 'Оплачено' else 'status-bad' }}">
-                        {{ s.status }}
-                    </span>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="table-wrapper">
+	    <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Клиент</th>
+					<th>Сумма</th>
+					<th>Статус</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for s in sales %}
+				<tr>
+					<td>#{{ s.id }}</td>
+					<td>{{ s.full_name or "—" }}</td>
+					<td>
+						{{ "{:,.2f}".format(s.total_amount).replace(",", " ") }} ₸
+					</td>
+					<td>
+						<span class="{{ 'status-ok' if s.status == 'Оплачено' else 'status-bad' }}">
+							{{ s.status }}
+						</span>
+					</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>
+
+<div class="mobile-sales-list">
+
+    {% for s in sales %}
+
+    <div class="mobile-sale-card">
+
+        <div class="m-sale-top">
+
+            <div class="m-sale-client">
+                {{ s.full_name or "Без клиента" }}
+            </div>
+
+            <div class="m-sale-status
+                {{ 'ok' if s.status == 'Оплачено' else 'bad' }}">
+                {{ s.status }}
+            </div>
+
+        </div>
+
+        <div class="m-sale-bottom">
+
+            <div class="m-sale-id">
+                #{{ s.id }}
+            </div>
+
+            <div class="m-sale-price">
+                {{ "{:,.0f}".format(s.total_amount).replace(",", " ") }} ₸
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endfor %}
 
 </div>
 
 <div class="card">
     <div class="title">Долги</div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Клиент</th>
-                <th>Сумма</th>
-                <th>Долг</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for d in debts %}
-            <tr>
-                <td>{{ d.full_name }}</td>
-                <td>{{ d.total_amount }} ₸</td>
-                <td style="color:red;">
-                    {{ d.total_amount - d.paid_amount }} ₸
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="table-wrapper">
+		<table>
+			<thead>
+				<tr>
+					<th>Клиент</th>
+					<th>Сумма</th>
+					<th>Долг</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for d in debts %}
+				<tr>
+					<td>{{ d.full_name }}</td>
+					<td>{{ d.total_amount }} ₸</td>
+					<td style="color:red;">
+						{{ d.total_amount - d.paid_amount }} ₸
+					</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>	
+</div>
+
+<div class="mobile-debts-list">
+
+	{% for d in debts %}
+
+	<div class="mobile-debt-card">
+
+		<div class="m-debt-client">
+			{{ d.full_name }}
+		</div>
+
+		<div class="m-debt-row">
+			<span>Сумма</span>
+			<b>{{ "{:,.0f}".format(d.total_amount).replace(",", " ") }} ₸</b>
+		</div>
+
+		<div class="m-debt-row danger">
+			<span>Долг</span>
+
+			<b>
+				{{ "{:,.0f}".format(d.total_amount - d.paid_amount).replace(",", " ") }} ₸
+			</b>
+		</div>
+
+	</div>
+
+	{% endfor %}
+
 </div>
 
 <div class="card">
@@ -146,36 +215,57 @@
         ⚠ Низкие остатки
     </div>
 
-    <table>
+    <div class="table-wrapper">
+		<table>
 
-        <thead>
-            <tr>
-                <th>Товар</th>
-                <th>Остаток</th>
-            </tr>
-        </thead>
+			<thead>
+				<tr>
+					<th>Товар</th>
+					<th>Остаток</th>
+				</tr>
+			</thead>
 
-        <tbody>
+			<tbody>
 
-        {% for item in low_stock %}
+			{% for item in low_stock %}
 
-            <tr>
+				<tr>
 
-                <td>
-                    {{ item.name }}
-                </td>
+					<td>
+						{{ item.name }}
+					</td>
 
-                <td style="color:#ef4444;font-weight:bold;">
-                    {{ item.stock }}
-                </td>
+					<td style="color:#ef4444;font-weight:bold;">
+						{{ item.stock }}
+					</td>
 
-            </tr>
+				</tr>
 
-        {% endfor %}
+			{% endfor %}
 
-        </tbody>
+			</tbody>
 
-    </table>
+		</table>
+	</div>
+</div>
+
+<div class="mobile-stock-list">
+
+	{% for item in low_stock %}
+
+	<div class="mobile-stock-card">
+
+		<div class="m-stock-name">
+			{{ item.name }}
+		</div>
+
+		<div class="m-stock-value">
+			Остаток: {{ item.stock }}
+		</div>
+
+	</div>
+
+	{% endfor %}
 
 </div>
 
@@ -212,5 +302,315 @@ new Chart(ctx, {
     }
 });
 </script>
+
+<style>
+
+/* ================= MOBILE DASHBOARD ================= */
+
+@media (max-width: 768px) {
+
+	/* HEADER */
+
+	.page-header {
+		margin-bottom: 14px;
+	}
+
+	.page-title {
+		font-size: 24px;
+	}
+
+	.page-note {
+		font-size: 13px;
+	}
+
+	/* КАРТОЧКИ */
+
+	.stats-grid {
+		display: flex !important;
+		flex-direction: column !important;
+		gap: 12px;
+	}
+
+	.stat-card {
+		border-radius: 18px;
+		padding: 16px;
+	}
+
+	.stat-label {
+		font-size: 12px;
+	}
+
+	.stat-value {
+		font-size: 24px !important;
+		word-break: break-word;
+	}
+
+	/* ОПЛАТЫ */
+
+	.payment-list {
+		gap: 8px;
+	}
+
+	.payment-item {
+		padding: 10px;
+		border-radius: 12px;
+	}
+
+	.payment-name {
+		font-size: 12px;
+	}
+
+	.payment-value {
+		font-size: 13px;
+	}
+
+	/* КАРТОЧКИ */
+
+	.card {
+		padding: 14px;
+		border-radius: 18px;
+		margin-bottom: 14px;
+	}
+
+	.title {
+		font-size: 16px;
+		margin-bottom: 12px;
+	}
+
+	/* ГРАФИК */
+
+	#salesChart {
+		max-height: 240px !important;
+	}
+
+	/* ТАБЛИЦЫ */
+
+	.table-wrapper {
+		overflow-x: auto;
+		border-radius: 14px;
+	}
+
+	table {
+		min-width: 520px !important;
+		font-size: 13px;
+	}
+
+	th,
+	td {
+		padding: 10px 8px !important;
+	}
+
+	/* УВЕДОМЛЕНИЯ */
+
+	.card div[style*="padding:6px 0"] {
+		font-size: 13px;
+		padding: 8px 0 !important;
+	}
+
+	/* PAGE */
+
+	.page-shell {
+		padding: 12px !important;
+	}
+}
+
+/* ===== VERY SMALL PHONES ===== */
+
+@media (max-width: 420px) {
+
+	.stat-value {
+		font-size: 20px !important;
+	}
+
+	.page-title {
+		font-size: 21px;
+	}
+
+	.card {
+		padding: 12px;
+	}
+}
+
+/* ===== MOBILE CARDS ===== */
+
+.mobile-sales-list {
+	display: none;
+}
+
+@media (max-width:768px){
+
+	/* скрываем desktop */
+
+	table {
+		display: none;
+	}
+
+	.mobile-sales-list {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.mobile-sale-card {
+
+		background: rgba(255,255,255,.9);
+
+		border-radius: 16px;
+
+		padding: 12px;
+
+		box-shadow:
+		0 4px 15px rgba(0,0,0,.06);
+	}
+
+	.m-sale-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.m-sale-client {
+		font-size: 14px;
+		font-weight: 700;
+		flex: 1;
+	}
+
+	.m-sale-status {
+
+		font-size: 11px;
+
+		padding: 4px 8px;
+
+		border-radius: 999px;
+
+		font-weight: 600;
+	}
+
+	.m-sale-status.ok {
+		background: rgba(34,197,94,.15);
+		color: #16a34a;
+	}
+
+	.m-sale-status.bad {
+		background: rgba(239,68,68,.12);
+		color: #ef4444;
+	}
+
+	.m-sale-bottom {
+
+		display: flex;
+
+		justify-content: space-between;
+
+		align-items: center;
+
+		margin-top: 10px;
+	}
+
+	.m-sale-id {
+		font-size: 12px;
+		color: #64748b;
+	}
+
+	.m-sale-price {
+		font-size: 16px;
+		font-weight: 800;
+		color: #0f172a;
+	}
+}
+
+/* ===== MOBILE DASHBOARD CARDS ===== */
+
+.mobile-sales-list,
+.mobile-debts-list,
+.mobile-stock-list {
+	display: none;
+}
+
+@media (max-width:768px){
+
+	/* desktop table */
+
+	.desktop-table {
+		display: none;
+	}
+
+	/* ===== SALES ===== */
+
+	.mobile-sales-list,
+	.mobile-debts-list,
+	.mobile-stock-list {
+
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.mobile-sale-card,
+	.mobile-debt-card,
+	.mobile-stock-card {
+
+		background: rgba(255,255,255,.92);
+
+		border-radius: 16px;
+
+		padding: 12px;
+
+		box-shadow:
+		0 4px 14px rgba(0,0,0,.06);
+	}
+
+	/* ===== CLIENT ===== */
+
+	.m-sale-client,
+	.m-debt-client,
+	.m-stock-name {
+
+		font-size: 14px;
+		font-weight: 700;
+		color: #0f172a;
+	}
+
+	/* ===== ROW ===== */
+
+	.m-debt-row {
+
+		display: flex;
+		justify-content: space-between;
+
+		margin-top: 8px;
+
+		font-size: 13px;
+	}
+
+	.m-debt-row span {
+		color: #64748b;
+	}
+
+	.m-debt-row.danger b {
+		color: #ef4444;
+	}
+
+	/* ===== STOCK ===== */
+
+	.m-stock-value {
+
+		margin-top: 8px;
+
+		font-size: 13px;
+
+		color: #ef4444;
+		font-weight: 700;
+	}
+
+	/* ===== HIDE TABLES ===== */
+
+	.card table {
+		display: none;
+	}
+}
+
+</style>
 
 {% endblock %}

@@ -333,7 +333,10 @@ def edit_client(client_id):
     if not client:
         return "Клиент не найден", 404
 
-    return render_template("client_edit.html", client=client)
+    return render_template(
+        "client_form.html",
+        client=client
+    )
     
 @clients_bp.route("/clients/<int:client_id>/delete")
 def delete_client(client_id):

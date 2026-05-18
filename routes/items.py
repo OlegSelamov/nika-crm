@@ -2,9 +2,18 @@ from flask import Blueprint, render_template, request, redirect, jsonify
 from models import get_db
 from werkzeug.utils import secure_filename
 from flask import session
+from datetime import datetime
 import json
 import os
 import uuid
+
+UPLOAD_DIR = os.path.join(
+    "static",
+    "uploads",
+    "items"
+)
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 items_bp = Blueprint("items", __name__)
 
@@ -60,6 +69,47 @@ def add_item():
             request.form.get("barcode"),
             company_id
         ))
+
+        item_id = conn.execute("""
+            SELECT last_insert_rowid()
+        """).fetchone()[0]
+
+        # 🔥 загрузка картинок
+
+        images = request.files.getlist("images")
+
+        for image in images:
+
+            if image and image.filename:
+
+                filename = secure_filename(image.filename)
+
+                filename = (
+                    f"{uuid.uuid4().hex}_{filename}"
+                )
+
+                save_path = os.path.join(
+                    UPLOAD_DIR,
+                    filename
+                )
+
+                image.save(save_path)
+
+                image_path = (
+                    "/" + save_path.replace("\\", "/")
+                )
+
+                conn.execute("""
+                    INSERT INTO item_images
+                    (
+                        item_id,
+                        image
+                    )
+                    VALUES (?, ?)
+                """, (
+                    item_id,
+                    image_path
+                ))
 
         conn.commit()
 

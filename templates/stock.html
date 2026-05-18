@@ -86,4 +86,143 @@
 
 </div>
 
+<div class="mobile-stock-list">
+
+{% for item in items %}
+
+	<div class="mobile-stock-card">
+
+		<div class="stock-name">
+			{{ item.name }}
+		</div>
+
+		<div class="stock-category">
+			{{ item.category }}
+		</div>
+
+		<div class="stock-grid">
+
+			<div>
+				<span>Остаток</span>
+
+				<b class="
+				{% if item.stock <= 0 %}
+					red
+				{% elif item.stock <= 5 %}
+					orange
+				{% else %}
+					green
+				{% endif %}
+				">
+					{{ item.stock }}
+				</b>
+			</div>
+
+			<div>
+				<span>Розница</span>
+
+				<b>
+					{{ "{:,.0f}".format(item.retail_price or 0).replace(",", " ") }} ₸
+				</b>
+			</div>
+
+		</div>
+
+	</div>
+
+{% endfor %}
+
+</div>
+
+<style>
+
+.mobile-stock-list{
+	display:none;
+}
+
+@media (max-width:768px){
+
+	.card table{
+		display:none;
+	}
+
+	.mobile-stock-list{
+
+		display:flex;
+		flex-direction:column;
+
+		gap:10px;
+	}
+
+	.mobile-stock-card{
+
+		background:white;
+
+		padding:12px;
+
+		border-radius:16px;
+
+		box-shadow:
+		0 4px 14px rgba(0,0,0,.06);
+	}
+
+	.stock-name{
+
+		font-size:14px;
+		font-weight:700;
+	}
+
+	.stock-category{
+
+		margin-top:4px;
+
+		font-size:12px;
+
+		color:#64748b;
+	}
+
+	.stock-grid{
+
+		display:grid;
+
+		grid-template-columns:1fr 1fr;
+
+		gap:10px;
+
+		margin-top:12px;
+	}
+
+	.stock-grid span{
+
+		display:block;
+
+		font-size:11px;
+
+		color:#64748b;
+	}
+
+	.stock-grid b{
+
+		display:block;
+
+		margin-top:4px;
+
+		font-size:15px;
+	}
+
+	.red{
+		color:#ef4444;
+	}
+
+	.orange{
+		color:#f59e0b;
+	}
+
+	.green{
+		color:#16a34a;
+	}
+}
+
+</style>
+
 {% endblock %}

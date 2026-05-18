@@ -78,4 +78,150 @@
 
 </div>
 
+<div class="mobile-movement-list">
+
+{% for row in rows %}
+
+	<div class="mobile-movement-card">
+
+		<div class="movement-top">
+
+			<div class="movement-name">
+				{{ row.item_name }}
+			</div>
+
+			<div class="movement-type
+				{{ row.movement_type }}">
+
+				{% if row.movement_type == "income" %}
+					Приход
+				{% elif row.movement_type == "sale" %}
+					Продажа
+				{% else %}
+					Списание
+				{% endif %}
+
+			</div>
+
+		</div>
+
+		<div class="movement-row">
+			<span>Кол-во</span>
+			<b>{{ row.quantity }}</b>
+		</div>
+
+		<div class="movement-row">
+			<span>Сумма</span>
+			<b>
+				{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸
+			</b>
+		</div>
+
+		<div class="movement-date">
+			{{ row.created_at[:16] if row.created_at }}
+		</div>
+
+	</div>
+
+{% endfor %}
+
+</div>
+
+<style>
+
+.mobile-movement-list{
+	display:none;
+}
+
+@media (max-width:768px){
+
+	.card table{
+		display:none;
+	}
+
+	.mobile-movement-list{
+
+		display:flex;
+		flex-direction:column;
+
+		gap:10px;
+	}
+
+	.mobile-movement-card{
+
+		background:white;
+
+		padding:12px;
+
+		border-radius:16px;
+
+		box-shadow:
+		0 4px 14px rgba(0,0,0,.06);
+	}
+
+	.movement-top{
+
+		display:flex;
+
+		justify-content:space-between;
+
+		gap:10px;
+	}
+
+	.movement-name{
+
+		font-size:14px;
+		font-weight:700;
+
+		flex:1;
+	}
+
+	.movement-type{
+
+		padding:4px 8px;
+
+		border-radius:999px;
+
+		font-size:11px;
+		font-weight:700;
+	}
+
+	.income{
+		background:#dcfce7;
+		color:#16a34a;
+	}
+
+	.sale{
+		background:#dbeafe;
+		color:#2563eb;
+	}
+
+	.writeoff{
+		background:#fee2e2;
+		color:#ef4444;
+	}
+
+	.movement-row{
+
+		display:flex;
+
+		justify-content:space-between;
+
+		margin-top:8px;
+
+		font-size:13px;
+	}
+
+	.movement-date{
+
+		margin-top:10px;
+
+		font-size:12px;
+
+		color:#64748b;
+	}
+}
+
+</style>
+
 {% endblock %}

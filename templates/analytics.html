@@ -10,7 +10,7 @@
 </div>
 
 <form method="get" class="card" style="margin-bottom:15px;">
-    <div style="display:flex; gap:10px; align-items:center;">
+    <div class="analytics-filter">
         <input type="date" name="from" value="{{ date_from }}">
         <input type="date" name="to" value="{{ date_to }}">
         <button class="btn">Применить</button>
@@ -112,39 +112,83 @@
 </div>
 
 <!-- 🏆 ТОП КЛИЕНТЫ -->
-<div class="card">
-    <div class="title">Топ клиенты</div>
+<div class="desktop-table">
+	<div class="card">
+		<div class="title">Топ клиенты</div>
 
-    <table>
-        <tbody>
-        {% for c in top_clients %}
-            <tr>
-                <td>{{ c.full_name }}</td>
-                <td style="text-align:right;">
-                    {{ "{:,.2f}".format(c.total).replace(",", " ") }} ₸
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+		<table>
+			<tbody>
+			{% for c in top_clients %}
+				<tr>
+					<td>{{ c.full_name }}</td>
+					<td style="text-align:right;">
+						{{ "{:,.2f}".format(c.total).replace(",", " ") }} ₸
+					</td>
+				</tr>
+			{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>
+
+<div class="mobile-top-list">
+
+	{% for c in top_clients %}
+
+	<div class="mobile-top-card">
+
+		<div class="mobile-top-name">
+			{{ c.full_name }}
+		</div>
+
+		<div class="mobile-top-value">
+			{{ "{:,.0f}".format(c.total).replace(",", " ") }} ₸
+		</div>
+
+	</div>
+
+	{% endfor %}
+
 </div>
 
 <!-- 📦 ТОП ТОВАРЫ -->
-<div class="card">
-    <div class="title">Топ товары</div>
+<div class="desktop-table">
+	<div class="card">
+		<div class="title">Топ товары</div>
 
-    <table>
-        <tbody>
-        {% for i in top_items %}
-            <tr>
-                <td>{{ i.name }}</td>
-                <td style="text-align:right;">
-                    {{ "{:,.2f}".format(i.total).replace(",", " ") }} ₸
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+		<table>
+			<tbody>
+			{% for i in top_items %}
+				<tr>
+					<td>{{ i.name }}</td>
+					<td style="text-align:right;">
+						{{ "{:,.2f}".format(i.total).replace(",", " ") }} ₸
+					</td>
+				</tr>
+			{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>	
+
+<div class="mobile-items-list">
+
+	{% for i in top_items %}
+
+	<div class="mobile-top-card">
+
+		<div class="mobile-top-name">
+			{{ i.name }}
+		</div>
+
+		<div class="mobile-top-value">
+			{{ "{:,.0f}".format(i.total).replace(",", " ") }} ₸
+		</div>
+
+	</div>
+
+	{% endfor %}
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -165,5 +209,154 @@ new Chart(document.getElementById('chart'), {
     }
 });
 </script>
+
+<style>
+
+/* ================= MOBILE ANALYTICS ================= */
+
+.mobile-top-list,
+.mobile-items-list {
+	display: none;
+}
+
+@media (max-width:768px){
+
+	/* FILTER */
+
+	.analytics-filter {
+
+		display: flex;
+		flex-direction: column;
+
+		gap: 10px;
+	}
+
+	.analytics-filter input,
+	.analytics-filter button {
+
+		width: 100%;
+		height: 46px;
+		font-size: 14px;
+	}
+
+	/* CARDS */
+
+	.stats-grid {
+
+		display: flex !important;
+		flex-direction: column !important;
+
+		gap: 12px;
+	}
+
+	.stat-card {
+		padding: 16px;
+		border-radius: 18px;
+	}
+
+	.stat-label {
+		font-size: 12px;
+	}
+
+	.stat-value {
+		font-size: 24px !important;
+		word-break: break-word;
+	}
+
+	/* GRAPH */
+
+	#chart {
+		max-height: 240px !important;
+	}
+
+	/* TABLES */
+
+	.card table {
+		display: none;
+	}
+
+	.mobile-top-list,
+	.mobile-items-list {
+
+		display: flex;
+		flex-direction: column;
+
+		gap: 10px;
+	}
+
+	.mobile-top-card {
+
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+
+		padding: 12px;
+
+		border-radius: 16px;
+
+		background: rgba(255,255,255,.9);
+
+		box-shadow:
+		0 4px 14px rgba(0,0,0,.06);
+	}
+
+	.mobile-top-name {
+
+		font-size: 14px;
+		font-weight: 700;
+
+		flex: 1;
+
+		padding-right: 10px;
+	}
+
+	.mobile-top-value {
+
+		font-size: 15px;
+		font-weight: 800;
+
+		color: #0f172a;
+
+		white-space: nowrap;
+	}
+
+	/* CARD */
+
+	.card {
+		padding: 14px;
+		border-radius: 18px;
+		margin-bottom: 14px;
+	}
+
+	.title {
+		font-size: 16px;
+		margin-bottom: 12px;
+	}
+
+	/* PAGE */
+
+	.page-shell {
+		padding: 12px !important;
+	}
+}
+
+/* ===== SMALL PHONES ===== */
+
+@media (max-width:420px){
+
+	.stat-value {
+		font-size: 20px !important;
+	}
+
+	.mobile-top-name {
+		font-size: 13px;
+	}
+
+	.mobile-top-value {
+		font-size: 14px;
+	}
+}
+
+</style>
 
 {% endblock %}

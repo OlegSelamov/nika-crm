@@ -9,6 +9,12 @@
     </div>
 
     <form method="POST" enctype="multipart/form-data" class="client-form-grid">
+	
+		<div class="form-section">
+			<div class="form-section-title">
+				Основная информация
+			</div>
+		
         <div class="form-group">
             <label>Наименование ИП / Организации</label>
             <input name="company_name" placeholder="Например: ИП Айдана / ТОО Nika Business">
@@ -24,17 +30,29 @@
             <input name="iin" maxlength="12" placeholder="Например: 990101300123">
         </div>
 		
-		<input
-			name="contract_number"
-			value="{{ client.contract_number if client else '' }}"
-			placeholder="Номер договора"
-		>
+		<div class="form-group">
 
-		<input
-			type="date"
-			name="contract_date"
-			value="{{ client.contract_date if client else '' }}"
-		>
+			<label>Номер договора</label>
+
+			<input
+				name="contract_number"
+				value="{{ client.contract_number if client else '' }}"
+				placeholder="Номер договора"
+			>
+
+		</div>
+
+		<div class="form-group">
+
+			<label>Дата договора</label>
+
+			<input
+				type="date"
+				name="contract_date"
+				value="{{ client.contract_date if client else '' }}"
+			>
+
+		</div>
 
         <div class="form-group">
             <label>Телефон</label>
@@ -46,6 +64,14 @@
             <input name="address">
         </div>
 
+		</div>
+
+		<div class="form-section">
+
+			<div class="form-section-title">
+				CRM информация
+			</div>
+		
         <div class="form-group">
             <label>Статус</label>
             <select name="status">
@@ -76,6 +102,14 @@
             </select>
         </div>
 
+		</div>
+
+		<div class="form-section">
+
+			<div class="form-section-title">
+				Файлы и вложения
+			</div>
+		
         <div class="form-group">
             <label>Основное фото клиента</label>
             <input type="file" name="photo" accept="image/*">
@@ -91,6 +125,7 @@
             <textarea name="comment" rows="5"></textarea>
         </div>
 
+		</div>
         <div class="form-actions full-width">
             <button class="btn" type="submit">Сохранить</button>
             <a href="/clients" class="btn gray">Отмена</a>
@@ -156,6 +191,205 @@ input[type="file"] {
     .client-form-grid .full-width {
         grid-column: auto;
     }
+}
+
+/* ===== SMALL PHONES ===== */
+
+@media (max-width:420px){
+
+	.form-head h2{
+		font-size:22px;
+	}
+
+	.client-form-grid input,
+	.client-form-grid select,
+	.client-form-grid textarea{
+
+		font-size:13px;
+		padding:13px;
+	}
+}
+
+@media (max-width:768px){
+
+	.form-actions .btn{
+
+		width:100% !important;
+
+		min-width:0 !important;
+
+		height:52px !important;
+
+		padding:0 14px !important;
+
+		font-size:15px !important;
+
+		border-radius:14px !important;
+	}
+
+	.client-form-card{
+
+		background:white;
+
+		box-shadow:
+		0 4px 18px rgba(0,0,0,.06);
+	}
+
+	.client-form-grid{
+
+		display:flex !important;
+
+		flex-direction:column !important;
+	}
+}
+
+/* ================= FORM SECTIONS ================= */
+
+.form-section{
+
+	display:flex;
+	flex-direction:column;
+
+	gap:14px;
+
+	padding:18px;
+
+	border-radius:22px;
+
+	background:
+	linear-gradient(
+	180deg,
+	rgba(248,250,252,.95),
+	rgba(241,245,249,.92)
+	);
+
+	border:1px solid rgba(99,102,241,.08);
+
+	box-shadow:
+	0 4px 18px rgba(15,23,42,.05);
+
+	margin-bottom:6px;
+}
+
+.form-section-title{
+
+	font-size:12px;
+	font-weight:800;
+
+	color:#4f46e5;
+
+	text-transform:uppercase;
+
+	letter-spacing:1px;
+
+	padding-bottom:10px;
+
+	border-bottom:
+	1px solid rgba(99,102,241,.08);
+}
+
+/* MOBILE */
+
+@media (max-width:768px){
+
+	.client-form-grid{
+
+		display:flex !important;
+		flex-direction:column !important;
+
+		gap:14px !important;
+	}
+
+	.form-section{
+
+		padding:14px;
+
+		border-radius:18px;
+	}
+
+	.form-group{
+
+		margin:0 !important;
+	}
+
+	.form-group label{
+
+		display:block;
+
+		font-size:13px;
+		font-weight:700;
+
+		margin-bottom:6px;
+	}
+
+	.form-group input,
+	.form-group select,
+	.form-group textarea{
+
+		width:100%;
+
+		height:48px;
+
+		border-radius:14px;
+
+		padding:0 14px;
+
+		font-size:14px;
+	}
+
+	.form-group textarea{
+
+		height:120px;
+
+		padding:14px;
+	}
+
+	.form-actions{
+
+		position:sticky;
+
+		bottom:0;
+
+		background:white;
+
+		padding-top:12px;
+
+		display:grid;
+
+		grid-template-columns:1fr 1fr;
+
+		gap:10px;
+	}
+
+	.form-actions .btn{
+
+		height:50px !important;
+
+		border-radius:14px !important;
+	}
+}
+
+@media (max-width:768px){
+
+	.client-form-card{
+
+		background: transparent !important;
+
+		box-shadow: none !important;
+
+		padding: 0 !important;
+	}
+
+	.client-form-grid{
+
+		gap:16px !important;
+	}
+
+	.form-head{
+
+		padding:0 4px;
+		margin-bottom:16px;
+	}
 }
 </style>
 
