@@ -919,20 +919,58 @@ async function openScanner() {
     video.setAttribute("autoplay", true);
     video.setAttribute("playsinline", true);
     video.style.width = "100%";
-    video.style.height = "100%";
+    video.style.height = "auto";
 
     readerEl.appendChild(video);
 
     try {
 
         // 🔥 ВКЛЮЧАЕМ КАМЕРУ НАПРЯМУЮ
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { ideal: "environment" }
-            }
-        });
+		const stream = await navigator.mediaDevices.getUserMedia({
+
+			video: {
+
+				facingMode: { ideal: "environment" },
+
+				width: { ideal: 1920 },
+				height: { ideal: 1080 }
+
+			}
+
+		});
 
         video.srcObject = stream;
+		
+		const track =
+			stream.getVideoTracks()[0];
+
+		const capabilities =
+			track.getCapabilities();
+
+		// 🔥 автофокус
+		if (capabilities.focusMode) {
+
+			track.applyConstraints({
+				advanced: [
+					{
+						focusMode: "continuous"
+					}
+				]
+			});
+		}
+
+		// 🔥 zoom
+		if (capabilities.zoom) {
+
+			track.applyConstraints({
+				advanced: [
+					{
+						zoom:
+							capabilities.zoom.max / 2
+					}
+				]
+			});
+		}
 
         // 🔥 ждём пока реально появится картинка
         await video.play();
@@ -1092,18 +1130,35 @@ setInterval(() => {
     .then(res => res.json())
     .then(data => {
 
-        if (data.code) {
+		if (data.code) {
 
-            console.log("С телефона:", data.code);
+			console.log("С телефона:", data.code);
 
-            const beep = document.getElementById("beepSound");
-            if (beep) {
-                beep.currentTime = 0;
-                beep.play().catch(() => {});
-            }
+			// 🔊 ПИК
+			const beep =
+				document.getElementById(
+					"beepSound"
+				);
 
-            handleBarcode(data.code);
-        }
+			if (beep) {
+				beep.currentTime = 0;
+				beep.play().catch(() => {});
+			}
+
+			// 📳 вибрация
+			if (navigator.vibrate) {
+				navigator.vibrate(120);
+			}
+
+			handleBarcode(data.code);
+
+			// 🔥 закрываем QR
+			if (autoClose) {
+				document.getElementById(
+					"qrBox"
+				).style.display = "none";
+			}
+		}
 
     });
 
