@@ -389,13 +389,51 @@ async function openScanner() {
     try {
 
         // 🔥 ВКЛЮЧАЕМ КАМЕРУ НАПРЯМУЮ
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { ideal: "environment" }
-            }
-        });
+		const stream = await navigator.mediaDevices.getUserMedia({
+
+			video: {
+
+				facingMode: { ideal: "environment" },
+
+				width: { ideal: 1920 },
+				height: { ideal: 1080 }
+
+			}
+
+		});
 
         video.srcObject = stream;
+		
+		const track =
+			stream.getVideoTracks()[0];
+
+		const capabilities =
+			track.getCapabilities();
+
+		// 🔥 автофокус
+		if (capabilities.focusMode) {
+
+			track.applyConstraints({
+				advanced: [
+					{
+						focusMode: "continuous"
+					}
+				]
+			});
+		}
+
+		// 🔥 zoom
+		if (capabilities.zoom) {
+
+			track.applyConstraints({
+				advanced: [
+					{
+						zoom:
+							capabilities.zoom.max / 2
+					}
+				]
+			});
+		}
 
         // 🔥 ждём пока реально появится картинка
         await video.play();
@@ -451,6 +489,41 @@ async function openScanner() {
 							document.getElementById(
 								"barcodeInput"
 							).value = code;
+
+							// 🔥 ищем товар
+							fetch("/api/barcode-info/" + code)
+
+							.then(res => res.json())
+
+							.then(data => {
+
+								console.log("BARCODE INFO:", data);
+
+								// ✅ название
+								if (data.name) {
+
+									document.querySelector(
+										"input[name='name']"
+									).value = data.name;
+								}
+
+								// ✅ категория
+								if (data.category) {
+
+									document.getElementById(
+										"categoryInput"
+									).value = data.category;
+								}
+
+								// ✅ цена
+								if (data.price) {
+
+									document.getElementById(
+										"retail_price"
+									).value = data.price;
+								}
+
+							});
 
 							closeScanner();
 						}
@@ -520,9 +593,44 @@ document.getElementById(
                 beep.play().catch(() => {});
             }
 
-            document.getElementById(
-                "barcodeInput"
-            ).value = barcodeBuffer;
+			document.getElementById(
+				"barcodeInput"
+			).value = code;
+
+			// 🔥 ищем товар
+			fetch("/api/barcode-info/" + code)
+
+			.then(res => res.json())
+
+			.then(data => {
+
+				console.log("BARCODE INFO:", data);
+
+				// ✅ название
+				if (data.name) {
+
+					document.querySelector(
+						"input[name='name']"
+					).value = data.name;
+				}
+
+				// ✅ категория
+				if (data.category) {
+
+					document.getElementById(
+						"categoryInput"
+					).value = data.category;
+				}
+
+				// ✅ цена
+				if (data.price) {
+
+					document.getElementById(
+						"retail_price"
+					).value = data.price;
+				}
+
+			});
         }
 
         barcodeBuffer = "";
