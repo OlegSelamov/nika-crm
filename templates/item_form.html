@@ -382,7 +382,7 @@ async function openScanner() {
     video.setAttribute("autoplay", true);
     video.setAttribute("playsinline", true);
     video.style.width = "100%";
-    video.style.height = "100%";
+    video.style.height = "auto";
 
     readerEl.appendChild(video);
 
@@ -771,6 +771,95 @@ function startListening() {
     font-size:22px;
 
     cursor:pointer;
+}
+
+.scanner-modal {
+
+    display: none;
+
+    position: fixed;
+
+    inset: 0;
+
+    background: rgba(0,0,0,0.8);
+
+    z-index: 9999;
+
+    justify-content: center;
+    align-items: center;
+}
+
+.scanner-box {
+
+    background: #000;
+
+    padding: 10px;
+
+    border-radius: 12px;
+
+    text-align: center;
+}
+
+#reader {
+
+    width: 420px;
+    height: 280px;
+
+    position: relative;
+
+    overflow: hidden;
+
+    border-radius: 14px;
+
+    background: #000;
+}
+
+#reader video,
+#reader canvas {
+
+    width: 100% !important;
+    height: 100% !important;
+
+    object-fit: cover;
+}
+
+#reader::after {
+
+    content: "";
+
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    width: 78%;
+    height: 95px;
+
+    transform: translate(-50%, -50%);
+
+    border: 3px solid #ff3333;
+
+    border-radius: 12px;
+
+    box-shadow:
+        0 0 0 999px rgba(0,0,0,0.35);
+
+    pointer-events: none;
+
+    z-index: 10;
+}
+
+@media (max-width: 600px) {
+
+    #reader {
+
+        width: 92vw;
+        height: 55vh;
+    }
+
+    .scanner-box {
+        width: 95vw;
+    }
 }
 
 @media(max-width:768px){
