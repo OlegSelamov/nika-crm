@@ -368,11 +368,10 @@ def barcode_info(barcode):
 
                 "external": True,
 
-                "name":
-                    product.get("name_ru", ""),
+                "debug": product,
 
-                "brand":
-                    product.get("brand", ""),
+                "name":
+                    str(product),
 
                 "barcode":
                     barcode

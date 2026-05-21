@@ -718,9 +718,9 @@ function startListening() {
                     beep.play().catch(() => {});
                 }
 
-                document.getElementById(
-                    "barcodeInput"
-                ).value = data.code;
+				document.getElementById(
+					"barcodeInput"
+				).value = barcodeBuffer;
 
                 document.getElementById(
                     "qrBox"
