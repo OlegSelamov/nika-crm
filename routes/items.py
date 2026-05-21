@@ -315,12 +315,14 @@ def barcode_info(barcode):
     try:
 
         url = (
-            "https://nct.gov.kz/"
+            "https://e-catalog.gov.kz/"
             "api/integration/ofd/"
             f"search_ofd/?tin={barcode}"
         )
 
         TOKEN = os.getenv("NCT_API_TOKEN")
+        
+        print("TOKEN =", TOKEN[:30] if TOKEN else "NONE")
 
         headers = {
             "Authorization": f"JWT {TOKEN}"
