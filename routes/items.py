@@ -344,6 +344,8 @@ def barcode_info(barcode):
                 product = data[0]
             else:
                 product = data
+                
+            print(product)
 
             return jsonify({
 
