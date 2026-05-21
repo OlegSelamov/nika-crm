@@ -523,7 +523,16 @@ async function openScanner() {
 									).value = data.price;
 								}
 
-							});
+								// 🔥 бренд
+								if (data.brand) {
+
+									console.log(
+										"BRAND:",
+										data.brand
+									);
+								}
+
+							})
 
 							closeScanner();
 						}
@@ -630,7 +639,16 @@ document.getElementById(
 					).value = data.price;
 				}
 
-			});
+				// 🔥 бренд
+				if (data.brand) {
+
+					console.log(
+						"BRAND:",
+						data.brand
+					);
+				}
+
+			})
         }
 
         barcodeBuffer = "";

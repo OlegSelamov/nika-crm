@@ -273,3 +273,99 @@ def delete_category(id):
     conn.close()
 
     return jsonify({"success": True})
+    
+@app.route("/api/barcode-info/<barcode>")
+def barcode_info(barcode):
+
+    import requests
+
+    db = get_db()
+
+    # 🔥 СНАЧАЛА СВОЯ БАЗА
+    item = db.execute(
+        """
+        SELECT *
+        FROM items
+        WHERE barcode=?
+        """,
+        (barcode,)
+    ).fetchone()
+
+    # ✅ нашли локально
+    if item:
+
+        return jsonify({
+
+            "found": True,
+
+            "local": True,
+
+            "name": item["name"],
+
+            "category": item["category"],
+
+            "price": item["retail_price"],
+
+            "image": item["image"]
+
+        })
+
+    # 🌍 NATIONAL CATALOG
+    try:
+
+        url = (
+            "https://nct.gov.kz/"
+            "api/integration/ofd/"
+            f"search_ofd/?tin={barcode}"
+        )
+
+        headers = {
+
+            "Authorization":
+                "frNKtn9WFFY6X5SpeKp-QiznaUbJtgHbE_tCqUlGCAM"
+
+        }
+
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=10
+        )
+
+        data = response.json()
+
+        print("NCT RESPONSE:", data)
+
+        # 🔥 ЕСЛИ НАШЛИ
+        if data:
+
+            # если список
+            if isinstance(data, list):
+                product = data[0]
+            else:
+                product = data
+
+            return jsonify({
+
+                "found": True,
+
+                "external": True,
+
+                "name":
+                    product.get("name_ru", ""),
+
+                "brand":
+                    product.get("brand", ""),
+
+                "barcode":
+                    barcode
+
+            })
+
+    except Exception as e:
+
+        print("NCT ERROR:", e)
+
+    return jsonify({
+        "found": False
+    })
