@@ -283,14 +283,19 @@ fetch("/api/items")
 });
 
 // добавление в корзину
-function addToCart(id, name, price) {
+function addToCart(id, name, price, qty = 1) {
 
     const existing = cart.find(i => i.id === id);
 
     if (existing) {
         existing.qty += 1;
     } else {
-        cart.push({ id, name, price, qty: 1 });
+		cart.push({
+			id,
+			name,
+			price,
+			qty
+		});
     }
 
     renderCart();
@@ -1066,21 +1071,144 @@ function closeScanner() {
 }
 
 function handleBarcode(code) {
+
     fetch("/api/barcode", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ barcode: code })
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            barcode: code
+        })
     })
+
     .then(res => res.json())
+
     .then(data => {
 
+        // ✅ нашли товар
         if (data.found) {
-            addToCart(data.id, data.name, data.price);
-        } else {
+
+            // 🔥 ВЕСОВОЙ ТОВАР
+            if (
+                data.unit === "кг" ||
+                data.unit === "литр"
+            ) {
+
+                const qty = prompt(
+                    "Введите количество"
+                );
+
+                if (!qty) return;
+
+                addToCart(
+                    data.id,
+                    data.name,
+                    data.price,
+                    parseFloat(qty)
+                );
+
+            } else {
+
+                addToCart(
+                    data.id,
+                    data.name,
+                    data.price
+                );
+            }
+
+        }
+
+        // ❌ нет товара
+        else {
+
             openAddItemModal(code);
+
         }
 
     });
+
+}
+
+function openAddItemModal(code) {
+
+    document.getElementById(
+        "addItemModal"
+    ).style.display = "flex";
+
+    document.getElementById(
+        "newBarcode"
+    ).value = code;
+
+    // 🔥 пробуем National Catalog
+    fetch("/api/barcode-info/" + code)
+
+    .then(res => res.json())
+
+    .then(data => {
+
+        if (data.name) {
+
+            document.getElementById(
+                "newName"
+            ).value = data.name;
+        }
+
+    });
+
+}
+
+function saveNewItem() {
+
+    fetch("/quick-add-item", {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+
+            name:
+                document.getElementById(
+                    "newName"
+                ).value,
+
+            retail_price:
+                document.getElementById(
+                    "newPrice"
+                ).value,
+
+            barcode:
+                document.getElementById(
+                    "newBarcode"
+                ).value
+
+        })
+
+    })
+
+    .then(res => res.json())
+
+    .then(data => {
+
+        if (data.success) {
+
+            document.getElementById(
+                "addItemModal"
+            ).style.display = "none";
+
+            addToCart(
+                data.item.id,
+                data.item.name,
+                data.item.price
+            );
+
+        }
+
+    });
+
 }
 
 let barcodeBuffer = "";
