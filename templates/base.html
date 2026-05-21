@@ -1356,7 +1356,28 @@
 				width: 260px !important;
 				min-width: 260px !important;
 			}
+			
+			.sidebar.mobile-open a,
+			.sidebar.mobile-open .submenu,
+			.sidebar.mobile-open .menu-title-static {
+
+				justify-content: flex-start !important;
+				text-align: left !important;
+
+				padding-left: 16px !important;
+			}
+
+			.sidebar.mobile-open .menu-group {
+
+				align-items: flex-start !important;
+			}
+
+			.sidebar.mobile-open .text {
+
+				text-align: left !important;
+			}
 		}
+		
 		
 		/* ================= MOBILE CLIENT SHEET ================= */
 
@@ -1476,6 +1497,133 @@
 				min-width: 100% !important;
 			}
 		}
+		
+			/* ===== USER BLOCK FIX ===== */
+
+			/* DESKTOP */
+
+			.sidebar-user-wrap{
+
+				display:flex;
+				align-items:center;
+
+				gap:8px;
+
+				margin-top:10px;
+				margin-bottom:16px;
+
+				padding-left:14px;
+			}
+
+			/* avatar */
+
+			.sidebar-avatar{
+
+				position:relative;
+
+				width:30px;
+				height:30px;
+
+				border-radius:50%;
+
+				display:flex;
+				align-items:center;
+				justify-content:center;
+
+				font-size:13px;
+
+				color:white;
+
+				background:
+				linear-gradient(
+				135deg,
+				rgba(99,102,241,.22),
+				rgba(139,92,246,.22)
+				);
+
+				border:
+				1px solid rgba(255,255,255,.08);
+
+				flex-shrink:0;
+			}
+
+			/* online */
+
+			.online-dot{
+
+				position:absolute;
+
+				right:1px;
+				bottom:1px;
+
+				width:7px;
+				height:7px;
+
+				border-radius:50%;
+
+				background:#22c55e;
+
+				border:1.5px solid #0f172a;
+			}
+
+			/* text */
+
+			.sidebar-user-info{
+
+				display:flex;
+				flex-direction:column;
+
+				line-height:1.05;
+			}
+
+			.user-name{
+
+				font-size:13px;
+				font-weight:700;
+
+				color:#f8fafc;
+			}
+
+			.user-role{
+
+				font-size:10px;
+
+				color:#94a3b8;
+
+				margin-top:2px;
+			}
+
+			/* ===== COLLAPSED ===== */
+
+			.sidebar.collapsed .sidebar-user-info{
+
+				display:none;
+			}
+
+			.sidebar.collapsed .sidebar-avatar{
+
+				margin:auto;
+			}
+
+			/* ===== MOBILE ===== */
+
+			@media (max-width:768px){
+
+				.sidebar-user-wrap{
+
+					padding-left:0;
+
+					margin-top:0px;
+					margin-bottom:14px;
+				}
+
+				.sidebar.mobile-open .sidebar-user-wrap{
+
+					padding-left:14px;
+
+					margin-top:54px;
+				}
+			}
 
     </style>
 </head>
@@ -1489,28 +1637,60 @@
 
 <div class="layout">
 
-    <button class="mobile-toggle" onclick="toggleSidebar()">
-        ☰
-    </button>
+    <button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
 
     <div class="sidebar-backdrop"></div>
 
 	<div class="sidebar" id="sidebar">
 
 		<!-- 🔘 кнопка -->
-            <div class="toggle-btn desktop-toggle" onclick="toggleSidebar()">☰</div>
-			<div style="margin:10px 0; font-size:12px; color:#94a3b8;">
-				👤 {{ session.get("username") }}
+			<div class="top-sidebar-row">
 
-				{% if session.get("is_creator") %}
-					(создатель системы 🔥)
-				{% elif session.get("is_super_admin") %}
-					(владелец системы)
-				{% elif session.get("role") == "admin" %}
-					(админ компании)
-				{% else %}
-					(кассир)
-				{% endif %}
+				<div class="toggle-btn desktop-toggle"
+					 onclick="toggleSidebar()">
+
+					☰
+
+				</div>
+
+				<div class="sidebar-user-wrap">
+
+					<div class="sidebar-avatar">
+
+						👤
+
+						<span class="online-dot"></span>
+
+					</div>
+
+					<div class="sidebar-user-info">
+
+						<div class="user-name">
+							{{ session.get("username") }}
+						</div>
+
+						<div class="user-role">
+
+							{% if session.get("is_creator") %}
+								создатель системы 🔥
+
+							{% elif session.get("is_super_admin") %}
+								владелец системы
+
+							{% elif session.get("role") == "admin" %}
+								админ компании
+
+							{% else %}
+								кассир
+
+							{% endif %}
+
+						</div>
+
+					</div>
+
+				</div>
+
 			</div>
 
 			<div class="sidebar-logo">

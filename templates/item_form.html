@@ -136,7 +136,42 @@
 
 <input name="discount_percent" value="{{ item.discount_percent if item else '' }}" placeholder="Скидка %">
 
-<input name="barcode" value="{{ item.barcode if item else '' }}" placeholder="Штрихкод">
+<input
+    type="number"
+    step="0.001"
+    name="quantity"
+    value="{{ item.quantity if item else '' }}"
+    placeholder="Остаток"
+>
+
+<div class="barcode-row">
+
+    <input
+        type="text"
+        name="barcode"
+        id="barcodeInput"
+        value="{{ item.barcode if item else '' }}"
+        placeholder="Штрихкод"
+        autocomplete="off"
+    >
+
+    <button
+        type="button"
+        onclick="openScanner()"
+        class="scan-btn"
+    >
+        📷
+    </button>
+
+    <button
+        type="button"
+        onclick="showQR()"
+        class="scan-btn"
+    >
+        📡
+    </button>
+
+</div>
 
 <div class="full">
     <label>Фото:</label>
@@ -146,7 +181,43 @@
 </div>
     <button class="btn">Сохранить</button>
 
+<div id="scannerModal" class="scanner-modal">
+	
+    <div class="scanner-box">
+
+        <div id="reader"></div>
+
+        <button onclick="closeScanner()" class="btn">Закрыть</button>
+
+    </div>
+</div>
+
+<div id="qrBox" style="
+	display:none;
+	position:fixed;
+	top:20%;
+	left:50%;
+	transform:translateX(-50%);
+	background:white;
+	padding:20px;
+	border-radius:12px;
+	z-index:9999;
+	text-align:center;
+">
+
+	<h3>Подключить телефон</h3>
+
+	<img id="qrImg" style="width:220px;">
+
+</div>
+
 </form>
+
+<audio id="beepSound" preload="auto">
+    <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+</audio>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
 <script>
 document.querySelector("input[name='name']").addEventListener("input", function() {
@@ -297,6 +368,246 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("unitSelect").value = currentUnit;
 
 });
+
+async function openScanner() {
+
+    const readerEl = document.getElementById("reader");
+    document.getElementById("scannerModal").style.display = "flex";
+
+    // 🔥 очищаем
+    readerEl.innerHTML = "";
+
+    // 🔥 создаём видео вручную
+    const video = document.createElement("video");
+    video.setAttribute("autoplay", true);
+    video.setAttribute("playsinline", true);
+    video.style.width = "100%";
+    video.style.height = "100%";
+
+    readerEl.appendChild(video);
+
+    try {
+
+        // 🔥 ВКЛЮЧАЕМ КАМЕРУ НАПРЯМУЮ
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: { ideal: "environment" }
+            }
+        });
+
+        video.srcObject = stream;
+
+        // 🔥 ждём пока реально появится картинка
+        await video.play();
+
+		// 🔥 НАТИВНЫЙ СКАНЕР БРАУЗЕРА — вместо ZXing
+		if (!("BarcodeDetector" in window)) {
+			alert("Этот браузер не поддерживает быстрый сканер. Попробуй Chrome на Android.");
+			return;
+		}
+
+		const barcodeDetector = new BarcodeDetector({
+			formats: [
+				"ean_13",
+				"ean_8",
+				"code_128",
+				"code_39",
+				"upc_a",
+				"upc_e"
+			]
+		});
+
+		let lastDetectedCode = "";
+		let lastDetectedTime = 0;
+
+		async function scanFrame() {
+			try {
+				const barcodes = await barcodeDetector.detect(video);
+
+				if (barcodes.length > 0) {
+					const code = barcodes[0].rawValue;
+					const now = Date.now();
+
+					if (code.length >= 8 && code.length <= 14) {
+
+						// защита от дублей
+						if (!(code === lastDetectedCode && now - lastDetectedTime < 1200)) {
+
+							lastDetectedCode = code;
+							lastDetectedTime = now;
+
+							console.log("BARCODE DETECTOR:", code);
+
+							const beep = document.getElementById("beepSound");
+							if (beep) {
+								beep.currentTime = 0;
+								beep.play().catch(() => {});
+							}
+
+							if (navigator.vibrate) {
+								navigator.vibrate(120);
+							}
+
+							document.getElementById(
+								"barcodeInput"
+							).value = code;
+
+							closeScanner();
+						}
+					}
+				}
+			} catch (err) {
+				console.log("SCAN FRAME ERROR:", err);
+			}
+
+			requestAnimationFrame(scanFrame);
+		}
+
+        scanFrame();
+
+    } catch (err) {
+
+        console.error("CAMERA ERROR:", err);
+        alert("Не удалось запустить камеру");
+
+    }
+}
+
+function closeScanner() {
+
+    document.getElementById("scannerModal").style.display = "none";
+
+    const video = document.querySelector("#reader video");
+
+    if (video && video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+    }
+}
+
+let barcodeBuffer = "";
+let lastKeyTime = 0;
+
+document.getElementById(
+    "barcodeInput"
+).addEventListener("keydown", (e) => {
+
+    const now = Date.now();
+
+    // 🔥 если пауза большая — новый скан
+    if (now - lastKeyTime > 100) {
+        barcodeBuffer = "";
+    }
+
+    lastKeyTime = now;
+
+    // 🔥 Enter = конец скана
+    if (e.key === "Enter") {
+
+        if (barcodeBuffer.length >= 8) {
+
+            console.log(
+                "USB Скан:",
+                barcodeBuffer
+            );
+
+            const beep =
+                document.getElementById(
+                    "beepSound"
+                );
+
+            if (beep) {
+                beep.currentTime = 0;
+                beep.play().catch(() => {});
+            }
+
+            document.getElementById(
+                "barcodeInput"
+            ).value = barcodeBuffer;
+        }
+
+        barcodeBuffer = "";
+
+        e.preventDefault();
+
+        return;
+    }
+
+    // 🔥 только цифры
+    if (/[0-9]/.test(e.key)) {
+        barcodeBuffer += e.key;
+    }
+
+});
+
+let sessionId = null;
+
+function showQR() {
+
+    fetch("/api/create-session")
+    .then(res => res.json())
+    .then(data => {
+
+        sessionId = data.session;
+
+        const url =
+            window.location.origin +
+            "/scanner?session=" +
+            sessionId;
+
+        QRCode.toDataURL(url, function (err, urlImg) {
+
+            document.getElementById(
+                "qrImg"
+            ).src = urlImg;
+
+            document.getElementById(
+                "qrBox"
+            ).style.display = "block";
+
+        });
+
+        startListening();
+    });
+}
+
+function startListening() {
+
+    const interval = setInterval(() => {
+
+        if (!sessionId) return;
+
+        fetch("/api/get-scan/" + sessionId)
+        .then(res => res.json())
+        .then(data => {
+
+            if (data.code) {
+
+                const beep =
+                    document.getElementById(
+                        "beepSound"
+                    );
+
+                if (beep) {
+                    beep.currentTime = 0;
+                    beep.play().catch(() => {});
+                }
+
+                document.getElementById(
+                    "barcodeInput"
+                ).value = data.code;
+
+                document.getElementById(
+                    "qrBox"
+                ).style.display = "none";
+
+                clearInterval(interval);
+            }
+
+        });
+
+    }, 300);
+}
+
 </script>
 
 <style>
@@ -429,6 +740,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
 .item-grid textarea{
     min-height:120px;
+}
+
+.barcode-row{
+
+    display:flex;
+
+    gap:10px;
+
+    align-items:center;
+}
+
+.barcode-row input{
+    flex:1;
+}
+
+.scan-btn{
+
+    width:52px;
+    height:52px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:#2563eb;
+
+    color:white;
+
+    font-size:22px;
+
+    cursor:pointer;
 }
 
 @media(max-width:768px){
