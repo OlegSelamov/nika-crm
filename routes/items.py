@@ -370,10 +370,17 @@ def barcode_info(barcode):
 
                 "external": True,
 
-                "debug": product,
-
                 "name":
-                    str(product),
+                    product.get("name_ru", ""),
+                    
+                "measure":
+                    product.get("measure", ""),
+
+                "gtin":
+                    product.get("gtin", ""),
+
+                "ntin":
+                    product.get("ntin_code", ""),
 
                 "barcode":
                     barcode

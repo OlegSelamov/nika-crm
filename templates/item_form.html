@@ -604,10 +604,10 @@ document.getElementById(
 
 			document.getElementById(
 				"barcodeInput"
-			).value = code;
+			).value = barcodeBuffer;
 
 			// 🔥 ищем товар
-			fetch("/api/barcode-info/" + code)
+			fetch("/api/barcode-info/" + barcodeBuffer)
 
 			.then(res => res.json())
 
@@ -721,6 +721,41 @@ function startListening() {
 				document.getElementById(
 					"barcodeInput"
 				).value = data.code;
+				
+				// 🔥 ищем товар
+				fetch("/api/barcode-info/" + data.code)
+
+				.then(res => res.json())
+
+				.then(item => {
+
+					console.log("BARCODE INFO:", item);
+
+					// ✅ название
+					if (item.name) {
+
+						document.querySelector(
+							"input[name='name']"
+						).value = item.name;
+					}
+
+					// ✅ категория
+					if (item.category) {
+
+						document.getElementById(
+							"categoryInput"
+						).value = item.category;
+					}
+
+					// ✅ ед.изм
+					if (item.measure) {
+
+						document.getElementById(
+							"unitSelect"
+						).value = item.measure;
+					}
+
+				});
 
                 document.getElementById(
                     "qrBox"
