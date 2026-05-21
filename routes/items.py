@@ -3,6 +3,7 @@ from models import get_db
 from werkzeug.utils import secure_filename
 from flask import session
 from datetime import datetime
+from flask import jsonify
 import json
 import os
 import uuid
@@ -274,7 +275,7 @@ def delete_category(id):
 
     return jsonify({"success": True})
     
-@app.route("/api/barcode-info/<barcode>")
+@items_bp.route("/api/barcode-info/<barcode>")
 def barcode_info(barcode):
 
     import requests
@@ -319,11 +320,10 @@ def barcode_info(barcode):
             f"search_ofd/?tin={barcode}"
         )
 
+        TOKEN = os.getenv("NCT_API_TOKEN")
+
         headers = {
-
-            "Authorization":
-                "frNKtn9WFFY6X5SpeKp-QiznaUbJtgHbE_tCqUlGCAM"
-
+            "Authorization": f"JWT {TOKEN}"
         }
 
         response = requests.get(
