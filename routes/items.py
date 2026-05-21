@@ -334,18 +334,33 @@ def barcode_info(barcode):
 
         data = response.json()
 
-        print("NCT RESPONSE:", data)
+        print("FULL DATA =", data)
 
         # 🔥 ЕСЛИ НАШЛИ
         if data:
 
-            # если список
-            if isinstance(data, list):
+            # 🔥 если results
+            if "results" in data:
+
+                if len(data["results"]) > 0:
+                    product = data["results"][0]
+                else:
+                    product = {}
+
+            # 🔥 если data
+            elif "data" in data:
+
+                product = data["data"]
+
+            # 🔥 если список
+            elif isinstance(data, list):
+
                 product = data[0]
+
+            # 🔥 обычный объект
             else:
+
                 product = data
-                
-            print(product)
 
             return jsonify({
 
