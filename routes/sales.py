@@ -1016,3 +1016,57 @@ def act(sale_id):
         date=datetime.now().strftime("%d.%m.%Y"),
         format_date_ru=format_date_ru
     )
+    
+@items_bp.route("/quick-add-item", methods=["POST"])
+def quick_add_item():
+
+    data = request.json
+
+    db = get_db()
+
+    cursor = db.execute(
+        """
+        INSERT INTO items
+        (
+            name,
+            retail_price,
+            barcode,
+            quantity,
+            unit
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            data.get("name"),
+            data.get("retail_price", 0),
+            data.get("barcode"),
+            0,
+            "шт"
+        )
+    )
+
+    db.commit()
+
+    item_id = cursor.lastrowid
+
+    return jsonify({
+
+        "success": True,
+
+        "item": {
+
+            "id": item_id,
+
+            "name": data.get("name"),
+
+            "price":
+                float(
+                    data.get(
+                        "retail_price",
+                        0
+                    )
+                )
+
+        }
+
+    })
