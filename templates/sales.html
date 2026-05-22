@@ -231,11 +231,21 @@
     <input id="newName" placeholder="Название">
     <input id="newPrice" placeholder="Цена">
     <input id="newBarcode">
-	<label>Категория</label>
+	<div class="category-wrapper">
 
-	<select id="newCategory">
+		<input
+			type="text"
+			id="newCategory"
+			placeholder="Категория"
+			autocomplete="off"
+		>
 
-	</select>
+		<div
+			id="quickCategoryDropdown"
+			class="category-dropdown"
+		></div>
+
+	</div>
 
 	<label>Ед. изм</label>
 
@@ -1200,15 +1210,29 @@ function openAddItemModal(code) {
 		categories.forEach(c => {
 
 			html += `
-				<option value="${c.name}">
-					${c.name}
-				</option>
+				<div
+					class="category-option"
+					onclick="selectQuickCategory(
+						'${c.name}',
+						'${c.markup_percent || 0}'
+					)"
+				>
+
+					<div>
+						<b>${c.name}</b>
+
+						<span class="markup">
+							${c.markup_percent || 0}%
+						</span>
+					</div>
+
+				</div>
 			`;
 
 		});
 
 		document.getElementById(
-			"newCategory"
+			"quickCategoryDropdown"
 		).innerHTML = html;
 
 	});
@@ -1230,6 +1254,61 @@ function openAddItemModal(code) {
     });
 
 }
+
+function selectQuickCategory(name, markup) {
+
+    document.getElementById(
+        "newCategory"
+    ).value = name;
+
+    document.getElementById(
+        "quickCategoryDropdown"
+    ).style.display = "none";
+
+    // 🔥 авто закупка
+    const retail =
+        parseFloat(
+            document.getElementById(
+                "newPrice"
+            ).value
+        ) || 0;
+
+    if (retail > 0) {
+
+        const purchase =
+            retail -
+            (retail * (parseFloat(markup) || 0) / 100);
+
+        document.getElementById(
+            "newPurchasePrice"
+        ).value =
+            Math.round(purchase);
+    }
+
+}
+
+document.addEventListener("click", (e) => {
+
+    if (
+        !e.target.closest(".category-wrapper")
+    ) {
+
+        document.getElementById(
+            "quickCategoryDropdown"
+        ).style.display = "none";
+    }
+
+});
+
+document.getElementById(
+    "newCategory"
+).addEventListener("focus", () => {
+
+    document.getElementById(
+        "quickCategoryDropdown"
+    ).style.display = "block";
+
+});
 
 function saveNewItem() {
 
