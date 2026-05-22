@@ -1287,6 +1287,58 @@ function selectQuickCategory(name, markup) {
 
 }
 
+// 🔥 ВОТ СЮДА ВСТАВИТЬ
+const quickCategoryInput =
+    document.getElementById(
+        "newCategory"
+    );
+
+const quickCategoryDropdown =
+    document.getElementById(
+        "quickCategoryDropdown"
+    );
+
+// 🔥 открыть список
+quickCategoryInput.addEventListener(
+    "focus",
+    () => {
+
+        quickCategoryDropdown.style.display =
+            "block";
+
+    }
+);
+
+// 🔥 открыть по клику
+quickCategoryInput.addEventListener(
+    "click",
+    () => {
+
+        quickCategoryDropdown.style.display =
+            "block";
+
+    }
+);
+
+// 🔥 закрыть вне блока
+document.addEventListener(
+    "click",
+    (e) => {
+
+        if (
+            !e.target.closest(
+                ".category-wrapper"
+            )
+        ) {
+
+            quickCategoryDropdown.style.display =
+                "none";
+
+        }
+
+    }
+);
+
 document.addEventListener("click", (e) => {
 
     if (
