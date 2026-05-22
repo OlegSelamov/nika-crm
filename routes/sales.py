@@ -1032,16 +1032,18 @@ def quick_add_item():
             retail_price,
             barcode,
             quantity,
-            unit
+            unit,
+            company_id
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             data.get("name"),
             data.get("retail_price", 0),
             data.get("barcode"),
             0,
-            "шт"
+            "шт",
+            session.get("company_id")
         )
     )
 
