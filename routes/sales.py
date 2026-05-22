@@ -1017,7 +1017,7 @@ def act(sale_id):
         format_date_ru=format_date_ru
     )
     
-@items_bp.route("/quick-add-item", methods=["POST"])
+@sales_bp.route("/quick-add-item", methods=["POST"])
 def quick_add_item():
 
     data = request.json
