@@ -258,6 +258,8 @@ fetch("/api/company/active")
     company = data;
 });
 
+function loadItems() {
+
 // загрузка товаров
 fetch("/api/items")
 .then(res => res.json())
@@ -302,6 +304,8 @@ fetch("/api/items")
 
     document.getElementById("itemsList").innerHTML = html;
 });
+
+}
 
 // добавление в корзину
 function addToCart(id, name, price, qty = 1) {
@@ -1225,6 +1229,8 @@ function saveNewItem() {
                 data.item.name,
                 data.item.price
             );
+			
+			loadItems();
 
         }
 
