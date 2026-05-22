@@ -231,6 +231,29 @@
     <input id="newName" placeholder="Название">
     <input id="newPrice" placeholder="Цена">
     <input id="newBarcode">
+	<label>Категория</label>
+
+	<select id="newCategory">
+
+	</select>
+
+	<label>Ед. изм</label>
+
+	<select id="newUnit">
+
+		<option value="шт">шт</option>
+		<option value="кг">кг</option>
+		<option value="литр">литр</option>
+
+	</select>
+
+	<label>Закупочная цена</label>
+
+	<input
+		type="number"
+		id="newPurchasePrice"
+		placeholder="Закупочная цена"
+	>
 
     <button onclick="saveNewItem()">Сохранить</button>
 
@@ -1164,6 +1187,31 @@ function openAddItemModal(code) {
     document.getElementById(
         "newBarcode"
     ).value = code;
+	
+	// 🔥 загружаем категории
+	fetch("/api/categories")
+
+	.then(res => res.json())
+
+	.then(categories => {
+
+		let html = "";
+
+		categories.forEach(c => {
+
+			html += `
+				<option value="${c.name}">
+					${c.name}
+				</option>
+			`;
+
+		});
+
+		document.getElementById(
+			"newCategory"
+		).innerHTML = html;
+
+	});
 
     // 🔥 пробуем National Catalog
     fetch("/api/barcode-info/" + code)
@@ -1208,7 +1256,22 @@ function saveNewItem() {
             barcode:
                 document.getElementById(
                     "newBarcode"
-                ).value
+                ).value,
+				
+			category:
+				document.getElementById(
+					"newCategory"
+				).value,
+
+			unit:
+				document.getElementById(
+					"newUnit"
+				).value,
+
+			purchase_price:
+				document.getElementById(
+					"newPurchasePrice"
+				).value,
 
         })
 
