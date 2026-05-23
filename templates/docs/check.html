@@ -5,62 +5,111 @@
 <title>Чек</title>
 
 <style>
-body {
 
-    width: 78mm;
+.receipt {
+
+    width: 58mm;
 
     margin: 0 auto;
 
-    padding: 8px;
+    padding: 4px;
 
     font-family: Arial, sans-serif;
 
+    color: #111;
+
+    font-size: 11px;
+
+    line-height: 1.2;
+}
+
+/* HEADER */
+
+.company {
+
+    text-align: center;
+
+    margin-bottom: 6px;
+}
+
+.company-name {
+
     font-size: 16px;
 
-    color: #000;
-
-    line-height: 1.4;
+    font-weight: 700;
 }
 
-.center {
-    text-align: center;
+.company-bin {
+
+    font-size: 12px;
+
+    margin-top: 2px;
 }
+
+.company-address {
+
+    font-size: 11px;
+
+    margin-top: 2px;
+}
+
+/* LINES */
 
 .line {
 
-    border-top: 2px dashed #000;
+    border-top: 1px dashed #000;
 
-    margin: 10px 0;
+    margin: 6px 0;
 }
 
-.item {
+/* INFO */
 
-    margin-bottom: 14px;
-}
-
-.item-top {
+.info-row {
 
     display: flex;
 
     justify-content: space-between;
 
-    font-weight: bold;
+    margin-bottom: 2px;
 
-    font-size: 17px;
+    font-size: 11px;
 }
 
-.item-bottom {
+/* ITEMS */
 
-    margin-top: 4px;
+.item {
 
-    font-size: 14px;
-
-    color: #222;
+    margin-bottom: 6px;
 }
 
-.bold {
+.item-name {
+
+    font-size: 12px;
+
     font-weight: 700;
+
+    margin-bottom: 2px;
 }
+
+.item-meta {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    font-size: 11px;
+}
+
+.item-extra {
+
+    font-size: 9px;
+
+    color: #444;
+
+    margin-top: 1px;
+}
+
+/* TOTAL */
 
 .total {
 
@@ -68,61 +117,85 @@ body {
 
     justify-content: space-between;
 
-    font-size: 22px;
+    align-items: center;
+
+    margin-top: 8px;
+
+    font-size: 18px;
 
     font-weight: 700;
-
-    margin-top: 12px;
 }
 
-.payments {
+/* PAYMENTS */
 
-    margin-top: 10px;
+.payment {
 
-    font-size: 15px;
+    display: flex;
+
+    justify-content: space-between;
+
+    font-size: 11px;
+
+    margin-top: 2px;
 }
+
+/* QR */
 
 .qr {
 
-    margin-top: 20px;
+    text-align: center;
+
+    margin-top: 8px;
+}
+
+.qr img {
+
+    width: 110px;
+
+    height: 110px;
+}
+
+/* FOOTER */
+
+.footer {
 
     text-align: center;
-}
 
-.small {
+    font-size: 10px;
 
-    font-size: 13px;
-}
+    margin-top: 6px;
 
-.company-title {
-
-    font-size: 22px;
-
-    font-weight: 700;
-
-    margin-bottom: 8px;
+    color: #333;
 }
 
 </style>
+
 </head>
 
 <body>
+<div class="receipt">
 
-<div class="center">
-    <div style="font-size:18px; font-weight:700;">
+<div class="company">
+
+    <div class="company-name">
         {{ company.name }}
     </div>
-    <div>{{ company.address }}</div>
-    <div>{{ company.phone }}</div>
+
+    <div class="company-bin">
+        БИН/ИИН: {{ company.bin }}
+    </div>
+
+    <div class="company-address">
+        {{ company.address }}
+    </div>
+
 </div>
 
 <div class="line"></div>
 
-<div>
-    <div><b>Дата:</b> {{ check_date }}</div>
-    <div><b>№ заказа:</b> {{ sale.id }}</div>
-    <div><b>Кассир:</b> Администратор</div>
-    <div><b>БИН:</b> {{ company.bin }}</div>
+<div class="info-row">
+    <span>Чек №{{ sale.id }}</span>
+    <span>{{ check_date }}</span>
 </div>
 
 <div class="line"></div>
@@ -131,31 +204,33 @@ body {
 
 <div class="item">
 
-    <div class="item-top">
-
-        <span>{{ i.name }}</span>
-
-        <span>{{ i.total }} ₸</span>
-
+    <div class="item-name">
+        {{ i.name }}
     </div>
 
-    <div class="item-bottom">
+    <div class="item-meta">
 
-        {{ i.quantity }}
-        {{ i.unit if i.unit else 'шт' }}
-        ×
-        {{ i.price }} ₸
+        <span>
+            {{ i.quantity }}
+            {{ i.unit }}
+            ×
+            {{ i.price }}
+        </span>
+
+        <span>
+            {{ i.total }} ₸
+        </span>
 
     </div>
 
     {% if i.gtin %}
-    <div class="small">
+    <div class="item-extra">
         GTIN: {{ i.gtin }}
     </div>
     {% endif %}
 
     {% if i.ntin %}
-    <div class="small">
+    <div class="item-extra">
         NTIN: {{ i.ntin }}
     </div>
     {% endif %}
@@ -167,16 +242,50 @@ body {
 <div class="line"></div>
 
 <div class="total">
+
     <span>ИТОГО</span>
-    <span>{{ sale.total_amount }} ₸</span>
+
+    <span>{{ "%.2f"|format(sale.total_amount|float) }} ₸</span>
+
 </div>
 
-<div class="item">
-    <span>Оплачено</span>
-    <span>{{ sale.total_amount }} ₸</span>
-</div>
+{% if cash|float > 0 %}
+<div class="payment">
 
-<div class="item">
+    <span>Наличные</span>
+
+    <span>
+        {{ "%.2f"|format(cash|float) }} ₸
+    </span>
+
+</div>
+{% endif %}
+
+{% if card|float > 0 %}
+<div class="payment">
+
+    <span>Карта</span>
+
+    <span>
+        {{ "%.2f"|format(card|float) }} ₸
+    </span>
+
+</div>
+{% endif %}
+
+{% if kaspi|float > 0 %}
+<div class="payment">
+
+    <span>Kaspi</span>
+
+    <span>
+        {{ "%.2f"|format(kaspi|float) }} ₸
+    </span>
+	
+</div>
+{% endif %}
+
+<div class="payment">
     <span>Сдача</span>
     <span>0 ₸</span>
 </div>
@@ -186,15 +295,15 @@ body {
 <div class="qr">
 
     <img
-        src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=SALE-{{ sale.id }}"
-        width="180"
+        src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=SALE-{{ sale.id }}"
     >
 
 </div>
 
-<div class="center">
-    Спасибо за покупку!
+<div class="footer">
+    Спасибо за покупку
 </div>
 
+</div>
 </body>
 </html>

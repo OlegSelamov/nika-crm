@@ -363,6 +363,21 @@ def init_db():
         cur.execute("ALTER TABLE items ADD COLUMN quantity REAL DEFAULT 0;")
     except:
         pass
+        
+    try:
+        cur.execute("ALTER TABLE items ADD COLUMN gtin TEXT;")
+    except:
+        pass
+        
+    try:
+        cur.execute("ALTER TABLE items ADD COLUMN ntin TEXT;")
+    except:
+        pass
+        
+    try:
+        cur.execute("ALTER TABLE items ADD COLUMN is_marked INTEGER DEFAULT 0;")
+    except:
+        pass
          
     conn.commit()
     conn.close()

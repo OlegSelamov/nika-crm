@@ -627,8 +627,6 @@ def check(sale_id):
         (session.get("company_id"),)
     ).fetchone()
 
-    conn.close()
-
     if not company:
         return "Нет компании"
 
@@ -668,6 +666,8 @@ def check(sale_id):
                 if db_item else ""
 
         })
+        
+    conn.close()
 
     return render_template(
         "docs/check.html",
@@ -675,7 +675,18 @@ def check(sale_id):
         items=new_items,
         client=client,
         company=company,
-        check_date=check_date
+        check_date=check_date,
+        cash=sale["cash_amount"]
+            if "cash_amount" in sale.keys()
+            else 0,
+
+        card=sale["card_amount"]
+            if "card_amount" in sale.keys()
+            else 0,
+
+        kaspi=sale["kaspi_amount"]
+            if "kaspi_amount" in sale.keys()
+            else 0,
     )
     
 @sales_bp.route("/docs/nakladnaya/<int:sale_id>")
@@ -1069,9 +1080,12 @@ def quick_add_item():
             quantity,
             unit,
             category,
+            gtin,
+            ntin,
+            is_marked,
             company_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             data.get("name"),
@@ -1081,6 +1095,9 @@ def quick_add_item():
             0,
             data.get("unit", "шт"),
             data.get("category"),
+            data.get("gtin", ""),
+            data.get("ntin", ""),
+            data.get("is_marked", 0),
             session.get("company_id")
         )
     )

@@ -282,6 +282,7 @@
 let cart = [];
 let selectedClientData = null;
 let selectedClient = null;
+let currentBarcodeData = {};
 
 let company = {}; // 👈 вот сюда
 
@@ -761,6 +762,7 @@ function openSaleModal(id) {
 
     const modal = document.getElementById("saleModal");
     const body = document.getElementById("saleBody");
+	document.getElementById("saleTitle").dataset.saleId = id;
 
     if (!modal || !body) {
         console.error("Модалка не найдена");
@@ -771,98 +773,20 @@ function openSaleModal(id) {
     body.innerHTML = "Загрузка...";
 
     fetch("/api/sale/" + id)
-        .then(res => res.json())
-        .then(data => {
+		.then(() => {
 
-			let html = `
-				<div style="text-align:center; margin-bottom:15px;">
-					<div style="font-size:18px; font-weight:700;">
-						${company.name || "Организация"}
-					</div>
-					<div style="font-size:13px; color:#666;">
-						${company.address || ""}
-					</div>
-					<div style="font-size:13px; color:#666;">
-						${company.phone || ""}
-					</div>
-				</div>
+			fetch("/docs/check/" + id)
 
-				<div style="font-size:13px; margin-bottom:10px;">
-					<div><b>Дата:</b> ${formatDate(data.created_at)}</div>
-					<div><b>№ заказа:</b> ${data.id}</div>
-					<div><b>Кассир:</b> Администратор</div>
-					<div><b>БИН:</b> ${company.bin || ""}</div>
-				</div>
+			.then(res => res.text())
 
-				<hr>
-			`;
+			.then(html => {
 
-            data.items.forEach(item => {
-                html += `
-                    <div style="margin-bottom:10px;">
-                        <div style="font-weight:600;">
-                            ${item.name}
-                        </div>
+				body.innerHTML = html;
 
-                        <div style="display:flex; justify-content:space-between; font-size:13px; color:#555;">
-                            <span>${item.quantity} × ${item.price}</span>
-                            <span>${item.total} ₸</span>
-                        </div>
-                    </div>
-                `;
-            });
+			});
 
-            html += `
-                <hr>
-
-                <div style="display:flex; justify-content:space-between; margin-top:10px;">
-                    <b>ИТОГО</b>
-                    <b>${data.total_amount} ₸</b>
-                </div>
-				
-				<div style="margin-top:10px; font-size:13px;">
-					${data.cash > 0 ? `
-						<div style="display:flex; justify-content:space-between;">
-							<span>Наличные</span>
-							<span>${data.cash} ₸</span>
-						</div>
-					` : ""}
-
-					${data.card > 0 ? `
-						<div style="display:flex; justify-content:space-between;">
-							<span>Карта</span>
-							<span>${data.card} ₸</span>
-						</div>
-					` : ""}
-
-					${data.kaspi > 0 ? `
-						<div style="display:flex; justify-content:space-between;">
-							<span>Kaspi</span>
-							<span>${data.kaspi} ₸</span>
-						</div>
-					` : ""}
-				</div>
-
-                <div style="display:flex; justify-content:space-between;">
-                    <span>Оплачено</span>
-                    <span>${data.total_amount} ₸</span>
-                </div>
-
-                <div style="display:flex; justify-content:space-between;">
-                    <span>Сдача</span>
-                    <span>0 ₸</span>
-                </div>
-
-                <hr>
-
-                <div style="text-align:center; font-size:12px; color:#666;">
-                    Спасибо за покупку!
-                </div>
-            `;
-
-            body.innerHTML = html;
-
-        })
+		})
+		
         .catch(err => {
             console.error("SALE LOAD ERROR:", err);
             body.innerHTML = "Ошибка загрузки чека";
@@ -890,7 +814,31 @@ function formatDate(dateStr) {
 }
 
 function printCheck() {
+
+    const printContents =
+        document.getElementById(
+            "saleBody"
+        ).innerHTML;
+
+    const original =
+        document.body.innerHTML;
+
+    document.body.innerHTML = `
+        <div style="
+            width:58mm;
+            margin:0 auto;
+            font-family:Arial;
+            font-size:13px;
+        ">
+            ${printContents}
+        </div>
+    `;
+
     window.print();
+
+    document.body.innerHTML = original;
+
+    location.reload();
 }
 
 function downloadPDF() {
@@ -1242,16 +1190,19 @@ function openAddItemModal(code) {
 
     .then(res => res.json())
 
-    .then(data => {
+	.then(data => {
 
-        if (data.name) {
+		currentBarcodeData = data;
 
-            document.getElementById(
-                "newName"
-            ).value = data.name;
-        }
+		if (data.name) {
 
-    });
+			document.getElementById(
+				"newName"
+			).value = data.name;
+
+		}
+
+	});
 
 }
 
@@ -1403,6 +1354,11 @@ function saveNewItem() {
 				document.getElementById(
 					"newPurchasePrice"
 				).value,
+				
+			gtin: currentBarcodeData.gtin || "",
+			ntin: currentBarcodeData.ntin || "",
+			is_marked:
+				currentBarcodeData.is_marked || 0,
 
         })
 

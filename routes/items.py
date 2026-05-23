@@ -381,6 +381,12 @@ def barcode_info(barcode):
 
                 "ntin":
                     product.get("ntin_code", ""),
+                    
+                "is_marked":
+                    product.get(
+                        "is_markedeac",
+                        False
+                    ),
 
                 "barcode":
                     barcode
