@@ -6,23 +6,103 @@
 
 <style>
 body {
-    width: 280px;
-    margin: auto;
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
+
+    width: 78mm;
+
+    margin: 0 auto;
+
+    padding: 8px;
+
+    font-family: Arial, sans-serif;
+
+    font-size: 16px;
+
+    color: #000;
+
+    line-height: 1.4;
 }
 
-.center { text-align: center; }
-.line { border-top: 1px dashed #000; margin: 10px 0; }
+.center {
+    text-align: center;
+}
+
+.line {
+
+    border-top: 2px dashed #000;
+
+    margin: 10px 0;
+}
 
 .item {
+
+    margin-bottom: 14px;
+}
+
+.item-top {
+
     display: flex;
+
     justify-content: space-between;
+
+    font-weight: bold;
+
+    font-size: 17px;
+}
+
+.item-bottom {
+
+    margin-top: 4px;
+
+    font-size: 14px;
+
+    color: #222;
 }
 
 .bold {
-    font-weight: bold;
+    font-weight: 700;
 }
+
+.total {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    font-size: 22px;
+
+    font-weight: 700;
+
+    margin-top: 12px;
+}
+
+.payments {
+
+    margin-top: 10px;
+
+    font-size: 15px;
+}
+
+.qr {
+
+    margin-top: 20px;
+
+    text-align: center;
+}
+
+.small {
+
+    font-size: 13px;
+}
+
+.company-title {
+
+    font-size: 22px;
+
+    font-weight: 700;
+
+    margin-bottom: 8px;
+}
+
 </style>
 </head>
 
@@ -48,19 +128,45 @@ body {
 <div class="line"></div>
 
 {% for i in items %}
-<div style="margin-bottom:10px;">
-    <div class="bold">{{ i.name }}</div>
 
-    <div class="item">
-        <span>{{ i.quantity }} × {{ i.price }}</span>
+<div class="item">
+
+    <div class="item-top">
+
+        <span>{{ i.name }}</span>
+
         <span>{{ i.total }} ₸</span>
+
     </div>
+
+    <div class="item-bottom">
+
+        {{ i.quantity }}
+        {{ i.unit if i.unit else 'шт' }}
+        ×
+        {{ i.price }} ₸
+
+    </div>
+
+    {% if i.gtin %}
+    <div class="small">
+        GTIN: {{ i.gtin }}
+    </div>
+    {% endif %}
+
+    {% if i.ntin %}
+    <div class="small">
+        NTIN: {{ i.ntin }}
+    </div>
+    {% endif %}
+
 </div>
+
 {% endfor %}
 
 <div class="line"></div>
 
-<div class="item bold">
+<div class="total">
     <span>ИТОГО</span>
     <span>{{ sale.total_amount }} ₸</span>
 </div>
@@ -76,6 +182,15 @@ body {
 </div>
 
 <div class="line"></div>
+
+<div class="qr">
+
+    <img
+        src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=SALE-{{ sale.id }}"
+        width="180"
+    >
+
+</div>
 
 <div class="center">
     Спасибо за покупку!

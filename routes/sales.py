@@ -634,11 +634,45 @@ def check(sale_id):
 
     date_obj = datetime.fromisoformat(sale["created_at"])
     check_date = date_obj.strftime("%d.%m.%Y %H:%M")
+    
+    new_items = []
+
+    for i in items:
+
+        db_item = conn.execute(
+            """
+            SELECT gtin, ntin, unit
+            FROM items
+            WHERE id = ?
+            """,
+            (i["item_id"],)
+        ).fetchone()
+
+        new_items.append({
+
+            "name": i["name"],
+            "quantity": i["quantity"],
+            "price": i["price"],
+            "total": i["total"],
+
+            "unit":
+                db_item["unit"]
+                if db_item else "шт",
+
+            "gtin":
+                db_item["gtin"]
+                if db_item else "",
+
+            "ntin":
+                db_item["ntin"]
+                if db_item else ""
+
+        })
 
     return render_template(
         "docs/check.html",
         sale=sale,
-        items=items,
+        items=new_items,
         client=client,
         company=company,
         check_date=check_date
