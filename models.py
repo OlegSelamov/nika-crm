@@ -150,7 +150,7 @@ def init_db():
         item_id INTEGER,
         price INTEGER,
         quantity INTEGER,
-        total INTEGER
+        total INTEGER,
         profit REAL DEFAULT 0
     )
     """)
