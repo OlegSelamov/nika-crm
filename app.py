@@ -20,6 +20,49 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+
+from models import get_db
+
+def update_database():
+
+    conn = get_db()
+
+    columns = conn.execute(
+        "PRAGMA table_info(items)"
+    ).fetchall()
+
+    column_names = [
+        c["name"]
+        for c in columns
+    ]
+
+    if "gtin" not in column_names:
+
+        conn.execute(
+            "ALTER TABLE items ADD COLUMN gtin TEXT"
+        )
+
+    if "ntin" not in column_names:
+
+        conn.execute(
+            "ALTER TABLE items ADD COLUMN ntin TEXT"
+        )
+
+    if "is_marked" not in column_names:
+
+        conn.execute(
+            """
+            ALTER TABLE items
+            ADD COLUMN is_marked INTEGER DEFAULT 0
+            """
+        )
+
+    conn.commit()
+
+    conn.close()
+
+update_database()
+
 app.secret_key = "nika_super_secret_key"
 
 # подключаем роуты
