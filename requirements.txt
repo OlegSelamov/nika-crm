@@ -4,3 +4,4 @@ openai
 requests
 python-dotenv
 num2words
+psycopg2-binary
