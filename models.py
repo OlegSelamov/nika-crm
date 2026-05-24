@@ -45,7 +45,7 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT,
         price INTEGER,
         category TEXT,
@@ -55,7 +55,7 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS item_images (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         item_id INTEGER,
         image TEXT
     )
@@ -63,7 +63,7 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS client_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         client_id INTEGER,
         item_id INTEGER,
         price INTEGER,
@@ -75,7 +75,7 @@ def init_db():
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         username TEXT UNIQUE,
         password TEXT,
         role TEXT DEFAULT 'cashier',
@@ -123,7 +123,7 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sales (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         client_id INTEGER,
         total_amount INTEGER,
         paid_amount INTEGER,
@@ -134,7 +134,7 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS companies (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT,
         bin TEXT,
         address TEXT,
@@ -145,7 +145,7 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sale_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         sale_id INTEGER,
         item_id INTEGER,
         price INTEGER,
@@ -157,7 +157,7 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         company_id INTEGER,
         name TEXT,
         markup_percent REAL DEFAULT 0
@@ -166,7 +166,7 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS stock_movements (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
 
         company_id INTEGER,
 
