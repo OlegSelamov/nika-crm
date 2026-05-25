@@ -169,15 +169,13 @@ def init_db():
                 password,
                 role,
                 is_super_admin,
-                is_creator,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s)
         """, (
             "admin",
             "12345",
             "admin",
-            True,
             True,
             datetime.now()
         ))
