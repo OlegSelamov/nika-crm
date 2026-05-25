@@ -138,7 +138,22 @@ def dashboard():
 
     GROUP BY items.id
 
-    HAVING stock <= 5
+    HAVING
+    COALESCE(
+        SUM(
+            CASE
+                WHEN stock_movements.movement_type='income'
+                THEN stock_movements.quantity
+
+                WHEN stock_movements.movement_type='sale'
+                THEN -stock_movements.quantity
+
+                WHEN stock_movements.movement_type='writeoff'
+                THEN -stock_movements.quantity
+            END
+        ),
+        0
+    ) <= 5
 
     ORDER BY stock ASC
 
