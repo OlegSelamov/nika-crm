@@ -161,8 +161,7 @@ def init_db():
     
     conn.commit()
     
-    cur.execute("SELECT * FROM users WHERE username = %s", ("admin",))
-    if not cur.fetchone():
+    try:
         cur.execute("""
             INSERT INTO users (
                 username,
@@ -179,6 +178,11 @@ def init_db():
             True,
             datetime.now()
         ))
+
+        conn.commit()
+
+    except:
+        conn.rollback()
             
     try:
         cur.execute("ALTER TABLE clients ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE")
