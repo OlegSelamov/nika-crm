@@ -65,7 +65,7 @@
                 </td>
 
                 <td>
-                    {{ row.created_at[:16] if row.created_at }}
+                    {{ row.created_at.strftime('%d.%m.%Y %H:%M') if row.created_at }}
                 </td>
 
             </tr>
@@ -118,7 +118,7 @@
 		</div>
 
 		<div class="movement-date">
-			{{ row.created_at[:16] if row.created_at }}
+			{{ row.created_at.strftime('%d.%m.%Y %H:%M') if row.created_at }}
 		</div>
 
 	</div>
