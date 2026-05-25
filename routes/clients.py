@@ -282,11 +282,11 @@ def edit_client(client_id):
 
     if request.method == "POST":
 
-         cur.execute(
+        cur.execute(
             "SELECT * FROM clients WHERE id = %s AND company_id = %s",
             (client_id, session.get("company_id"))
         )
-        
+
         old_client = cur.fetchone()
 
         if not old_client:
