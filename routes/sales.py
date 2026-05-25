@@ -585,7 +585,7 @@ def invoice(sale_id):
     if not company:
         return "Активная организация не выбрана"
 
-    date_obj = datetime.fromisoformat(sale["created_at"])
+    date_obj = sale["created_at"]
     sale_date = date_obj.strftime("%d.%m.%Y")
 
     total = int(sale["total_amount"])
@@ -678,7 +678,7 @@ def check(sale_id):
     if not company:
         return "Нет компании"
 
-    date_obj = datetime.fromisoformat(sale["created_at"])
+    date_obj = sale["created_at"]
     check_date = date_obj.strftime("%d.%m.%Y %H:%M")
     
     new_items = []
@@ -766,7 +766,7 @@ def nakladnaya(sale_id):
     from datetime import datetime
 
     # дата
-    date_obj = datetime.fromisoformat(sale["created_at"])
+    date_obj = sale["created_at"]
     sale_date = date_obj.strftime("%d.%m.%Y")
 
     # директор
@@ -855,7 +855,7 @@ def schet_factura(sale_id):
     else:
         payment_type = "безналичный расчет"
         
-    date_obj = datetime.fromisoformat(sale["created_at"])
+    date_obj = sale["created_at"]
     sale_date = date_obj.strftime("%d.%m.%Y")
 
     return render_template(
