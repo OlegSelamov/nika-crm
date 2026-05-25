@@ -10,10 +10,14 @@ def current_user():
         return None
 
     conn = get_db()
-    user = conn.execute(
-        "SELECT * FROM users WHERE id = ?",
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT * FROM users WHERE id = %s",
         (user_id,)
-    ).fetchone()
+    )
+
+    user = cur.fetchone()
     conn.close()
     return user
 
@@ -24,10 +28,14 @@ def login():
         password = request.form.get("password", "").strip()
 
         conn = get_db()
-        user = conn.execute(
-            "SELECT * FROM users WHERE username = ? AND password = ?",
+        cur = conn.cursor()
+
+        cur.execute(
+            "SELECT * FROM users WHERE username = %s AND password = %s",
             (username, password)
-        ).fetchone()
+        )
+
+        user = cur.fetchone()
         conn.close()
         
         if user:
@@ -72,6 +80,8 @@ def users():
         return "Доступ запрещен", 403
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -80,32 +90,36 @@ def users():
         company_id = request.form.get("company_id") or session.get("company_id")
         is_super_admin = 1 if request.form.get("is_super_admin") == "1" else 0
 
-        conn.execute("""
+        cur.execute("""
             INSERT INTO users (username, password, role, company_id, is_super_admin, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             username,
             password,
             role,
             company_id if company_id else None,
             is_super_admin,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            datetime.now()
         ))
         conn.commit()
         conn.close()
         return redirect("/users")
 
-    users = conn.execute("""
+    cur.execute("""
         SELECT users.*, companies.name as company_name
         FROM users
         LEFT JOIN companies ON users.company_id = companies.id
         ORDER BY users.id DESC
-    """).fetchall()
+    """)
 
-    companies = conn.execute("""
+    users = cur.fetchall()
+
+    cur.execute("""
         SELECT * FROM companies
         ORDER BY id DESC
-    """).fetchall()
+    """)
+
+    companies = cur.fetchall()
 
     conn.close()
 
@@ -127,11 +141,15 @@ def delete_user(user_id):
         return "Доступ запрещен", 403
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    user = conn.execute(
-        "SELECT * FROM users WHERE id = ?",
+    cur.execute(
+        "SELECT * FROM users WHERE id = %s",
         (user_id,)
-    ).fetchone()
+    )
+
+    user = cur.fetchone()
 
     if not user:
         conn.close()
@@ -153,7 +171,7 @@ def delete_user(user_id):
         return "Нельзя удалить владельца системы"
 
     # ✅ удаление
-    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
     conn.commit()
     conn.close()
 
@@ -163,6 +181,8 @@ def delete_user(user_id):
 def register():
     if request.method == "POST":
         conn = get_db()
+        
+        cur = conn.cursor()
 
         # 🔐 пользователь
         username = request.form["username"]
@@ -181,17 +201,33 @@ def register():
         knp = request.form.get("knp")
 
         # 1. создаём компанию
-        conn.execute("""
-            INSERT INTO companies (name, director, bin, address, phone, iik, bik, bank, kbe, knp, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        """, (name, director, bin, address, phone, iik, bik, bank, kbe, knp))
+        cur.execute("""
+            INSERT INTO companies (
+                name, director, bin, address, phone,
+                iik, bik, bank, kbe, knp, is_active
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            name,
+            director,
+            bin,
+            address,
+            phone,
+            iik,
+            bik,
+            bank,
+            kbe,
+            knp,
+            True
+        ))
 
-        company_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        company_id = cur.fetchone()["id"]
 
         # 2. создаём владельца
-        conn.execute("""
+        cur.execute("""
             INSERT INTO users (username, password, role, company_id)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
         """, (username, password, "admin", company_id))
 
         conn.commit()

@@ -1,43 +1,16 @@
+import psycopg2
+import psycopg2.extras
 import os
-import sqlite3
 from datetime import datetime
-
-# если есть диск (на Render)
-if os.path.exists("/data"):
-    DATABASE = "/data/database.db"
-else:
-    # локально
-    DATABASE = "database.db"
 
 def get_db():
 
-    # 🔥 PostgreSQL на Render
-    if os.environ.get("DATABASE_URL"):
+    conn = psycopg2.connect(
+        os.environ.get("DATABASE_URL"),
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
 
-        import psycopg2
-        import psycopg2.extras
-
-        conn = psycopg2.connect(
-            os.environ.get("DATABASE_URL")
-        )
-
-        conn.cursor_factory = (
-            psycopg2.extras.RealDictCursor
-        )
-
-        return conn
-
-    # 🔥 SQLite локально
-    else:
-
-        conn = sqlite3.connect(
-            DATABASE,
-            timeout=5
-        )
-
-        conn.row_factory = sqlite3.Row
-
-        return conn
+    return conn
 
 def init_db():
     conn = get_db()
@@ -47,7 +20,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS items (
         id SERIAL PRIMARY KEY,
         name TEXT,
-        price INTEGER,
+        price NUMERIC(12,2),
         category TEXT,
         type TEXT
     )
@@ -66,10 +39,10 @@ def init_db():
         id SERIAL PRIMARY KEY,
         client_id INTEGER,
         item_id INTEGER,
-        price INTEGER,
+        price NUMERIC(12,2),
         payment_method TEXT,
         is_paid INTEGER DEFAULT 0,
-        created_at TEXT
+        created_at TIMESTAMP
     )
     """)
 
@@ -80,15 +53,15 @@ def init_db():
         password TEXT,
         role TEXT DEFAULT 'cashier',
         company_id INTEGER,
-        is_super_admin INTEGER DEFAULT 0,
-        created_at TEXT
+        is_super_admin BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP
     )
     """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS clients (
-        id INTEGER PRIMARY KEY,
-        is_deleted INTEGER DEFAULT 0,
+        id SERIAL PRIMARY KEY,
+        is_deleted BOOLEAN DEFAULT FALSE,
         full_name TEXT,
         phone TEXT,
         status TEXT,
@@ -96,7 +69,7 @@ def init_db():
         payment TEXT,
         comment TEXT,
         address TEXT,
-        created_at TEXT,
+        created_at TIMESTAMP,
         iin TEXT,
         company_name TEXT,
         photo TEXT,
@@ -106,7 +79,7 @@ def init_db():
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS tasks (
-        id INTEGER PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         title TEXT,
         client_id INTEGER,
         due_date TEXT
@@ -115,9 +88,9 @@ def init_db():
     
     cur.execute("""
     CREATE TABLE IF NOT EXISTS services (
-        id INTEGER PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         name TEXT,
-        price INTEGER
+        price NUMERIC(12,2)
     )
     """)
     
@@ -125,10 +98,10 @@ def init_db():
     CREATE TABLE IF NOT EXISTS sales (
         id SERIAL PRIMARY KEY,
         client_id INTEGER,
-        total_amount INTEGER,
-        paid_amount INTEGER,
+        total_amount NUMERIC(12,2),
+        paid_amount NUMERIC(12,2),
         status TEXT,
-        created_at TEXT
+        created_at TIMESTAMP
     )
     """)
     
@@ -139,7 +112,7 @@ def init_db():
         bin TEXT,
         address TEXT,
         phone TEXT,
-        is_active INTEGER DEFAULT 0
+        is_active BOOLEAN DEFAULT FALSE
     )
     """)
     
@@ -148,10 +121,10 @@ def init_db():
         id SERIAL PRIMARY KEY,
         sale_id INTEGER,
         item_id INTEGER,
-        price INTEGER,
-        quantity INTEGER,
-        total INTEGER,
-        profit REAL DEFAULT 0
+        price NUMERIC(12,2),
+        quantity NUMERIC(12,3),
+        total NUMERIC(12,2),
+        profit NUMERIC(12,2) DEFAULT 0
     )
     """)
     
@@ -174,235 +147,276 @@ def init_db():
 
         movement_type TEXT,
 
-        quantity REAL,
+        quantity NUMERIC(12,3),
 
-        price REAL,
+        price NUMERIC(12,2),
 
-        total REAL,
+        total NUMERIC(12,2),
 
         comment TEXT,
 
-        created_at TEXT
+        created_at TIMESTAMP
     )
     """)
     
-    cur.execute("SELECT * FROM users WHERE username = ?", ("admin",))
+    cur.execute("SELECT * FROM users WHERE username = %s", ("admin",))
     if not cur.fetchone():
         cur.execute("""
             INSERT INTO users (username, password, role, is_super_admin, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         """, (
             "admin",
             "12345",
             "admin",
             1,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            datetime.now()
         ))
             
     try:
-        cur.execute("ALTER TABLE clients ADD COLUMN is_deleted INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE clients ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE")
+        conn.commit()    
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE items ADD COLUMN description TEXT")
+        conn.commit()    
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE items ADD COLUMN retail_price INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE items ADD COLUMN wholesale_price INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE items ADD COLUMN discount_percent INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE items ADD COLUMN purchase_price INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE items ADD COLUMN barcode TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE sales ADD COLUMN company_id INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN iik TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN bik TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN bank TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN kbe TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN knp TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN director TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE sale_items ADD COLUMN unit TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE items ADD COLUMN unit TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE items ADD COLUMN markup_percent REAL DEFAULT 0")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
-        cur.execute("ALTER TABLE sales ADD COLUMN paid_at TEXT;")
+        cur.execute("ALTER TABLE sales ADD COLUMN paid_at TIMESTAMP;")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE sales ADD COLUMN sale_type TEXT;")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE sale_items ADD COLUMN name TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
-        cur.execute("ALTER TABLE sales ADD COLUMN cash_amount INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE sales ADD COLUMN cash_amount NUMERIC(12,2) DEFAULT 0")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
-        cur.execute("ALTER TABLE sales ADD COLUMN card_amount INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE sales ADD COLUMN card_amount NUMERIC(12,2) DEFAULT 0")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
-        cur.execute("ALTER TABLE sales ADD COLUMN kaspi_amount INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE sales ADD COLUMN kaspi_amount NUMERIC(12,2) DEFAULT 0")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'cashier'")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE users ADD COLUMN company_id INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
-        cur.execute("ALTER TABLE users ADD COLUMN is_super_admin INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE users ADD COLUMN is_super_admin BOOLEAN DEFAULT FALSE")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
-        cur.execute("ALTER TABLE users ADD COLUMN created_at TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
-        cur.execute("ALTER TABLE users ADD COLUMN is_creator INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE users ADD COLUMN is_creator BOOLEAN DEFAULT FALSE")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN owner_id INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
-        cur.execute("ALTER TABLE companies ADD COLUMN is_active INTEGER DEFAULT 1")
+        cur.execute("ALTER TABLE companies ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN tariff TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
 
     try:
-        cur.execute("ALTER TABLE companies ADD COLUMN paid_until TEXT")
+        cur.execute("ALTER TABLE companies ADD COLUMN paid_until TIMESTAMP")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE clients ADD COLUMN company_id INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE items ADD COLUMN company_id INTEGER")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE clients ADD COLUMN contract_number TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE clients ADD COLUMN contract_date TEXT")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
-        cur.execute("ALTER TABLE sales ADD COLUMN is_processed INTEGER DEFAULT 0;")
+        cur.execute("ALTER TABLE sales ADD COLUMN is_processed BOOLEAN DEFAULT FALSE;")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE items ADD COLUMN quantity REAL DEFAULT 0;")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE items ADD COLUMN gtin TEXT;")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE items ADD COLUMN ntin TEXT;")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
         
     try:
-        cur.execute("ALTER TABLE items ADD COLUMN is_marked INTEGER DEFAULT 0;")
+        cur.execute("ALTER TABLE items ADD COLUMN is_marked BOOLEAN DEFAULT FALSE;")
+        conn.commit()
     except:
-        pass
+        conn.rollback()
          
     conn.commit()
     conn.close()

@@ -22,15 +22,19 @@ items_bp = Blueprint("items", __name__)
 @items_bp.route("/items")
 def items():
     conn = get_db()
-    items = conn.execute("""
+    
+    cur = conn.cursor()
+    
+    cur.execute("""
     SELECT 
         items.*,
         (SELECT image FROM item_images 
          WHERE item_id = items.id 
          LIMIT 1) as image
     FROM items
-    WHERE items.company_id = ?
-    """, (session.get("company_id"),)).fetchall()
+    WHERE items.company_id = %s
+    """, (session.get("company_id"),))
+    items = cur.fetchall()
     conn.close()
     return render_template("items.html", items=items)
 
@@ -38,14 +42,15 @@ def items():
 def add_item():
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
     if request.method == "POST":
 
         company_id = session.get("company_id")
 
-        conn.execute("""
-            INSERT INTO items 
-            (
+        cur.execute("""
+            INSERT INTO items (
                 name,
                 category,
                 unit,
@@ -57,7 +62,8 @@ def add_item():
                 barcode,
                 company_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             request.form["name"],
             request.form["category"],
@@ -71,9 +77,7 @@ def add_item():
             company_id
         ))
 
-        item_id = conn.execute("""
-            SELECT last_insert_rowid()
-        """).fetchone()[0]
+        item_id = cur.fetchone()["id"]
 
         # 🔥 загрузка картинок
 
@@ -100,13 +104,13 @@ def add_item():
                     "/" + save_path.replace("\\", "/")
                 )
 
-                conn.execute("""
+                cur.execute("""
                     INSERT INTO item_images
                     (
                         item_id,
                         image
                     )
-                    VALUES (?, ?)
+                    VALUES (%s, %s)
                 """, (
                     item_id,
                     image_path
@@ -119,14 +123,16 @@ def add_item():
         return redirect("/items")
 
     # категории
-    categories = conn.execute("""
+    cur.execute("""
         SELECT *
         FROM categories
-        WHERE company_id = ?
+        WHERE company_id = %s
         ORDER BY name
     """, (
         session.get("company_id"),
-    )).fetchall()
+    ))
+    
+    categories = cur.fetchall()
 
     conn.close()
 
@@ -138,21 +144,23 @@ def add_item():
 @items_bp.route("/items/<int:item_id>/edit", methods=["GET", "POST"])
 def edit_item(item_id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
     if request.method == "POST":
-        conn.execute("""
+        cur.execute("""
             UPDATE items
             SET 
-                name = ?,
-                category = ?,
-                unit = ?,
-                description = ?,
-                retail_price = ?,
-                wholesale_price = ?,
-                purchase_price = ?,
-                discount_percent = ?,
-                barcode = ?
-            WHERE id = ? AND company_id = ?
+                name = %s,
+                category = %s,
+                unit = %s,
+                description = %s,
+                retail_price = %s,
+                wholesale_price = %s,
+                purchase_price = %s,
+                discount_percent = %s,
+                barcode = %s
+            WHERE id = %s AND company_id = %s
         """, (
             request.form["name"],
             request.form["category"],
@@ -171,21 +179,27 @@ def edit_item(item_id):
         conn.close()
         return redirect("/items")
 
-    item = conn.execute(
-        "SELECT * FROM items WHERE id = ? AND company_id = ?",
+    cur.execute(
+        "SELECT * FROM items WHERE id = %s AND company_id = %s",
         (item_id, session.get("company_id"))
-    ).fetchone()
+    )
+
+    item = cur.fetchone()
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    categories = conn.execute("""
+    cur.execute("""
         SELECT *
         FROM categories
-        WHERE company_id = ?
+        WHERE company_id = %s
         ORDER BY name
     """, (
         session.get("company_id"),
-    )).fetchall()
+    ))
+
+    categories = cur.fetchall()
 
     conn.close()
 
@@ -198,9 +212,11 @@ def edit_item(item_id):
 @items_bp.route("/items/<int:item_id>/delete")
 def delete_item(item_id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    conn.execute(
-        "DELETE FROM items WHERE id = ? AND company_id = ?",
+    cur.execute(
+        "DELETE FROM items WHERE id = %s AND company_id = %s",
         (item_id, session.get("company_id"))
     )
 
@@ -212,16 +228,20 @@ def delete_item(item_id):
 @items_bp.route("/api/items")
 def api_items():
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    items = conn.execute("""
+    cur.execute("""
     SELECT 
         items.*,
         (SELECT image FROM item_images 
          WHERE item_id = items.id 
          LIMIT 1) as image
     FROM items
-    WHERE items.company_id = ?
-    """, (session.get("company_id"),)).fetchall()
+    WHERE items.company_id = %s
+    """, (session.get("company_id"),))
+    
+    items = cur.fetchall()
 
     conn.close()
 
@@ -232,19 +252,21 @@ def add_category():
     data = request.json
 
     conn = get_db()
+    
     cur = conn.cursor()
 
     cur.execute("""
         INSERT INTO categories
         (company_id, name, markup_percent)
-        VALUES (?, ?, ?)
+        VALUES (%s, %s, %s)
+        RETURNING id
     """, (
         session.get("company_id"),
         data["name"],
         data.get("markup", 0)
     ))
 
-    category_id = cur.lastrowid
+    category_id = cur.fetchone()["id"]
 
     conn.commit()
     conn.close()
@@ -259,11 +281,13 @@ def add_category():
 def delete_category(id):
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    conn.execute("""
+    cur.execute("""
         DELETE FROM categories
-        WHERE id = ?
-        AND company_id = ?
+        WHERE id = %s
+        AND company_id = %s
     """, (
         id,
         session.get("company_id")
@@ -281,16 +305,15 @@ def barcode_info(barcode):
     import requests
 
     db = get_db()
+    cur = db.cursor()
 
-    # 🔥 СНАЧАЛА СВОЯ БАЗА
-    item = db.execute(
-        """
+    cur.execute("""
         SELECT *
         FROM items
-        WHERE barcode=?
-        """,
-        (barcode,)
-    ).fetchone()
+        WHERE barcode = %s
+    """, (barcode,))
+
+    item = cur.fetchone()
 
     # ✅ нашли локально
     if item:
@@ -306,8 +329,6 @@ def barcode_info(barcode):
             "category": item["category"],
 
             "price": item["retail_price"],
-
-            "image": item["image"]
 
         })
 

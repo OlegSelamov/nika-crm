@@ -1,10 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, session
 from models import get_db
-import sqlite3
 
-companies_bp = Blueprint("companies", __name__)
-
-DB_NAME = "database.db" 
+companies_bp = Blueprint("companies", __name__) 
 
 # 📋 список
 @companies_bp.route("/companies")
@@ -16,8 +13,12 @@ def companies():
         return "Доступ запрещен", 403
         
     conn = get_db()
-    conn.row_factory = sqlite3.Row
-    data = conn.execute("SELECT * FROM companies").fetchall()
+    
+    cur = conn.cursor()
+    
+    cur.execute("SELECT * FROM companies")
+
+    data = cur.fetchall()
     conn.close()
     return render_template("companies.html", companies=data)
 
@@ -31,10 +32,16 @@ def add_company():
         return "Доступ запрещен", 403
         
     conn = get_db()
-    conn.row_factory = sqlite3.Row
-    conn.execute("""
-        INSERT INTO companies (name, bin, address, phone, iik, bik, bank, kbe, knp, director)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    
+    cur = conn.cursor()
+    
+    cur.execute("""
+        INSERT INTO companies (
+            name, bin, address, phone,
+            iik, bik, bank, kbe, knp, director
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
     """, (
         request.form["name"],
         request.form["bin"],
@@ -47,13 +54,12 @@ def add_company():
         request.form.get("knp"),
         request.form.get("director"),
     ))
-    
-    # получаем ID созданной компании
-    company_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    company_id = cur.fetchone()["id"]
 
     # 🔥 привязываем текущего пользователя к этой компании
-    conn.execute(
-        "UPDATE users SET company_id = ? WHERE id = ?",
+    cur.execute(
+        "UPDATE users SET company_id = %s WHERE id = %s",
         (company_id, session["user_id"])
     )
     
@@ -71,10 +77,14 @@ def activate_company(id):
         return "Доступ запрещен", 403
         
     conn = get_db()
-    conn.row_factory = sqlite3.Row
+    
+    cur = conn.cursor()
 
-    conn.execute("UPDATE companies SET is_active = 0")
-    conn.execute("UPDATE companies SET is_active = 1 WHERE id = ?", (id,))
+    cur.execute("UPDATE companies SET is_active = FALSE")
+    cur.execute(
+        "UPDATE companies SET is_active = TRUE WHERE id = %s",
+        (id,)
+    )
 
     conn.commit()
     conn.close()
@@ -85,13 +95,16 @@ def activate_company(id):
 @companies_bp.route("/api/company/active")
 def active_company():
     conn = get_db()
-    conn.row_factory = sqlite3.Row
+    
+    cur = conn.cursor()
 
-    company = conn.execute("""
+    cur.execute("""
         SELECT * FROM companies
-        WHERE is_active = 1
+        WHERE is_active = TRUE
         LIMIT 1
-    """).fetchone()
+    """)
+
+    company = cur.fetchone()
 
     conn.close()
 
@@ -106,8 +119,10 @@ def delete_company(id):
         return "Доступ запрещен", 403
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    conn.execute("DELETE FROM companies WHERE id = ?", (id,))
+    cur.execute("DELETE FROM companies WHERE id = %s", (id,))
 
     conn.commit()
     conn.close()
@@ -120,11 +135,15 @@ def company_profile():
         return redirect("/login")
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    company = conn.execute(
-        "SELECT * FROM companies WHERE id = ?",
+    cur.execute(
+        "SELECT * FROM companies WHERE id = %s",
         (session.get("company_id"),)
-    ).fetchone()
+    )
+
+    company = cur.fetchone()
 
     conn.close()
 

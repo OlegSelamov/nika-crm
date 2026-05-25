@@ -1,63 +1,73 @@
 from flask import Blueprint, render_template, session
 from models import get_db
 from datetime import datetime
-import sqlite3
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
 @dashboard_bp.route("/dashboard")
 def dashboard():
     conn = get_db()
-    conn.row_factory = sqlite3.Row
+    
+    cur = conn.cursor()
 
     company_id = session.get("company_id")
 
     # 💰 ОБЩАЯ ВЫРУЧКА
-    total = conn.execute("""
+    cur.execute("""
         SELECT SUM(total_amount) as total
         FROM sales
-        WHERE company_id = ?
-    """, (company_id,)).fetchone()["total"] or 0
+        WHERE company_id = %s
+    """, (company_id,))
+
+    total = cur.fetchone()["total"] or 0
 
     # 📅 СЕГОДНЯ
     today_str = datetime.now().strftime("%Y-%m-%d")
 
-    today = conn.execute("""
+    cur.execute("""
         SELECT SUM(total_amount) as total
         FROM sales
-        WHERE DATE(created_at) = ?
-        AND company_id = ?
-    """, (today_str, company_id)).fetchone()["total"] or 0
+        WHERE DATE(created_at) = %s
+        AND company_id = %s
+    """, (today_str, company_id))
+
+    today = cur.fetchone()["total"] or 0
 
     # 💳 ОПЛАТЫ
-    payments = conn.execute("""
+    cur.execute("""
         SELECT 
             SUM(cash_amount) as cash,
             SUM(card_amount) as card,
             SUM(kaspi_amount) as kaspi
         FROM sales
-        WHERE company_id = ?
-    """, (company_id,)).fetchone()
+        WHERE company_id = %s
+    """, (company_id,))
+
+    payments = cur.fetchone()
 
     # 🧾 ПОСЛЕДНИЕ ПРОДАЖИ
-    sales = conn.execute("""
+    cur.execute("""
         SELECT sales.*, clients.full_name
         FROM sales
         LEFT JOIN clients ON sales.client_id = clients.id
-        WHERE sales.company_id = ?
+        WHERE sales.company_id = %s
         ORDER BY sales.id DESC
         LIMIT 5
-    """, (company_id,)).fetchall()
+    """, (company_id,))
+
+    sales = cur.fetchall()
 
     # 📈 ГРАФИК
-    chart_data = conn.execute("""
+    cur.execute("""
         SELECT DATE(created_at) as date, SUM(total_amount) as total
         FROM sales
-        WHERE company_id = ?
+        WHERE company_id = %s
         GROUP BY DATE(created_at)
         ORDER BY date DESC
         LIMIT 7
-    """, (company_id,)).fetchall()
+    """, (company_id,))
+    
+    chart_data = cur.fetchall()
 
     chart_labels = []
     chart_values = []
@@ -67,15 +77,17 @@ def dashboard():
         chart_values.append(row["total"] or 0)
         
     # ⚠️ ДОЛГИ
-    debts = conn.execute("""
+    cur.execute("""
         SELECT clients.full_name, sales.total_amount, sales.paid_amount
         FROM sales
         JOIN clients ON sales.client_id = clients.id
-        WHERE sales.company_id = ?
+        WHERE sales.company_id = %s
         AND sales.status != 'Оплачено'
         ORDER BY sales.id DESC
         LIMIT 5
-    """, (company_id,)).fetchall()
+    """, (company_id,))
+    
+    debts = cur.fetchall()
     
     # 🔔 УВЕДОМЛЕНИЯ
     notifications = []
@@ -83,18 +95,20 @@ def dashboard():
     for d in debts:
         notifications.append(f"Долг: {d['full_name']}")
 
-    recent = conn.execute("""
+    cur.execute("""
         SELECT id FROM sales
-        WHERE company_id = ?
+        WHERE company_id = %s
         ORDER BY id DESC
         LIMIT 3
-    """, (company_id,)).fetchall()
+    """, (company_id,))
+    
+    recent = cur.fetchall()
 
     for r in recent:
         notifications.append(f"Новая продажа #{r['id']}")
       
     
-    low_stock = conn.execute("""
+    cur.execute("""
 
     SELECT
         items.name,
@@ -120,7 +134,7 @@ def dashboard():
     LEFT JOIN stock_movements
     ON items.id = stock_movements.item_id
 
-    WHERE items.company_id = ?
+    WHERE items.company_id = %s
 
     GROUP BY items.id
 
@@ -130,7 +144,9 @@ def dashboard():
 
     """, (
         session.get("company_id"),
-    )).fetchall() 
+    ))
+    
+    low_stock = cur.fetchall() 
 
     conn.close()   
     

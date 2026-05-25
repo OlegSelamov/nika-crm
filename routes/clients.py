@@ -32,18 +32,20 @@ clients_bp = Blueprint("clients", __name__)
 @clients_bp.route("/clients")
 def clients():
     conn = get_db()
+    
+    cur = conn.cursor()
 
     search = request.args.get("search", "").strip()
 
     if search:
-        clients = conn.execute("""
+        cur.execute("""
             SELECT * FROM clients
-            WHERE company_id = ?
+            WHERE company_id = %s
             AND (
-                full_name LIKE ?
-                OR phone LIKE ?
-                OR company_name LIKE ?
-                OR iin LIKE ?
+                full_name LIKE %s
+                OR phone LIKE %s
+                OR company_name LIKE %s
+                OR iin LIKE %s
             )
             ORDER BY id DESC
         """, (
@@ -52,13 +54,17 @@ def clients():
             f"%{search}%",
             f"%{search}%",
             f"%{search}%"
-        )).fetchall()
+        ))
+        
+        clients = cur.fetchall()
     else:
-        clients = conn.execute("""
+        cur.execute("""
             SELECT * FROM clients
-            WHERE company_id = ?
+            WHERE company_id = %s
             ORDER BY id DESC
-        """, (session.get("company_id"),)).fetchall()
+        """, (session.get("company_id"),))
+        
+        clients = cur.fetchall()
 
     conn.close()
 
@@ -100,9 +106,11 @@ def add_client():
 
         conn = get_db()
         
+        cur = conn.cursor()
+        
         print("CLIENT SAVE COMPANY:", session.get("company_id"))
         
-        conn.execute(
+        cur.execute(
             """
             INSERT INTO clients (
                 full_name,
@@ -121,7 +129,7 @@ def add_client():
                 created_at,
                 company_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 full_name,
@@ -137,7 +145,7 @@ def add_client():
                 request.form.get("contract_date", ""),
                 photo_path,
                 "|".join(comment_photo_paths),
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.now(),
                 session.get("company_id")
             ),
         )
@@ -151,17 +159,23 @@ def add_client():
 @clients_bp.route("/clients/<int:client_id>")
 def client_detail(client_id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    client = conn.execute(
-        "SELECT * FROM clients WHERE id = ? AND company_id = ?",
+    cur.execute(
+        "SELECT * FROM clients WHERE id = %s AND company_id = %s",
         (client_id, session.get("company_id"))
-    ).fetchone()
+    )
+    
+    client = cur.fetchone()
 
-    sales = conn.execute("""
+    cur.execute("""
         SELECT * FROM sales
-        WHERE client_id = ? AND company_id = ?
+        WHERE client_id = %s AND company_id = %s
         ORDER BY id DESC
-    """, (client_id, session.get("company_id"))).fetchall()
+    """, (client_id, session.get("company_id")))
+    
+    sales = cur.fetchall()
 
     conn.close()
 
@@ -192,26 +206,30 @@ def client_detail(client_id):
 @clients_bp.route("/clients/<int:client_id>/add_item", methods=["POST"])
 def add_item(client_id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
     item_id = request.form.get("item_id")
     payment_method = request.form.get("payment_method", "Не оплачено")
 
-    item = conn.execute(
-        "SELECT * FROM items WHERE id = ?",
+    cur.execute(
+        "SELECT * FROM items WHERE id = %s",
         (item_id,)
-    ).fetchone()
+    )
+    
+    item = cur.fetchone()
 
     if item:
-        conn.execute("""
+        cur.execute("""
             INSERT INTO client_items (client_id, item_id, price, payment_method, is_paid, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             client_id,
             item_id,
             item["price"],
             payment_method,
             0,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            datetime.now()
         ))
         conn.commit()
 
@@ -221,23 +239,31 @@ def add_item(client_id):
 @clients_bp.route("/api/client/<int:client_id>")
 def api_client(client_id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    client = conn.execute(
-        "SELECT * FROM clients WHERE id = ? AND company_id = ?",
+    cur.execute(
+        "SELECT * FROM clients WHERE id = %s AND company_id = %s",
         (client_id, session.get("company_id"))
-    ).fetchone()
+    )
+    
+    client = cur.fetchone()
 
-    deals = conn.execute("""
+    cur.execute("""
         SELECT * FROM sales
-        WHERE client_id = ? AND company_id = ?
+        WHERE client_id = %s AND company_id = %s
         ORDER BY id DESC
-    """, (client_id, session.get("company_id"))).fetchall()
+    """, (client_id, session.get("company_id")))
+    
+    deals = cur.fetchall()
 
     # 🔥 ВАЖНО: сначала берём services
-    items = conn.execute(
-        "SELECT * FROM items WHERE company_id = ?",
+    cur.execute(
+        "SELECT * FROM items WHERE company_id = %s",
         (session.get("company_id"),)
-    ).fetchall()
+    )
+    
+    items = cur.fetchall()
 
     # ❗ И ТОЛЬКО ПОТОМ закрываем
     conn.close()
@@ -251,13 +277,17 @@ def api_client(client_id):
 @clients_bp.route("/clients/<int:client_id>/edit", methods=["GET", "POST"])
 def edit_client(client_id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
     if request.method == "POST":
 
-        old_client = conn.execute(
-            "SELECT * FROM clients WHERE id = ? AND company_id = ?",
+         cur.execute(
+            "SELECT * FROM clients WHERE id = %s AND company_id = %s",
             (client_id, session.get("company_id"))
-        ).fetchone()
+        )
+        
+        old_client = cur.fetchone()
 
         if not old_client:
             conn.close()
@@ -284,22 +314,22 @@ def edit_client(client_id):
                 file.save(save_path)
                 comment_photo_paths.append("/" + save_path.replace("\\", "/"))
 
-        conn.execute("""
+        cur.execute("""
             UPDATE clients
-            SET full_name = ?, 
-                phone = ?, 
-                iin = ?, 
-                company_name = ?, 
-                status = ?,
-                category = ?, 
-                payment = ?, 
-                comment = ?, 
-                address = ?,
-                contract_number = ?,
-                contract_date = ?,
-                photo = ?, 
-                comment_photos = ?
-            WHERE id = ? AND company_id = ?
+            SET full_name = %s, 
+                phone = %s, 
+                iin = %s, 
+                company_name = %s, 
+                status = %s,
+                category = %s, 
+                payment = %s, 
+                comment = %s, 
+                address = %s,
+                contract_number = %s,
+                contract_date = %s,
+                photo = %s, 
+                comment_photos = %s
+            WHERE id = %s AND company_id = %s
         """, (
             request.form["full_name"],
             request.form.get("phone", ""),
@@ -323,10 +353,12 @@ def edit_client(client_id):
         return {"status": "ok"}
 
     # GET
-    client = conn.execute(
-        "SELECT * FROM clients WHERE id = ? AND company_id = ?",
+    cur.execute(
+        "SELECT * FROM clients WHERE id = %s AND company_id = %s",
         (client_id, session.get("company_id"))
-    ).fetchone()
+    )
+    
+    client = cur.fetchone()
 
     conn.close()
 
@@ -341,9 +373,11 @@ def edit_client(client_id):
 @clients_bp.route("/clients/<int:client_id>/delete")
 def delete_client(client_id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    conn.execute(
-        "UPDATE clients SET is_deleted = 1 WHERE id = ? AND company_id = ?",
+    cur.execute(
+        "UPDATE clients SET is_deleted = TRUE WHERE id = %s AND company_id = %s",
         (client_id, session.get("company_id"))
     )
 
@@ -355,10 +389,15 @@ def delete_client(client_id):
 @clients_bp.route("/clients/deleted")
 def deleted_clients():
     conn = get_db()
-    data = conn.execute(
-        "SELECT * FROM clients WHERE is_deleted = 1 AND company_id = ? ORDER BY id DESC",
+    
+    cur = conn.cursor()
+    
+    cur.execute(
+        "SELECT * FROM clients WHERE is_deleted = TRUE AND company_id = %s ORDER BY id DESC",
         (session.get("company_id"),)
-    ).fetchall()
+    )
+    
+    data = cur.fetchall()
     conn.close()
     return render_template("clients_deleted.html", clients=data)
     
@@ -366,8 +405,10 @@ def deleted_clients():
 def restore_client(client_id):
     conn = get_db()
     
-    conn.execute(
-        "UPDATE clients SET is_deleted = 0 WHERE id = ? AND company_id = ?",
+    cur = conn.cursor()
+    
+    cur.execute(
+        "UPDATE clients SET is_deleted = FALSE WHERE id = %s AND company_id = %s",
         (client_id, session.get("company_id"))
     )
     
@@ -379,9 +420,11 @@ def restore_client(client_id):
 @clients_bp.route("/clients/<int:client_id>/delete_permanently")
 def delete_client_permanently(client_id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    (conn.execute(
-        "DELETE FROM clients WHERE id = ? AND company_id = ?",
+    (cur.execute(
+        "DELETE FROM clients WHERE id = %s AND company_id = %s",
         (client_id, session.get("company_id"))
     ))
 
@@ -393,8 +436,10 @@ def delete_client_permanently(client_id):
 @clients_bp.route("/api/clients")
 def api_clients():
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    clients = conn.execute("""
+    cur.execute("""
         SELECT 
             id,
             full_name,
@@ -403,9 +448,11 @@ def api_clients():
             company_name,
             address
         FROM clients
-        WHERE is_deleted = 0 AND company_id = ?
+        WHERE is_deleted = FALSE AND company_id = %s
         ORDER BY id DESC
-    """, (session.get("company_id"),)).fetchall()
+    """, (session.get("company_id"),))
+    
+    clients = cur.fetchall()
 
     conn.close()
 
@@ -414,12 +461,16 @@ def api_clients():
 @clients_bp.route("/api/client/<int:id>/sales")
 def client_sales(id):
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    sales = conn.execute("""
+    cur.execute("""
         SELECT * FROM sales
-        WHERE client_id = ? AND company_id = ?
+        WHERE client_id = %s AND company_id = %s
         ORDER BY id DESC
-    """, (id, session.get("company_id"))).fetchall()
+    """, (id, session.get("company_id")))
+    
+    sales = cur.fetchall()
 
     conn.close()
 

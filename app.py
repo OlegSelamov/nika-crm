@@ -47,10 +47,16 @@ def check_company_access():
         return
 
     conn = get_db()
-    company = conn.execute(
-        "SELECT * FROM companies WHERE id = ?",
+
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT * FROM companies WHERE id = %s",
         (session.get("company_id"),)
-    ).fetchone()
+    )
+
+    company = cur.fetchone()
+
     conn.close()
 
     if not company:

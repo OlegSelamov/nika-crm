@@ -30,6 +30,11 @@ navigator.mediaDevices.getUserMedia({
 
     video.srcObject = stream;
     video.play();
+	
+	video.setAttribute(
+		"autofocus",
+		true
+	);
 
     // 🔥 ВСЁ ВНУТРИ!
     const track = stream.getVideoTracks()[0];
@@ -43,7 +48,7 @@ navigator.mediaDevices.getUserMedia({
 
     if (capabilities.zoom) {
         track.applyConstraints({
-            advanced: [{ zoom: capabilities.zoom.max / 2 }]
+            advanced: [{ zoom: 1.5 }]
         });
     }
 
@@ -100,12 +105,13 @@ setTimeout(scan, 500);
 body {
     margin:0;
     background:black;
+    overflow:hidden;
 }
 
 #video {
     width:100%;
     height:100vh;
-    object-fit:contain;
+    object-fit:cover;
 }
 
 .scan-frame {

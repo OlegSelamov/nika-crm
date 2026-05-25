@@ -9,6 +9,8 @@ stock_bp = Blueprint("stock", __name__)
 def stock_income():
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
     if request.method == "POST":
 
@@ -24,7 +26,7 @@ def stock_income():
 
         comment = request.form.get("comment")
 
-        conn.execute("""
+        cur.execute("""
             INSERT INTO stock_movements (
                 company_id,
                 item_id,
@@ -35,7 +37,7 @@ def stock_income():
                 comment,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             session.get("company_id"),
             item_id,
@@ -44,21 +46,23 @@ def stock_income():
             price,
             quantity * price,
             comment,
-            datetime.now().isoformat()
+            datetime.now()
         ))
 
         conn.commit()
 
         return redirect("/stock/income")
 
-    items = conn.execute("""
+    cur.execute("""
         SELECT *
         FROM items
-        WHERE company_id = ?
+        WHERE company_id = %s
         ORDER BY name
     """, (
         session.get("company_id"),
-    )).fetchall()
+    ))
+
+    items = cur.fetchall()
 
     conn.close()
 
@@ -71,8 +75,10 @@ def stock_income():
 def stock():
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    items = conn.execute("""
+    cur.execute("""
         SELECT
             items.*,
 
@@ -97,14 +103,16 @@ def stock():
         LEFT JOIN stock_movements
         ON items.id = stock_movements.item_id
 
-        WHERE items.company_id = ?
+        WHERE items.company_id = %s
 
         GROUP BY items.id
 
         ORDER BY items.name
     """, (
         session.get("company_id"),
-    )).fetchall()
+    ))
+    
+    items = cur.fetchall()
 
     conn.close()
 
@@ -117,8 +125,10 @@ def stock():
 def stock_movements():
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
-    rows = conn.execute("""
+    cur.execute("""
         SELECT
             stock_movements.*,
             items.name as item_name
@@ -128,12 +138,14 @@ def stock_movements():
         LEFT JOIN items
         ON items.id = stock_movements.item_id
 
-        WHERE stock_movements.company_id = ?
+        WHERE stock_movements.company_id = %s
 
         ORDER BY stock_movements.id DESC
     """, (
         session.get("company_id"),
-    )).fetchall()
+    ))
+    
+    rows = cur.fetchall()
 
     conn.close()
 
@@ -146,6 +158,8 @@ def stock_movements():
 def stock_writeoff():
 
     conn = get_db()
+    
+    cur = conn.cursor()
 
     if request.method == "POST":
 
@@ -157,7 +171,7 @@ def stock_writeoff():
 
         comment = request.form.get("comment")
 
-        conn.execute("""
+        cur.execute("""
             INSERT INTO stock_movements (
                 company_id,
                 item_id,
@@ -168,7 +182,7 @@ def stock_writeoff():
                 comment,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             session.get("company_id"),
             item_id,
@@ -177,20 +191,22 @@ def stock_writeoff():
             0,
             0,
             comment,
-            datetime.now().isoformat()
+            datetime.now()
         ))
 
         conn.commit()
 
         return redirect("/stock/writeoff")
 
-    items = conn.execute("""
+    cur.execute("""
         SELECT *
         FROM items
-        WHERE company_id = ?
+        WHERE company_id = %s
     """, (
         session.get("company_id"),
-    )).fetchall()
+    ))
+    
+    items = cur.fetchall()
 
     conn.close()
 

@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from models import get_db
 from openai import OpenAI
+from flask import session
+from datetime import datetime
 import os
 import json
 
@@ -132,12 +134,21 @@ def agent_command():
     if action == "create_client":
         conn = get_db()
 
-        conn.execute("""
-            INSERT INTO clients (full_name, phone, created_at)
-            VALUES (?, ?, datetime('now'))
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO clients (
+                full_name,
+                phone,
+                created_at,
+                company_id
+            )
+            VALUES (%s, %s, %s, %s)
         """, (
             command.get("name"),
-            command.get("phone", "")
+            command.get("phone", ""),
+            datetime.now(),
+            session.get("company_id")
         ))
 
         conn.commit()
