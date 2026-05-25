@@ -1,6 +1,6 @@
 from routes.clients import format_date_ru
 from flask import Blueprint, render_template, request, jsonify, redirect
-from models import get_db
+from models import get_db, pool
 from datetime import datetime, timedelta
 from flask import render_template
 from num2words import num2words

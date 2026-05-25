@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, session
-from models import get_db
+from models import get_db, pool
 from datetime import datetime
 
 dashboard_bp = Blueprint("dashboard", __name__)

@@ -1,8 +1,13 @@
 import psycopg2
 import psycopg2.extras
 import os
+
+from dotenv import load_dotenv
+
 from datetime import datetime
 from psycopg2.pool import SimpleConnectionPool
+
+load_dotenv()
 
 pool = SimpleConnectionPool(
     1,

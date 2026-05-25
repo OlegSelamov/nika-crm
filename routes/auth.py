@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for
-from models import get_db
+from models import get_db, pool
 from datetime import datetime
 
 auth_bp = Blueprint("auth", __name__)

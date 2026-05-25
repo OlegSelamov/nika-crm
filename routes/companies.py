@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, session
-from models import get_db
+from models import get_db, pool
 
 companies_bp = Blueprint("companies", __name__) 
 

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import get_db
+from models import get_db, pool
 from openai import OpenAI
 from flask import session
 from datetime import datetime

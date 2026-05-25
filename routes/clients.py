@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect
 from flask import session
-from models import get_db
+from models import get_db, pool
 from datetime import datetime
 from werkzeug.utils import secure_filename
 import os

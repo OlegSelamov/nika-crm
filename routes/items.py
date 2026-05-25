@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, jsonify
-from models import get_db
+from models import get_db, pool
 from werkzeug.utils import secure_filename
 from flask import session
 from datetime import datetime

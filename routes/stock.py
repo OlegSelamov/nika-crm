@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, session
-from models import get_db
+from models import get_db, pool
 from datetime import datetime
 
 stock_bp = Blueprint("stock", __name__)
