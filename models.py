@@ -168,7 +168,7 @@ def init_db():
             "admin",
             "12345",
             "admin",
-            1,
+            True,
             datetime.now()
         ))
             
