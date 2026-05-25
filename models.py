@@ -41,7 +41,7 @@ def init_db():
         item_id INTEGER,
         price NUMERIC(12,2),
         payment_method TEXT,
-        is_paid INTEGER DEFAULT 0,
+        is_paid BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP
     )
     """)
@@ -158,6 +158,8 @@ def init_db():
         created_at TIMESTAMP
     )
     """)
+    
+    conn.commit()
     
     cur.execute("SELECT * FROM users WHERE username = %s", ("admin",))
     if not cur.fetchone():
@@ -395,7 +397,7 @@ def init_db():
         conn.rollback()
         
     try:
-        cur.execute("ALTER TABLE items ADD COLUMN quantity REAL DEFAULT 0;")
+        cur.execute("ALTER TABLE items ADD COLUMN quantity NUMERIC(12,3) DEFAULT 0;")
         conn.commit()
     except:
         conn.rollback()
