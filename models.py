@@ -429,6 +429,38 @@ def init_db():
         conn.commit()
     except:
         conn.rollback()
+        
+    # 🔥 INDEXES
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_sales_company
+    ON sales(company_id)
+    """)
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_items_company
+    ON items(company_id)
+    """)
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_clients_company
+    ON clients(company_id)
+    """)
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_stock_company
+    ON stock_movements(company_id)
+    """)
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_sale_items_sale
+    ON sale_items(sale_id)
+    """)
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_items_barcode
+    ON items(barcode)
+    """)
          
     conn.commit()
     conn.close()
