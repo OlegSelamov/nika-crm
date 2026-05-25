@@ -164,12 +164,20 @@ def init_db():
     cur.execute("SELECT * FROM users WHERE username = %s", ("admin",))
     if not cur.fetchone():
         cur.execute("""
-            INSERT INTO users (username, password, role, is_super_admin, created_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO users (
+                username,
+                password,
+                role,
+                is_super_admin,
+                is_creator,
+                created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             "admin",
             "12345",
             "admin",
+            True,
             True,
             datetime.now()
         ))
