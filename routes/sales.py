@@ -26,7 +26,7 @@ def sales():
 
     sales = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template("sales.html", sales=sales)
 
@@ -49,7 +49,7 @@ def add_sale():
     ))
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return redirect("/sales")
 
@@ -154,7 +154,7 @@ def pay_sale():
         conn.commit()
 
     finally:
-        conn.close()
+        pool.putconn(conn)
 
     return {"success": True, "sale_id": sale_id}
 
@@ -173,7 +173,7 @@ def get_sale(sale_id):
     sale = cur.fetchone()
 
     if not sale:
-        conn.close()
+        pool.putconn(conn)
         return jsonify({"error": "not found"}), 404
 
     cur.execute(
@@ -204,7 +204,7 @@ def get_sale(sale_id):
             "unit": i["unit"] if "unit" in i.keys() else "шт"
         })
 
-    conn.close()
+    pool.putconn(conn)
     return jsonify(result)
 
 
@@ -249,7 +249,7 @@ def smart_sale(payload=None):
             break
 
     if not client:
-        conn.close()
+        pool.putconn(conn)
         return jsonify({"success": False, "error": f"client not found: {client_name}"})
 
     cur.execute(
@@ -278,7 +278,7 @@ def smart_sale(payload=None):
             break
 
     if not item:
-        conn.close()
+        pool.putconn(conn)
         return jsonify({"success": False, "error": f"item not found: {item_name}"})
 
     cur.execute("""
@@ -309,7 +309,7 @@ def smart_sale(payload=None):
     ))
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return jsonify({
         "success": True,
@@ -384,7 +384,7 @@ def create_invoice():
         ))
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return jsonify({
         "success": True,
@@ -416,7 +416,7 @@ def get_sale_data(sale_id):
     )
     client = cur.fetchone()
 
-    conn.close()
+    pool.putconn(conn)
 
     return sale, items, client
     
@@ -580,7 +580,7 @@ def invoice(sale_id):
     )
     
     company = cur.fetchone()
-    conn.close()
+    pool.putconn(conn)
 
     if not company:
         return "Активная организация не выбрана"
@@ -632,7 +632,7 @@ def mark_paid():
     sale = cur.fetchone()
 
     if not sale:
-        conn.close()
+        pool.putconn(conn)
         return {"success": False, "error": "Продажа не найдена"}, 404
 
     cur.execute("""
@@ -653,7 +653,7 @@ def mark_paid():
     process_sale(conn, sale_id)
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return {"success": True}
     
@@ -717,7 +717,7 @@ def check(sale_id):
 
         })
         
-    conn.close()
+    pool.putconn(conn)
 
     return render_template(
         "docs/check.html",
@@ -758,7 +758,7 @@ def nakladnaya(sale_id):
     )
     
     company = cur.fetchone()
-    conn.close()
+    pool.putconn(conn)
 
     if not company:
         return "Нет компании"
@@ -839,7 +839,7 @@ def schet_factura(sale_id):
     )
     
     company = cur.fetchone()
-    conn.close()
+    pool.putconn(conn)
 
     if not company:
         return "Нет компании"
@@ -982,7 +982,7 @@ def analytics():
 
     today = cur.fetchone()["total"] or 0
     
-    conn.close()
+    pool.putconn(conn)
 
     return render_template(
         "analytics.html",
@@ -1014,7 +1014,7 @@ def barcode():
 
     item = cur.fetchone()
 
-    conn.close()
+    pool.putconn(conn)
 
     if item:
         return {
@@ -1061,7 +1061,7 @@ def add_item_api():
 
     item = cur.fetchone()
 
-    conn.close()
+    pool.putconn(conn)
 
     return {
         "id": item["id"],

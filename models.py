@@ -2,13 +2,19 @@ import psycopg2
 import psycopg2.extras
 import os
 from datetime import datetime
+from psycopg2.pool import SimpleConnectionPool
+
+pool = SimpleConnectionPool(
+    1,
+    20,
+    os.environ.get("DATABASE_URL")
+)
 
 def get_db():
 
-    conn = psycopg2.connect(
-        os.environ.get("DATABASE_URL"),
-        cursor_factory=psycopg2.extras.RealDictCursor
-    )
+    conn = pool.getconn()
+
+    conn.cursor_factory = psycopg2.extras.RealDictCursor
 
     return conn
 
@@ -463,4 +469,4 @@ def init_db():
     """)
          
     conn.commit()
-    conn.close()
+    pool.putconn(conn)

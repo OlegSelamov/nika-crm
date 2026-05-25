@@ -66,7 +66,7 @@ def clients():
         
         clients = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template("clients.html", clients=clients)
 
@@ -150,7 +150,7 @@ def add_client():
             ),
         )
         conn.commit()
-        conn.close()
+        pool.putconn(conn)
         return redirect("/clients")
 
     return render_template("client_form.html")
@@ -177,7 +177,7 @@ def client_detail(client_id):
     
     sales = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     if not client:
         return "Клиент не найден", 404
@@ -233,7 +233,7 @@ def add_item(client_id):
         ))
         conn.commit()
 
-    conn.close()
+    pool.putconn(conn)
     return "", 200
     
 @clients_bp.route("/api/client/<int:client_id>")
@@ -266,7 +266,7 @@ def api_client(client_id):
     items = cur.fetchall()
 
     # ❗ И ТОЛЬКО ПОТОМ закрываем
-    conn.close()
+    pool.putconn(conn)
 
     return {
         "client": dict(client) if client else {},
@@ -290,7 +290,7 @@ def edit_client(client_id):
         old_client = cur.fetchone()
 
         if not old_client:
-            conn.close()
+            pool.putconn(conn)
             return "Нет доступа"
 
         photo_path = old_client["photo"] or ""
@@ -349,7 +349,7 @@ def edit_client(client_id):
         ))
 
         conn.commit()
-        conn.close()
+        pool.putconn(conn)
         return {"status": "ok"}
 
     # GET
@@ -360,7 +360,7 @@ def edit_client(client_id):
     
     client = cur.fetchone()
 
-    conn.close()
+    pool.putconn(conn)
 
     if not client:
         return "Клиент не найден", 404
@@ -382,7 +382,7 @@ def delete_client(client_id):
     )
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return redirect("/clients")
     
@@ -398,7 +398,7 @@ def deleted_clients():
     )
     
     data = cur.fetchall()
-    conn.close()
+    pool.putconn(conn)
     return render_template("clients_deleted.html", clients=data)
     
 @clients_bp.route("/clients/<int:client_id>/restore")
@@ -413,7 +413,7 @@ def restore_client(client_id):
     )
     
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
     
     return redirect("/clients/deleted")
     
@@ -429,7 +429,7 @@ def delete_client_permanently(client_id):
     ))
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return redirect("/clients/deleted")
     
@@ -454,7 +454,7 @@ def api_clients():
     
     clients = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return [dict(c) for c in clients]
     
@@ -472,6 +472,6 @@ def client_sales(id):
     
     sales = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return [dict(s) for s in sales]

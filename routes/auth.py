@@ -18,7 +18,7 @@ def current_user():
     )
 
     user = cur.fetchone()
-    conn.close()
+    pool.putconn(conn)
     return user
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -36,7 +36,7 @@ def login():
         )
 
         user = cur.fetchone()
-        conn.close()
+        pool.putconn(conn)
         
         if user:
             print("USER COMPANY:", user["company_id"])
@@ -102,7 +102,7 @@ def users():
             datetime.now()
         ))
         conn.commit()
-        conn.close()
+        pool.putconn(conn)
         return redirect("/users")
 
     cur.execute("""
@@ -121,7 +121,7 @@ def users():
 
     companies = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template("users.html", users=users, companies=companies)
     
@@ -152,28 +152,28 @@ def delete_user(user_id):
     user = cur.fetchone()
 
     if not user:
-        conn.close()
+        pool.putconn(conn)
         return "Пользователь не найден"
 
     # ❌ Creator вообще нельзя трогать
     if user["is_creator"]:
-        conn.close()
+        pool.putconn(conn)
         return "Создатель системы не может быть удален"
 
     # ❌ нельзя удалить самого себя (даже creator не сможет)
     if user_id == session.get("user_id"):
-        conn.close()
+        pool.putconn(conn)
         return "Нельзя удалить самого себя"
 
     # ❌ супер-админ не может удалять других владельцев
     if user["is_super_admin"] and not session.get("is_creator"):
-        conn.close()
+        pool.putconn(conn)
         return "Нельзя удалить владельца системы"
 
     # ✅ удаление
     cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return redirect("/users")
     
@@ -231,7 +231,7 @@ def register():
         """, (username, password, "admin", company_id))
 
         conn.commit()
-        conn.close()
+        pool.putconn(conn)
 
         return redirect("/login")
 

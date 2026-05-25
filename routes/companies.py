@@ -19,7 +19,7 @@ def companies():
     cur.execute("SELECT * FROM companies")
 
     data = cur.fetchall()
-    conn.close()
+    pool.putconn(conn)
     return render_template("companies.html", companies=data)
 
 # ➕ добавление
@@ -64,7 +64,7 @@ def add_company():
     )
     
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
     return redirect("/companies")
 
 # ⭐ сделать активной
@@ -87,7 +87,7 @@ def activate_company(id):
     )
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return redirect("/companies")
     
@@ -106,7 +106,7 @@ def active_company():
 
     company = cur.fetchone()
 
-    conn.close()
+    pool.putconn(conn)
 
     return dict(company) if company else {}
     
@@ -125,7 +125,7 @@ def delete_company(id):
     cur.execute("DELETE FROM companies WHERE id = %s", (id,))
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return redirect("/companies")
     
@@ -145,6 +145,6 @@ def company_profile():
 
     company = cur.fetchone()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template("company_profile.html", company=company)

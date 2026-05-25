@@ -152,7 +152,7 @@ def agent_command():
         ))
 
         conn.commit()
-        conn.close()
+        pool.putconn(conn)
 
         return jsonify({
             "reply": f"Клиент {command.get('name')} создан"

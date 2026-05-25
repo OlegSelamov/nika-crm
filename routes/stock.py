@@ -64,7 +64,7 @@ def stock_income():
 
     items = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template(
         "stock_income.html",
@@ -114,7 +114,7 @@ def stock():
     
     items = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template(
         "stock.html",
@@ -147,7 +147,7 @@ def stock_movements():
     
     rows = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template(
         "stock_movements.html",
@@ -208,7 +208,7 @@ def stock_writeoff():
     
     items = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template(
         "stock_writeoff.html",

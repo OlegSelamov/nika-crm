@@ -35,7 +35,7 @@ def items():
     WHERE items.company_id = %s
     """, (session.get("company_id"),))
     items = cur.fetchall()
-    conn.close()
+    pool.putconn(conn)
     return render_template("items.html", items=items)
 
 @items_bp.route("/items/add", methods=["GET", "POST"])
@@ -118,7 +118,7 @@ def add_item():
 
         conn.commit()
 
-        conn.close()
+        pool.putconn(conn)
 
         return redirect("/items")
 
@@ -134,7 +134,7 @@ def add_item():
     
     categories = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template(
         "item_form.html",
@@ -176,7 +176,7 @@ def edit_item(item_id):
         ))
 
         conn.commit()
-        conn.close()
+        pool.putconn(conn)
         return redirect("/items")
 
     cur.execute(
@@ -201,7 +201,7 @@ def edit_item(item_id):
 
     categories = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return render_template(
         "item_form.html",
@@ -221,7 +221,7 @@ def delete_item(item_id):
     )
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return redirect("/items")
     
@@ -243,7 +243,7 @@ def api_items():
     
     items = cur.fetchall()
 
-    conn.close()
+    pool.putconn(conn)
 
     return [dict(i) for i in items]
     
@@ -269,7 +269,7 @@ def add_category():
     category_id = cur.fetchone()["id"]
 
     conn.commit()
-    conn.close()
+    pool.putconn(conn)
 
     return jsonify({
         "id": category_id,
@@ -295,7 +295,7 @@ def delete_category(id):
 
     conn.commit()
 
-    conn.close()
+    pool.putconn(conn)
 
     return jsonify({"success": True})
     

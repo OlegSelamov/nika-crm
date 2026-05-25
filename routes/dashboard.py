@@ -163,7 +163,7 @@ def dashboard():
     
     low_stock = cur.fetchall() 
 
-    conn.close()   
+    pool.putconn(conn)   
     
     return render_template(
         "dashboard.html",
