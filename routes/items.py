@@ -165,7 +165,10 @@ def edit_item(item_id):
                 wholesale_price = %s,
                 purchase_price = %s,
                 discount_percent = %s,
-                barcode = %s
+                barcode = %s,
+                gtin = %s,
+                ntin = %s,
+                is_marked = %s
             WHERE id = %s AND company_id = %s
         """, (
             request.form["name"],
@@ -177,6 +180,9 @@ def edit_item(item_id):
             float(request.form.get("purchase_price") or 0),
             int(request.form.get("discount_percent") or 0),
             request.form.get("barcode"),
+            request.form.get("gtin"),
+            request.form.get("ntin"),
+            request.form.get("is_marked") == "1",
             item_id,
             session.get("company_id")
         ))

@@ -175,6 +175,38 @@
 
 </div>
 
+	<label>GTIN</label>
+
+	<input
+		type="text"
+		name="gtin"
+		value="{{ item.gtin if item else '' }}"
+		placeholder="GTIN"
+	>
+
+	<label>NTIN</label>
+
+	<input
+		type="text"
+		name="ntin"
+		value="{{ item.ntin if item else '' }}"
+		placeholder="NTIN"
+	>
+
+	<label class="checkbox-row">
+
+		<input
+			type="checkbox"
+			name="is_marked"
+			value="1"
+			{% if item and item.is_marked %}checked{% endif %}
+		>
+
+		Маркированный товар
+
+	</label>
+
+
 <div class="full">
     <label>Фото:</label>
     <input type="file" name="images" multiple>
