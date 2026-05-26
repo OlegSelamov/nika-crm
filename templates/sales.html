@@ -343,7 +343,7 @@ fetch("/api/items")
 
     data.forEach(i => {
         html += `
-            <div class="item-card" onclick="addToCart(${i.id}, '${i.name}', ${i.retail_price || 0})">
+            <div class="item-card" onclick="addToCart(${i.id}, '${i.name}', ${i.retail_price || 0}, 1, '${i.gtin || ""}', '${i.ntin || ""}')">
 
                 <div class="item-image">
                     <img src="${i.image || '/static/img/no-image.png'}">
@@ -383,7 +383,7 @@ fetch("/api/items")
 }
 
 // добавление в корзину
-function addToCart(id, name, price, qty = 1) {
+function addToCart(id, name, price, qty = 1, gtin = "", ntin = "") {
 
     const existing = cart.find(i => i.id === id);
 
@@ -394,7 +394,9 @@ function addToCart(id, name, price, qty = 1) {
 			id,
 			name,
 			price,
-			qty
+			qty,
+			gtin,
+			ntin
 		});
     }
 
@@ -557,7 +559,7 @@ function searchItems(query) {
                 (i.barcode && i.barcode.includes(query))
             ) {
 				html += `
-					<div class="item-card" onclick="addToCart(${i.id}, '${i.name}', ${i.retail_price || 0})">
+					<div class="item-card" onclick="addToCart(${i.id}, '${i.name}', ${i.retail_price || 0}, 1, '${i.gtin || ""}', '${i.ntin || ""}')">
 
 						<div class="item-image">
 							<img src="${i.image || '/static/img/no-image.png'}">

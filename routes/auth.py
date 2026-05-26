@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for
 from models import get_db, pool
-from datetime import datetime
+from utils.timezone import now_kz
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -99,7 +99,7 @@ def users():
             role,
             company_id if company_id else None,
             is_super_admin,
-            datetime.now()
+            now_kz()
         ))
         conn.commit()
         pool.putconn(conn)

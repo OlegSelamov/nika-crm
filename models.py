@@ -4,8 +4,11 @@ import os
 
 from dotenv import load_dotenv
 
-from datetime import datetime
+from utils.timezone import now_kz
 from psycopg2.pool import SimpleConnectionPool
+import pytz
+
+kz = pytz.timezone("Asia/Almaty")
 
 load_dotenv()
 
@@ -187,7 +190,7 @@ def init_db():
             "12345",
             "admin",
             True,
-            datetime.now()
+            now_kz()
         ))
 
         conn.commit()
@@ -437,6 +440,18 @@ def init_db():
         
     try:
         cur.execute("ALTER TABLE items ADD COLUMN is_marked BOOLEAN DEFAULT FALSE;")
+        conn.commit()
+    except:
+        conn.rollback()
+        
+    try:
+        cur.execute("ALTER TABLE sale_items ADD COLUMN gtin TEXT;")
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("ALTER TABLE sale_items ADD COLUMN ntin TEXT;")
         conn.commit()
     except:
         conn.rollback()

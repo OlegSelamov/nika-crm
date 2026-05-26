@@ -2,6 +2,7 @@ from routes.clients import format_date_ru
 from flask import Blueprint, render_template, request, jsonify, redirect
 from models import get_db, pool
 from datetime import datetime, timedelta
+from utils.timezone import now_kz
 from flask import render_template
 from num2words import num2words
 from flask import session
@@ -45,7 +46,7 @@ def add_sale():
         0,
         0,
         "Новая",
-        datetime.now()
+        now_kz()
     ))
 
     conn.commit()
@@ -104,7 +105,7 @@ def pay_sale():
             total,
             paid,
             status,
-            datetime.now(),
+            now_kz(),
             "cash",
             cash,
             card,
@@ -136,9 +137,11 @@ def pay_sale():
                     price,
                     quantity,
                     total,
-                    unit
+                    unit,
+                    gtin,
+                    ntin
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 sale_id,
                 item.get("id"),
@@ -146,7 +149,9 @@ def pay_sale():
                 item.get("price", 0),
                 item.get("qty", 1),
                 item.get("price", 0) * item.get("qty", 1),
-                unit
+                unit,
+                item.get("gtin"),
+                item.get("ntin")
             ))
 
         process_sale(conn, sale_id)
@@ -291,7 +296,7 @@ def smart_sale(payload=None):
         item["retail_price"],
         0,
         "Новая",
-        datetime.now()
+        now_kz()
     ))
 
     sale_id = cur.fetchone()["id"]
@@ -350,7 +355,7 @@ def create_invoice():
         total,
         0,
         "Счёт выставлен",
-        datetime.now(),
+        now_kz(),
         "invoice"
     ))
 
@@ -518,7 +523,7 @@ def process_sale(conn, sale_id):
             item["quantity"],
             item["price"],
             item["total"],
-            datetime.now().isoformat()
+            now_kz().isoformat()
         ))
     
         # 🔥 помечаем как проведённую
@@ -645,7 +650,7 @@ def mark_paid():
             card_amount = total_amount
         WHERE id = %s AND company_id = %s
     """, (
-        datetime.now(),
+        now_kz(),
         sale_id,
         session.get("company_id")
     ))
@@ -882,8 +887,8 @@ def analytics():
     date_to = request.args.get("to")
 
     if not date_from or not date_to:
-        date_to = datetime.now().strftime("%Y-%m-%d")
-        date_from = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        date_to = now_kz().strftime("%Y-%m-%d")
+        date_from = (now_kz() - timedelta(days=7)).strftime("%Y-%m-%d")
 
     # 📈 ГРАФИК
     cur.execute("""
@@ -970,7 +975,7 @@ def analytics():
     
     payments = cur.fetchone()
     
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = now_kz().strftime("%Y-%m-%d")
 
     cur.execute("""
         SELECT SUM(total_amount) as total
@@ -1158,7 +1163,7 @@ def act(sale_id):
         company=company,
         client=client,
         total=total,
-        date=datetime.now().strftime("%d.%m.%Y"),
+        date=now_kz().strftime("%d.%m.%Y"),
         format_date_ru=format_date_ru
     )
     

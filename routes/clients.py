@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect
 from flask import session
 from models import get_db, pool
 from datetime import datetime
+from utils.timezone import now_kz
 from werkzeug.utils import secure_filename
 import os
 
@@ -90,7 +91,7 @@ def add_client():
         photo = request.files.get("photo")
         if photo and photo.filename:
             filename = secure_filename(photo.filename)
-            filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+            filename = f"{now_kz().strftime('%Y%m%d%H%M%S')}_{filename}"
             save_path = os.path.join(UPLOAD_DIR, filename)
             photo.save(save_path)
             photo_path = "/" + save_path.replace("\\", "/")
@@ -99,7 +100,7 @@ def add_client():
         for file in comment_photos:
             if file and file.filename:
                 filename = secure_filename(file.filename)
-                filename = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{filename}"
+                filename = f"{now_kz().strftime('%Y%m%d%H%M%S%f')}_{filename}"
                 save_path = os.path.join(COMMENT_UPLOAD_DIR, filename)
                 file.save(save_path)
                 comment_photo_paths.append("/" + save_path.replace("\\", "/"))
@@ -145,7 +146,7 @@ def add_client():
                 request.form.get("contract_date", ""),
                 photo_path,
                 "|".join(comment_photo_paths),
-                datetime.now(),
+                now_kz(),
                 session.get("company_id")
             ),
         )
@@ -229,7 +230,7 @@ def add_item(client_id):
             item["price"],
             payment_method,
             0,
-            datetime.now()
+            now_kz()
         ))
         conn.commit()
 
@@ -300,7 +301,7 @@ def edit_client(client_id):
         photo = request.files.get("photo")
         if photo and photo.filename:
             filename = secure_filename(photo.filename)
-            filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+            filename = f"{now_kz().strftime('%Y%m%d%H%M%S')}_{filename}"
             save_path = os.path.join(UPLOAD_DIR, filename)
             photo.save(save_path)
             photo_path = "/" + save_path.replace("\\", "/")
@@ -309,7 +310,7 @@ def edit_client(client_id):
         for file in comment_photos:
             if file and file.filename:
                 filename = secure_filename(file.filename)
-                filename = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{filename}"
+                filename = f"{now_kz().strftime('%Y%m%d%H%M%S%f')}_{filename}"
                 save_path = os.path.join(COMMENT_UPLOAD_DIR, filename)
                 file.save(save_path)
                 comment_photo_paths.append("/" + save_path.replace("\\", "/"))

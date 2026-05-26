@@ -60,9 +60,12 @@ def add_item():
                 purchase_price,
                 discount_percent,
                 barcode,
+                gtin,
+                ntin,
+                is_marked,
                 company_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             request.form["name"],
@@ -74,6 +77,9 @@ def add_item():
             float(request.form.get("purchase_price") or 0),
             int(request.form.get("discount_percent") or 0),
             request.form.get("barcode"),
+            request.form.get("gtin"),
+            request.form.get("ntin"),
+            request.form.get("is_marked") == "1",
             company_id
         ))
 
@@ -329,6 +335,12 @@ def barcode_info(barcode):
             "category": item["category"],
 
             "price": item["retail_price"],
+            
+            "gtin": item.get("gtin"),
+            
+            "ntin": item.get("ntin"),
+            
+            "is_marked": item.get("is_marked"),
 
         })
 

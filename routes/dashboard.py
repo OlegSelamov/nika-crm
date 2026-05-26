@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, session
 from models import get_db, pool
 from datetime import datetime
+from utils.timezone import now_kz
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -22,7 +23,7 @@ def dashboard():
     total = cur.fetchone()["total"] or 0
 
     # 📅 СЕГОДНЯ
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = now_kz().strftime("%Y-%m-%d")
 
     cur.execute("""
         SELECT SUM(total_amount) as total
