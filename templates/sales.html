@@ -1150,20 +1150,25 @@ function handleBarcode(code) {
 
                 if (!qty) return;
 
-                addToCart(
-                    data.id,
-                    data.name,
-                    data.price,
-                    parseFloat(qty)
-                );
+				addToCart(
+					data.id,
+					data.name,
+					data.price,
+					parseFloat(qty),
+					data.gtin || "",
+					data.ntin || ""
+				);
 
             } else {
 
-                addToCart(
-                    data.id,
-                    data.name,
-                    data.price
-                );
+				addToCart(
+					data.id,
+					data.name,
+					data.price,
+					1,
+					data.gtin || "",
+					data.ntin || ""
+				);
             }
 
         }
