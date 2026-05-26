@@ -2333,31 +2333,40 @@ window.addEventListener("load", function () {
 		padding-bottom: 120px;
 	}
 	
-	/* 🔥 МОБИЛЬНЫЙ СКАНЕР */
+	/* 🔥 MOBILE SCANNER */
 
 	.scanner-modal{
 
-		align-items:flex-start !important;
+		align-items:flex-end !important;
 
-		padding-top:10px;
+		justify-content:center !important;
 
-		background:rgba(0,0,0,0.35);
+		background:transparent !important;
+
+		padding:0 0 110px 0;
 	}
 
 	.scanner-box{
 
-		width:95vw;
+		width:94vw;
 
-		border-radius:18px;
+		background:#111;
+
+		border-radius:22px;
 
 		overflow:hidden;
+
+		box-shadow:
+			0 10px 30px rgba(0,0,0,.35);
 	}
 
 	#reader{
 
 		width:100% !important;
 
-		height:220px !important;
+		height:170px !important;
+
+		border-radius:18px;
 	}
 }
 
