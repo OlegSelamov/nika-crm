@@ -18,15 +18,17 @@
 <!-- 🔥 СПИСОК С ДАННЫМИ -->
 <datalist id="itemsList">
     {% for i in items %}
-        <option 
-            value="{{ i.name }}"
-            data-price="{{ i.retail_price }}"
-            data-category="{{ i.category }}"
-            data-description="{{ i.description }}"
-			data-gtin="{{ i.gtin }}"
-			data-ntin="{{ i.ntin }}"
-			data-marked="{{ i.is_marked }}"
-        >
+		<option 
+			value="{{ i.name }}"
+			label='{{ {
+				"price": i.retail_price,
+				"category": i.category,
+				"description": i.description,
+				"gtin": i.gtin,
+				"ntin": i.ntin,
+				"marked": i.is_marked
+			} | tojson }}'
+		>
     {% endfor %}
 </datalist>
 
@@ -254,19 +256,47 @@
 
 <script>
 document.querySelector("input[name='name']").addEventListener("input", function() {
+
     const value = this.value;
-    const options = document.querySelectorAll("#itemsList option");
+
+    const options =
+        document.querySelectorAll("#itemsList option");
 
     options.forEach(option => {
+
         if (option.value === value) {
-            document.getElementById("retail_price").value = option.dataset.price || "";
-            document.getElementById("categoryInput").value = option.dataset.category || "";
-            document.querySelector("textarea[name='description']").value = option.dataset.description || "";
-			document.querySelector("input[name='gtin']").value = option.dataset.gtin || "";
-			document.querySelector("input[name='ntin']").value = option.dataset.ntin || "";
-			document.querySelector("input[name='is_marked']").checked = option.dataset.marked === "True"; 			
+
+            const data =
+                JSON.parse(option.label || "{}");
+
+            document.getElementById(
+                "retail_price"
+            ).value = data.price || "";
+
+            document.getElementById(
+                "categoryInput"
+            ).value = data.category || "";
+
+            document.querySelector(
+                "textarea[name='description']"
+            ).value = data.description || "";
+
+            document.querySelector(
+                "input[name='gtin']"
+            ).value = data.gtin || "";
+
+            document.querySelector(
+                "input[name='ntin']"
+            ).value = data.ntin || "";
+
+            document.querySelector(
+                "input[name='is_marked']"
+            ).checked = data.marked === true;
+
         }
+
     });
+
 });
 
 const modal = document.getElementById("categoryModal");
