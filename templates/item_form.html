@@ -169,15 +169,6 @@
         <img src="/static/icons/scan.png">
     </button>
 
-    <!-- ПОДКЛЮЧЕНИЕ ТЕЛЕФОНА -->
-    <button
-        type="button"
-        onclick="showQR()"
-        class="scan-btn"
-    >
-        <img src="/static/icons/connect.png">
-    </button>
-
 </div>
 
 	<input
@@ -225,25 +216,6 @@
         <button onclick="closeScanner()" class="btn">Закрыть</button>
 
     </div>
-</div>
-
-<div id="qrBox" style="
-	display:none;
-	position:fixed;
-	top:20%;
-	left:50%;
-	transform:translateX(-50%);
-	background:white;
-	padding:20px;
-	border-radius:12px;
-	z-index:9999;
-	text-align:center;
-">
-
-	<h3>Подключить телефон</h3>
-
-	<img id="qrImg" style="width:220px;">
-
 </div>
 
 </form>
@@ -776,127 +748,6 @@ document.getElementById(
 });
 
 let sessionId = null;
-
-function showQR() {
-
-    fetch("/api/create-session")
-    .then(res => res.json())
-    .then(data => {
-
-        sessionId = data.session;
-
-        const url =
-            window.location.origin +
-            "/scanner?session=" +
-            sessionId;
-
-        QRCode.toDataURL(url, function (err, urlImg) {
-
-            document.getElementById(
-                "qrImg"
-            ).src = urlImg;
-
-            document.getElementById(
-                "qrBox"
-            ).style.display = "block";
-
-        });
-
-        startListening();
-    });
-}
-
-function startListening() {
-
-    const interval = setInterval(() => {
-
-        if (!sessionId) return;
-
-        fetch("/api/get-scan/" + sessionId)
-        .then(res => res.json())
-        .then(data => {
-
-            if (data.code) {
-
-                const beep =
-                    document.getElementById(
-                        "beepSound"
-                    );
-
-                if (beep) {
-                    beep.currentTime = 0;
-                    beep.play().catch(() => {});
-                }
-
-				document.getElementById(
-					"barcodeInput"
-				).value = data.code;
-				
-				// 🔥 ищем товар
-				fetch("/api/barcode-info/" + data.code)
-
-				.then(res => res.json())
-
-				.then(item => {
-
-					console.log("BARCODE INFO:", item);
-
-					// ✅ название
-					if (item.name) {
-
-						document.querySelector(
-							"input[name='name']"
-						).value = item.name;
-					}
-
-					// ✅ категория
-					if (item.category) {
-
-						document.getElementById(
-							"categoryInput"
-						).value = item.category;
-					}
-
-					// ✅ ед.изм
-					if (item.measure) {
-
-						document.getElementById(
-							"unitSelect"
-						).value = item.measure;
-					}
-					
-					// ✅ GTIN
-					document.querySelector(
-						"input[name='gtin']"
-					).value = data.gtin || item.gtin || "";
-
-					// ✅ NTIN
-					document.querySelector(
-						"input[name='ntin']"
-					).value = data.ntin || item.ntin || "";
-
-					// ✅ Маркировка
-					document.querySelector(
-						"input[name='is_marked']"
-					).checked =
-						data.is_marked === true ||
-						data.is_marked === 1 ||
-						item.is_marked === true ||
-						item.is_marked === 1;
-
-				});
-
-                document.getElementById(
-                    "qrBox"
-                ).style.display = "none";
-
-                clearInterval(interval);
-            }
-
-        });
-
-    }, 300);
-}
 
 </script>
 

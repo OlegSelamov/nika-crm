@@ -9,6 +9,13 @@
 <video id="video" autoplay playsinline></video>
 <div class="scan-frame"></div>
 
+<audio id="beepSound" preload="auto">
+    <source
+        src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"
+        type="audio/ogg"
+    >
+</audio>
+
 <script>
 const params = new URLSearchParams(window.location.search);
 const session = params.get("session");
@@ -19,40 +26,92 @@ let lastCode = "";
 let lastTime = 0;
 
 // 🔥 включаем камеру
-navigator.mediaDevices.getUserMedia({
-    video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
+async function startCamera() {
+
+    try {
+
+        const stream =
+            await navigator.mediaDevices.getUserMedia({
+
+                video: {
+                    facingMode: {
+                        ideal: "environment"
+                    },
+
+                    width: {
+                        ideal: 1920
+                    },
+
+                    height: {
+                        ideal: 1080
+                    }
+                }
+
+            });
+
+        video.srcObject = stream;
+
+        await video.play();
+
+        const track =
+            stream.getVideoTracks()[0];
+
+        const capabilities =
+            track.getCapabilities();
+
+        // 🔥 autofocus
+        if (capabilities.focusMode) {
+
+            track.applyConstraints({
+                advanced: [
+                    {
+                        focusMode: "continuous"
+                    }
+                ]
+            });
+
+        }
+
+        // 🔥 zoom
+        if (capabilities.zoom) {
+
+            track.applyConstraints({
+                advanced: [
+                    {
+                        zoom: 1.5
+                    }
+                ]
+            });
+
+        }
+
+        console.log("CAMERA STARTED");
+
+    } catch(err) {
+
+        console.log(
+            "CAMERA ERROR",
+            err
+        );
+
+        alert(
+            "Не удалось открыть камеру"
+        );
     }
-})
-.then(stream => {
+}
 
-    video.srcObject = stream;
-    video.play();
-	
-	video.setAttribute(
-		"autofocus",
-		true
-	);
+window.addEventListener(
+    "load",
+    () => {
 
-    // 🔥 ВСЁ ВНУТРИ!
-    const track = stream.getVideoTracks()[0];
-    const capabilities = track.getCapabilities();
+        setTimeout(() => {
 
-    if (capabilities.focusMode) {
-        track.applyConstraints({
-            advanced: [{ focusMode: "continuous" }]
-        });
+            startCamera();
+
+        }, 300);
+
     }
-
-    if (capabilities.zoom) {
-        track.applyConstraints({
-            advanced: [{ zoom: 1.5 }]
-        });
-    }
-
-});
+);
 
 // 🔥 детектор
 const detector = new BarcodeDetector({
@@ -79,8 +138,26 @@ async function scan() {
 
                     console.log("SCAN:", code);
 
-                    // 🔊 пик
-                    if (navigator.vibrate) navigator.vibrate(120);
+					// 🔊 звук
+					const beep =
+						document.getElementById(
+							"beepSound"
+						);
+
+					if (beep) {
+
+						beep.currentTime = 0;
+
+						beep.play().catch(() => {});
+
+					}
+
+					// 📳 вибрация
+					if (navigator.vibrate) {
+
+						navigator.vibrate(120);
+
+					}
 
                     fetch("/api/scan/" + session, {
                         method: "POST",
@@ -98,7 +175,14 @@ async function scan() {
     requestAnimationFrame(scan);
 }
 
-setTimeout(scan, 500);
+video.addEventListener(
+    "loadedmetadata",
+    () => {
+
+        scan();
+
+    }
+);
 </script>
 
 <style>
@@ -121,10 +205,10 @@ body {
     top: 50%;
     left: 50%;
 
-    width: 92%;
-    max-width: 700px;
+    width: 96%;
+    max-width: 900px;
 
-    height: 120px;
+    height: 180px;
 
     transform: translate(-50%, -50%);
 
