@@ -291,7 +291,9 @@ document.querySelector("input[name='name']").addEventListener("input", function(
 
             document.querySelector(
                 "input[name='is_marked']"
-            ).checked = data.marked === true;
+            ).checked =
+				data.is_marked === true ||
+				data.is_marked === 1;
 
         }
 
@@ -588,6 +590,29 @@ async function openScanner() {
 										"retail_price"
 									).value = data.price;
 								}
+								
+								// ✅ GTIN
+								if (data.gtin) {
+
+									document.querySelector(
+										"input[name='gtin']"
+									).value = data.gtin;
+								}
+
+								// ✅ NTIN
+								if (data.ntin) {
+
+									document.querySelector(
+										"input[name='ntin']"
+									).value = data.ntin;
+								}
+
+								// ✅ Маркировка
+								document.querySelector(
+									"input[name='is_marked']"
+								).checked =
+									data.is_marked === true ||
+									data.is_marked === 1;
 
 								// 🔥 бренд
 								if (data.brand) {
