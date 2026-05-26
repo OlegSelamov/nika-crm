@@ -1026,7 +1026,11 @@ def barcode():
             "found": True,
             "id": item["id"],
             "name": item["name"],
-            "price": item["retail_price"]
+            "price": item["retail_price"],
+            "unit": item.get("unit"),
+            "gtin": item.get("gtin"),
+            "ntin": item.get("ntin"),
+            "is_marked": item.get("is_marked")
         }
 
     return {"found": False}
