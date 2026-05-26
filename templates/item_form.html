@@ -23,6 +23,9 @@
             data-price="{{ i.retail_price }}"
             data-category="{{ i.category }}"
             data-description="{{ i.description }}"
+			data-gtin="{{ i.gtin }}"
+			data-ntin="{{ i.ntin }}"
+			data-marked="{{ i.is_marked }}"
         >
     {% endfor %}
 </datalist>
@@ -175,16 +178,12 @@
 
 </div>
 
-	<label>GTIN</label>
-
 	<input
 		type="text"
 		name="gtin"
 		value="{{ item.gtin if item else '' }}"
 		placeholder="GTIN"
 	>
-
-	<label>NTIN</label>
 
 	<input
 		type="text"
@@ -263,6 +262,9 @@ document.querySelector("input[name='name']").addEventListener("input", function(
             document.getElementById("retail_price").value = option.dataset.price || "";
             document.getElementById("categoryInput").value = option.dataset.category || "";
             document.querySelector("textarea[name='description']").value = option.dataset.description || "";
+			document.querySelector("input[name='gtin']").value = option.dataset.gtin || "";
+			document.querySelector("input[name='ntin']").value = option.dataset.ntin || "";
+			document.querySelector("input[name='is_marked']").checked = option.dataset.marked === "True"; 			
         }
     });
 });

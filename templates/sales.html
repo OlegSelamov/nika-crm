@@ -1247,6 +1247,18 @@ function openAddItemModal(code) {
 			document.getElementById(
 				"newName"
 			).value = data.name;
+			
+			document.getElementById(
+				"newGtin"
+			).value = data.gtin || "";
+
+			document.getElementById(
+				"newNtin"
+			).value = data.ntin || "";
+
+			document.getElementById(
+				"newIsMarked"
+			).checked = data.is_marked || false;
 
 		}
 
