@@ -155,20 +155,22 @@
         autocomplete="off"
     >
 
+    <!-- СКАНЕР -->
     <button
         type="button"
         onclick="openScanner()"
         class="scan-btn"
     >
-        📷
+        <img src="/static/icons/scan.png">
     </button>
 
+    <!-- ПОДКЛЮЧЕНИЕ ТЕЛЕФОНА -->
     <button
         type="button"
         onclick="showQR()"
         class="scan-btn"
     >
-        📡
+        <img src="/static/icons/connect.png">
     </button>
 
 </div>
@@ -923,17 +925,35 @@ function startListening() {
 
     border:none;
 
-    border-radius:12px;
+    border-radius:14px;
 
-    background:#2563eb;
+    background:linear-gradient(
+        135deg,
+        #315BFF,
+        #5B6CFF
+    );
 
-    color:white;
-
-    font-size:22px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
 
     cursor:pointer;
+
+    transition:0.2s ease;
+
+    box-shadow:
+        0 6px 18px rgba(49,91,255,.25);
 }
 
+.scan-btn:hover{
+    transform:translateY(-2px);
+}
+
+.scan-btn img{
+    width:24px;
+    height:24px;
+    object-fit:contain;
+}
 .scanner-modal {
 
     display: none;
