@@ -729,6 +729,25 @@ document.getElementById(
 						"retail_price"
 					).value = data.price;
 				}
+				
+				// ✅ GTIN
+				document.querySelector(
+					"input[name='gtin']"
+				).value = data.gtin || item.gtin || "";
+
+				// ✅ NTIN
+				document.querySelector(
+					"input[name='ntin']"
+				).value = data.ntin || item.ntin || "";
+
+				// ✅ Маркировка
+				document.querySelector(
+					"input[name='is_marked']"
+				).checked =
+					data.is_marked === true ||
+					data.is_marked === 1 ||
+					item.is_marked === true ||
+					item.is_marked === 1;
 
 				// 🔥 бренд
 				if (data.brand) {
@@ -845,6 +864,25 @@ function startListening() {
 							"unitSelect"
 						).value = item.measure;
 					}
+					
+					// ✅ GTIN
+					document.querySelector(
+						"input[name='gtin']"
+					).value = data.gtin || item.gtin || "";
+
+					// ✅ NTIN
+					document.querySelector(
+						"input[name='ntin']"
+					).value = data.ntin || item.ntin || "";
+
+					// ✅ Маркировка
+					document.querySelector(
+						"input[name='is_marked']"
+					).checked =
+						data.is_marked === true ||
+						data.is_marked === 1 ||
+						item.is_marked === true ||
+						item.is_marked === 1;
 
 				});
 
