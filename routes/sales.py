@@ -211,6 +211,69 @@ def get_sale(sale_id):
 
     pool.putconn(conn)
     return jsonify(result)
+    
+@sales_bp.route("/api/sales/history")
+def sales_history():
+
+    conn = get_db()
+
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            sales.id,
+            sales.created_at,
+            sales.total_amount,
+            sales.sale_type,
+            sales.status,
+            clients.full_name
+        FROM sales
+        LEFT JOIN clients
+            ON sales.client_id = clients.id
+        WHERE sales.company_id = %s
+        ORDER BY sales.id DESC
+        LIMIT 100
+    """, (
+        session.get("company_id"),
+    ))
+
+    sales = cur.fetchall()
+
+    result = []
+
+    for sale in sales:
+
+        payment_type = "—"
+
+        if sale["sale_type"] == "cash":
+            payment_type = "Наличные"
+
+        elif sale["sale_type"] == "invoice":
+            payment_type = "Безнал"
+
+        result.append({
+
+            "id": sale["id"],
+
+            "created_at": sale["created_at"],
+
+            "client_name":
+                sale["full_name"],
+
+            "total":
+                sale["total_amount"],
+
+            "payment_type":
+                payment_type,
+
+            "status":
+                sale["status"]
+
+        })
+
+    pool.putconn(conn)
+
+    return jsonify(result)
 
 
 @sales_bp.route("/api/smart-sale", methods=["POST"])

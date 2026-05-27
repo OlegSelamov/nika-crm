@@ -87,7 +87,7 @@
 
         <!-- КОРЗИНА -->
         <div class="cart-box">
-		    <div class="table-wrapper">
+		    <div class="table-wrapper" id="cartTableWrapper">
             <table class="cart-table">
                 <thead>
                     <tr>
@@ -100,9 +100,59 @@
                 </thead>
                 <tbody id="cart"></tbody>
             </table>
+		
 			</div>
 			<div id="mobileCart" class="mobile-cart"></div>
+			
+			<div id="salesHistoryBox" style="display:none;">
+
+				<div class="table-wrapper">
+
+					<table class="cart-table">
+
+						<thead>
+
+							<tr>
+								<th>№</th>
+								<th>Дата</th>
+								<th>Клиент</th>
+								<th>Сумма</th>
+								<th>Оплата</th>
+								<th>Действия</th>
+							</tr>
+
+						</thead>
+
+						<tbody id="salesHistory"></tbody>
+
+					</table>
+					
+					<div id="mobileSalesHistory" class="mobile-sales-history"></div>
+
+				</div>
+
+			</div>
         </div>
+		
+		<div class="sales-tabs">
+
+			<button
+				class="sales-tab active"
+				onclick="switchSalesTab('cart')"
+				id="cartTabBtn"
+			>
+				Продажа
+			</button>
+
+			<button
+				class="sales-tab"
+				onclick="switchSalesTab('history')"
+				id="historyTabBtn"
+			>
+				История продаж
+			</button>
+
+		</div>
 
     </div>
 
@@ -1604,6 +1654,185 @@ window.addEventListener("load", () => {
     loadItems();
 
 });
+
+function switchSalesTab(tab) {
+
+	const cartTable =
+		document.getElementById("cartTableWrapper");
+
+    const mobileCart =
+        document.getElementById("mobileCart");
+
+    const history =
+        document.getElementById("salesHistoryBox");
+
+    const cartBtn =
+        document.getElementById("cartTabBtn");
+
+    const historyBtn =
+        document.getElementById("historyTabBtn");
+
+    if (tab === "cart") {
+
+        cartTable.style.display = "";
+        mobileCart.style.display = "";
+        history.style.display = "none";
+
+        cartBtn.classList.add("active");
+        historyBtn.classList.remove("active");
+
+    } else {
+
+        cartTable.style.display = "none";
+        mobileCart.style.display = "none";
+        history.style.display = "block";
+
+        cartBtn.classList.remove("active");
+        historyBtn.classList.add("active");
+
+        loadSalesHistory();
+    }
+}
+
+function loadSalesHistory() {
+
+    fetch("/api/sales/history")
+
+    .then(res => res.json())
+
+    .then(data => {
+
+        let html = "";
+		let mobileHtml = "";
+
+        data.forEach(sale => {
+
+            html += `
+                <tr>
+
+                    <td>${sale.id}</td>
+
+                    <td>
+                        ${formatDate(sale.created_at)}
+                    </td>
+
+                    <td>
+                        ${sale.client_name || "-"}
+                    </td>
+
+                    <td>
+                        ${sale.total || 0} ₸
+                    </td>
+
+                    <td>
+                        ${sale.payment_type || "-"}
+                    </td>
+
+                    <td>
+
+                        <div class="history-actions">
+
+                            <button
+                                onclick="openSaleModal(${sale.id})"
+                                class="mini-doc-btn"
+                            >
+                                🧾
+                            </button>
+
+                            <button
+                                onclick="window.open('/docs/nakladnaya/${sale.id}', '_blank')"
+                                class="mini-doc-btn"
+                            >
+                                📦
+                            </button>
+
+                            <button
+                                onclick="window.open('/docs/schet-factura/${sale.id}', '_blank')"
+                                class="mini-doc-btn"
+                            >
+                                📄
+                            </button>
+
+                            <button
+                                onclick="window.open('/docs/act/${sale.id}', '_blank')"
+                                class="mini-doc-btn"
+                            >
+                                📋
+                            </button>
+
+                        </div>
+
+                    </td>
+
+                </tr>
+            `;
+			
+			mobileHtml += `
+
+			<div class="mobile-sale-card">
+
+				<div class="mobile-sale-top">
+
+					<div class="mobile-sale-client">
+						${sale.client_name || "-"}
+					</div>
+
+					<div class="mobile-sale-sum">
+						${sale.total || 0} ₸
+					</div>
+
+				</div>
+
+				<div class="mobile-sale-date">
+					${formatDate(sale.created_at)}
+				</div>
+
+				<div class="mobile-sale-actions">
+
+					<button
+						onclick="openSaleModal(${sale.id})"
+						class="mini-doc-btn"
+					>
+						🧾
+					</button>
+
+					<button
+						onclick="window.open('/docs/nakladnaya/${sale.id}', '_blank')"
+						class="mini-doc-btn"
+					>
+						📦
+					</button>
+
+					<button
+						onclick="window.open('/docs/schet-factura/${sale.id}', '_blank')"
+						class="mini-doc-btn"
+					>
+						📄
+					</button>
+
+					<button
+						onclick="window.open('/docs/act/${sale.id}', '_blank')"
+						class="mini-doc-btn"
+					>
+						📋
+					</button>
+
+				</div>
+
+			</div>
+			`;
+        });
+
+        document.getElementById(
+            "salesHistory"
+        ).innerHTML = html;
+		
+		document.getElementById(
+			"mobileSalesHistory"
+		).innerHTML = mobileHtml;
+
+    });
+}
 </script>
 
 <style>
@@ -1695,8 +1924,15 @@ window.addEventListener("load", () => {
 
 .cart-table th:nth-child(4),
 .cart-table td:nth-child(4) {
-    width: 40%;
+    width: 90%;
     text-align: center;
+}
+
+.cart-table th:nth-child(1),
+.cart-table td:nth-child(1){
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
 }
 
 .cart-table tr:hover {
@@ -2129,6 +2365,99 @@ window.addEventListener("load", () => {
 	display: none;
 }
 
+.sales-tabs{
+
+    display:flex;
+    gap:8px;
+    margin-top:10px;
+}
+
+.sales-tab{
+
+    border:none;
+    background:#eef2ff;
+    padding:10px 14px;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:600;
+    color:#475569;
+}
+
+.sales-tab.active{
+
+    background:#315BFF;
+    color:white;
+}
+
+.history-actions{
+
+    display:flex;
+    gap:4px;
+    justify-content:center;
+}
+
+.mini-doc-btn{
+
+    width:30px;
+    height:30px;
+
+    border:none;
+    border-radius:8px;
+
+    cursor:pointer;
+
+    background:#f1f5f9;
+}
+
+.mobile-sales-history{
+    display:none;
+}
+
+.mobile-sale-card{
+
+    background:white;
+    border-radius:12px;
+    padding:12px;
+
+    box-shadow:
+        0 3px 10px rgba(0,0,0,.06);
+
+    margin-bottom:10px;
+}
+
+.mobile-sale-top{
+
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+}
+
+.mobile-sale-client{
+    font-weight:600;
+    font-size:14px;
+}
+
+.mobile-sale-sum{
+    font-weight:bold;
+    color:#315BFF;
+}
+
+.mobile-sale-date{
+
+    margin-top:6px;
+
+    font-size:12px;
+    color:#64748b;
+}
+
+.mobile-sale-actions{
+
+    display:flex;
+    gap:6px;
+
+    margin-top:10px;
+}
+
 /* ================= MOBILE SALES ================= */
 
 @media (max-width: 768px) {
@@ -2191,7 +2520,7 @@ window.addEventListener("load", () => {
 		overflow-x: hidden !important;
 	}
 
-	.cart-table {
+	#cartTableWrapper .cart-table {
 		display: none;
 	}
 
@@ -2383,7 +2712,17 @@ window.addEventListener("load", () => {
 
 		border-radius:18px;
 	}
+	
+	#salesHistoryBox .cart-table{
+		display:none;
+	}
+
+	.mobile-sales-history{
+		display:block;
+	}
 }
+
+
 
 </style>
 
