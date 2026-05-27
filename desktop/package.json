@@ -1,0 +1,13 @@
+{
+  "name": "nika-business",
+  "version": "1.0.0",
+  "main": "main.js",
+
+  "scripts": {
+    "start": "electron ."
+  },
+
+  "devDependencies": {
+    "electron": "^36.0.0"
+  }
+}

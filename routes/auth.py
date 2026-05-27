@@ -50,8 +50,8 @@ def login():
         session["username"] = user["username"]
         session["role"] = user["role"] or "cashier"
         session["company_id"] = user["company_id"]
-        session["is_super_admin"] = user["is_super_admin"] or 0
-        session["is_creator"] = user["is_creator"] if "is_creator" in user.keys() else 0
+        session["is_super_admin"] = bool(user["is_super_admin"])
+        session["is_creator"] = bool(user["is_creator"]) if "is_creator" in user.keys() else False
 
         # 👑 Супер админ
         if user["is_super_admin"]:
@@ -88,7 +88,7 @@ def users():
         password = request.form.get("password", "").strip()
         role = request.form.get("role", "cashier").strip()
         company_id = request.form.get("company_id") or session.get("company_id")
-        is_super_admin = 1 if request.form.get("is_super_admin") == "1" else 0
+        is_super_admin = True if request.form.get("is_super_admin") == "1" else False
 
         cur.execute("""
             INSERT INTO users (username, password, role, company_id, is_super_admin, created_at)

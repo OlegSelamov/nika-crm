@@ -547,6 +547,10 @@ function pay() {
     });
 }
 
+document.getElementById(
+    "itemsList"
+).style.display = "grid";
+
 function searchItems(query) {
     fetch("/api/items")
     .then(res => res.json())
@@ -727,9 +731,15 @@ if (searchInput) {
             if (match) hasVisible = true;
         });
 
-        if (!hasVisible) {
-            itemsBox.style.display = "grid";
-        }
+		if (hasVisible) {
+
+			itemsBox.style.display = "grid";
+
+		} else {
+
+			itemsBox.style.display = "none";
+
+		}
     });
 
     // 🔥 клик вне — закрывает
@@ -1589,6 +1599,11 @@ window.addEventListener("load", function () {
     document.querySelector(".sales-page").classList.add("ready");
 });
 
+window.addEventListener("load", () => {
+
+    loadItems();
+
+});
 </script>
 
 <style>

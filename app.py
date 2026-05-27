@@ -72,9 +72,16 @@ def check_company_access():
             
 @app.route("/")
 def landing():
-    return render_template("landing.html")
+
+    # 🔥 если уже вошёл
+    if session.get("user_id"):
+
+        return redirect("/dashboard")
+
+    # 🔥 если не вошёл
+    return redirect("/login")
     
 if __name__ == "__main__":
-    init_db()
+    #init_db()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=5000, debug=True)
