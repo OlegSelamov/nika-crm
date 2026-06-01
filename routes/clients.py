@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect
 from flask import session
 from models import get_db, pool
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils.timezone import now_kz
 from werkzeug.utils import secure_filename
 import os
@@ -186,11 +186,16 @@ def client_detail(client_id):
     formatted_sales = []
 
     for s in sales:
+
         try:
-            dt = datetime.fromisoformat(s["created_at"])
+
+            dt = s["created_at"] + timedelta(hours=5)
+
             date_str = dt.strftime("%d.%m.%Y %H:%M")
+
         except:
-            date_str = s["created_at"]
+
+            date_str = str(s["created_at"])
 
         new_s = dict(s)
         new_s["date_str"] = date_str

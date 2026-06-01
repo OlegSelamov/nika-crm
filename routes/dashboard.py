@@ -74,8 +74,14 @@ def dashboard():
     chart_values = []
 
     for row in reversed(chart_data):
-        chart_labels.append(row["date"])
-        chart_values.append(row["total"] or 0)
+
+        chart_labels.append(
+            row["date"].strftime("%d.%m")
+        )
+
+        chart_values.append(
+            row["total"] or 0
+        )
         
     # ⚠️ ДОЛГИ
     cur.execute("""

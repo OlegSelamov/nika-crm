@@ -79,7 +79,9 @@
 <div class="card">
     <div class="title">График продаж</div>
 
-    <canvas id="salesChart" height="100"></canvas>
+	<div class="chart-box">
+		<canvas id="salesChart"></canvas>
+	</div>
 </div>
 
 <!-- 🧾 ПОСЛЕДНИЕ ПРОДАЖИ -->
@@ -295,11 +297,48 @@ new Chart(ctx, {
             tension: 0.3
         }]
     },
-    options: {
-        plugins: {
-            legend: { display: false }
-        }
-    }
+	options: {
+		responsive: true,
+		maintainAspectRatio: false,
+
+		plugins: {
+			legend: {
+				display: false
+			}
+		},
+
+		scales: {
+
+			x: {
+
+				ticks: {
+					maxTicksLimit: 7,
+
+					callback: function(value) {
+
+						let label = this.getLabelForValue(value);
+
+						if(label.includes('-')){
+
+							const p = label.split('-');
+
+							return p[2] + '.' + p[1];
+						}
+
+						return label;
+					}
+				}
+			},
+
+			y: {
+
+				ticks: {
+
+					maxTicksLimit: 5
+				}
+			}
+		}
+	}
 });
 </script>
 
@@ -609,6 +648,18 @@ new Chart(ctx, {
 	.card table {
 		display: none;
 	}
+}
+
+.chart-box{
+    position:relative;
+    height:320px;
+}
+
+@media (max-width:768px){
+
+    .chart-box{
+        height:180px;
+    }
 }
 
 </style>

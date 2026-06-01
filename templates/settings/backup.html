@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Резервное копирование</h2>
+
+<div class="card">
+
+    <div class="form-group">
+
+        <label>
+
+            <input type="checkbox">
+
+            Включить автобэкап
+
+        </label>
+
+    </div>
+
+    <div class="form-group">
+
+        <label>Периодичность</label>
+
+        <select>
+            <option>Каждый день</option>
+            <option>Каждую неделю</option>
+            <option>Каждый месяц</option>
+        </select>
+
+    </div>
+
+    <button class="btn">
+
+        Создать резервную копию сейчас
+
+    </button>
+
+</div>
+
+{% endblock %}

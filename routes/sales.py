@@ -7,6 +7,7 @@ from flask import render_template
 from num2words import num2words
 from flask import session
 import uuid
+import pytz
 
 sales_bp = Blueprint("sales", __name__)
 sales_api = Blueprint("sales_api", __name__)
@@ -728,6 +729,12 @@ def mark_paid():
 @sales_bp.route("/docs/check/<int:sale_id>")
 def check(sale_id):
     sale, items, client = get_sale_data(sale_id)
+    
+    print("=" * 50)
+    print("CREATED_AT:", sale["created_at"])
+    print("TYPE:", type(sale["created_at"]))
+    print("TZINFO:", getattr(sale["created_at"], "tzinfo", None))
+    print("=" * 50)
 
     if sale["sale_type"] != "cash":
         return "Чек доступен только для кассовой продажи"
@@ -746,7 +753,8 @@ def check(sale_id):
     if not company:
         return "Нет компании"
 
-    date_obj = sale["created_at"]
+    date_obj = sale["created_at"] + timedelta(hours=5)
+
     check_date = date_obj.strftime("%d.%m.%Y %H:%M")
     
     new_items = []
@@ -966,8 +974,15 @@ def analytics():
     
     chart_data = cur.fetchall()
 
-    chart_labels = [row["date"] for row in chart_data]
-    chart_values = [row["total"] or 0 for row in chart_data]
+    chart_labels = [
+        row["date"].strftime("%d.%m")
+        for row in chart_data
+    ]
+
+    chart_values = [
+        row["total"] or 0
+        for row in chart_data
+    ]
 
     # 💰 СУММЫ
     total = sum(chart_values)

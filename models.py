@@ -175,6 +175,29 @@ def init_db():
     
     conn.commit()
     
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS integrations (
+
+        id SERIAL PRIMARY KEY,
+
+        company_id INTEGER,
+
+        kkm_type TEXT,
+
+        webkassa_enabled BOOLEAN DEFAULT FALSE,
+        webkassa_login TEXT,
+        webkassa_password TEXT,
+        webkassa_cashbox TEXT,
+
+        pos_enabled BOOLEAN DEFAULT FALSE,
+        pos_type TEXT,
+        pos_ip TEXT,
+        pos_port TEXT,
+
+        created_at TIMESTAMP
+    )
+    """)
+    
     try:
         cur.execute("""
             INSERT INTO users (

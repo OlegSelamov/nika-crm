@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Национальный Каталог</h2>
+
+<div class="card">
+
+    <div class="form-group">
+        <label>API ключ</label>
+
+        <input
+            type="text"
+            placeholder="Введите API ключ">
+    </div>
+
+    <div class="form-group">
+
+        <label>
+
+            <input type="checkbox">
+
+            Автопоиск товара по штрихкоду
+
+        </label>
+
+    </div>
+
+    <button class="btn">
+
+        Сохранить
+
+    </button>
+
+</div>
+
+<div class="card">
+
+    <h3>Возможности</h3>
+
+    <ul>
+        <li>Автоподстановка названия</li>
+        <li>GTIN</li>
+        <li>NTIN</li>
+        <li>Маркировка</li>
+    </ul>
+
+</div>
+
+{% endblock %}

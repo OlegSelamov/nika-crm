@@ -14,12 +14,19 @@ from routes.auth import auth_bp
 from models import get_db
 from routes.stock import stock_bp
 from routes.webkassa import webkassa_bp
+from routes.settings import settings_bp
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates"),
+    static_folder=os.path.join(BASE_DIR, "static")
+)
 app.secret_key = "nika_super_secret_key"
 
 # подключаем роуты
@@ -35,6 +42,7 @@ app.register_blueprint(voice_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(stock_bp)
 app.register_blueprint(webkassa_bp)
+app.register_blueprint(settings_bp)
     
 @app.before_request
 def check_company_access():

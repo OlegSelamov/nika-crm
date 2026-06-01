@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>🖥 Оборудование</h2>
+
+<div class="stats-grid">
+
+    <div class="card">
+        <h3>💰 ККМ</h3>
+        <p>Webkassa, Kaspi Касса, Портовая ККМ</p>
+
+        <a href="/settings/kkm" class="btn">
+            Настроить
+        </a>
+    </div>
+
+    <div class="card">
+        <h3>🖨 Принтеры</h3>
+        <p>Чеки и документы</p>
+
+        <a href="/settings/printers" class="btn">
+            Настроить
+        </a>
+    </div>
+
+    <div class="card">
+        <h3>💳 POS Терминалы</h3>
+        <p>Kaspi POS, Halyk POS</p>
+
+        <a href="/settings/pos" class="btn">
+            Настроить
+        </a>
+    </div>
+
+    <div class="card">
+        <h3>📦 Сканеры</h3>
+        <p>Штрихкоды и маркировка</p>
+
+        <a href="/settings/scanners" class="btn">
+            Настроить
+        </a>
+    </div>
+
+    <div class="card">
+        <h3>⚖ Весы</h3>
+        <p>Торговые весы</p>
+
+        <a href="/settings/scales" class="btn">
+            Настроить
+        </a>
+    </div>
+
+</div>
+
+{% endblock %}

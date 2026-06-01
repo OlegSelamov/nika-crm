@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Интеграции</h2>
+
+<div class="stats-grid">
+
+    <div class="card">
+        <h3>ККМ</h3>
+        <p>Фискальные регистраторы</p>
+
+        <a href="/settings/kkm" class="btn">
+            Настроить
+        </a>
+    </div>
+
+    <div class="card">
+        <h3>POS Терминалы</h3>
+        <p>Kaspi, Halyk, Freedom</p>
+
+        <a href="/settings/pos" class="btn">
+            Настроить
+        </a>
+    </div>
+
+    <div class="card">
+        <h3>Нац. Каталог</h3>
+        <p>GTIN / NTIN</p>
+
+        <a href="/settings/catalog" class="btn">
+            Настроить
+        </a>
+    </div>
+
+    <div class="card">
+        <h3>Резервные копии</h3>
+
+        <a href="/settings/backup" class="btn">
+            Настроить
+        </a>
+    </div>
+
+</div>
+
+{% endblock %}

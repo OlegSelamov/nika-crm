@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>⚙ Настройки системы</h2>
+
+<div class="card">
+    <h3>Компания</h3>
+    <p>Реквизиты организации</p>
+
+    <a href="/company/profile" class="btn">
+        Открыть
+    </a>
+</div>
+
+<div class="card">
+    <h3>Интеграции</h3>
+    <p>ККМ, POS-терминалы, Webkassa</p>
+
+    <a href="/settings/integrations" class="btn">
+        Открыть
+    </a>
+</div>
+
+<div class="card">
+    <h3>Пользователи</h3>
+    <p>Управление сотрудниками</p>
+
+    <a href="/users" class="btn">
+        Открыть
+    </a>
+</div>
+
+<div class="card">
+    <h3>Оборудование</h3>
+    <p>ККМ, принтеры, сканеры, POS терминалы</p>
+
+    <a href="/settings/equipment" class="btn">
+        Открыть
+    </a>
+</div>
+
+<div class="card">
+    <h3>Документы</h3>
+    <p>Счета, накладные, акты</p>
+</div>
+
+<div class="card">
+    <h3>Резервные копии</h3>
+    <p>Безопасность данных</p>
+</div>
+
+{% endblock %}
