@@ -4,6 +4,8 @@ from utils.timezone import now_kz
 
 auth_bp = Blueprint("auth", __name__)
 
+from flask import jsonify
+
 def current_user():
     user_id = session.get("user_id")
     if not user_id:
@@ -65,6 +67,46 @@ def login():
         return redirect("/profile")
 
     return render_template("login.html")
+    
+@auth_bp.route("/api/login", methods=["POST"])
+def api_login():
+
+    data = request.get_json()
+
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT *
+        FROM users
+        WHERE username = %s
+        AND password = %s
+        """,
+        (username, password)
+    )
+
+    user = cur.fetchone()
+
+    pool.putconn(conn)
+
+    if not user:
+        return jsonify({
+            "success": False,
+            "message": "Неверный логин или пароль"
+        })
+
+    return jsonify({
+        "success": True,
+        "user_id": user["id"],
+        "username": user["username"],
+        "role": user["role"],
+        "company_id": user["company_id"],
+        "is_super_admin": bool(user["is_super_admin"])
+    })
 
 @auth_bp.route("/logout")
 def logout():
