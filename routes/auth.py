@@ -98,6 +98,13 @@ def api_login():
             "success": False,
             "message": "Неверный логин или пароль"
         })
+        
+    session["user_id"] = user["id"]
+    session["username"] = user["username"]
+    session["role"] = user["role"] or "cashier"
+    session["company_id"] = user["company_id"]
+    session["is_super_admin"] = bool(user["is_super_admin"])
+    session["is_creator"] = bool(user["is_creator"]) if "is_creator" in user.keys() else False
 
     return jsonify({
         "success": True,
