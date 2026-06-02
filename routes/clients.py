@@ -481,3 +481,55 @@ def client_sales(id):
     pool.putconn(conn)
 
     return [dict(s) for s in sales]
+    
+@clients_bp.route(
+    "/api/clients/create",
+    methods=["POST"]
+)
+def api_create_client():
+
+    data = request.json
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO clients (
+            full_name,
+            phone,
+            iin,
+            company_name,
+            address,
+            comment,
+            status,
+            payment,
+            created_at,
+            company_id
+        )
+        VALUES (
+            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+        )
+        RETURNING id
+    """, (
+        data.get("full_name", ""),
+        data.get("phone", ""),
+        data.get("iin", ""),
+        data.get("company_name", ""),
+        data.get("address", ""),
+        data.get("comment", ""),
+        "Новый",
+        "Не оплачено",
+        now_kz(),
+        session.get("company_id"),
+    ))
+
+    client_id = cur.fetchone()["id"]
+
+    conn.commit()
+
+    pool.putconn(conn)
+
+    return {
+        "success": True,
+        "id": client_id
+    }
