@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, session
 from models import get_db, pool
 from datetime import datetime
+from flask import jsonify
 
 stock_bp = Blueprint("stock", __name__)
 
@@ -214,3 +215,162 @@ def stock_writeoff():
         "stock_writeoff.html",
         items=items
     )
+    
+@stock_bp.route("/api/stock")
+def api_stock():
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            items.*,
+
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN stock_movements.movement_type='income'
+                        THEN stock_movements.quantity
+
+                        WHEN stock_movements.movement_type='sale'
+                        THEN -stock_movements.quantity
+
+                        WHEN stock_movements.movement_type='writeoff'
+                        THEN -stock_movements.quantity
+                    END
+                ),
+                0
+            ) as stock
+
+        FROM items
+
+        LEFT JOIN stock_movements
+        ON items.id = stock_movements.item_id
+
+        WHERE items.company_id = %s
+
+        GROUP BY items.id
+
+        ORDER BY items.name
+    """, (
+        session.get("company_id"),
+    ))
+
+    rows = cur.fetchall()
+
+    pool.putconn(conn)
+
+    return jsonify(rows)
+    
+@stock_bp.route("/api/stock/movements")
+def api_stock_movements():
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            stock_movements.*,
+            items.name as item_name
+
+        FROM stock_movements
+
+        LEFT JOIN items
+        ON items.id = stock_movements.item_id
+
+        WHERE stock_movements.company_id = %s
+
+        ORDER BY stock_movements.id DESC
+    """, (
+        session.get("company_id"),
+    ))
+
+    rows = cur.fetchall()
+
+    pool.putconn(conn)
+
+    return jsonify(rows)
+    
+@stock_bp.route(
+    "/api/stock/income",
+    methods=["POST"]
+)
+def api_stock_income():
+
+    data = request.json
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO stock_movements (
+            company_id,
+            item_id,
+            movement_type,
+            quantity,
+            price,
+            total,
+            comment,
+            created_at
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        session.get("company_id"),
+        data["item_id"],
+        "income",
+        data["quantity"],
+        data["price"],
+        data["quantity"] * data["price"],
+        data.get("comment",""),
+        datetime.now()
+    ))
+
+    conn.commit()
+
+    pool.putconn(conn)
+
+    return jsonify({
+        "success": True
+    })
+    
+@stock_bp.route(
+    "/api/stock/writeoff",
+    methods=["POST"]
+)
+def api_stock_writeoff():
+
+    data = request.json
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO stock_movements (
+            company_id,
+            item_id,
+            movement_type,
+            quantity,
+            price,
+            total,
+            comment,
+            created_at
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        session.get("company_id"),
+        data["item_id"],
+        "writeoff",
+        data["quantity"],
+        0,
+        0,
+        data.get("comment",""),
+        datetime.now()
+    ))
+
+    conn.commit()
+
+    pool.putconn(conn)
+
+    return jsonify({
+        "success": True
+    })
