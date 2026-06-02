@@ -1081,6 +1081,72 @@ def analytics():
         profit=profit,
     )
     
+@sales_bp.route("/api/analytics")
+def analytics_api():
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    company_id = session.get("company_id")
+
+    today_str = now_kz().strftime("%Y-%m-%d")
+
+    cur.execute("""
+        SELECT COALESCE(SUM(total_amount),0) as total
+        FROM sales
+        WHERE company_id = %s
+        AND status = 'Оплачено'
+    """, (company_id,))
+    revenue = cur.fetchone()["total"] or 0
+
+    cur.execute("""
+        SELECT COALESCE(SUM(profit),0) as profit
+        FROM sale_items
+        WHERE sale_id IN (
+            SELECT id
+            FROM sales
+            WHERE company_id = %s
+            AND status = 'Оплачено'
+        )
+    """, (company_id,))
+    profit = cur.fetchone()["profit"] or 0
+
+    cur.execute("""
+        SELECT COALESCE(SUM(total_amount),0) as total
+        FROM sales
+        WHERE company_id = %s
+        AND status = 'Оплачено'
+        AND DATE(created_at) = %s
+    """, (
+        company_id,
+        today_str
+    ))
+
+    today = cur.fetchone()["total"] or 0
+
+    cur.execute("""
+        SELECT
+            COALESCE(SUM(cash_amount),0) as cash,
+            COALESCE(SUM(card_amount),0) as card,
+            COALESCE(SUM(kaspi_amount),0) as kaspi
+        FROM sales
+        WHERE company_id = %s
+        AND status = 'Оплачено'
+    """, (company_id,))
+
+    payments = cur.fetchone()
+
+    pool.putconn(conn)
+
+    return jsonify({
+        "revenue": revenue,
+        "profit": profit,
+        "today": today,
+        "cash": payments["cash"],
+        "card": payments["card"],
+        "kaspi": payments["kaspi"]
+    })
+    
 @sales_bp.route("/api/barcode", methods=["POST"])
 def barcode():
     data = request.get_json()
