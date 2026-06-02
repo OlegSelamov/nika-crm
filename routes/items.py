@@ -439,3 +439,84 @@ def barcode_info(barcode):
     return jsonify({
         "found": False
     })
+    
+@items_bp.route("/api/items/create", methods=["POST"])
+def api_create_item():
+    data = request.json
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO items (
+            name,
+            category,
+            unit,
+            description,
+            retail_price,
+            purchase_price,
+            wholesale_price,
+            discount_percent,
+            barcode,
+            gtin,
+            ntin,
+            is_marked,
+            quantity,
+            company_id
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+    """, (
+        data.get("name", ""),
+        data.get("category", ""),
+        data.get("unit", "шт"),
+        data.get("description", ""),
+        float(data.get("retail_price") or 0),
+        float(data.get("purchase_price") or 0),
+        float(data.get("wholesale_price") or 0),
+        int(data.get("discount_percent") or 0),
+        data.get("barcode", ""),
+        data.get("gtin", ""),
+        data.get("ntin", ""),
+        bool(data.get("is_marked", False)),
+        float(data.get("quantity") or 0),
+        session.get("company_id")
+    ))
+
+    item_id = cur.fetchone()["id"]
+
+    # если количество больше 0 — создаём приход в движении товара
+    quantity = float(data.get("quantity") or 0)
+    purchase_price = float(data.get("purchase_price") or 0)
+
+    if quantity > 0:
+        cur.execute("""
+            INSERT INTO stock_movements (
+                company_id,
+                item_id,
+                movement_type,
+                quantity,
+                price,
+                total,
+                comment,
+                created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            session.get("company_id"),
+            item_id,
+            "income",
+            quantity,
+            purchase_price,
+            quantity * purchase_price,
+            "Первичный остаток при создании товара",
+            datetime.now()
+        ))
+
+    conn.commit()
+    pool.putconn(conn)
+
+    return jsonify({
+        "success": True,
+        "id": item_id
+    })
