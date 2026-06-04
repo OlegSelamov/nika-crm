@@ -1809,6 +1809,13 @@ function loadSalesHistory() {
                             >
                                 📋
                             </button>
+							
+							<button
+								onclick="refundSale(${sale.id})"
+								class="mini-doc-btn"
+							>
+								↩️
+							</button>
 
                         </div>
 
@@ -1995,6 +2002,42 @@ function monitorKaspiPayment(processId) {
         });
 
     }, 2000);
+}
+
+function refundSale(id){
+
+    if(!confirm("Сделать возврат через Kaspi POS?")){
+        return;
+    }
+
+    fetch("/sales/refund/" + id,{
+        method:"POST"
+    })
+    .then(r => r.json())
+    .then(data => {
+
+        if(data.success){
+
+            alert("Возврат выполнен");
+
+            loadSalesHistory();
+
+        }else{
+
+            alert(
+                data.error ||
+                "Ошибка возврата"
+            );
+        }
+
+    })
+    .catch(err => {
+
+        console.error(err);
+
+        alert("Ошибка связи");
+
+    });
 }
 </script>
 

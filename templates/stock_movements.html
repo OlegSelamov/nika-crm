@@ -47,6 +47,11 @@
                         <span style="color:#3b82f6;font-weight:bold;">
                             Продажа
                         </span>
+						
+					{% elif row.movement_type == "refund" %}
+						<span style="color:#f59e0b;font-weight:bold;">
+							Возврат
+						</span>
 
                     {% elif row.movement_type == "writeoff" %}
                         <span style="color:#ef4444;font-weight:bold;">
@@ -97,6 +102,8 @@
 					Приход
 				{% elif row.movement_type == "sale" %}
 					Продажа
+				{% elif row.movement_type == "refund" %}
+					Возврат
 				{% else %}
 					Списание
 				{% endif %}
@@ -199,6 +206,11 @@
 	.writeoff{
 		background:#fee2e2;
 		color:#ef4444;
+	}
+	
+	.refund{
+		background:#fef3c7;
+		color:#d97706;
 	}
 
 	.movement-row{

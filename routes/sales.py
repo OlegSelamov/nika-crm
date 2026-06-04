@@ -8,6 +8,7 @@ from num2words import num2words
 from flask import session
 import uuid
 import pytz
+import requests
 
 sales_bp = Blueprint("sales", __name__)
 sales_api = Blueprint("sales_api", __name__)
@@ -1385,3 +1386,196 @@ def quick_add_item():
         }
 
     })
+    
+@sales_bp.route("/sales/refund/<int:sale_id>", methods=["POST"])
+def refund_sale(sale_id):
+
+    import time
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+
+        cur.execute("""
+            SELECT *
+            FROM sales
+            WHERE id = %s
+            AND company_id = %s
+        """, (
+            sale_id,
+            session.get("company_id")
+        ))
+
+        sale = cur.fetchone()
+
+        if not sale:
+            return jsonify({
+                "success": False,
+                "error": "Продажа не найдена"
+            })
+
+        if sale.get("is_refunded"):
+            return jsonify({
+                "success": False,
+                "error": "Продажа уже возвращена"
+            })
+
+        transaction_id = sale.get("kaspi_transaction_id")
+
+        if not transaction_id:
+            return jsonify({
+                "success": False,
+                "error": "Нет transactionId"
+            })
+
+        amount = int(sale["total_amount"])
+        method = sale.get("kaspi_method") or "qr"
+
+        # запуск возврата
+
+        refund_response = requests.get(
+            "http://10.22.108.105:8080/v2/refund",
+            params={
+                "transactionId": transaction_id,
+                "amount": amount,
+                "method": method
+            },
+            timeout=15
+        )
+
+        refund_result = refund_response.json()
+
+        if refund_result.get("statusCode") != 0:
+            return jsonify({
+                "success": False,
+                "error": refund_result
+            })
+
+        process_id = refund_result["data"]["processId"]
+
+        # ждём ответ терминала
+
+        refund_ok = False
+        refund_transaction_id = None
+
+        for _ in range(30):
+
+            time.sleep(2)
+
+            status_response = requests.get(
+                "http://10.22.108.105:8080/v2/status",
+                params={
+                    "processId": process_id
+                },
+                timeout=15
+            )
+
+            status_result = status_response.json()
+
+            data_block = status_result.get("data", {})
+
+            status = data_block.get("status")
+
+            if status == "success":
+
+                refund_ok = True
+
+                refund_transaction_id = (
+                    data_block.get("transactionId")
+                )
+
+                break
+
+            if status == "fail":
+
+                return jsonify({
+                    "success": False,
+                    "error": "Возврат отменён или отклонён"
+                })
+
+        if not refund_ok:
+
+            return jsonify({
+                "success": False,
+                "error": "Истекло время ожидания возврата"
+            })
+
+        # возвращаем товар на склад
+
+        cur.execute("""
+            SELECT *
+            FROM sale_items
+            WHERE sale_id = %s
+        """, (
+            sale_id,
+        ))
+
+        items = cur.fetchall()
+
+        for item in items:
+
+            cur.execute("""
+                UPDATE items
+                SET quantity =
+                    COALESCE(quantity,0) + %s
+                WHERE id = %s
+            """, (
+                item["quantity"],
+                item["item_id"]
+            ))
+
+            cur.execute("""
+                INSERT INTO stock_movements (
+                    company_id,
+                    item_id,
+                    movement_type,
+                    quantity,
+                    price,
+                    total,
+                    created_at
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                sale["company_id"],
+                item["item_id"],
+                "refund",
+                item["quantity"],
+                item["price"],
+                item["total"],
+                now_kz().isoformat()
+            ))
+
+        # обновляем продажу
+
+        cur.execute("""
+            UPDATE sales
+            SET
+                status = %s,
+                is_refunded = TRUE
+            WHERE id = %s
+        """, (
+            "Возврат",
+            sale_id
+        ))
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "refund_transaction_id":
+                refund_transaction_id
+        })
+
+    except Exception as e:
+
+        conn.rollback()
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
+
+    finally:
+
+        pool.putconn(conn)

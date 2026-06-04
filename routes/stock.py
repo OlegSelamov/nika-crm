@@ -88,6 +88,9 @@ def stock():
                     CASE
                         WHEN stock_movements.movement_type='income'
                         THEN stock_movements.quantity
+                        
+                        WHEN stock_movements.movement_type='refund'
+                        THEN stock_movements.quantity
 
                         WHEN stock_movements.movement_type='sale'
                         THEN -stock_movements.quantity
@@ -230,6 +233,9 @@ def api_stock():
                 SUM(
                     CASE
                         WHEN stock_movements.movement_type='income'
+                        THEN stock_movements.quantity
+                        
+                        WHEN stock_movements.movement_type='refund'
                         THEN stock_movements.quantity
 
                         WHEN stock_movements.movement_type='sale'
