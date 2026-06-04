@@ -185,6 +185,15 @@
 					БЕЗНАЛ
 
 				</button>
+				
+				<button
+					class="pay-btn"
+					style="background:#e11d48"
+					onclick="payKaspiPOS()">
+
+					KASPI POS
+
+				</button>
 
 			</div>
 
@@ -1866,6 +1875,106 @@ function loadSalesHistory() {
 		).innerHTML = mobileHtml;
 
     });
+}
+
+function payKaspiPOS() {
+
+    if (!selectedClient) {
+        alert("Сначала выбери клиента");
+        return;
+    }
+
+    if (cart.length === 0) {
+        alert("Корзина пустая");
+        return;
+    }
+
+    let total = 0;
+
+    cart.forEach(item => {
+        total += item.price * item.qty;
+    });
+
+    fetch("/kaspi/start-payment", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            amount: total
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        if (!data.success) {
+            alert(data.error || "Ошибка POS");
+            return;
+        }
+
+        monitorKaspiPayment(data.processId);
+    });
+}
+
+function monitorKaspiPayment(processId) {
+
+    const timer = setInterval(() => {
+
+        fetch("/kaspi/status/" + processId)
+        .then(res => res.json())
+        .then(data => {
+
+            console.log("KASPI STATUS:", data);
+
+            if (data.status === "success") {
+
+                clearInterval(timer);
+
+                document.getElementById("kaspiInput").value =
+                    document.getElementById("totalAmount")
+                        .innerText
+                        .replace(/\D/g, '');
+
+                alert("Оплата Kaspi POS прошла успешно");
+
+                pay();
+                return;
+            }
+
+            if (data.status === "fail") {
+
+                clearInterval(timer);
+
+                alert(
+                    data.message ||
+                    "Оплата отменена или отклонена на терминале"
+                );
+
+                return;
+            }
+
+            if (data.status === "unknown") {
+
+                clearInterval(timer);
+
+                alert(
+                    "Статус оплаты неизвестен. Проверь терминал и историю Kaspi перед повторной оплатой."
+                );
+
+                return;
+            }
+
+        })
+        .catch(err => {
+
+            clearInterval(timer);
+
+            alert("Ошибка связи с Kaspi POS");
+
+            console.error(err);
+        });
+
+    }, 2000);
 }
 </script>
 

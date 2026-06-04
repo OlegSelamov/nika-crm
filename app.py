@@ -4,6 +4,7 @@ from routes.clients import clients_bp
 from routes.tasks import tasks_bp
 from routes.items import items_bp
 from routes.sales import sales_bp
+from routes.kaspi_pos import kaspi_pos_bp
 from flask import redirect, session
 from models import init_db
 from routes.sales import sales_api
@@ -35,6 +36,7 @@ app.register_blueprint(clients_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(items_bp)
 app.register_blueprint(sales_bp)
+app.register_blueprint(kaspi_pos_bp)
 app.register_blueprint(sales_api)
 app.register_blueprint(companies_bp)
 app.register_blueprint(agent_bp)
