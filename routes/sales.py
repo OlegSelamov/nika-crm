@@ -69,6 +69,8 @@ def pay_sale():
 
     client_id = data.get("client_id")
     cart = data.get("cart", [])
+    kaspi_transaction_id = data.get("kaspi_transaction_id")
+    kaspi_method = data.get("kaspi_method")
 
     total = sum(item.get("price", 0) * item.get("qty", 1) for item in cart)
     cash = to_int(data.get("cash"))
@@ -96,9 +98,11 @@ def pay_sale():
                 sale_type,
                 cash_amount,
                 card_amount,
-                kaspi_amount
+                kaspi_amount,
+                kaspi_transaction_id,
+                kaspi_method
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             client_id,
@@ -110,7 +114,9 @@ def pay_sale():
             "cash",
             cash,
             card,
-            kaspi
+            kaspi,
+            kaspi_transaction_id,
+            kaspi_method
         ))
 
         sale_id = cur.fetchone()["id"]

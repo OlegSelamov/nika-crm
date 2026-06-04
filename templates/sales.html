@@ -581,14 +581,21 @@ function pay() {
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-            client_id: selectedClient,
-            cart: cart,
-            cash: cash,
-            card: card,
-            kaspi: kaspi,
-            company_id: null
-        })
+		body: JSON.stringify({
+			client_id: selectedClient,
+			cart: cart,
+			cash: cash,
+			card: card,
+			kaspi: kaspi,
+
+			kaspi_transaction_id:
+				window.lastKaspiTransactionId || "",
+
+			kaspi_method:
+				window.lastKaspiMethod || "qr",
+
+			company_id: null
+		})
     })
     .then(res => res.json().catch(() => null))
     .then(data => {
@@ -1859,6 +1866,13 @@ function loadSalesHistory() {
 					>
 						📋
 					</button>
+					
+					<button
+						onclick="refundSale(${sale.id})"
+						class="mini-doc-btn"
+					>
+						↩️
+					</button>
 
 				</div>
 
@@ -1934,7 +1948,13 @@ function monitorKaspiPayment(processId) {
                     document.getElementById("totalAmount")
                         .innerText
                         .replace(/\D/g, '');
+				
+				window.lastKaspiTransactionId =
+					data.transactionId;
 
+				window.lastKaspiMethod =
+					data.method || "qr";
+					
                 alert("Оплата Kaspi POS прошла успешно");
 
                 pay();

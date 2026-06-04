@@ -360,6 +360,33 @@ def init_db():
         conn.rollback()
         
     try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN kaspi_transaction_id TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN kaspi_method TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN is_refunded BOOLEAN DEFAULT FALSE
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+        
+    try:
         cur.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'cashier'")
         conn.commit()
     except:
