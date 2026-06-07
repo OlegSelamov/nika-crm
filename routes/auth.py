@@ -12,16 +12,20 @@ def current_user():
         return None
 
     conn = get_db()
-    cur = conn.cursor()
 
-    cur.execute(
-        "SELECT * FROM users WHERE id = %s",
-        (user_id,)
-    )
+    try:
+        cur = conn.cursor()
 
-    user = cur.fetchone()
-    pool.putconn(conn)
-    return user
+        cur.execute(
+            "SELECT * FROM users WHERE id = %s",
+            (user_id,)
+        )
+
+        return cur.fetchone()
+
+    finally:
+        cur.close()
+        pool.putconn(conn)
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
