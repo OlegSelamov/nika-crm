@@ -59,19 +59,27 @@
 		{% for u in users %}
 		<tr>
 			<td>{{ u.id }}</td>
+
 			<td>{{ u.username }}</td>
-			<td>{{ u.role }}</td>
-			<td>{{ u.company_name or "-" }}</td>
-			<td>{{ "Да" if u.is_super_admin else "Нет" }}</td>
+
 			<td>{{ u.full_name or "-" }}</td>
+
 			<td>{{ u.phone or "-" }}</td>
+
 			<td>{{ u.percent_rate or 0 }}%</td>
+
+			<td>{{ u.role }}</td>
+
+			<td>{{ u.company_name or "-" }}</td>
+
+			<td>{{ "Да" if u.is_super_admin else "Нет" }}</td>
+
 			<td>
 				{% if not u.is_creator %}
 				<a href="/users/delete/{{ u.id }}"
 				   onclick="return confirm('Удалить пользователя?')"
-			       style="color:red;">
-			       Удалить
+				   style="color:red;">
+				   Удалить
 				</a>
 				{% else %}
 				<span style="color:gray;">Создатель</span>
