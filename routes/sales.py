@@ -1310,6 +1310,8 @@ def act(sale_id):
     client = dict(client)
 
     total = sum(item["total"] or 0 for item in items)
+    
+    pool.putconn(conn)
 
     return render_template(
         "docs/act.html",
@@ -1364,6 +1366,8 @@ def quick_add_item():
     item_id = cur.fetchone()["id"]
 
     db.commit()
+    
+    pool.putconn(db)
 
     return jsonify({
 

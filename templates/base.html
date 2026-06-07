@@ -1678,11 +1678,22 @@
 								владелец системы
 
 							{% elif session.get("role") == "admin" %}
-								админ компании
+								администратор
 
-							{% else %}
+							{% elif session.get("role") == "accountant" %}
+								бухгалтер
+
+							{% elif session.get("role") == "manager" %}
+								менеджер
+
+							{% elif session.get("role") == "cto" %}
+								специалист ЦТО
+
+							{% elif session.get("role") == "cashier" %}
 								кассир
 
+							{% else %}
+								сотрудник
 							{% endif %}
 
 						</div>

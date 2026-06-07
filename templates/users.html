@@ -6,10 +6,23 @@
 <form method="POST" class="card" style="max-width:500px; display:grid; gap:10px;">
     <input name="username" placeholder="Логин" required>
     <input name="password" placeholder="Пароль" required>
+	
+	<input name="full_name" placeholder="ФИО">
+
+	<input name="phone" placeholder="Телефон">
+
+	<input name="percent_rate"
+		   type="number"
+		   step="0.01"
+		   placeholder="Процент">
 
     <select name="role">
-        <option value="cashier">Кассир</option>
-        <option value="admin">Админ</option>
+		<option value="owner">Владелец</option>
+		<option value="admin">Администратор</option>
+		<option value="accountant">Бухгалтер</option>
+		<option value="manager">Менеджер</option>
+		<option value="cto">Специалист ЦТО</option>
+		<option value="cashier">Кассир</option>
     </select>
 
     <select name="company_id">
@@ -34,6 +47,9 @@
 		<tr>
 			<th>ID</th>
 			<th>Логин</th>
+			<th>ФИО</th>
+			<th>Телефон</th>
+			<th>%</th>
 			<th>Роль</th>
 			<th>Компания</th>
 			<th>Супер-админ</th>
@@ -47,6 +63,9 @@
 			<td>{{ u.role }}</td>
 			<td>{{ u.company_name or "-" }}</td>
 			<td>{{ "Да" if u.is_super_admin else "Нет" }}</td>
+			<td>{{ u.full_name or "-" }}</td>
+			<td>{{ u.phone or "-" }}</td>
+			<td>{{ u.percent_rate or 0 }}%</td>
 			<td>
 				{% if not u.is_creator %}
 				<a href="/users/delete/{{ u.id }}"

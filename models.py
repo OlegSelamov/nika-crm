@@ -417,6 +417,24 @@ def init_db():
         conn.rollback()
         
     try:
+        cur.execute("ALTER TABLE users ADD COLUMN full_name TEXT")
+        conn.commit()
+    except:
+        conn.rollback()
+        
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+        conn.commit()
+    except:
+        conn.rollback()
+        
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN percent_rate NUMERIC(12,2) DEFAULT 0;")
+        conn.commit()
+    except:
+        conn.rollback()
+                
+    try:
         cur.execute("ALTER TABLE companies ADD COLUMN owner_id INTEGER")
         conn.commit()
     except:

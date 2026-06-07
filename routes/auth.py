@@ -142,15 +142,31 @@ def users():
         role = request.form.get("role", "cashier").strip()
         company_id = request.form.get("company_id") or session.get("company_id")
         is_super_admin = True if request.form.get("is_super_admin") == "1" else False
+        full_name = request.form.get("full_name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        percent_rate = request.form.get("percent_rate") or 0
 
         cur.execute("""
-            INSERT INTO users (username, password, role, company_id, is_super_admin, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO users (
+                username,
+                password,
+                role,
+                company_id,
+                full_name,
+                phone,
+                percent_rate,
+                is_super_admin,
+                created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             username,
             password,
             role,
             company_id if company_id else None,
+            full_name,
+            phone,
+            percent_rate,
             is_super_admin,
             now_kz()
         ))
