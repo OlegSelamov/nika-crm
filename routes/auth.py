@@ -56,6 +56,9 @@ def login():
         session["username"] = user["username"]
         session["role"] = user["role"] or "cashier"
         session["company_id"] = user["company_id"]
+        session["full_name"] = user["full_name"]
+        session["phone"] = user["phone"]
+        session["percent_rate"] = user["percent_rate"]
         session["is_super_admin"] = bool(user["is_super_admin"])
         session["is_creator"] = bool(user["is_creator"]) if "is_creator" in user.keys() else False
 
@@ -107,6 +110,9 @@ def api_login():
     session["username"] = user["username"]
     session["role"] = user["role"] or "cashier"
     session["company_id"] = user["company_id"]
+    session["full_name"] = user["full_name"]
+    session["phone"] = user["phone"]
+    session["percent_rate"] = user["percent_rate"]
     session["is_super_admin"] = bool(user["is_super_admin"])
     session["is_creator"] = bool(user["is_creator"]) if "is_creator" in user.keys() else False
 
@@ -196,10 +202,33 @@ def users():
     
 @auth_bp.route("/profile")
 def profile():
+
     if not session.get("user_id"):
         return redirect("/login")
 
-    return render_template("profile.html")
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            u.*,
+            c.name AS company_name
+        FROM users u
+        LEFT JOIN companies c
+            ON c.id = u.company_id
+        WHERE u.id = %s
+    """, (
+        session["user_id"],
+    ))
+
+    user = cur.fetchone()
+
+    pool.putconn(conn)
+
+    return render_template(
+        "profile.html",
+        user=user
+    )
     
 @auth_bp.route("/users/delete/<int:user_id>")
 def delete_user(user_id):

@@ -16,6 +16,10 @@ from models import get_db
 from routes.stock import stock_bp
 from routes.webkassa import webkassa_bp
 from routes.settings import settings_bp
+from routes.reports import reports_bp
+from routes.expenses import expenses_bp
+from routes.cto import cto_bp
+from routes.accounting import accounting_bp
 import os
 from dotenv import load_dotenv
 
@@ -45,6 +49,10 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(stock_bp)
 app.register_blueprint(webkassa_bp)
 app.register_blueprint(settings_bp)
+app.register_blueprint(reports_bp)
+app.register_blueprint(expenses_bp)
+app.register_blueprint(cto_bp)
+app.register_blueprint(accounting_bp)
     
 @app.before_request
 def check_company_access():

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">ККМ и ЦТО</h1>
+        <div class="page-note">Услуги центра технического обслуживания</div>
+    </div>
+</div>
+
+<div class="card">
+
+    <div class="title">Доступные услуги</div>
+
+    <div class="feature-grid">
+
+        <div class="feature-card">🖨 Регистрация ККМ</div>
+
+        <div class="feature-card">🔄 Перерегистрация</div>
+
+        <div class="feature-card">❌ Снятие с учёта</div>
+
+        <div class="feature-card">🌐 Подключение ОФД</div>
+
+        <div class="feature-card">🔧 Ремонт</div>
+
+        <div class="feature-card">🚗 Выезд специалиста</div>
+
+    </div>
+
+</div>
+
+{% include "module_cards_style.html" %}
+
+{% endblock %}

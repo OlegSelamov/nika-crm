@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Расходы</h1>
+        <div class="page-note">Управление расходами компании</div>
+    </div>
+</div>
+
+<div class="stats-grid">
+
+<div class="stat-card blue">
+    <div class="stat-label">Аренда</div>
+</div>
+
+<div class="stat-card purple">
+    <div class="stat-label">Зарплата</div>
+</div>
+
+<div class="stat-card cyan">
+    <div class="stat-label">Прочие расходы</div>
+</div>
+
+</div>
+
+<div class="card">
+
+<div class="title">Категории расходов</div>
+
+<div class="feature-grid">
+
+    <div class="feature-card">🏢 Аренда</div>
+
+    <div class="feature-card">💵 Зарплата</div>
+
+    <div class="feature-card">🚗 Транспорт</div>
+
+    <div class="feature-card">📦 Закупки</div>
+
+    <div class="feature-card">⚡ Коммунальные</div>
+
+    <div class="feature-card">🧾 Прочие расходы</div>
+
+</div>
+
+</div>
+
+{% include "module_cards_style.html" %}
+
+{% endblock %}

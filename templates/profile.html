@@ -1,11 +1,85 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2>Мой профиль</h2>
-
-<div class="card" style="max-width:500px;">
-    <p><b>Логин:</b> {{ session.get("username") }}</p>
-    <p><b>Роль:</b> {{ session.get("role") }}</p>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Мой профиль</h1>
+        <div class="page-note">
+            Личный кабинет сотрудника
+        </div>
+    </div>
 </div>
+
+<div class="stats-grid">
+
+    <div class="stat-card blue">
+        <div class="stat-label">Роль</div>
+        <div class="stat-value">
+            {{ session.get("role","-") }}
+        </div>
+    </div>
+
+    <div class="stat-card purple">
+        <div class="stat-label">Логин</div>
+        <div class="stat-value">
+            {{ session.get("username","-") }}
+        </div>
+    </div>
+
+</div>
+
+<div class="card">
+
+    <div class="title">
+        Информация о сотруднике
+    </div>
+
+    <div class="profile-grid">
+
+        <div class="profile-item">
+            <span>ФИО</span>
+            <b>{{ session.get("full_name","Не заполнено") }}</b>
+        </div>
+
+        <div class="profile-item">
+            <span>Телефон</span>
+            <b>{{ session.get("phone","Не заполнено") }}</b>
+        </div>
+
+        <div class="profile-item">
+            <span>Компания</span>
+            <b>{{ session.get("company_name","-") }}</b>
+        </div>
+
+    </div>
+
+</div>
+
+<style>
+
+.profile-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:16px;
+}
+
+.profile-item{
+    background:#f8fafc;
+    border-radius:14px;
+    padding:14px;
+}
+
+.profile-item span{
+    display:block;
+    color:#64748b;
+    font-size:12px;
+    margin-bottom:6px;
+}
+
+.profile-item b{
+    color:#0f172a;
+}
+
+</style>
 
 {% endblock %}

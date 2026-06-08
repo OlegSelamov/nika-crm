@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Отчёты</h1>
+        <div class="page-note">Отчётность компании</div>
+    </div>
+</div>
+
+<div class="stats-grid">
+
+<div class="stat-card blue">
+    <div class="stat-label">Продажи</div>
+</div>
+
+<div class="stat-card purple">
+    <div class="stat-label">Прибыль</div>
+</div>
+
+<div class="stat-card cyan">
+    <div class="stat-label">Склад</div>
+</div>
+
+</div>
+
+<div class="card">
+
+<div class="title">Доступные отчёты</div>
+
+<div class="feature-grid">
+
+    <div class="feature-card">📊 Отчёт по продажам</div>
+
+    <div class="feature-card">💰 Отчёт по прибыли</div>
+
+    <div class="feature-card">📦 Отчёт по складу</div>
+
+    <div class="feature-card">👥 Отчёт по клиентам</div>
+
+    <div class="feature-card">📄 PDF</div>
+
+    <div class="feature-card">📥 Excel</div>
+
+</div>
+
+</div>
+
+{% include "module_cards_style.html" %}
+
+{% endblock %}

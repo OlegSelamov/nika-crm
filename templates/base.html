@@ -1716,6 +1716,11 @@
 
 		<div class="menu-section">
 			<div class="menu-caption">Основное</div>
+			
+			<a href="/profile">
+				<img src="/static/icons/profile.png" class="menu-icon">
+				<span class="text">Профиль</span>
+			</a>
 
 			<a href="/dashboard">
 				<img src="/static/icons/home.png" class="menu-icon">
@@ -1740,6 +1745,26 @@
 			<a href="/tasks">
 				<img src="/static/icons/tasks.png" class="menu-icon">
 				<span class="text">Задачи</span>
+			</a>
+			
+			<a href="/cto">
+				<img src="/static/icons/cto.png" class="menu-icon">
+				<span class="text">ККМ и ЦТО</span>
+			</a>
+			
+			<a href="/accounting">
+				<img src="/static/icons/buh.png" class="menu-icon">
+				<span class="text">Бухгалтерия</span>
+			</a>
+			
+			<a href="/reports">
+				<img src="/static/icons/otchet.png" class="menu-icon">
+				<span class="text">Отчеты</span>
+			</a>
+			
+			<a href="/expenses">
+				<img src="/static/icons/rashod.png" class="menu-icon">
+				<span class="text">Расходы</span>
 			</a>
 		</div>
 			
@@ -1822,7 +1847,7 @@
 			
 			{% if session.get("is_super_admin") %}
 			<a href="/users">
-				<img src="/static/icons/clients.png" class="menu-icon">
+				<img src="/static/icons/user.png" class="menu-icon">
 				<span class="text">Пользователи</span>
 			</a>
 			{% endif %}
