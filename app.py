@@ -12,7 +12,7 @@ from routes.companies import companies_bp
 from routes.agent import agent_bp
 from routes.voice import voice_bp
 from routes.auth import auth_bp
-from models import get_db
+from models import get_db, pool
 from routes.stock import stock_bp
 from routes.webkassa import webkassa_bp
 from routes.settings import settings_bp
@@ -65,17 +65,23 @@ def check_company_access():
         return
 
     conn = get_db()
+    cur = None
 
-    cur = conn.cursor()
+    try:
+        cur = conn.cursor()
 
-    cur.execute(
-        "SELECT * FROM companies WHERE id = %s",
-        (session.get("company_id"),)
-    )
+        cur.execute(
+            "SELECT * FROM companies WHERE id = %s",
+            (session.get("company_id"),)
+        )
 
-    company = cur.fetchone()
+        company = cur.fetchone()
 
-    conn.close()
+    finally:
+        if cur:
+            cur.close()
+
+        pool.putconn(conn)
 
     if not company:
         return
