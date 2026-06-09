@@ -97,13 +97,10 @@ def check_company_access():
 @app.route("/")
 def landing():
 
-    # 🔥 если уже вошёл
     if session.get("user_id"):
-
         return redirect("/dashboard")
 
-    # 🔥 если не вошёл
-    return redirect("/login")
+    return render_template("landing.html")
     
 if __name__ == "__main__":
     #init_db()
