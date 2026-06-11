@@ -249,6 +249,36 @@
 
 </div>
 
+<div class="payment">
+    <span>Оплата</span>
+
+    <span>
+        {% if sale.sale_type == "cash" %}
+            Наличные
+        {% elif sale.sale_type == "card" %}
+            Банковская карта
+        {% elif sale.sale_type == "kaspi" %}
+            Kaspi POS
+        {% endif %}
+    </span>
+</div>
+
+{% if sale.kaspi_method %}
+<div class="payment">
+    <span>Тип</span>
+
+    <span>
+        {% if "Qr" in sale.kaspi_method %}
+            Kaspi QR
+        {% elif "Card" in sale.kaspi_method %}
+            Банковская карта
+        {% else %}
+            {{ sale.kaspi_method }}
+        {% endif %}
+    </span>
+</div>
+{% endif %}
+
 {% if cash|float > 0 %}
 <div class="payment">
 
@@ -276,7 +306,7 @@
 {% if kaspi|float > 0 %}
 <div class="payment">
 
-    <span>Kaspi</span>
+    <span>Оплачено</span>
 
     <span>
         {{ "%.2f"|format(kaspi|float) }} ₸

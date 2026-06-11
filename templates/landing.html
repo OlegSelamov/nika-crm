@@ -1,1312 +1,226 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<title>Nika Business CRM</title>
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<style>
-body {
-    margin: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background: #0f172a;
-    color: white;
-}
-
-/* HEADER */
-.header {
-    position: fixed;
-    top: 0;
-    width: 100%;
-    padding: 15px 40px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(0,0,0,0.4);
-    backdrop-filter: blur(10px);
-    z-index: 1000;
-}
-
-.logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: bold;
-    font-size: 18px;
-}
-
-.logo img {
-    height: 50px;
-}
-
-.nav {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.nav a {
-    color: white;
-    text-decoration: none;
-    font-size: 14px;
-    opacity: 0.9;
-    transition: 0.3s;
-}
-
-.login-btn {
-    border: 1px solid white;
-    padding: 8px 14px;
-    border-radius: 8px;
-}
-
-/* HERO */
-.hero {
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    background: linear-gradient(135deg, #ff7a18, #005bea);
-    padding-top: 80px;
-    padding: 20px;
-}
-
-.hero h1 {
-    font-size: 52px;
-}
-
-.hero p {
-    font-size: 20px;
-    margin-top: 15px;
-}
-
-.buttons {
-    margin-top: 30px;
-}
-
-.btn {
-    padding: 14px 26px;
-    border-radius: 10px;
-    margin: 10px;
-    text-decoration: none;
-    font-weight: bold;
-}
-
-.btn-primary {
-    background: white;
-    color: black;
-}
-
-.btn-secondary {
-    border: 1px solid white;
-    color: white;
-}
-
-/* SECTION */
-.section {
-    padding: 100px 20px;
-    text-align: center;
-    max-width: 1200px;
-    margin: auto;
-}
-
-h2 {
-    font-size: 36px;
-}
-
-/* CARDS */
-.cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 25px;
-    margin-top: 40px;
-}
-
-.card {
-    background: #1e293b;
-    padding: 30px;
-    border-radius: 16px;
-    transition: 0.3s;
-}
-
-.card:hover {
-    transform: translateY(-6px);
-}
-
-/* SCREEN */
-.screen img {
-    width: 100%;
-    border-radius: 16px;
-    margin-top: 40px;
-}
-
-/* FEATURES */
-.features {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 30px;
-    text-align: left;
-    margin-top: 40px;
-}
-
-/* PRICING */
-.pricing {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 30px;
-    margin-top: 40px;
-}
-
-.price-card {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-
-    min-height: 380px; /* ключ */
-}
-
-.top {
-    margin-bottom: 10px;
-}
-
-
-
-.price {
-    font-size: 28px;
-    margin: 15px 0;
-}
-
-/* CTA */
-.cta {
-    background: linear-gradient(135deg, #6366f1, #3b82f6);
-    padding: 80px 20px;
-}
-
-.hero {
-    position: relative;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.hero-video {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    min-width: 100%;
-    min-height: 100%;
-    transform: translate(-50%, -50%);
-    object-fit: cover;
-    z-index: 1;
-}
-
-.hero-overlay {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.55);
-    z-index: 2;
-}
-
-.hero-content {
-    position: relative;
-    z-index: 3;
-    text-align: center;
-    color: white;
-    padding: 20px;
-}
-
-.hero h1 {
-    font-size: 52px;
-}
-
-.hero p {
-    font-size: 20px;
-    margin-top: 15px;
-}
-
-* {
-    box-sizing: border-box;
-}
-
-/* MOBILE */
-@media(max-width:768px){
-    .cards, .features, .pricing {
-        grid-template-columns: 1fr;
-    }
-    .hero h1 {
-        font-size: 34px;
-    }
-}
-
-.problem {
-    background: #020617;
-    padding: 100px 20px;
-}
-
-.problem-container {
-    max-width: 1100px;
-    margin: auto;
-    text-align: center;
-}
-
-.problem h2 {
-    font-size: 38px;
-    margin-bottom: 10px;
-}
-
-.problem-sub {
-    color: #94a3b8;
-    margin-bottom: 50px;
-}
-
-/* GRID */
-.problem-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 25px;
-}
-
-/* CARD */
-.problem-card {
-    background: #1e293b;
-    padding: 30px;
-    border-radius: 16px;
-    text-align: left;
-    transition: 0.3s;
-}
-
-.problem-card:hover {
-    transform: translateY(-5px);
-    background: #243447;
-}
-
-.icon {
-    font-size: 28px;
-    margin-bottom: 10px;
-}
-
-.problem-card h3 {
-    margin-bottom: 8px;
-}
-
-.problem-card p {
-    color: #cbd5f5;
-}
-
-/* MOBILE */
-@media(max-width:768px){
-    .problem-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.solution {
-    background: linear-gradient(135deg, #020617, #0f172a);
-    padding: 100px 20px;
-}
-
-.solution-container {
-    max-width: 1100px;
-    margin: auto;
-    text-align: center;
-}
-
-.solution h2 {
-    font-size: 38px;
-    margin-bottom: 10px;
-}
-
-.solution-sub {
-    color: #94a3b8;
-    margin-bottom: 50px;
-}
-
-/* GRID */
-.solution-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 25px;
-}
-
-/* CARD */
-.solution-card {
-    background: #1e293b;
-    padding: 30px;
-    border-radius: 16px;
-    text-align: left;
-    transition: 0.3s;
-    border: 1px solid transparent;
-}
-
-.solution-card:hover {
-    transform: translateY(-5px);
-    border-color: #6366f1;
-    background: #243447;
-}
-
-.solution-icon {
-    font-size: 28px;
-    margin-bottom: 10px;
-}
-
-.solution-card h3 {
-    margin-bottom: 8px;
-}
-
-.solution-card p {
-    color: #cbd5f5;
-}
-
-/* MOBILE */
-@media(max-width:768px){
-    .solution-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.screen-section {
-    padding: 100px 20px;
-    text-align: center;
-}
-
-.screen-container {
-    max-width: 1100px;
-    margin: auto;
-}
-
-.screen-sub {
-    color: #94a3b8;
-    margin-bottom: 40px;
-}
-
-/* СКРИН */
-.screen-wrapper {
-    background: #020617;
-    padding: 20px;
-    border-radius: 20px;
-    box-shadow: 0 0 60px rgba(99,102,241,0.3);
-}
-
-.screen-wrapper img {
-    width: 100%;
-    border-radius: 12px;
-}
-
-/* ФИЧИ ПОД СКРИНОМ */
-.screen-features {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-    margin-top: 40px;
-}
-
-.screen-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    justify-content: center;
-}
-
-.screen-item span {
-    color: #22c55e;
-    font-weight: bold;
-}
-
-.screen-item p {
-    margin: 0;
-}
-
-/* MOBILE */
-@media(max-width:768px){
-    .screen-features {
-        grid-template-columns: 1fr;
-    }
-}
-
-.why {
-    background: #020617;
-    padding: 100px 20px;
-}
-
-.why-container {
-    max-width: 1100px;
-    margin: auto;
-    text-align: center;
-}
-
-.why h2 {
-    font-size: 38px;
-    margin-bottom: 10px;
-}
-
-.why-sub {
-    color: #94a3b8;
-    margin-bottom: 50px;
-}
-
-/* GRID */
-.why-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 25px;
-}
-
-/* CARD */
-.why-card {
-    background: #1e293b;
-    padding: 30px;
-    border-radius: 16px;
-    text-align: left;
-    transition: 0.3s;
-    border: 1px solid transparent;
-}
-
-.why-card:hover {
-    transform: translateY(-5px);
-    border-color: #6366f1;
-    background: #243447;
-}
-
-.why-icon {
-    font-size: 28px;
-    margin-bottom: 10px;
-}
-
-.why-card h3 {
-    margin-bottom: 8px;
-}
-
-.why-card p {
-    color: #cbd5f5;
-}
-
-/* MOBILE */
-@media(max-width:768px){
-    .why-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.pricing-grid {
-    margin-top: 30px;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-}
-
-.pricing-container {
-    max-width: 1000px;
-    margin: 0 auto;
-    text-align: center;
-}
-
-.price-card {
-    background: #1e293b;
-    padding: 30px;
-    border-radius: 16px;
-    transition: 0.3s;
-    position: relative;
-    text-align: left;
-}
-
-.price-card:hover {
-    transform: translateY(-5px);
-}
-
-.price {
-    font-size: 28px;
-    margin: 15px 0;
-    font-weight: bold;
-}
-
-/* POPULAR */
-.popular {
-    border: 2px solid #6366f1;
-    transform: scale(1.05);
-}
-
-.badge {
-    position: absolute;
-    top: -10px;
-    right: 10px;
-    background: #6366f1;
-    padding: 5px 10px;
-    font-size: 12px;
-    border-radius: 6px;
-}
-
-.features-list {
-    margin: 20px 0;
-    flex-grow: 1;
-}
-
-.features-list p {
-    margin: 6px 0;
-    line-height: 1.4;
-    color: #cbd5f5;
-	font-size: 10px;
-}
-
-.price-card a {
-    margin-top: auto;
-}
-
-/* MOBILE */
-@media(max-width:768px){
-    .pricing-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.final-cta {
-    background: linear-gradient(135deg, #6366f1, #3b82f6);
-    padding: 100px 20px;
-    text-align: center;
-}
-
-.final-container {
-    max-width: 800px;
-    margin: auto;
-}
-
-.final-cta h2 {
-    font-size: 38px;
-    margin-bottom: 15px;
-}
-
-.final-sub {
-    color: rgba(255,255,255,0.9);
-    margin-bottom: 30px;
-}
-
-/* КНОПКА */
-.big-btn {
-    padding: 18px 35px;
-    font-size: 18px;
-}
-
-/* МЕЛКИЙ ТЕКСТ */
-.final-note {
-    margin-top: 15px;
-    font-size: 14px;
-    opacity: 0.8;
-}
-
-/* ================= PREMIUM MOBILE LANDING ================= */
-
-@media (max-width:768px){
-
-	/* BODY */
-
-	body{
-		overflow-x:hidden;
-	}
-
-	/* HEADER */
-
-	.header{
-
-		padding:14px 16px;
-
-		display:flex;
-		flex-direction:column;
-
-		align-items:center;
-
-		gap:14px;
-	}
-
-	.logo{
-
-		display:flex;
-		justify-content:center;
-
-		width:100%;
-	}
-
-	.logo img{
-		height:40px;
-	}
-
-	/* NAV */
-
-	.nav{
-
-		width:100%;
-
-		justify-content:center;
-
-		flex-wrap:wrap;
-
-		gap:10px;
-	}
-
-	.nav a{
-
-		font-size:13px;
-
-		padding:8px 12px;
-
-		border-radius:10px;
-
-		background:rgba(255,255,255,.08);
-	}
-
-	.login-btn{
-
-		padding:8px 14px;
-	}
-
-	/* HERO */
-
-	.hero{
-
-		min-height:100vh;
-
-		height:auto;
-
-		padding:
-		120px 18px 70px;
-	}
-
-	.hero-content{
-
-		max-width:100%;
-	}
-
-	.hero h1{
-
-		font-size:34px;
-
-		line-height:1.15;
-
-		margin-bottom:14px;
-	}
-
-	.hero p{
-
-		font-size:15px;
-
-		line-height:1.5;
-
-		color:#e2e8f0;
-	}
-
-	/* BUTTONS */
-
-	.buttons{
-
-		display:flex;
-		flex-direction:column;
-
-		gap:12px;
-
-		margin-top:24px;
-	}
-
-	.buttons .btn{
-
-		width:100%;
-
-		margin:0;
-
-		height:52px;
-
-		display:flex;
-		align-items:center;
-		justify-content:center;
-
-		border-radius:14px;
-
-		font-size:15px;
-	}
-
-	/* SECTION */
-
-	.section,
-	.problem,
-	.solution,
-	.cta{
-
-		padding:70px 16px;
-	}
-
-	h2{
-
-		font-size:28px;
-
-		line-height:1.2;
-	}
-
-	.problem-sub,
-	.solution-sub{
-
-		font-size:14px;
-
-		line-height:1.5;
-	}
-
-	/* CARDS */
-
-	.cards,
-	.features,
-	.pricing,
-	.problem-grid,
-	.solution-grid{
-
-		grid-template-columns:1fr !important;
-
-		gap:14px;
-	}
-
-	.card,
-	.problem-card,
-	.solution-card,
-	.price-card{
-
-		padding:20px;
-
-		border-radius:22px;
-
-		background:
-		linear-gradient(
-		180deg,
-		rgba(30,41,59,.96),
-		rgba(15,23,42,.92)
-		);
-
-		box-shadow:
-		0 10px 30px rgba(0,0,0,.18);
-	}
-
-	.card h3,
-	.problem-card h3,
-	.solution-card h3{
-
-		font-size:18px;
-	}
-
-	.card p,
-	.problem-card p,
-	.solution-card p{
-
-		font-size:14px;
-
-		line-height:1.5;
-	}
-
-	/* SCREEN */
-
-	.screen img{
-
-		border-radius:18px;
-
-		margin-top:24px;
-	}
-
-	/* FEATURES */
-
-	.features{
-
-		text-align:left;
-	}
-
-	/* PRICE */
-
-	.price{
-
-		font-size:22px !important;
-
-		word-break:break-word;
-	}
-	
-	.price-card ul{
-
-		padding-left:18px;
-
-		font-size:13px;
-	}
-
-	.price-card{
-
-		width:100% !important;
-
-		min-width:0 !important;
-
-		min-height:auto !important;
-
-		padding:18px 16px !important;
-	}
-
-	/* CTA */
-
-	.cta h2{
-
-		font-size:30px;
-	}
-
-	.cta .btn{
-
-		width:100%;
-
-		max-width:100%;
-
-		height:52px;
-
-		display:flex;
-		align-items:center;
-		justify-content:center;
-
-		padding:0 16px;
-
-		font-size:14px;
-
-		text-align:center;
-
-		line-height:1.2;
-
-		white-space:normal;
-	}
-	
-	.cta{
-		overflow:hidden;
-	}
-	
-	.btn{
-
-		min-width:0 !important;
-	}
-}
-
-
-
-/* ===== SMALL PHONES ===== */
-
-@media (max-width:420px){
-
-	.hero h1{
-		font-size:30px;
-	}
-
-	h2{
-		font-size:24px;
-	}
-
-	.hero p{
-		font-size:14px;
-	}
-
-	.card,
-	.problem-card,
-	.solution-card,
-	.price-card{
-
-		padding:18px;
-	}
-}
-
-/* ===== FIX MOBILE PRICING + FINAL CTA ===== */
-
-@media (max-width:768px){
-
-	/* тарифы компактнее */
-
-	.pricing-section{
-		padding:60px 14px !important;
-	}
-
-	.pricing-container{
-		width:100% !important;
-		max-width:100% !important;
-	}
-
-	.pricing-grid{
-		grid-template-columns:1fr !important;
-		gap:14px !important;
-		margin-top:22px !important;
-	}
-
-	.price-card{
-		width:100% !important;
-		min-width:0 !important;
-		min-height:auto !important;
-		padding:16px !important;
-		border-radius:18px !important;
-		transform:none !important;
-	}
-
-	.price-card.popular{
-		transform:none !important;
-	}
-
-	.price-card h3{
-		font-size:18px !important;
-		margin:0 0 8px !important;
-	}
-
-	.price{
-		font-size:21px !important;
-		margin:8px 0 10px !important;
-		line-height:1.2 !important;
-	}
-
-	.features-list p{
-		font-size:12px !important;
-		line-height:1.35 !important;
-		margin:5px 0 !important;
-	}
-
-	.price-card .btn{
-		width:100% !important;
-		height:44px !important;
-		margin:12px 0 0 !important;
-		padding:0 12px !important;
-		font-size:13px !important;
-		border-radius:12px !important;
-		display:flex !important;
-		align-items:center !important;
-		justify-content:center !important;
-	}
-
-	.badge{
-		position:static !important;
-		display:inline-block !important;
-		margin-bottom:10px !important;
-		font-size:10px !important;
-	}
-
-	/* последняя CTA секция */
-
-	.final-cta{
-		padding:60px 14px !important;
-		overflow:hidden !important;
-	}
-
-	.final-cta h2{
-		font-size:26px !important;
-		line-height:1.2 !important;
-	}
-
-	.final-sub{
-		font-size:14px !important;
-		line-height:1.45 !important;
-	}
-
-	.big-btn{
-		width:100% !important;
-		max-width:100% !important;
-		height:auto !important;
-		min-height:52px !important;
-		margin:18px 0 0 !important;
-		padding:14px 16px !important;
-		font-size:14px !important;
-		line-height:1.25 !important;
-		white-space:normal !important;
-		text-align:center !important;
-		display:flex !important;
-		align-items:center !important;
-		justify-content:center !important;
-		border-radius:14px !important;
-		box-sizing:border-box !important;
-	}
-}
-</style>
-</head>
-
-<body>
-<div class="header">
-    <div class="logo">
-        <img src="/static/img/logo.png" alt="Nika Business">
-    </div>
-
-    <div class="nav">
-        <a href="#features">Возможности</a>
-        <a href="#pricing">Тарифы</a>
-        <a href="/login" class="login-btn">Войти</a>
-    </div>
-</div>
-<!-- HEADER -->
-<div class="hero">
-    <video autoplay muted loop playsinline class="hero-video">
-        <source src="/static/video/hero.mp4" type="video/mp4">
-    </video>
-
-    <div class="hero-overlay"></div>
-
-    <div class="hero-content">
-        <h1>Контролируй клиентов и прибыль<br>в одном месте</h1>
-        <p>Запусти систему за 5 минут и наведи порядок в бизнесе уже сегодня</p>
-
-        <div class="buttons">
-            <a href="/register" class="btn btn-primary">Начать бесплатно</a>
-        </div>
-    </div>
-</div>
-
-<!-- ПРОБЛЕМА -->
-<section class="problem" id="features">
-    <div class="problem-container">
-        
-        <h2>Знакомо?</h2>
-        <p class="problem-sub">
-            Бизнес вроде работает, но внутри полный хаос
-        </p>
-
-        <div class="problem-grid">
-
-            <div class="problem-card">
-                <div class="icon">📉</div>
-                <h3>Клиенты теряются</h3>
-                <p>Нет единой базы, всё в голове или WhatsApp</p>
-            </div>
-
-            <div class="problem-card">
-                <div class="icon">💸</div>
-                <h3>Деньги не контролируются</h3>
-                <p>Не понятно кто должен и сколько заработал</p>
-            </div>
-
-            <div class="problem-card">
-                <div class="icon">📄</div>
-                <h3>Документы вручную</h3>
-                <p>Счета, акты, накладные — тратишь часы</p>
-            </div>
-
-            <div class="problem-card">
-                <div class="icon">🤯</div>
-                <h3>Бардак в процессах</h3>
-                <p>Нет системы — всё держится на тебе</p>
-            </div>
+    <meta charset="UTF-8">
+    <title>Nika Business — система управления бизнесом</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Nika Business — продажи, склад, касса, клиенты, сотрудники, аналитика и интеграции в одной системе.">
+    <style>
+        :root{
+            --bg:#020617;
+            --panel:rgba(15,23,42,.72);
+            --panel2:rgba(255,255,255,.065);
+            --line:rgba(125,211,252,.22);
+            --blue:#38bdf8;
+            --blue2:#0ea5e9;
+            --green:#22c55e;
+            --text:#f8fafc;
+            --muted:#94a3b8;
+            --soft:#cbd5e1;
+            --danger:#fb7185;
+            --shadow:0 30px 100px rgba(0,0,0,.5);
+        }
+        *{box-sizing:border-box}
+        html{scroll-behavior:smooth}
+        body{
+            margin:0;
+            font-family:Inter,Arial,sans-serif;
+            background:
+                radial-gradient(circle at 12% 8%, rgba(14,165,233,.28), transparent 28%),
+                radial-gradient(circle at 88% 10%, rgba(34,197,94,.14), transparent 24%),
+                radial-gradient(circle at 50% 80%, rgba(14,165,233,.12), transparent 32%),
+                var(--bg);
+            color:var(--text);
+            overflow-x:hidden;
+        }
+        body:before{
+            content:"";
+            position:fixed; inset:0; pointer-events:none; opacity:.22;
+            background-image:linear-gradient(rgba(56,189,248,.08) 1px, transparent 1px),linear-gradient(90deg, rgba(56,189,248,.08) 1px, transparent 1px);
+            background-size:58px 58px;
+            mask-image:linear-gradient(to bottom, #000, transparent 82%);
+        }
+        a{text-decoration:none;color:inherit}
+        .wrap{width:min(1200px,92%);margin:0 auto}
+        .nav{
+            position:sticky; top:0; z-index:20;
+            backdrop-filter:blur(18px);
+            background:linear-gradient(to bottom, rgba(2,6,23,.86), rgba(2,6,23,.45));
+            border-bottom:1px solid rgba(255,255,255,.08);
+        }
+        .nav-inner{height:78px;display:flex;align-items:center;justify-content:space-between}
+        .brand{display:flex;align-items:center;gap:12px;font-weight:900;letter-spacing:.4px;text-transform:uppercase}
+		.brand img{
+			height:70px;
+			width:auto;
+			display:block;
+		}
+        .brand-mark{
+            width:42px;height:42px;border-radius:13px;
+            background:linear-gradient(135deg,#0284c7,#38bdf8 48%,#0f172a 49%,#1d4ed8);
+            box-shadow:0 0 32px rgba(56,189,248,.45);
+            display:grid;place-items:center;font-size:25px;font-weight:950;
+        }
+        .brand span{display:block;color:var(--blue);font-size:13px;letter-spacing:1.4px}
+        .nav-links{display:flex;align-items:center;gap:22px;color:var(--soft);font-size:14px}
+        .pill-btn,.ghost-btn{
+            display:inline-flex;align-items:center;justify-content:center;gap:8px;
+            padding:14px 22px;border-radius:16px;font-weight:800;transition:.25s;
+        }
 		
-        </div>
+		.pill-btn{
+			display:inline-flex;
+			align-items:center;
+			justify-content:center;
+			gap:10px;
+		}
 
+		.pill-btn img{
+			width:28px;
+			height:28px;
+			object-fit:contain;
+		}
+        .pill-btn{background:linear-gradient(135deg,var(--blue),var(--green));color:#020617;box-shadow:0 15px 45px rgba(14,165,233,.28)}
+        .pill-btn:hover{transform:translateY(-2px);box-shadow:0 20px 60px rgba(14,165,233,.4)}
+        .ghost-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:white}
+        .hero{position:relative;padding:74px 0 40px;min-height:calc(100vh - 78px);display:flex;align-items:center}
+        .hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+        .badge{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;color:#bae6fd;background:rgba(14,165,233,.12);border:1px solid var(--line);box-shadow:0 0 38px rgba(14,165,233,.16);font-size:14px;margin-bottom:22px}
+        .pulse{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 8px rgba(34,197,94,.12)}
+        h1{font-size:clamp(44px,6.6vw,86px);line-height:.92;margin:0 0 24px;letter-spacing:-3px}
+        .grad{background:linear-gradient(90deg,#fff 0%,#7dd3fc 45%,#22c55e 100%);-webkit-background-clip:text;color:transparent}
+        .lead{font-size:20px;line-height:1.65;color:var(--soft);max-width:640px;margin:0}
+        .hero-actions{display:flex;gap:14px;flex-wrap:wrap;margin:34px 0 28px}
+        .chips{display:flex;gap:10px;flex-wrap:wrap;color:#cbd5e1;font-size:13px}
+        .chip{padding:9px 12px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11)}
+        .visual{position:relative;min-height:610px}
+        .orb{position:absolute;width:420px;height:420px;border-radius:50%;right:40px;top:35px;background:radial-gradient(circle,rgba(56,189,248,.36),transparent 65%);filter:blur(8px);animation:float 7s ease-in-out infinite}
+        .control-panel{
+            position:absolute;right:0;top:20px;width:min(560px,100%);
+            padding:18px;border-radius:32px;background:linear-gradient(145deg,rgba(15,23,42,.82),rgba(2,6,23,.66));
+            border:1px solid rgba(125,211,252,.22);box-shadow:var(--shadow), inset 0 0 40px rgba(56,189,248,.06);
+            backdrop-filter:blur(18px);overflow:hidden;
+        }
+        .control-panel:before{content:"";position:absolute;inset:-2px;background:linear-gradient(120deg,transparent,rgba(56,189,248,.26),transparent);transform:translateX(-100%);animation:scan 5s infinite}
+        .panel-head{position:relative;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+        .dots{display:flex;gap:8px}.dots i{width:10px;height:10px;border-radius:50%;background:#64748b}.dots i:nth-child(1){background:#38bdf8}.dots i:nth-child(2){background:#22c55e}
+        .status{font-size:12px;color:#86efac;border:1px solid rgba(34,197,94,.28);background:rgba(34,197,94,.08);padding:7px 10px;border-radius:999px}
+        .dash{position:relative;display:grid;gap:14px}
+        .top-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+        .kpi,.glass{background:rgba(255,255,255,.065);border:1px solid rgba(255,255,255,.11);border-radius:20px;padding:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+        .kpi small,.glass small{color:var(--muted);font-size:12px}.kpi b{display:block;font-size:23px;margin-top:8px}.up{color:#86efac}.warn{color:#fbbf24}.bad{color:var(--danger)}
+        .mid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}.chart{height:220px;display:flex;align-items:end;gap:9px}.bar{flex:1;border-radius:10px 10px 4px 4px;background:linear-gradient(to top,var(--blue2),rgba(56,189,248,.18));box-shadow:0 0 22px rgba(56,189,248,.25)}
+        .items{display:grid;gap:10px;margin-top:12px}.item{display:flex;justify-content:space-between;gap:10px;padding:10px;border-radius:14px;background:rgba(2,6,23,.34);font-size:13px;color:var(--soft)}
+        .floating-card{position:absolute;z-index:3;padding:15px;border-radius:18px;background:rgba(8,13,28,.82);border:1px solid rgba(125,211,252,.25);box-shadow:0 20px 60px rgba(0,0,0,.35),0 0 40px rgba(56,189,248,.18);backdrop-filter:blur(16px)}
+        .fc1{left:-16px;bottom:92px}.fc2{right:18px;bottom:12px}.fc3{right:-24px;top:250px}
+        .floating-card b{display:block;font-size:22px;margin:6px 0}.floating-card small{color:var(--muted)}
+        .section{padding:86px 0;position:relative}.section-title{font-size:clamp(34px,4.4vw,58px);line-height:1;margin:0 0 16px;letter-spacing:-2px}.section-sub{color:var(--muted);font-size:18px;line-height:1.65;max-width:760px;margin:0 0 34px}
+        .problem-grid,.feature-grid,.aud-grid,.integrations{display:grid;gap:16px}.problem-grid{grid-template-columns:repeat(5,1fr)}.feature-grid{grid-template-columns:repeat(4,1fr)}.aud-grid{grid-template-columns:repeat(6,1fr)}.integrations{grid-template-columns:repeat(7,1fr)}
+        .card{position:relative;overflow:hidden;padding:24px;border-radius:26px;background:var(--panel2);border:1px solid rgba(255,255,255,.11);min-height:158px;transition:.25s}.card:hover{transform:translateY(-4px);border-color:rgba(56,189,248,.35);box-shadow:0 25px 70px rgba(0,0,0,.28)}
+        .icon{font-size:30px;margin-bottom:14px}.card h3{margin:0 0 10px;font-size:20px}.card p{margin:0;color:var(--muted);line-height:1.55;font-size:14px}.card:after{content:"";position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;background:rgba(56,189,248,.10)}
+        .showcase{display:grid;grid-template-columns:.95fr 1.05fr;gap:34px;align-items:center;padding:34px;border-radius:34px;background:linear-gradient(135deg,rgba(14,165,233,.12),rgba(255,255,255,.04));border:1px solid rgba(125,211,252,.18);box-shadow:var(--shadow)}
+        .mock-img{min-height:440px;border-radius:28px;background:linear-gradient(rgba(2,6,23,.2),rgba(2,6,23,.72)),url('WhatsApp Image 2026-06-11 at 10.49.06.jpeg') center/cover;border:1px solid rgba(125,211,252,.22);box-shadow:inset 0 0 80px rgba(56,189,248,.10)}
+        .list{display:grid;gap:12px;margin-top:24px}.li{display:flex;gap:12px;align-items:flex-start;color:var(--soft)}.check{width:24px;height:24px;display:grid;place-items:center;border-radius:8px;background:rgba(34,197,94,.14);color:#86efac;flex:0 0 auto}
+        .pos-box{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.receipt{padding:24px;border-radius:28px;background:#f8fafc;color:#020617;box-shadow:0 20px 80px rgba(0,0,0,.35);transform:rotate(-2deg)}.receipt h3{margin-top:0}.receipt-row{display:flex;justify-content:space-between;border-bottom:1px dashed #94a3b8;padding:10px 0}.pay{padding:24px;border-radius:28px;background:rgba(14,165,233,.10);border:1px solid rgba(125,211,252,.22)}
+        .integration{min-height:105px;display:grid;place-items:center;text-align:center;padding:14px;border-radius:22px;background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.16);font-weight:800;color:#e0f2fe}.aud{min-height:115px;text-align:center;display:grid;place-items:center;font-weight:800}
+        .story{display:grid;grid-template-columns:.8fr 1.2fr;gap:28px;align-items:center}.portrait{min-height:330px;border-radius:34px;background:radial-gradient(circle at 50% 30%,rgba(56,189,248,.24),transparent 40%),rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.11);display:grid;place-items:center;font-size:94px}.quote{font-size:28px;line-height:1.35;margin:0;color:#e2e8f0}.quote span{color:var(--blue)}
+        .ai{padding:46px;border-radius:36px;background:radial-gradient(circle at top right,rgba(34,197,94,.18),transparent 35%),radial-gradient(circle at top left,rgba(56,189,248,.24),transparent 32%),rgba(255,255,255,.055);border:1px solid rgba(125,211,252,.18)}
+        .cta{padding:80px 0 70px}.cta-box{text-align:center;padding:58px 26px;border-radius:40px;background:linear-gradient(135deg,rgba(14,165,233,.26),rgba(34,197,94,.14));border:1px solid rgba(255,255,255,.16);box-shadow:var(--shadow)}.cta-box h2{font-size:clamp(38px,5vw,70px);line-height:1;margin:0 0 18px;letter-spacing:-2px}.cta-box p{color:var(--soft);font-size:19px;margin:0 0 30px}.footer{padding:30px 0;color:var(--muted);border-top:1px solid rgba(255,255,255,.08)}
+        @keyframes float{50%{transform:translateY(22px)}}@keyframes scan{0%,45%{transform:translateX(-100%)}75%,100%{transform:translateX(100%)}}
+        @media(max-width:980px){.hero-grid,.showcase,.pos-box,.story{grid-template-columns:1fr}.visual{min-height:570px}.problem-grid,.feature-grid{grid-template-columns:repeat(2,1fr)}.aud-grid,.integrations{grid-template-columns:repeat(3,1fr)}.nav-links a:not(.login){display:none}.mock-img{min-height:360px}}
+        @media(max-width:620px){.nav-inner{height:68px}.brand-mark{width:36px;height:36px}.brand{font-size:14px}.hero{padding-top:42px}.lead{font-size:17px}h1{letter-spacing:-1.8px}.hero-actions .pill-btn,.hero-actions .ghost-btn{width:100%}.visual{min-height:auto}.control-panel{position:relative;top:0}.floating-card{display:none}.top-cards,.mid,.problem-grid,.feature-grid,.aud-grid,.integrations{grid-template-columns:1fr}.section{padding:58px 0}.showcase,.ai{padding:22px}.receipt{transform:none}.mock-img{min-height:300px}.chips{font-size:12px}.nav-links{gap:10px}.login{padding:11px 15px}.chart{height:160px}}
+    </style>
+</head>
+<body>
+<div class="nav">
+    <div class="wrap nav-inner">
+		<a href="/" class="brand">
+			<img src="/static/img/logo.png" alt="Nika Business">
+		</a>
+        <nav class="nav-links">
+            <a href="#control">Склад</a><a href="#sales">Продажи</a><a href="#integrations">Интеграции</a><a href="#ai">AI</a>
+            <a class="ghost-btn login" href="/login">Войти</a>
+        </nav>
     </div>
-</section>
-
-<!-- РЕШЕНИЕ -->
-<section class="solution">
-    <div class="solution-container">
-
-        <h2>Nika Business решает это</h2>
-        <p class="solution-sub">
-            Вся работа с клиентами, продажами и документами — в одной системе
-        </p>
-
-        <div class="solution-grid">
-
-            <div class="solution-card">
-                <div class="solution-icon">👥</div>
-                <h3>Единая база клиентов</h3>
-                <p>Все клиенты, история и комментарии в одном месте</p>
+</div>
+<main class="hero">
+    <div class="wrap hero-grid">
+        <section>
+            <div class="badge"><span class="pulse"></span> CRM · POS · склад · касса · аналитика · AI</div>
+            <h1>Контролируйте <span class="grad">весь бизнес</span> в реальном времени</h1>
+            <p class="lead">Nika Business объединяет продажи, остатки, кассу, клиентов, сотрудников, отчёты и оборудование в одну современную систему для предпринимателей Казахстана.</p>
+            <div class="hero-actions">
+				<a href="/login" class="pill-btn">
+					<img src="/static/icons/start.png" alt="">
+					Начать бесплатно
+				</a>
+                <a href="#features" class="ghost-btn">Посмотреть возможности</a>
             </div>
-
-            <div class="solution-card">
-                <div class="solution-icon">💰</div>
-                <h3>Контроль продаж</h3>
-                <p>Каждая сделка под контролем — видно прибыль и долги</p>
+            <div class="chips">
+                <span class="chip">Kaspi POS</span><span class="chip">Webkassa</span><span class="chip">ККМ ПОРТ</span><span class="chip">НацКаталог</span><span class="chip">Android</span><span class="chip">Windows</span>
             </div>
-
-            <div class="solution-card">
-                <div class="solution-icon">📄</div>
-                <h3>Документы за секунды</h3>
-                <p>Счёт, накладная, акт — формируются автоматически</p>
-            </div>
-
-            <div class="solution-card">
-                <div class="solution-icon">🤖</div>
-                <h3>AI помощник Ника</h3>
-                <p>Создаёт клиентов и продажи за тебя — голосом</p>
-            </div>
-
-        </div>
-
-    </div>
-</section>
-
-<!-- СКРИН -->
-<section class="screen-section">
-    <div class="screen-container">
-
-        <h2>Управляй бизнесом из одного окна</h2>
-        <p class="screen-sub">
-            Всё что нужно — в одном интерфейсе
-        </p>
-
-        <div class="screen-wrapper">
-            <img src="/static/img/crm.png" alt="CRM">
-        </div>
-
-        <div class="screen-features">
-
-            <div class="screen-item">
-                <span>✔</span>
-                <p>Все клиенты и сделки на одном экране</p>
-            </div>
-
-            <div class="screen-item">
-                <span>✔</span>
-                <p>Быстрое создание продаж</p>
-            </div>
-
-            <div class="screen-item">
-                <span>✔</span>
-                <p>Документы формируются автоматически</p>
-            </div>
-
-            <div class="screen-item">
-                <span>✔</span>
-                <p>Контроль оплат и прибыли</p>
-            </div>
-
-        </div>
-
-    </div>
-</section>
-
-<!-- ПРЕИМУЩЕСТВА -->
-<section class="why">
-    <div class="why-container">
-
-        <h2>Почему выбирают Nika Business</h2>
-        <p class="why-sub">
-            Простая система, которая реально помогает зарабатывать
-        </p>
-
-        <div class="why-grid">
-
-            <div class="why-card">
-                <div class="why-icon">🚀</div>
-                <h3>Быстрый запуск</h3>
-                <p>Начни работать уже через 5 минут без сложной настройки</p>
-            </div>
-
-            <div class="why-card">
-                <div class="why-icon">💰</div>
-                <h3>Экономия денег</h3>
-                <p>Не нужно платить за несколько сервисов — всё в одном месте</p>
-            </div>
-
-            <div class="why-card">
-                <div class="why-icon">📈</div>
-                <h3>Рост прибыли</h3>
-                <p>Контролируй сделки и увеличивай доход</p>
-            </div>
-
-            <div class="why-card">
-                <div class="why-icon">🤖</div>
-                <h3>AI помощник</h3>
-                <p>Автоматизируй задачи и экономь время</p>
-            </div>
-
-        </div>
-
-    </div>
-</section>
-
-<!-- ТАРИФЫ -->
-<section class="pricing-section" id="pricing">
-    <div class="pricing-container">
-
-        <h2>Тарифы</h2>
-        <p class="pricing-sub">
-            Начни бесплатно и масштабируй бизнес вместе с нами
-        </p>
-
-        <div class="pricing-grid">
-
-            <!-- FREE -->
-            <div class="price-card">
-                <h3>Старт</h3>
-                <div class="price">0 ₸</div>
-				
-                <div class="features-list">
-                    <p>1 организация</p>
-                    <p>1 сотрудник</p>
-                    <p>Доступ на 14 дней</p>
+        </section>
+        <section class="visual">
+            <div class="orb"></div>
+            <div class="control-panel">
+                <div class="panel-head"><div class="dots"><i></i><i></i><i></i></div><div class="status">● система онлайн</div></div>
+                <div class="dash">
+                    <div class="top-cards">
+                        <div class="kpi"><small>Продажи сегодня</small><b>₸ 248 500</b><small class="up">+18% к вчера</small></div>
+                        <div class="kpi"><small>Остатки</small><b>5 148</b><small>товаров</small></div>
+                        <div class="kpi"><small>Прибыль</small><b>₸ 78 200</b><small class="up">норма</small></div>
+                    </div>
+                    <div class="mid">
+                        <div class="glass"><small>Динамика продаж</small><div class="chart"><div class="bar" style="height:32%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:42%"></div><div class="bar" style="height:72%"></div><div class="bar" style="height:60%"></div><div class="bar" style="height:86%"></div><div class="bar" style="height:95%"></div></div></div>
+                        <div class="glass"><small>Низкие остатки</small><div class="items"><div class="item"><span>Кофемашины</span><b class="warn">21 шт</b></div><div class="item"><span>Блендеры</span><b class="bad">6 шт</b></div><div class="item"><span>Наушники</span><b>156 шт</b></div><div class="item"><span>Пылесосы</span><b class="warn">12 шт</b></div></div></div>
+                    </div>
+                    <div class="glass"><small>Последние события</small><div class="items"><div class="item"><span>Kaspi POS</span><b class="up">Оплачено ₸ 15 000</b></div><div class="item"><span>Склад</span><b>Приход 42 шт</b></div><div class="item"><span>ККМ</span><b>Чек пробит</b></div></div></div>
                 </div>
-				
-                <a href="/register" class="btn btn-primary">Попробовать</a>
             </div>
-
-            <!-- BASIC -->
-            <div class="price-card">
-                <h3>Базовый</h3>
-                <div class="price">5 990₸/мес.</div>
-				
-                <div class="features-list">
-                    <p>1 организация</p>
-                    <p>2 сотрудника (админ, кассир)</p>
-				    <p>Webkassa + ОФД оплачивается отдельно</p>
-                </div>
-				
-                <a href="/register" class="btn btn-primary">Выбрать</a>
-            </div>
-
-            <!-- BUSINESS -->
-            <div class="price-card popular">
-                <div class="badge">ПОПУЛЯРНЫЙ</div>
-
-                <h3>Бизнес</h3>
-                <div class="price">12 990₸/мес.</div>
-				
-                <div class="features-list">
-                    <p>1 организация</p>
-					<p>до 5 сотрудников</p>
-					<p>Роли: админ, кассиры, супер админ</p>
-					<p>🎁 Веб-касса в подарок</p>
-                </div>
-				
-                <a href="/register" class="btn btn-primary">Выбрать</a>
-            </div>
-
-            <!-- PRO -->
-            <div class="price-card">
-                <h3>Профи</h3>
-                <div class="price">24 990тг/мес.</div>
-				
-                <div class="features-list">
-					<p>1 организация</p>
-					<p>Неограниченные сотрудники</p>
-					<p>Неограниченные точки</p>
-					<p>Неограниченные точки</p>
-					<p>Самостоятельное управление персоналом</p>
-					<p>🤖 Голосовой помощник Nika</p>
-					<p>🎁 Веб-касса в подарок</p>
-					<p>🎁 ОФД тариф в подарок</p>
-				</div>
-
-                <a href="/register" class="btn btn-primary">Подключить</a>
-            </div>
-
-        </div>
-
+            <div class="floating-card fc1"><small>Контроль кассы</small><b>24/7</b><small>без потери данных</small></div>
+            <div class="floating-card fc2"><small>Уведомление</small><b class="bad">Дефицит</b><small>товар ниже минимума</small></div>
+            <div class="floating-card fc3"><small>Средний чек</small><b>₸ 8 350</b><small class="up">растёт</small></div>
+        </section>
     </div>
-</section>
-
-<!-- CTA -->
-<section class="final-cta">
-    <div class="final-container">
-
-        <h2>Начни управлять бизнесом уже сегодня</h2>
-
-        <p class="final-sub">
-            Попробуй бесплатно и наведи порядок в клиентах, продажах и документах
-        </p>
-
-        <a href="/register" class="btn btn-primary big-btn">
-            Создать компанию за 1 минуту
-        </a>
-
-        <p class="final-note">
-            Без карты • Без обязательств
-        </p>
-
+</main>
+<section class="section" id="features"><div class="wrap">
+    <h2 class="section-title">Почему владельцы теряют деньги</h2>
+    <p class="section-sub">Когда продажи, склад и касса живут отдельно, бизнесом сложно управлять. Nika Business собирает всё в одном окне.</p>
+    <div class="problem-grid">
+        <div class="card"><div class="icon">📦</div><h3>Товар закончился</h3><p>Система заранее показывает низкие остатки.</p></div>
+        <div class="card"><div class="icon">💸</div><h3>Не видно прибыль</h3><p>Продажи, себестоимость и доход считаются автоматически.</p></div>
+        <div class="card"><div class="icon">👥</div><h3>Ошибки сотрудников</h3><p>Роли ограничивают доступ и упрощают работу.</p></div>
+        <div class="card"><div class="icon">📉</div><h3>Нет контроля</h3><p>Владелец видит события в реальном времени.</p></div>
+        <div class="card"><div class="icon">📄</div><h3>Ручной учёт</h3><p>Документы и отчёты постепенно автоматизируются.</p></div>
     </div>
-</section>
-
+</div></section>
+<section class="section" id="control"><div class="wrap showcase">
+    <div><h2 class="section-title">Всегда знаете остатки</h2><p class="section-sub">Система контролирует склад и магазины, показывает дефицит и помогает не терять продажи из-за отсутствия товара.</p><div class="list"><div class="li"><span class="check">✓</span>Остатки по складам и торговым точкам</div><div class="li"><span class="check">✓</span>Приход, списание и движение товара</div><div class="li"><span class="check">✓</span>Уведомления о низком остатке</div><div class="li"><span class="check">✓</span>Штрихкоды, GTIN, NTIN и НацКаталог</div></div></div>
+    <div class="mock-img"></div>
+</div></section>
+<section class="section" id="sales"><div class="wrap">
+    <h2 class="section-title">Продажи за несколько секунд</h2><p class="section-sub">Касса, корзина, клиент, скидка, Kaspi POS, наличные, карта, возвраты и история чеков — всё на одном экране.</p>
+    <div class="pos-box">
+        <div class="receipt"><h3>NIKA BUSINESS</h3><div class="receipt-row"><span>Кофемашина</span><b>₸ 120 000</b></div><div class="receipt-row"><span>Скидка</span><b>-₸ 5 000</b></div><div class="receipt-row"><span>Kaspi POS</span><b>Оплачено</b></div><div class="receipt-row"><span>Итого</span><b>₸ 115 000</b></div><p>Чек · возврат · печать 58 мм · ККМ</p></div>
+        <div class="pay"><div class="feature-grid" style="grid-template-columns:1fr 1fr"><div class="card"><div class="icon">🔍</div><h3>Сканер</h3><p>Быстрое добавление товара по штрихкоду.</p></div><div class="card"><div class="icon">💳</div><h3>Оплата</h3><p>Наличные, карта, Kaspi POS и QR.</p></div><div class="card"><div class="icon">↩️</div><h3>Возвраты</h3><p>Контроль возвратов и восстановление остатков.</p></div><div class="card"><div class="icon">🧾</div><h3>Чеки</h3><p>Печать, история и фискализация.</p></div></div></div>
+    </div>
+</div></section>
+<section class="section" id="integrations"><div class="wrap">
+    <h2 class="section-title">Интеграции с оборудованием</h2><p class="section-sub">Nika Business создаётся не как отдельная программа, а как платформа, которая соединяет бизнес, кассу и оборудование.</p>
+    <div class="integrations"><div class="integration">Kaspi POS</div><div class="integration">Webkassa</div><div class="integration">ККМ ПОРТ</div><div class="integration">НацКаталог</div><div class="integration">Сканеры</div><div class="integration">Принтеры</div><div class="integration">Android POS</div></div>
+</div></section>
+<section class="section"><div class="wrap">
+    <h2 class="section-title">Под разные бизнесы</h2><p class="section-sub">Модули можно расширять под магазины, кафе, услуги, доставку и производство.</p>
+    <div class="aud-grid"><div class="card aud">🏪<br>Магазины</div><div class="card aud">☕<br>Кафе</div><div class="card aud">🐾<br>Зоотовары</div><div class="card aud">💄<br>Салоны</div><div class="card aud">🚚<br>Доставка</div><div class="card aud">🏭<br>Производство</div></div>
+</div></section>
+<section class="section"><div class="wrap story">
+    <div class="portrait">N</div><div><h2 class="section-title">Создано на реальных задачах бизнеса</h2><p class="quote">Nika Business — это не просто CRM. Это фундамент ERP-платформы, где владелец видит продажи, склад, кассу и аналитику <span>в одном месте</span>.</p><p class="section-sub" style="margin-top:22px">Система развивается вокруг задач предпринимателей Казахстана: быстрее продавать, точнее считать остатки, подключать оборудование и постепенно автоматизировать рутину.</p></div>
+</div></section>
+<section class="section" id="ai"><div class="wrap ai">
+    <h2 class="section-title">AI станет вашим помощником</h2><p class="section-sub">Следующий этап платформы — умные подсказки, прогнозирование продаж, автозаказ товара и контроль процессов без ручной рутины.</p>
+    <div class="feature-grid"><div class="card"><div class="icon">🧠</div><h3>Прогноз продаж</h3><p>Понимать, какие товары будут продаваться лучше.</p></div><div class="card"><div class="icon">📦</div><h3>Автозаказ</h3><p>Система подскажет, что нужно заказать поставщику.</p></div><div class="card"><div class="icon">📊</div><h3>Анализ прибыли</h3><p>AI поможет увидеть сильные и слабые места.</p></div><div class="card"><div class="icon">⚙️</div><h3>Автоматизация</h3><p>Меньше ручной работы, больше контроля.</p></div></div>
+</div></section>
+<section class="cta"><div class="wrap cta-box"><h2>Управляйте бизнесом, а не таблицами</h2><p>Продажи. Склад. Касса. Аналитика. В одном месте.</p><a href="/login" class="pill-btn">🚀 Перейти в систему</a></div></section>
+<footer class="footer"><div class="wrap">© Nika Business · Автоматизация бизнеса в Казахстане</div></footer>
 </body>
 </html>

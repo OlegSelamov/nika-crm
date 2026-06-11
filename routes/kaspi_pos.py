@@ -3,7 +3,7 @@ import requests
 
 kaspi_pos_bp = Blueprint("kaspi_pos", __name__)
 
-POS_IP = "10.22.108.105"
+POS_IP = "10.149.133.105"
 
 
 @kaspi_pos_bp.route("/kaspi/start-payment", methods=["POST"])

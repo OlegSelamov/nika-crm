@@ -72,14 +72,28 @@ def pay_sale():
     cart = data.get("cart", [])
     kaspi_transaction_id = data.get("kaspi_transaction_id")
     kaspi_method = data.get("kaspi_method")
+    payment_method = data.get("payment_method", "cash")
 
-    total = sum(item.get("price", 0) * item.get("qty", 1) for item in cart)
-    cash = to_int(data.get("cash"))
-    card = to_int(data.get("card"))
-    kaspi = to_int(data.get("kaspi"))
+    total = sum(
+        item.get("price", 0) * item.get("qty", 1)
+        for item in cart
+    )
 
-    paid = cash + card + kaspi
-    status = "Оплачено" if paid >= total else "Долг"
+    cash = 0
+    card = 0
+    kaspi = 0
+
+    if payment_method == "cash":
+        cash = total
+
+    elif payment_method == "card":
+        card = total
+
+    elif payment_method == "kaspi":
+        kaspi = total
+
+    paid = total
+    status = "Оплачено"
 
     conn = get_db()
     
@@ -112,7 +126,7 @@ def pay_sale():
             paid,
             status,
             now_kz(),
-            "cash",
+            payment_method,
             cash,
             card,
             kaspi,
@@ -194,9 +208,31 @@ def get_sale(sale_id):
         (sale_id,)
     )
     items = cur.fetchall()
+    
+    cur.execute(
+        """
+        SELECT
+            name,
+            bin,
+            address
+        FROM companies
+        WHERE id = %s
+        """,
+        (sale["company_id"],)
+    )
+
+    company = cur.fetchone()
 
     result = {
         "id": sale["id"],
+        "company_name":
+            company["name"] if company else "",
+
+        "company_bin":
+            company["bin"] if company else "",
+
+        "company_address":
+            company["address"] if company else "",
         "total_amount": sale["total_amount"],
         "paid_amount": sale["paid_amount"],
         "status": sale["status"],
@@ -205,16 +241,39 @@ def get_sale(sale_id):
         "cash": sale["cash_amount"] if "cash_amount" in sale.keys() else 0,
         "card": sale["card_amount"] if "card_amount" in sale.keys() else 0,
         "kaspi": sale["kaspi_amount"] if "kaspi_amount" in sale.keys() else 0,
+        "check_date":
+            (sale["created_at"] + timedelta(hours=5))
+                .strftime("%d.%m.%Y %H:%M"),
+        "kaspi_method": sale.get("kaspi_method"),
+        "kaspi_transaction_id": sale.get("kaspi_transaction_id"),
         "items": []
     }
 
     for i in items:
+
         result["items"].append({
-            "name": i["name"] if "name" in i.keys() else f"Товар #{i['item_id']}",
-            "quantity": i["quantity"],
-            "total": i["total"],
-            "price": i["price"],
-            "unit": i["unit"] if "unit" in i.keys() else "шт"
+
+            "name":
+                i["name"],
+
+            "quantity":
+                i["quantity"],
+
+            "total":
+                i["total"],
+
+            "price":
+                i["price"],
+
+            "unit":
+                i["unit"] if i["unit"] else "шт",
+
+            "gtin":
+                i["gtin"] if "gtin" in i.keys() else "",
+
+            "ntin":
+                i["ntin"] if "ntin" in i.keys() else ""
+
         })
 
     pool.putconn(conn)
@@ -256,8 +315,14 @@ def sales_history():
         if sale["sale_type"] == "cash":
             payment_type = "Наличные"
 
+        elif sale["sale_type"] == "card":
+            payment_type = "Карта"
+
+        elif sale["sale_type"] == "kaspi":
+            payment_type = "Kaspi POS"
+
         elif sale["sale_type"] == "invoice":
-            payment_type = "Безнал"
+            payment_type = "Счёт"
 
         result.append({
 
@@ -743,7 +808,7 @@ def check(sale_id):
     print("TZINFO:", getattr(sale["created_at"], "tzinfo", None))
     print("=" * 50)
 
-    if sale["sale_type"] != "cash":
+    if sale["sale_type"] == "invoice":
         return "Чек доступен только для кассовой продажи"
 
     conn = get_db()
@@ -1439,7 +1504,7 @@ def refund_sale(sale_id):
         # запуск возврата
 
         refund_response = requests.get(
-            "http://10.22.108.105:8080/v2/refund",
+            "http://10.149.133.105:8080/v2/refund",
             params={
                 "transactionId": transaction_id,
                 "amount": amount,
@@ -1468,7 +1533,7 @@ def refund_sale(sale_id):
             time.sleep(2)
 
             status_response = requests.get(
-                "http://10.22.108.105:8080/v2/status",
+                "http://10.149.133.105:8080/v2/status",
                 params={
                     "processId": process_id
                 },

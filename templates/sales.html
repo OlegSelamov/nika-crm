@@ -575,6 +575,16 @@ function pay() {
     let cash = document.getElementById("cashInput").value || 0;
     let card = document.getElementById("cardInput").value || 0;
     let kaspi = document.getElementById("kaspiInput").value || 0;
+	
+	let paymentMethod = "cash";
+
+	if (parseFloat(card) > 0) {
+		paymentMethod = "card";
+	}
+
+	if (parseFloat(kaspi) > 0) {
+		paymentMethod = "kaspi";
+	}
 
     fetch("/sales/pay", {
         method: "POST",
@@ -584,6 +594,9 @@ function pay() {
 		body: JSON.stringify({
 			client_id: selectedClient,
 			cart: cart,
+
+			payment_method: paymentMethod,
+
 			cash: cash,
 			card: card,
 			kaspi: kaspi,
@@ -592,7 +605,7 @@ function pay() {
 				window.lastKaspiTransactionId || "",
 
 			kaspi_method:
-				window.lastKaspiMethod || "qr",
+				window.lastKaspiMethod || "",
 
 			company_id: null
 		})

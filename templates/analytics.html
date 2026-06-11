@@ -2,20 +2,32 @@
 
 {% block content %}
 
-<div class="page-header">
+<div class="page-header analytics-header">
+
     <div>
         <h1 class="page-title">Аналитика</h1>
-        <div class="page-note">Статистика продаж и клиентов</div>
+        <div class="page-note">
+            Статистика продаж и клиентов
+        </div>
     </div>
-</div>
 
-<form method="get" class="card" style="margin-bottom:15px;">
-    <div class="analytics-filter">
-        <input type="date" name="from" value="{{ date_from }}">
-        <input type="date" name="to" value="{{ date_to }}">
-        <button class="btn">Применить</button>
-    </div>
-</form>
+    <form method="get" class="analytics-toolbar">
+
+        <input type="date"
+               name="from"
+               value="{{ date_from }}">
+
+        <input type="date"
+               name="to"
+               value="{{ date_to }}">
+
+        <button class="btn">
+            Применить
+        </button>
+
+    </form>
+
+</div>
 
 <!-- 🔷 КАРТОЧКИ -->
 <div class="stats-grid">
@@ -56,59 +68,24 @@
 
     </div>
 
-	<div class="stat-card cyan payments-card">
+</div>
+
+<div class="analytics-row">
+	<div class="card payments-card">
 
 		<div class="stat-label">
 			Способы оплаты
 		</div>
 
-		<div class="payment-list">
-
-			<div class="payment-item">
-
-				<div class="payment-name">
-					Наличные
-				</div>
-
-				<div class="payment-value">
-					{{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }} ₸
-				</div>
-
-			</div>
-
-			<div class="payment-item">
-
-				<div class="payment-name">
-					Карта
-				</div>
-
-				<div class="payment-value">
-					{{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }} ₸
-				</div>
-
-			</div>
-
-			<div class="payment-item">
-
-				<div class="payment-name">
-					Kaspi
-				</div>
-
-				<div class="payment-value">
-					{{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }} ₸
-				</div>
-
-			</div>
-
-		</div>
-
+		<canvas id="paymentsChart"></canvas>
+		
+	</div>
+		
+	<div class="card chart-card">
+		<div class="title">График продаж</div>
+		<canvas id="chart"></canvas>
 	</div>
 
-</div>
-
-<div class="card">
-    <div class="title">График продаж</div>
-    <canvas id="chart"></canvas>
 </div>
 
 <!-- 🏆 ТОП КЛИЕНТЫ -->
@@ -198,11 +175,24 @@ new Chart(document.getElementById('chart'), {
     type: 'line',
     data: {
         labels: {{ chart_labels | tojson }},
-        datasets: [{
-            data: {{ chart_values | tojson }},
-            borderWidth: 2,
-            tension: 0.3
-        }]
+		datasets: [{
+			data: {{ chart_values | tojson }},
+
+			borderColor: '#6366f1',
+
+			backgroundColor: 'rgba(99,102,241,0.15)',
+
+			fill: true,
+
+			pointRadius: 5,
+			pointHoverRadius: 7,
+
+			pointBackgroundColor: '#6366f1',
+
+			borderWidth: 3,
+
+			tension: 0.4
+		}]
     },
     options: {
         plugins: { legend: { display: false } }
@@ -210,7 +200,149 @@ new Chart(document.getElementById('chart'), {
 });
 </script>
 
+<script>
+new Chart(document.getElementById('paymentsChart'), {
+
+    type: 'doughnut',
+
+    data: {
+        labels: ['Наличные', 'Карта', 'Kaspi'],
+		datasets: [{
+
+			data: [
+				{{ payments.cash or 0 }},
+				{{ payments.card or 0 }},
+				{{ payments.kaspi or 0 }}
+			],
+
+			backgroundColor: [
+				'#6366f1',
+				'#8b5cf6',
+				'#06b6d4'
+			],
+
+			hoverOffset: 12,
+
+			borderColor: '#ffffff',
+			borderWidth: 3
+		}]
+    },
+
+    options: {
+        responsive: true,
+
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        },
+
+        cutout: '65%'
+    }
+
+});
+</script>
+
 <style>
+.analytics-row{
+
+    display:grid;
+    grid-template-columns:280px 1fr;
+
+    gap:16px;
+    margin-top:16px;
+}
+
+.chart-card{
+
+    min-height:360px;
+}
+
+.payments-card{
+    height:360px;
+}
+
+#chart{
+
+    max-height:300px;
+}
+
+@media(max-width:768px){
+
+    .analytics-row{
+
+        grid-template-columns:1fr;
+    }
+}
+
+.analytics-header{
+
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:20px;
+
+    margin-bottom:20px;
+}
+
+.analytics-toolbar{
+
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+
+.analytics-toolbar input{
+
+    width:180px;
+    height:44px;
+
+    border:1px solid #dbe2ea;
+    border-radius:12px;
+
+    padding:0 12px;
+
+    background:#fff;
+}
+
+.analytics-toolbar .btn{
+
+    height:44px;
+    padding:0 18px;
+
+    white-space:nowrap;
+}
+
+#paymentsChart{
+
+    width:100% !important;
+    max-width:240px;
+
+    margin:20px auto;
+}
+
+/* MOBILE */
+
+@media(max-width:768px){
+
+    .analytics-header{
+
+        flex-direction:column;
+        align-items:stretch;
+    }
+
+    .analytics-toolbar{
+
+        flex-direction:column;
+        width:100%;
+    }
+
+    .analytics-toolbar input,
+    .analytics-toolbar .btn{
+
+        width:100%;
+    }
+}
 
 /* ================= MOBILE ANALYTICS ================= */
 
