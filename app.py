@@ -20,6 +20,7 @@ from routes.reports import reports_bp
 from routes.expenses import expenses_bp
 from routes.cto import cto_bp
 from routes.accounting import accounting_bp
+from routes.rekassa import rekassa_bp
 import os
 from dotenv import load_dotenv
 
@@ -53,6 +54,7 @@ app.register_blueprint(reports_bp)
 app.register_blueprint(expenses_bp)
 app.register_blueprint(cto_bp)
 app.register_blueprint(accounting_bp)
+app.register_blueprint(rekassa_bp)
     
 @app.before_request
 def check_company_access():
