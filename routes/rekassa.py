@@ -34,3 +34,24 @@ def rekassa_test():
         "api_key": bool(REKASSA_API_KEY),
         "url": REKASSA_URL
     })
+    
+@rekassa_bp.route("/api/rekassa/test-login")
+def test_login():
+
+    response = requests.post(
+        f"{REKASSA_URL}/api/auth/login",
+        params={
+            "apiKey": REKASSA_API_KEY,
+            "format": "json"
+        },
+        json={
+            "number": "6PR7V64G-26H",
+            "password": "0000"
+        },
+        timeout=30
+    )
+
+    return jsonify({
+        "status": response.status_code,
+        "response": response.json()
+    })
