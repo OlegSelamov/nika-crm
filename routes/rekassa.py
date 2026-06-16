@@ -38,6 +38,9 @@ def rekassa_test():
 @rekassa_bp.route("/api/rekassa/test-login")
 def test_login():
 
+    PASSWORD = os.getenv("REKASSA_PASSWORD")
+    NUMBER = os.getenv("REKASSA_NUMBER")
+
     response = requests.post(
         f"{REKASSA_URL}/api/auth/login",
         params={
@@ -45,8 +48,8 @@ def test_login():
             "format": "json"
         },
         json={
-            "number": "6PR7V64G-26H",
-            "password": "0000"
+            "number": NUMBER,
+            "password": PASSWORD
         },
         timeout=30
     )
