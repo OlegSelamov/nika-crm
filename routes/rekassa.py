@@ -26,3 +26,11 @@ def rekassa_login():
     )
 
     return jsonify(response.json()), response.status_code
+    
+@rekassa_bp.route("/api/rekassa/test", methods=["GET"])
+def rekassa_test():
+    return jsonify({
+        "status": "ok",
+        "api_key": bool(REKASSA_API_KEY),
+        "url": REKASSA_URL
+    })
