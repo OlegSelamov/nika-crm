@@ -5,7 +5,7 @@ import os
 rekassa_bp = Blueprint("rekassa", __name__)
 
 REKASSA_API_KEY = os.getenv("REKASSA_API_KEY")
-REKASSA_URL = "https://app-test.rekassa.kz/partner"
+REKASSA_URL = os.getenv("REKASSA_URL")
 
 @rekassa_bp.route("/api/rekassa/login", methods=["POST"])
 def rekassa_login():
