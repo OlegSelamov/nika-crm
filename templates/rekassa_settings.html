@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>🧾 ReKassa</h2>
+
+<div class="card">
+
+    <label>ЗНМ</label>
+    <input
+        type="text"
+        id="rekassa_number"
+        placeholder="Введите ЗНМ">
+
+    <label>Пароль интеграции</label>
+    <input
+        type="password"
+        id="rekassa_password"
+        placeholder="Введите пароль">
+
+    <br><br>
+
+    <button class="btn" onclick="checkRekassa()">
+        Проверить подключение
+    </button>
+
+    <button class="btn" onclick="saveRekassa()">
+        Сохранить
+    </button>
+
+    <div id="rekassaStatus"></div>
+
+</div>
+
+<script>
+
+async function checkRekassa(){
+
+    const number =
+        document.getElementById("rekassa_number").value;
+
+    const password =
+        document.getElementById("rekassa_password").value;
+
+    const response = await fetch(
+        "/api/rekassa/login",
+        {
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                number:number,
+                password:password
+            })
+        }
+    );
+
+    const result = await response.json();
+
+    console.log(result);
+
+    if(result.response?.id){
+
+        document.getElementById(
+            "rekassaStatus"
+        ).innerHTML = `
+            <div style="color:green">
+                ✅ Подключено<br>
+                ЗНМ: ${result.response.serialNumber}<br>
+                ID: ${result.response.id}
+            </div>
+        `;
+
+    }else{
+
+        document.getElementById(
+            "rekassaStatus"
+        ).innerHTML = `
+            <div style="color:red">
+                ❌ Ошибка подключения
+            </div>
+        `;
+    }
+}
+
+</script>
+
+{% endblock %}
