@@ -60,19 +60,19 @@ async function checkRekassa(){
 
     console.log(result);
 
-    if(result.response?.id){
+	if(result.id){
 
-        document.getElementById(
-            "rekassaStatus"
-        ).innerHTML = `
-            <div style="color:green">
-                ✅ Подключено<br>
-                ЗНМ: ${result.response.serialNumber}<br>
-                ID: ${result.response.id}
-            </div>
-        `;
+		document.getElementById(
+			"rekassaStatus"
+		).innerHTML = `
+			<div style="color:green">
+				✅ Подключено<br>
+				ЗНМ: ${result.serialNumber}<br>
+				ID: ${result.id}
+			</div>
+		`;
 
-    }else{
+	}else{
 
         document.getElementById(
             "rekassaStatus"
