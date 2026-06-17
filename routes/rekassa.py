@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from datetime import datetime
 import requests
 import os
@@ -303,6 +303,25 @@ def rekassa_sell(conn, sale_id):
 
     elif sale["sale_type"] == "kaspi":
         payment_type = "PAYMENT_CARD"
+        
+    amounts = {
+        "total": {
+            "bills": str(total),
+            "coins": 0
+        }
+    }
+
+    if payment_type == "PAYMENT_CASH":
+
+        amounts["taken"] = {
+            "bills": str(total),
+            "coins": 0
+        }
+
+        amounts["change"] = {
+            "bills": "0",
+            "coins": 0
+        }
     
     ticket = {
 
@@ -337,20 +356,7 @@ def rekassa_sell(conn, sale_id):
             }
         ],
 
-        "amounts": {
-            "total": {
-                "bills": str(total),
-                "coins": 0
-            },
-            "taken": {
-                "bills": str(total),
-                "coins": 0
-            },
-            "change": {
-                "bills": "0",
-                "coins": 0
-            }
-        },
+        "amounts": amounts,
 
         "operator": {
             "code": 0
