@@ -524,6 +524,51 @@ def init_db():
     except:
         conn.rollback()
         
+    try:
+        cur.execute("""
+            ALTER TABLE integrations
+            ADD COLUMN rekassa_enabled BOOLEAN DEFAULT FALSE
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE integrations
+            ADD COLUMN rekassa_number TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE integrations
+            ADD COLUMN rekassa_password TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE integrations
+            ADD COLUMN rekassa_crs_id INTEGER
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE integrations
+            ADD COLUMN rekassa_serial_number TEXT
+        """)
+        conn.commit()
+    except:
+            conn.rollback()
+        
     # 🔥 INDEXES
 
     cur.execute("""
