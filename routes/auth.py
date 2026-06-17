@@ -321,6 +321,17 @@ def register():
         ))
 
         company_id = cur.fetchone()["id"]
+        
+        cur.execute("""
+            INSERT INTO integrations (
+                company_id,
+                created_at
+            )
+            VALUES (%s, %s)
+        """, (
+            company_id,
+            now_kz()
+        ))
 
         # 2. создаём владельца
         cur.execute("""

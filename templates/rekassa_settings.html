@@ -84,6 +84,54 @@ async function checkRekassa(){
     }
 }
 
+async function saveRekassa(){
+
+    const number =
+        document.getElementById("rekassa_number").value;
+
+    const password =
+        document.getElementById("rekassa_password").value;
+
+    const response = await fetch(
+        "/api/rekassa/login",
+        {
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                number,
+                password
+            })
+        }
+    );
+
+    const auth = await response.json();
+
+    if(!auth.id){
+        alert("Сначала проверьте подключение");
+        return;
+    }
+
+    await fetch(
+        "/api/rekassa/save",
+        {
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                number:number,
+                password:password,
+                id:auth.id,
+                serialNumber:auth.serialNumber
+            })
+        }
+    );
+
+    alert("ReKassa сохранена");
+}
+
 </script>
 
 {% endblock %}

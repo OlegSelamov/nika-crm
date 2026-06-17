@@ -176,3 +176,38 @@ def rekassa_test_ticket():
         "response": response.json()
     })
     
+@rekassa_bp.route("/api/rekassa/save", methods=["POST"])
+def save_rekassa():
+
+    from models import get_db
+
+    data = request.json
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    company_id = session.get("company_id")
+
+    cur.execute("""
+        UPDATE integrations
+        SET
+            rekassa_enabled = TRUE,
+            rekassa_number = %s,
+            rekassa_password = %s,
+            rekassa_crs_id = %s,
+            rekassa_serial_number = %s
+        WHERE company_id = %s
+    """, (
+        data["number"],
+        data["password"],
+        data["id"],
+        data["serialNumber"],
+        company_id
+    ))
+
+    conn.commit()
+
+    return jsonify({
+        "success": True
+    })
+    

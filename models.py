@@ -459,6 +459,21 @@ def init_db():
         conn.rollback()
         
     try:
+        cur.execute("""
+            INSERT INTO integrations (company_id, created_at)
+            SELECT id, NOW()
+            FROM companies
+            WHERE id NOT IN (
+                SELECT company_id
+                FROM integrations
+                WHERE company_id IS NOT NULL
+            )
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+        
+    try:
         cur.execute("ALTER TABLE clients ADD COLUMN company_id INTEGER")
         conn.commit()
     except:
