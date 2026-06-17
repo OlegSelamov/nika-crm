@@ -177,6 +177,16 @@ def pay_sale():
             ))
 
         process_sale(conn, sale_id)
+        
+        from routes.rekassa import rekassa_sell
+
+        rekassa_result = rekassa_sell(
+            conn,
+            sale_id
+        )
+
+        print("REKASSA RESULT:")
+        print(rekassa_result)
 
         conn.commit()
 
