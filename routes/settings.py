@@ -57,8 +57,5 @@ def scales():
     return render_template("settings/scales.html")
     
 @settings_bp.route("/settings/rekassa")
-@login_required
 def rekassa_settings():
-    return render_template(
-        "rekassa_settings.html"
-    )
+    return render_template("rekassa_settings.html")
