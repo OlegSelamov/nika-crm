@@ -583,6 +583,51 @@ def init_db():
         conn.commit()
     except:
             conn.rollback()
+            
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_ticket_id BIGINT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_ticket_number TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_qr TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_shift_number INTEGER
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_status TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
         
     # 🔥 INDEXES
 

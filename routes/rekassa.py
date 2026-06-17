@@ -295,7 +295,15 @@ def rekassa_sell(conn, sale_id):
                 ]
             }
         })
+        
+    payment_type = "PAYMENT_CASH"
 
+    if sale["sale_type"] == "card":
+        payment_type = "PAYMENT_CARD"
+
+    elif sale["sale_type"] == "kaspi":
+        payment_type = "PAYMENT_CARD"
+    
     ticket = {
 
         "operation": "OPERATION_SELL",
@@ -321,7 +329,7 @@ def rekassa_sell(conn, sale_id):
 
         "payments": [
             {
-                "type": "PAYMENT_CASH",
+                "type": payment_type,
                 "sum": {
                     "bills": str(total),
                     "coins": 0

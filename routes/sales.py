@@ -184,6 +184,26 @@ def pay_sale():
             conn,
             sale_id
         )
+        
+        if rekassa_result.get("status") == "OK":
+
+            cur.execute("""
+                UPDATE sales
+                SET
+                    rekassa_ticket_id = %s,
+                    rekassa_ticket_number = %s,
+                    rekassa_qr = %s,
+                    rekassa_shift_number = %s,
+                    rekassa_status = %s
+                WHERE id = %s
+            """, (
+                rekassa_result.get("id"),
+                rekassa_result.get("ticketNumber"),
+                rekassa_result.get("qrCode"),
+                rekassa_result.get("shiftNumber"),
+                rekassa_result.get("status"),
+                sale_id
+            ))
 
         print("REKASSA RESULT:")
         print(rekassa_result)
