@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from datetime import datetime
 import requests
 import os
 import uuid
@@ -81,12 +82,29 @@ def rekassa_test_ticket():
 
     token = auth_data["token"]
     crs_id = auth_data["id"]
+    
+    now = datetime.now()
 
     ticket = {
         "operation": "OPERATION_SELL",
+
+        "dateTime": {
+            "date": {
+                "year": now.year,
+                "month": now.month,
+                "day": now.day
+            },
+            "time": {
+                "hour": now.hour,
+                "minute": now.minute,
+                "second": now.second
+            }
+        },
+
         "domain": {
             "type": "DOMAIN_SERVICES"
         },
+
         "items": [
             {
                 "type": "ITEM_TYPE_COMMODITY",
@@ -101,10 +119,17 @@ def rekassa_test_ticket():
                     "sum": {
                         "bills": "100",
                         "coins": 0
-                    }
+                    },
+                    "auxiliary": [
+                        {
+                            "key": "UNIT_TYPE",
+                            "value": "PIECE"
+                        }
+                    ]
                 }
             }
         ],
+
         "payments": [
             {
                 "type": "PAYMENT_CASH",
@@ -113,7 +138,26 @@ def rekassa_test_ticket():
                     "coins": 0
                 }
             }
-        ]
+        ],
+
+        "amounts": {
+            "total": {
+                "bills": "100",
+                "coins": 0
+            },
+            "taken": {
+                "bills": "100",
+                "coins": 0
+            },
+            "change": {
+                "bills": "0",
+                "coins": 0
+            }
+        },
+
+        "operator": {
+            "code": 0
+        }
     }
 
     response = requests.post(
