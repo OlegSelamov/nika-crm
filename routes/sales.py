@@ -1680,3 +1680,39 @@ def refund_sale(sale_id):
     finally:
 
         pool.putconn(conn)
+        
+@sales_bp.route("/api/gtin", methods=["POST"])
+def find_by_gtin():
+
+    data = request.get_json()
+
+    gtin = data.get("gtin")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM items
+        WHERE gtin = %s
+        AND company_id = %s
+    """, (
+        gtin,
+        session.get("company_id")
+    ))
+
+    item = cur.fetchone()
+
+    pool.putconn(conn)
+
+    if not item:
+        return {"found": False}
+
+    return {
+        "found": True,
+        "id": item["id"],
+        "name": item["name"],
+        "price": item["retail_price"],
+        "gtin": item["gtin"],
+        "ntin": item["ntin"]
+    }
