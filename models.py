@@ -540,6 +540,12 @@ def init_db():
         conn.rollback()
         
     try:
+        cur.execute("ALTER TABLE sale_items ADD COLUMN excise_stamp TEXT")
+        conn.commit()
+    except:
+        conn.rollback()
+        
+    try:
         cur.execute("""
             ALTER TABLE integrations
             ADD COLUMN rekassa_enabled BOOLEAN DEFAULT FALSE

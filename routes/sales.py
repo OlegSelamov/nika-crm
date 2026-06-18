@@ -161,9 +161,10 @@ def pay_sale():
                     total,
                     unit,
                     gtin,
-                    ntin
+                    ntin,
+                    excise_stamp
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 sale_id,
                 item.get("id"),
@@ -173,7 +174,8 @@ def pay_sale():
                 item.get("price", 0) * item.get("qty", 1),
                 unit,
                 item.get("gtin"),
-                item.get("ntin")
+                item.get("ntin"),
+                item.get("excise_stamp")
             ))
 
         process_sale(conn, sale_id)

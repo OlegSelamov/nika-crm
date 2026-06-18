@@ -264,36 +264,33 @@ def rekassa_sell(conn, sale_id):
         amount = int(item["total"])
 
         total += amount
+        
+        commodity = {
+            "name": item["name"],
+            "sectionCode": "1",
+            "quantity": int(item["quantity"] * 1000),
+            "price": {
+                "bills": str(int(item["price"])),
+                "coins": 0
+            },
+            "sum": {
+                "bills": str(amount),
+                "coins": 0
+            },
+            "auxiliary": [
+                {
+                    "key": "UNIT_TYPE",
+                    "value": "PIECE"
+                }
+            ]
+        }
+
+        if item.get("excise_stamp"):
+            commodity["excise_stamp"] = item["excise_stamp"]
 
         ticket_items.append({
-
             "type": "ITEM_TYPE_COMMODITY",
-
-            "commodity": {
-
-                "name": item["name"],
-
-                "sectionCode": "1",
-
-                "quantity": int(item["quantity"] * 1000),
-
-                "price": {
-                    "bills": str(int(item["price"])),
-                    "coins": 0
-                },
-
-                "sum": {
-                    "bills": str(amount),
-                    "coins": 0
-                },
-
-                "auxiliary": [
-                    {
-                        "key": "UNIT_TYPE",
-                        "value": "PIECE"
-                    }
-                ]
-            }
+            "commodity": commodity
         })
         
     payment_type = "PAYMENT_CASH"

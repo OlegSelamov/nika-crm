@@ -105,7 +105,7 @@ def landing():
     return render_template("landing.html")
     
 if __name__ == "__main__":
-    #init_db()
+    init_db()
 
     port = int(os.environ.get("PORT", 5000))
 
