@@ -1193,40 +1193,90 @@ def analytics_api():
 
     company_id = session.get("company_id")
 
-    today_str = now_kz().strftime("%Y-%m-%d")
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+
+    if not date_from or not date_to:
+
+        date_to = now_kz().strftime("%Y-%m-%d")
+
+        date_from = (
+            now_kz() - timedelta(days=30)
+        ).strftime("%Y-%m-%d")
 
     cur.execute("""
-        SELECT COALESCE(SUM(total_amount),0) as total
+        SELECT
+            COALESCE(SUM(total_amount),0) as total
         FROM sales
         WHERE company_id = %s
         AND status = 'Оплачено'
-    """, (company_id,))
+        AND DATE(created_at)
+            BETWEEN %s AND %s
+    """, (
+        company_id,
+        date_from,
+        date_to
+    ))
+
     revenue = cur.fetchone()["total"] or 0
 
     cur.execute("""
-        SELECT COALESCE(SUM(profit),0) as profit
+        SELECT
+            COALESCE(SUM(profit),0) as profit
         FROM sale_items
         WHERE sale_id IN (
+
             SELECT id
             FROM sales
             WHERE company_id = %s
             AND status = 'Оплачено'
+            AND DATE(created_at)
+                BETWEEN %s AND %s
+
         )
-    """, (company_id,))
+    """, (
+        company_id,
+        date_from,
+        date_to
+    ))
+
     profit = cur.fetchone()["profit"] or 0
 
     cur.execute("""
-        SELECT COALESCE(SUM(total_amount),0) as total
+        SELECT COUNT(*) as count
         FROM sales
         WHERE company_id = %s
         AND status = 'Оплачено'
-        AND DATE(created_at) = %s
+        AND DATE(created_at)
+            BETWEEN %s AND %s
     """, (
         company_id,
-        today_str
+        date_from,
+        date_to
     ))
 
-    today = cur.fetchone()["total"] or 0
+    sales_count = cur.fetchone()["count"] or 0
+
+    cur.execute("""
+        SELECT
+            COALESCE(
+                AVG(total_amount),
+                0
+            ) as avg_check
+        FROM sales
+        WHERE company_id = %s
+        AND status = 'Оплачено'
+        AND DATE(created_at)
+            BETWEEN %s AND %s
+    """, (
+        company_id,
+        date_from,
+        date_to
+    ))
+
+    average_check = (
+        cur.fetchone()["avg_check"] or 0
+    )
 
     cur.execute("""
         SELECT
@@ -1236,19 +1286,84 @@ def analytics_api():
         FROM sales
         WHERE company_id = %s
         AND status = 'Оплачено'
-    """, (company_id,))
+        AND DATE(created_at)
+            BETWEEN %s AND %s
+    """, (
+        company_id,
+        date_from,
+        date_to
+    ))
 
     payments = cur.fetchone()
+
+    cur.execute("""
+        SELECT
+            name,
+            SUM(total) as total
+        FROM sale_items
+        WHERE sale_id IN (
+            SELECT id
+            FROM sales
+            WHERE company_id = %s
+            AND status = 'Оплачено'
+            AND DATE(created_at)
+                BETWEEN %s AND %s
+        )
+        GROUP BY name
+        ORDER BY total DESC
+        LIMIT 10
+    """, (
+        company_id,
+        date_from,
+        date_to
+    ))
+
+    top_items = cur.fetchall()
+
+    cur.execute("""
+        SELECT
+            clients.full_name,
+            SUM(sales.total_amount) as total
+        FROM sales
+        JOIN clients
+            ON sales.client_id = clients.id
+        WHERE sales.company_id = %s
+        AND sales.status = 'Оплачено'
+        AND DATE(sales.created_at)
+            BETWEEN %s AND %s
+        GROUP BY clients.id
+        ORDER BY total DESC
+        LIMIT 10
+    """, (
+        company_id,
+        date_from,
+        date_to
+    ))
+
+    top_clients = cur.fetchall()
 
     pool.putconn(conn)
 
     return jsonify({
+
         "revenue": revenue,
+
         "profit": profit,
-        "today": today,
+
+        "sales_count": sales_count,
+
+        "average_check": average_check,
+
         "cash": payments["cash"],
+
         "card": payments["card"],
-        "kaspi": payments["kaspi"]
+
+        "kaspi": payments["kaspi"],
+
+        "top_items": top_items,
+
+        "top_clients": top_clients
+
     })
     
 @sales_bp.route("/api/barcode", methods=["POST"])
