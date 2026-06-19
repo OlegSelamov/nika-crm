@@ -1875,7 +1875,7 @@ def find_by_gtin():
 @sales_bp.route("/api/items/search")
 def search_items():
 
-    q = request.args.get("q", "")
+    q = request.args.get("q", "").strip()
 
     conn = get_db()
     cur = conn.cursor()
