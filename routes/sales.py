@@ -216,6 +216,21 @@ def pay_sale():
 
                 sale_id
             ))
+            
+            print(
+                "REKASSA DOC:",
+                rekassa_result["data"]["ticket"].get("printedDocumentNumber")
+            )
+
+            print(
+                "REKASSA RNM:",
+                rekassa_result["data"]["service"]["regInfo"]["kkm"].get("fnsKkmId")
+            )
+
+            print(
+                "REKASSA ZNM:",
+                rekassa_result["data"]["service"]["regInfo"]["kkm"].get("serialNumber")
+            )
 
         print("REKASSA RESULT:")
         print(rekassa_result)
