@@ -204,7 +204,7 @@ def pay_sale():
             """, (
                 rekassa_result.get("id"),
                 rekassa_result.get("ticketNumber"),
-                rekassa_result.get("qrCode"),
+                rekassa_result.get("fdoQrCode"),
                 rekassa_result.get("shiftNumber"),
                 rekassa_result.get("status"),
 
