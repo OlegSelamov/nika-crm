@@ -198,6 +198,20 @@
     <span>{{ check_date }}</span>
 </div>
 
+{% if sale.rekassa_ticket_number %}
+<div class="info-row">
+    <span>Фискальный чек</span>
+    <span>{{ sale.rekassa_ticket_number }}</span>
+</div>
+{% endif %}
+
+{% if sale.rekassa_shift_number %}
+<div class="info-row">
+    <span>Смена</span>
+    <span>{{ sale.rekassa_shift_number }}</span>
+</div>
+{% endif %}
+
 <div class="line"></div>
 
 {% for i in items %}
@@ -324,9 +338,13 @@
 
 <div class="qr">
 
-    <img
-        src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=SALE-{{ sale.id }}"
-    >
+	{% if sale.rekassa_qr %}
+	<img src="{{ sale.rekassa_qr }}">
+	{% else %}
+	<img
+		src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=SALE-{{ sale.id }}"
+	>
+	{% endif %}
 
 </div>
 

@@ -834,6 +834,10 @@ def mark_paid():
 def check(sale_id):
     sale, items, client = get_sale_data(sale_id)
     
+    print("REKASSA NUMBER =", sale.get("rekassa_ticket_number"))
+    print("REKASSA QR =", sale.get("rekassa_qr"))
+    print("REKASSA STATUS =", sale.get("rekassa_status"))
+    
     print("=" * 50)
     print("CREATED_AT:", sale["created_at"])
     print("TYPE:", type(sale["created_at"]))
