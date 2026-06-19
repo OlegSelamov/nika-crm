@@ -1871,3 +1871,35 @@ def find_by_gtin():
         "gtin": item["gtin"],
         "ntin": item["ntin"]
     }
+    
+@sales_bp.route("/api/items/search")
+def search_items():
+
+    q = request.args.get("q", "")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            id,
+            name,
+            retail_price,
+            gtin,
+            ntin
+        FROM items
+        WHERE company_id = %s
+        AND LOWER(name)
+            LIKE LOWER(%s)
+        ORDER BY name
+        LIMIT 50
+    """, (
+        session.get("company_id"),
+        f"%{q}%"
+    ))
+
+    items = cur.fetchall()
+
+    pool.putconn(conn)
+
+    return jsonify(items)
