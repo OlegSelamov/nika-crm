@@ -358,7 +358,7 @@
 
     {% if sale.rekassa_qr %}
 		<img
-		src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={{ sale.rekassa_qr }}"
+		src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={{ sale.rekassa_qr|urlencode }}"
 		>
     {% else %}
         <img

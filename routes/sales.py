@@ -303,6 +303,14 @@ def get_sale(sale_id):
                 .strftime("%d.%m.%Y %H:%M"),
         "kaspi_method": sale.get("kaspi_method"),
         "kaspi_transaction_id": sale.get("kaspi_transaction_id"),
+        "rekassa_ticket_id": sale.get("rekassa_ticket_id"),
+        "rekassa_ticket_number": sale.get("rekassa_ticket_number"),
+        "rekassa_qr": sale.get("rekassa_qr"),
+        "rekassa_shift_number": sale.get("rekassa_shift_number"),
+        "rekassa_status": sale.get("rekassa_status"),
+        "rekassa_document_number": sale.get("rekassa_document_number"),
+        "rekassa_rnm": sale.get("rekassa_rnm"),
+        "rekassa_znm": sale.get("rekassa_znm"),
         "items": []
     }
 
