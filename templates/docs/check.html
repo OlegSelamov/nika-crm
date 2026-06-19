@@ -201,28 +201,18 @@
 {% if sale.rekassa_ticket_number %}
 <div class="line"></div>
 
-<div class="info-row">
-    <span>ФП:</span>
-    <span>{{ sale.rekassa_ticket_number }}</span>
-</div>
-
 {% if sale.rekassa_shift_number %}
 <div class="info-row">
-    <span>Смена:</span>
-    <span>{{ sale.rekassa_shift_number }}</span>
+    <span>
+        Продажа: №{{ sale.rekassa_document_number }}
+    </span>
+
+    <span>
+        Смена: {{ sale.rekassa_shift_number }}
+    </span>
 </div>
+
 {% endif %}
-
-{% if sale.rekassa_ticket_id %}
-<div class="info-row">
-    <span>Продажа:</span>
-    <span>№{{ sale.rekassa_document_number }}</span>
-</div>
-
-<div class="info-row">
-    <span>Смена:</span>
-    <span>{{ sale.rekassa_shift_number }}</span>
-</div>
 
 <div class="info-row">
     <span>ФП:</span>
