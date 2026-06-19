@@ -229,7 +229,6 @@
     <span>{{ sale.rekassa_znm }}</span>
 </div>
 {% endif %}
-{% endif %}
 
 <div class="line"></div>
 
@@ -358,9 +357,9 @@
 <div class="qr">
 
     {% if sale.rekassa_qr %}
-        <img
-            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={{ sale.rekassa_qr|urlencode }}"
-        >
+		<img
+		src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={{ sale.rekassa_qr }}"
+		>
     {% else %}
         <img
             src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=SALE-{{ sale.id }}"
