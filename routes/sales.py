@@ -1886,7 +1886,8 @@ def search_items():
             name,
             retail_price,
             gtin,
-            ntin
+            ntin,
+            type
         FROM items
         WHERE company_id = %s
         AND LOWER(name)
