@@ -1187,6 +1187,9 @@ def analytics():
     
 @sales_bp.route("/api/analytics")
 def analytics_api():
+    
+    print("DATE FROM =", request.args.get("date_from"))
+    print("DATE TO =", request.args.get("date_to"))
 
     conn = get_db()
     cur = conn.cursor()

@@ -269,14 +269,19 @@ def rekassa_sell(conn, sale_id):
             "name": item["name"],
             "sectionCode": "1",
             "quantity": int(item["quantity"] * 1000),
+
             "price": {
                 "bills": str(int(item["price"])),
                 "coins": 0
             },
+
             "sum": {
                 "bills": str(amount),
                 "coins": 0
             },
+
+            "measureUnitCode": "796",
+
             "auxiliary": [
                 {
                     "key": "UNIT_TYPE",
@@ -285,8 +290,14 @@ def rekassa_sell(conn, sale_id):
             ]
         }
 
+        if item.get("gtin"):
+            commodity["barcode"] = str(item.get("gtin"))
+
+        if item.get("ntin"):
+            commodity["ntin"] = str(item.get("ntin"))
+
         if item.get("excise_stamp"):
-            commodity["excise_stamp"] = item["excise_stamp"]
+            commodity["excise_stamp"] = item.get("excise_stamp")
 
         ticket_items.append({
             "type": "ITEM_TYPE_COMMODITY",
@@ -298,7 +309,7 @@ def rekassa_sell(conn, sale_id):
     if sale["sale_type"] == "card":
         payment_type = "PAYMENT_CARD"
 
-    elif sale["sale_type"] == "kaspi":
+    elif sale["аsale_type"] == "kaspi":
         payment_type = "PAYMENT_CARD"
         
     amounts = {
