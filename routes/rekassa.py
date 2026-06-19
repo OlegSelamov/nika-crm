@@ -309,7 +309,7 @@ def rekassa_sell(conn, sale_id):
     if sale["sale_type"] == "card":
         payment_type = "PAYMENT_CARD"
 
-    elif sale["аsale_type"] == "kaspi":
+    elif sale["sale_type"] == "kaspi":
         payment_type = "PAYMENT_CARD"
         
     amounts = {
@@ -381,6 +381,32 @@ def rekassa_sell(conn, sale_id):
         json=ticket,
         timeout=30
     )
+    
+    result = response.json()
+
+    if result.get("status") == "OK":
+
+        cur.execute("""
+            UPDATE sales
+            SET
+                rekassa_ticket_id = %s,
+                rekassa_ticket_number = %s,
+                rekassa_qr = %s,
+                rekassa_shift_number = %s,
+                rekassa_status = %s
+            WHERE id = %s
+        """, (
+            result.get("id"),
+            result.get("ticketNumber"),
+            result.get("qrCode"),
+            result.get("shiftNumber"),
+            result.get("status"),
+            sale_id
+        ))
+
+        conn.commit()
+
+    return result
 
     return response.json()
     
