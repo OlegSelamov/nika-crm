@@ -199,17 +199,33 @@
 </div>
 
 {% if sale.rekassa_ticket_number %}
+<div class="line"></div>
+
 <div class="info-row">
-    <span>Фискальный чек</span>
+    <span>ФП:</span>
     <span>{{ sale.rekassa_ticket_number }}</span>
 </div>
-{% endif %}
 
 {% if sale.rekassa_shift_number %}
 <div class="info-row">
-    <span>Смена</span>
+    <span>Смена:</span>
     <span>{{ sale.rekassa_shift_number }}</span>
 </div>
+{% endif %}
+
+{% if sale.rekassa_ticket_id %}
+<div class="info-row">
+    <span>Продажа:</span>
+    <span>№{{ sale.rekassa_ticket_id }}</span>
+</div>
+{% endif %}
+
+{% if sale.rekassa_status %}
+<div class="info-row">
+    <span>Статус:</span>
+    <span>{{ sale.rekassa_status }}</span>
+</div>
+{% endif %}
 {% endif %}
 
 <div class="line"></div>
@@ -338,13 +354,17 @@
 
 <div class="qr">
 
-	{% if sale.rekassa_qr %}
-	<img src="{{ sale.rekassa_qr }}">
-	{% else %}
-	<img
-		src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=SALE-{{ sale.id }}"
-	>
-	{% endif %}
+    {% if sale.rekassa_qr %}
+        <img
+            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={{ sale.rekassa_qr|urlencode }}"
+        >
+    {% else %}
+        <img
+            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=SALE-{{ sale.id }}"
+        >
+    {% endif %}
+
+</div>
 
 </div>
 
