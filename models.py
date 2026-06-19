@@ -598,6 +598,42 @@ def init_db():
         conn.commit()
     except:
         conn.rollback()
+        
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_ticket_number TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+        
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_document_number TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_rnm TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN rekassa_znm TEXT
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
 
     try:
         cur.execute("""

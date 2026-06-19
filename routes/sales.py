@@ -196,7 +196,10 @@ def pay_sale():
                     rekassa_ticket_number = %s,
                     rekassa_qr = %s,
                     rekassa_shift_number = %s,
-                    rekassa_status = %s
+                    rekassa_status = %s,
+                    rekassa_document_number = %s,
+                    rekassa_rnm = %s,
+                    rekassa_znm = %s
                 WHERE id = %s
             """, (
                 rekassa_result.get("id"),
@@ -204,6 +207,13 @@ def pay_sale():
                 rekassa_result.get("qrCode"),
                 rekassa_result.get("shiftNumber"),
                 rekassa_result.get("status"),
+
+                rekassa_result["data"]["ticket"].get("printedDocumentNumber"),
+
+                rekassa_result["data"]["service"]["regInfo"]["kkm"].get("fnsKkmId"),
+
+                rekassa_result["data"]["service"]["regInfo"]["kkm"].get("serialNumber"),
+
                 sale_id
             ))
 
