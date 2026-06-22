@@ -61,6 +61,10 @@ def add_sale():
 def pay_sale():
     data = request.get_json()
     company_id = session.get("company_id")
+    
+    print("=" * 50)
+    print("COMPANY_ID =", company_id)
+    print("=" * 50)
 
     def to_int(val):
         try:
@@ -109,6 +113,8 @@ def pay_sale():
         """, (company_id,))
 
         sale_number = cur.fetchone()["next_number"]
+        
+        print("SALE_NUMBER =", sale_number)
 
         cur.execute("""
             INSERT INTO sales (
