@@ -671,6 +671,15 @@ def init_db():
     except:
         conn.rollback()
         
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN sale_number INTEGER
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+        
     # 🔥 INDEXES
 
     cur.execute("""

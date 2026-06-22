@@ -101,11 +101,20 @@ def pay_sale():
 
     try:
         cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT COALESCE(MAX(sale_number), 0) + 1 AS next_number
+            FROM sales
+            WHERE company_id = %s
+        """, (company_id,))
+
+        sale_number = cur.fetchone()["next_number"]
 
         cur.execute("""
             INSERT INTO sales (
                 client_id,
                 company_id,
+                sale_number,
                 total_amount,
                 paid_amount,
                 status,
@@ -117,11 +126,12 @@ def pay_sale():
                 kaspi_transaction_id,
                 kaspi_method
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             client_id,
             company_id,
+            sale_number,
             total,
             paid,
             status,
@@ -282,6 +292,9 @@ def get_sale(sale_id):
 
     result = {
         "id": sale["id"],
+        
+        "sale_number": sale.get("sale_number"),
+        
         "company_name":
             company["name"] if company else "",
 
@@ -354,6 +367,7 @@ def sales_history():
     cur.execute("""
         SELECT
             sales.id,
+            sales.sale_number,
             sales.created_at,
             sales.total_amount,
             sales.sale_type,
@@ -392,6 +406,8 @@ def sales_history():
         result.append({
 
             "id": sale["id"],
+            
+            "sale_number": sale["sale_number"],
 
             "created_at": sale["created_at"],
 
@@ -486,14 +502,31 @@ def smart_sale(payload=None):
     if not item:
         pool.putconn(conn)
         return jsonify({"success": False, "error": f"item not found: {item_name}"})
+        
+    cur.execute("""
+        SELECT COALESCE(MAX(sale_number), 0) + 1 AS next_number
+        FROM sales
+        WHERE company_id = %s
+    """, (session.get("company_id"),))
+
+    sale_number = cur.fetchone()["next_number"]
 
     cur.execute("""
-        INSERT INTO sales (client_id, company_id, total_amount, paid_amount, status, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO sales (
+            client_id,
+            company_id,
+            sale_number,
+            total_amount,
+            paid_amount,
+            status,
+            created_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """, (
         client["id"],
         session.get("company_id"),
+        sale_number,
         item["retail_price"],
         0,
         "Новая",
@@ -537,22 +570,32 @@ def create_invoice():
     total = 0
     for i in cart:
         total += i.get("price", 0) * i.get("qty", 1)
+        
+    cur.execute("""
+        SELECT COALESCE(MAX(sale_number), 0) + 1 AS next_number
+        FROM sales
+        WHERE company_id = %s
+    """, (company_id,))
+
+    sale_number = cur.fetchone()["next_number"]
 
     cur.execute("""
         INSERT INTO sales (
             client_id,
             company_id,
+            sale_number,
             total_amount,
             paid_amount,
             status,
             created_at,
             sale_type
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         RETURNING id
     """, (
         client_id,
         company_id,
+        sale_number,
         total,
         0,
         "Счёт выставлен",
@@ -996,7 +1039,7 @@ def nakladnaya(sale_id):
         "sender_short": company["name"],
         "receiver_short": client["company_name"] or client["full_name"],
         "bin": company["bin"],
-        "doc_number": sale["id"],
+        "doc_number": sale["sale_number"],
         "doc_date": sale_date,
         "responsible": director_short,
         "transport_org": "",
