@@ -1720,13 +1720,19 @@ def refund_sale(sale_id):
                 "error": "Продажа уже возвращена"
             })
 
-        transaction_id = sale.get("kaspi_transaction_id")
+        refund_transaction_id = None
 
-        if not transaction_id:
-            return jsonify({
-                "success": False,
-                "error": "Нет transactionId"
-            })
+        if sale["sale_type"] == "kaspi":
+
+            transaction_id = sale.get(
+                "kaspi_transaction_id"
+            )
+
+            if not transaction_id:
+                return jsonify({
+                    "success": False,
+                    "error": "Нет transactionId"
+                })
 
         amount = int(sale["total_amount"])
         method = sale.get("kaspi_method") or "qr"
