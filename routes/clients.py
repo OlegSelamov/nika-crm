@@ -4,6 +4,7 @@ from models import get_db, pool
 from datetime import datetime, timedelta
 from utils.timezone import now_kz
 from werkzeug.utils import secure_filename
+from flask import jsonify
 import os
 
 def format_date_ru(date_str):
@@ -558,7 +559,7 @@ def get_client_by_iin(iin):
     if client:
         return jsonify({
             "found": True,
-            "client": client
+            "client": dict(client)
         })
 
     return jsonify({
