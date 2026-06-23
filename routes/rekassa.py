@@ -235,10 +235,15 @@ def rekassa_sell(conn, sale_id):
 
     integration = cur.fetchone()
 
-    if not integration:
+    if (
+        not integration
+        or not integration["rekassa_enabled"]
+        or not integration["rekassa_number"]
+        or not integration["rekassa_password"]
+    ):
         return {
             "status": "ERROR",
-            "message": "ReKassa не настроена"
+            "message": "ReKassa не настроена для этой компании"
         }
 
     cur.execute("""
