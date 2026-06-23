@@ -533,3 +533,34 @@ def api_create_client():
         "success": True,
         "id": client_id
     }
+    
+@clients_bp.route("/api/clients/by-iin/<iin>")
+def get_client_by_iin(iin):
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM clients
+        WHERE company_id = %s
+        AND iin = %s
+        LIMIT 1
+    """, (
+        session.get("company_id"),
+        iin
+    ))
+
+    client = cur.fetchone()
+
+    pool.putconn(conn)
+
+    if client:
+        return jsonify({
+            "found": True,
+            "client": client
+        })
+
+    return jsonify({
+        "found": False
+    })
