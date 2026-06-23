@@ -1773,7 +1773,7 @@ function loadSalesHistory() {
             html += `
                 <tr>
 
-                    <td>${sale.id}</td>
+                    <td>${sale.sale_number || sale.id}</td>
 
                     <td>
                         ${formatDate(sale.created_at)}

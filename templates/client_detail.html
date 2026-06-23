@@ -145,7 +145,9 @@
 					 style="cursor:pointer;">
 
 					<div class="sale-top">
-						<div class="sale-id">Продажа #{{ s.id }}</div>
+						<div class="sale-id">
+							Продажа #{{ s.sale_number or s.id }}
+						</div>
 
 						<div class="sale-status {{ 'ok' if s.status == 'Оплачено' else 'bad' }}">
 							{{ s.status }}
@@ -1199,9 +1201,9 @@ function openSaleModal(id) {
 
             let html = `
                 <div style="display:flex; flex-direction:column; gap:12px;">
-                    <div style="font-size:18px; font-weight:700;">
-                        Продажа #${data.id}
-                    </div>
+					<div style="font-size:18px; font-weight:700;">
+						Продажа #${data.sale_number || data.id}
+					</div>
 
                     <div>Тип продажи: <b>${data.sale_type === "invoice" ? "Безнал / по счету" : "Кассовая"}</b></div>
                     <div>Статус: <b>${data.status}</b></div>
