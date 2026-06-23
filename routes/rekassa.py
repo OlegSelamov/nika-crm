@@ -224,6 +224,22 @@ def rekassa_sell(conn, sale_id):
     ))
 
     sale = cur.fetchone()
+    
+    cur.execute("""
+        SELECT *
+        FROM integrations
+        WHERE company_id = %s
+    """, (
+        sale["company_id"],
+    ))
+
+    integration = cur.fetchone()
+
+    if not integration:
+        return {
+            "status": "ERROR",
+            "message": "ReKassa не настроена"
+        }
 
     cur.execute("""
         SELECT *
@@ -242,8 +258,8 @@ def rekassa_sell(conn, sale_id):
             "format": "json"
         },
         json={
-            "number": os.getenv("REKASSA_NUMBER"),
-            "password": os.getenv("REKASSA_PASSWORD")
+            "number": integration["rekassa_number"],
+            "password": integration["rekassa_password"]
         },
         timeout=30
     )
@@ -251,7 +267,8 @@ def rekassa_sell(conn, sale_id):
     auth_data = auth.json()
 
     token = auth_data["token"]
-    crs_id = auth_data["id"]
+
+    crs_id = integration["rekassa_crs_id"]
 
     now = datetime.now()
 
