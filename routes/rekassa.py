@@ -590,6 +590,11 @@ def rekassa_refund(conn, sale_id):
             "code": 0
         }
     }
+    
+    print("=" * 50)
+    print("REKASSA REFUND REQUEST")
+    print(ticket)
+    print("=" * 50)
 
     response = requests.post(
         f"{REKASSA_URL}/api/crs/{crs_id}/tickets",
@@ -601,6 +606,11 @@ def rekassa_refund(conn, sale_id):
         json=ticket,
         timeout=30
     )
+    
+    print("=" * 50)
+    print("REKASSA REFUND RESPONSE")
+    print(response.json())
+    print("=" * 50)
 
     return response.json()
     
