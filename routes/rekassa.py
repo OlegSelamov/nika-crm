@@ -432,6 +432,12 @@ def rekassa_refund(conn, sale_id):
     """, (sale_id,))
 
     sale = cur.fetchone()
+    
+    print("TICKET ID =", sale.get("rekassa_ticket_id"))
+    print("TICKET NUMBER =", sale.get("rekassa_ticket_number"))
+    print("DOCUMENT NUMBER =", sale.get("rekassa_document_number"))
+    print("RNM =", sale.get("rekassa_rnm"))
+    print("ZNM =", sale.get("rekassa_znm"))
 
     cur.execute("""
         SELECT *
