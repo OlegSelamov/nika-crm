@@ -342,6 +342,18 @@ def rekassa_sell(conn, sale_id):
         }
     }
     
+    if payment_type == "PAYMENT_CASH":
+
+        amounts["taken"] = {
+            "bills": str(total),
+            "coins": 0
+        }
+
+        amounts["change"] = {
+            "bills": "0",
+            "coins": 0
+        }
+    
     ticket = {
 
         "operation": "OPERATION_SELL",
@@ -536,16 +548,6 @@ def rekassa_refund(conn, sale_id):
             "coins": 0
         }
     }
-
-    if payment_type == "PAYMENT_CASH":
-        amounts["taken"] = {
-            "bills": str(total),
-            "coins": 0
-        }
-        amounts["change"] = {
-            "bills": "0",
-            "coins": 0
-        }
 
     ticket = {
         "operation": "OPERATION_SELL_RETURN",
