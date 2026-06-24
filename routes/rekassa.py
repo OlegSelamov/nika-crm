@@ -3,6 +3,7 @@ from datetime import datetime
 import requests
 import os
 import uuid
+import json
 
 rekassa_bp = Blueprint("rekassa", __name__)
 
@@ -593,7 +594,13 @@ def rekassa_refund(conn, sale_id):
     
     print("=" * 50)
     print("REKASSA REFUND REQUEST")
-    print(ticket)
+    print(
+        json.dumps(
+            ticket,
+            indent=2,
+            ensure_ascii=False
+        )
+    )
     print("=" * 50)
 
     response = requests.post(
@@ -609,7 +616,13 @@ def rekassa_refund(conn, sale_id):
     
     print("=" * 50)
     print("REKASSA REFUND RESPONSE")
-    print(response.json())
+    print(
+        json.dumps(
+            response.json(),
+            indent=2,
+            ensure_ascii=False
+        )
+    )
     print("=" * 50)
 
     return response.json()
