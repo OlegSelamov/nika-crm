@@ -1826,12 +1826,12 @@ def refund_sale(sale_id):
             print(rekassa_refund_result)
 
             if rekassa_refund_result.get("status") != "OK":
+                print("REKASSA REFUND ERROR:")
+                print(rekassa_refund_result)
+
                 return jsonify({
                     "success": False,
-                    "error": {
-                        "message": "Ошибка возврата ReKassa",
-                        "rekassa": rekassa_refund_result
-                    }
+                    "error": str(rekassa_refund_result)
                 })
 
         # возвращаем товар на склад
