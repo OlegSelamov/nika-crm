@@ -1740,77 +1740,78 @@ def refund_sale(sale_id):
                     "error": "Нет transactionId"
                 })
 
-        amount = int(sale["total_amount"])
-        method = sale.get("kaspi_method") or "qr"
+            amount = int(sale["total_amount"])
 
-        # запуск возврата
+            method = sale.get("kaspi_method") or "qr"
 
-        refund_response = requests.get(
-            "http://10.149.133.105:8080/v2/refund",
-            params={
-                "transactionId": transaction_id,
-                "amount": amount,
-                "method": method
-            },
-            timeout=15
-        )
-
-        refund_result = refund_response.json()
-
-        if refund_result.get("statusCode") != 0:
-            return jsonify({
-                "success": False,
-                "error": refund_result
-            })
-
-        process_id = refund_result["data"]["processId"]
-
-        # ждём ответ терминала
-
-        refund_ok = False
-        refund_transaction_id = None
-
-        for _ in range(30):
-
-            time.sleep(2)
-
-            status_response = requests.get(
-                "http://10.149.133.105:8080/v2/status",
+            refund_response = requests.get(
+                "http://10.149.133.105:8080/v2/refund",
                 params={
-                    "processId": process_id
+                    "transactionId": transaction_id,
+                    "amount": amount,
+                    "method": method
                 },
                 timeout=15
             )
 
-            status_result = status_response.json()
+            refund_result = refund_response.json()
 
-            data_block = status_result.get("data", {})
+            if refund_result.get("statusCode") != 0:
+                return jsonify({
+                    "success": False,
+                    "error": refund_result
+                })
 
-            status = data_block.get("status")
+            process_id = refund_result["data"]["processId"]
 
-            if status == "success":
+            refund_ok = False
 
-                refund_ok = True
+            for _ in range(30):
 
-                refund_transaction_id = (
-                    data_block.get("transactionId")
+                time.sleep(2)
+
+                status_response = requests.get(
+                    "http://10.149.133.105:8080/v2/status",
+                    params={
+                        "processId": process_id
+                    },
+                    timeout=15
                 )
 
-                break
+                status_result = status_response.json()
 
-            if status == "fail":
+                data_block = status_result.get(
+                    "data",
+                    {}
+                )
+
+                status = data_block.get("status")
+
+                if status == "success":
+
+                    refund_ok = True
+
+                    refund_transaction_id = (
+                        data_block.get(
+                            "transactionId"
+                        )
+                    )
+
+                    break
+
+                if status == "fail":
+
+                    return jsonify({
+                        "success": False,
+                        "error": "Возврат отменён или отклонён"
+                    })
+
+            if not refund_ok:
 
                 return jsonify({
                     "success": False,
-                    "error": "Возврат отменён или отклонён"
+                    "error": "Истекло время ожидания возврата"
                 })
-
-        if not refund_ok:
-
-            return jsonify({
-                "success": False,
-                "error": "Истекло время ожидания возврата"
-            })
 
         # возвращаем товар на склад
 

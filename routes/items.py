@@ -518,7 +518,17 @@ def api_create_item():
     conn.commit()
     pool.putconn(conn)
 
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM items
+        WHERE id = %s
+    """, (item_id,))
+
+    item = cur.fetchone()
+
     return jsonify({
         "success": True,
-        "id": item_id
+        "item": dict(item)
     })
