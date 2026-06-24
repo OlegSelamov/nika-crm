@@ -432,3 +432,177 @@ def rekassa_sell(conn, sale_id):
 
     return response.json()
     
+def rekassa_refund(conn, sale_id):
+
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM sales
+        WHERE id = %s
+    """, (sale_id,))
+
+    sale = cur.fetchone()
+
+    cur.execute("""
+        SELECT *
+        FROM integrations
+        WHERE company_id = %s
+    """, (sale["company_id"],))
+
+    integration = cur.fetchone()
+
+    if (
+        not integration
+        or not integration["rekassa_enabled"]
+        or not integration["rekassa_number"]
+        or not integration["rekassa_password"]
+    ):
+        return {
+            "status": "ERROR",
+            "message": "ReKassa не настроена"
+        }
+
+    cur.execute("""
+        SELECT *
+        FROM sale_items
+        WHERE sale_id = %s
+    """, (sale_id,))
+
+    items = cur.fetchall()
+
+    auth = requests.post(
+        f"{REKASSA_URL}/api/auth/login",
+        params={
+            "apiKey": REKASSA_API_KEY,
+            "format": "json"
+        },
+        json={
+            "number": integration["rekassa_number"],
+            "password": integration["rekassa_password"]
+        },
+        timeout=30
+    )
+
+    auth_data = auth.json()
+
+    token = auth_data["token"]
+    crs_id = integration["rekassa_crs_id"]
+
+    now = datetime.now()
+
+    ticket_items = []
+    total = 0
+
+    for item in items:
+        amount = int(item["total"])
+        total += amount
+
+        commodity = {
+            "name": item["name"],
+            "sectionCode": "1",
+            "quantity": int(item["quantity"] * 1000),
+            "price": {
+                "bills": str(int(item["price"])),
+                "coins": 0
+            },
+            "sum": {
+                "bills": str(amount),
+                "coins": 0
+            },
+            "measureUnitCode": "796",
+            "auxiliary": [
+                {
+                    "key": "UNIT_TYPE",
+                    "value": "PIECE"
+                }
+            ]
+        }
+
+        if item.get("gtin"):
+            commodity["barcode"] = str(item.get("gtin"))
+
+        if item.get("ntin"):
+            commodity["ntin"] = str(item.get("ntin"))
+
+        ticket_items.append({
+            "type": "ITEM_TYPE_COMMODITY",
+            "commodity": commodity
+        })
+
+    payment_type = "PAYMENT_CASH"
+
+    if sale["sale_type"] in ["card", "kaspi", "invoice"]:
+        payment_type = "PAYMENT_CARD"
+
+    amounts = {
+        "total": {
+            "bills": str(total),
+            "coins": 0
+        }
+    }
+
+    if payment_type == "PAYMENT_CASH":
+        amounts["taken"] = {
+            "bills": str(total),
+            "coins": 0
+        }
+        amounts["change"] = {
+            "bills": "0",
+            "coins": 0
+        }
+
+    ticket = {
+        "operation": "OPERATION_SELL_RETURN",
+
+        "dateTime": {
+            "date": {
+                "year": now.year,
+                "month": now.month,
+                "day": now.day
+            },
+            "time": {
+                "hour": now.hour,
+                "minute": now.minute,
+                "second": now.second
+            }
+        },
+
+        "domain": {
+            "type": "DOMAIN_SERVICES"
+        },
+
+        "items": ticket_items,
+
+        "payments": [
+            {
+                "type": payment_type,
+                "sum": {
+                    "bills": str(total),
+                    "coins": 0
+                }
+            }
+        ],
+
+        "amounts": amounts,
+
+        "operator": {
+            "code": 0
+        }
+    }
+
+    response = requests.post(
+        f"{REKASSA_URL}/api/crs/{crs_id}/tickets",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "X-Request-ID": str(uuid.uuid4())
+        },
+        json=ticket,
+        timeout=30
+    )
+
+    return response.json()
+    
+
+    

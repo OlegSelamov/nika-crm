@@ -1812,6 +1812,27 @@ def refund_sale(sale_id):
                     "success": False,
                     "error": "Истекло время ожидания возврата"
                 })
+                
+        if sale.get("rekassa_ticket_id"):
+
+            from routes.rekassa import rekassa_refund
+
+            rekassa_refund_result = rekassa_refund(
+                conn,
+                sale_id
+            )
+
+            print("REKASSA REFUND RESULT:")
+            print(rekassa_refund_result)
+
+            if rekassa_refund_result.get("status") != "OK":
+                return jsonify({
+                    "success": False,
+                    "error": {
+                        "message": "Ошибка возврата ReKassa",
+                        "rekassa": rekassa_refund_result
+                    }
+                })
 
         # возвращаем товар на склад
 
