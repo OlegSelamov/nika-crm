@@ -203,6 +203,9 @@ def pay_sale():
             sale_id
         )
         
+        print("REKASSA RESULT:")
+        print(rekassa_result)
+        
         if rekassa_result.get("status") == "OK":
 
             cur.execute("""
@@ -1901,6 +1904,9 @@ def refund_sale(sale_id):
         })
 
     except Exception as e:
+
+        import traceback
+        traceback.print_exc()
 
         conn.rollback()
 

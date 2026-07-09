@@ -269,6 +269,9 @@ def rekassa_sell(conn, sale_id):
         },
         timeout=30
     )
+    
+    print("AUTH STATUS =", auth.status_code)
+    print("AUTH TEXT =", auth.text)
 
     auth_data = auth.json()
 
@@ -404,6 +407,9 @@ def rekassa_sell(conn, sale_id):
         json=ticket,
         timeout=30
     )
+    
+    print("TICKET STATUS =", response.status_code)
+    print("TICKET TEXT =", response.text)
     
     result = response.json()
 

@@ -73,10 +73,6 @@
 						<img src="/static/icons/scan.png">
 					</button>
 
-					<button onclick="showQR()" class="scan-action-btn">
-						<img src="/static/icons/connect.png">
-					</button>
-
 				</div>
 
 				<div id="itemsList" class="items-dropdown"></div>
@@ -282,18 +278,6 @@
     </div>
 </div>
 
-<div id="qrBox" style="
-	display:none;
-	position:fixed;
-	top:20%;
-	left:50%;
-	transform:translateX(-50%);
-	background:white;
-	padding:20px;
-	border-radius:12px;
-	z-index:9999;
-	text-align:center;
-">
 	<h3>Подключить сканер</h3>
 	<img id="qrImg" style="width:200px;">
 </div>
@@ -375,7 +359,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
 <audio id="beepSound" preload="auto">
     <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
@@ -1619,94 +1602,6 @@ document.addEventListener("keydown", function(e) {
         barcodeBuffer += e.key;
     }
 });
-
-setInterval(() => {
-
-    fetch("/api/get-scan")
-    .then(res => res.json())
-    .then(data => {
-
-		if (data.code) {
-
-			console.log("С телефона:", data.code);
-
-			// 🔊 ПИК
-			const beep =
-				document.getElementById(
-					"beepSound"
-				);
-
-			if (beep) {
-				beep.currentTime = 0;
-				beep.play().catch(() => {});
-			}
-
-			// 📳 вибрация
-			if (navigator.vibrate) {
-				navigator.vibrate(120);
-			}
-
-			handleBarcode(data.code);
-
-			// 🔥 закрываем QR
-			if (autoClose) {
-				document.getElementById(
-					"qrBox"
-				).style.display = "none";
-			}
-		}
-
-    });
-
-}, 300); // каждые 1 сек
-
-let sessionId = null;
-
-function showQR() {
-
-    fetch("/api/create-session")
-    .then(res => res.json())
-    .then(data => {
-
-        sessionId = data.session;
-
-        const url = window.location.origin + "/scanner?session=" + sessionId;
-
-        QRCode.toDataURL(url, function (err, urlImg) {
-            document.getElementById("qrImg").src = urlImg;
-            document.getElementById("qrBox").style.display = "block";
-        });
-
-        startListening(true);
-    });
-}
-
-function startListening(autoClose = false) {
-
-    const interval = setInterval(() => {
-
-        if (!sessionId) return;
-
-        fetch("/api/get-scan/" + sessionId)
-        .then(res => res.json())
-        .then(data => {
-
-            if (data.code) {
-
-                handleBarcode(data.code);
-
-                // 🔥 закрываем QR
-                if (autoClose) {
-                    document.getElementById("qrBox").style.display = "none";
-                }
-
-            }
-
-        });
-
-    }, 200);
-
-}
 
 window.addEventListener("load", function () {
     document.querySelector(".sales-page").classList.add("ready");
