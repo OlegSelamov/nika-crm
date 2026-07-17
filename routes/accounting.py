@@ -800,7 +800,11 @@ def accounting():
 
     try:
         # Таблицы и историческая синхронизация больше не запускаются
-        # при каждом открытии страницы. Это делает загрузку быстрой.
+        # при каждом открытии страницы. Это делает загрузку быстрой.      
+        _ensure_accounting_tables(cur)
+        _ensure_tax_tables(cur)
+        conn.commit()
+        
         today = now_kz().date()
         year_start = today.replace(month=1, day=1)
         year_end = today.replace(month=12, day=31)
@@ -910,8 +914,6 @@ def accounting():
         """, (company_id,))
         documents_count = cur.fetchone()["documents_count"] or 0
 
-        _ensure_tax_tables(cur)
-        conn.commit()
         selected_tax_period = request.args.get("tax_period") or now_kz().strftime("%Y-%m")
         tax_calculation = _calculate_taxes(cur, company_id, selected_tax_period)
         cur.execute("""
