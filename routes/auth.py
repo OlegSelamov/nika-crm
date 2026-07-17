@@ -206,30 +206,146 @@ def profile():
     if not session.get("user_id"):
         return redirect("/login")
 
+    user_id = session.get("user_id")
+    company_id = session.get("company_id")
+
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT
-            u.*,
-            c.name AS company_name
-        FROM users u
-        LEFT JOIN companies c
-            ON c.id = u.company_id
-        WHERE u.id = %s
-    """, (
-        session["user_id"],
-    ))
+    try:
+        # Сотрудник + полная информация о компании
+        cur.execute("""
+            SELECT
+                u.*,
+                c.name AS company_name,
+                c.bin AS company_bin,
+                c.address AS company_address,
+                c.phone AS company_phone,
+                c.director AS company_director,
+                c.tariff AS company_tariff,
+                c.paid_until AS company_paid_until
+            FROM users u
+            LEFT JOIN companies c
+                ON c.id = u.company_id
+            WHERE u.id = %s
+        """, (
+            user_id,
+        ))
 
-    user = cur.fetchone()
+        user = cur.fetchone()
 
-    pool.putconn(conn)
+        if not user:
+            return redirect("/logout")
 
-    return render_template(
-        "profile.html",
-        user=user
-    )
-    
+        today = now_kz().date()
+        month_start = today.replace(day=1)
+
+        # Личная статистика за сегодня
+        cur.execute("""
+            SELECT
+                COUNT(*) AS sales_count,
+                COALESCE(SUM(total_amount), 0) AS revenue,
+                COALESCE(AVG(total_amount), 0) AS average_check
+            FROM sales
+            WHERE company_id = %s
+              AND user_id = %s
+              AND status = 'Оплачено'
+              AND DATE(created_at) = %s
+        """, (
+            company_id,
+            user_id,
+            today,
+        ))
+
+        today_stats = cur.fetchone()
+
+        # Личная статистика за текущий месяц
+        cur.execute("""
+            SELECT
+                COUNT(*) AS sales_count,
+                COALESCE(SUM(total_amount), 0) AS revenue,
+                COALESCE(AVG(total_amount), 0) AS average_check
+            FROM sales
+            WHERE company_id = %s
+              AND user_id = %s
+              AND status = 'Оплачено'
+              AND DATE(created_at) BETWEEN %s AND %s
+        """, (
+            company_id,
+            user_id,
+            month_start,
+            today,
+        ))
+
+        month_stats = cur.fetchone()
+
+        percent_rate = float(user.get("percent_rate") or 0)
+        today_revenue = float(today_stats.get("revenue") or 0)
+        month_revenue = float(month_stats.get("revenue") or 0)
+
+        today_reward = today_revenue * percent_rate / 100
+        month_reward = month_revenue * percent_rate / 100
+
+        # Возвраты текущего сотрудника за месяц
+        cur.execute("""
+            SELECT
+                COUNT(*) AS refund_count,
+                COALESCE(SUM(total_amount), 0) AS refund_total
+            FROM sales
+            WHERE company_id = %s
+              AND user_id = %s
+              AND (
+                    status = 'Возврат'
+                    OR COALESCE(is_refunded, FALSE) = TRUE
+              )
+              AND DATE(created_at) BETWEEN %s AND %s
+        """, (
+            company_id,
+            user_id,
+            month_start,
+            today,
+        ))
+
+        refund_stats = cur.fetchone()
+
+        # Последние личные продажи
+        cur.execute("""
+            SELECT
+                id,
+                sale_number,
+                total_amount,
+                sale_type,
+                status,
+                created_at
+            FROM sales
+            WHERE company_id = %s
+              AND user_id = %s
+            ORDER BY id DESC
+            LIMIT 10
+        """, (
+            company_id,
+            user_id,
+        ))
+
+        recent_sales = cur.fetchall()
+
+        return render_template(
+            "profile.html",
+            user=user,
+            today_stats=today_stats,
+            month_stats=month_stats,
+            refund_stats=refund_stats,
+            today_reward=today_reward,
+            month_reward=month_reward,
+            recent_sales=recent_sales,
+            today=today,
+            month_start=month_start
+        )
+
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
 @auth_bp.route("/users/delete/<int:user_id>")
 def delete_user(user_id):
     if not session.get("user_id"):

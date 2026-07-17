@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="employee-page">
+
+    <div class="employee-page-header">
+        <div>
+            <a href="/analytics?from={{ date_from }}&to={{ date_to }}" class="back-link">← Назад к аналитике</a>
+            <h1>{{ employee.full_name or employee.username }}</h1>
+            <div class="employee-subtitle">
+                {{ employee.role or 'Сотрудник' }} · {{ employee.percent_rate or 0 }}% от продаж
+            </div>
+        </div>
+
+        <form method="get" class="employee-filter">
+            <input type="date" name="from" value="{{ date_from }}">
+            <input type="date" name="to" value="{{ date_to }}">
+            <button class="btn">Применить</button>
+        </form>
+    </div>
+
+    <div class="employee-stats-grid">
+        <div class="employee-stat"><span>Продаж</span><b>{{ stats.sales_count or 0 }}</b></div>
+        <div class="employee-stat"><span>Выручка</span><b>{{ "{:,.0f}".format(stats.revenue or 0).replace(",", " ") }} ₸</b></div>
+        <div class="employee-stat"><span>Средний чек</span><b>{{ "{:,.0f}".format(stats.average_check or 0).replace(",", " ") }} ₸</b></div>
+        <div class="employee-stat reward"><span>Вознаграждение</span><b>{{ "{:,.0f}".format(reward or 0).replace(",", " ") }} ₸</b></div>
+        <div class="employee-stat"><span>Возвратов</span><b>{{ stats.refund_count or 0 }}</b></div>
+        <div class="employee-stat"><span>Сумма возвратов</span><b>{{ "{:,.0f}".format(stats.refund_total or 0).replace(",", " ") }} ₸</b></div>
+    </div>
+
+    <div class="employee-layout">
+        <div class="employee-card chart-card">
+            <div class="card-title">Динамика продаж</div>
+            <canvas id="employeeChart"></canvas>
+        </div>
+
+        <div class="employee-card">
+            <div class="card-title">Данные сотрудника</div>
+            <div class="employee-info">
+                <div><span>Логин</span><b>{{ employee.username or '—' }}</b></div>
+                <div><span>Телефон</span><b>{{ employee.phone or '—' }}</b></div>
+                <div><span>Роль</span><b>{{ employee.role or '—' }}</b></div>
+                <div><span>Ставка</span><b>{{ employee.percent_rate or 0 }}%</b></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="employee-card">
+        <div class="card-title">Лучшие товары сотрудника</div>
+        <div class="top-items-list">
+            {% for item in top_employee_items %}
+            <div class="top-item-row">
+                <div>
+                    <b>{{ item.name }}</b>
+                    <span>Количество: {{ item.quantity }}</span>
+                </div>
+                <strong>{{ "{:,.0f}".format(item.total or 0).replace(",", " ") }} ₸</strong>
+            </div>
+            {% else %}
+            <div class="empty-state">За выбранный период товаров нет</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="employee-card">
+        <div class="card-title">Продажи сотрудника</div>
+
+        <div class="employee-sales-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Чек</th>
+                        <th>Дата</th>
+                        <th>Способ оплаты</th>
+                        <th>Статус</th>
+                        <th>Сумма</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in recent_sales %}
+                    <tr>
+                        <td>№ {{ sale.sale_number or sale.id }}</td>
+                        <td>{{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '—' }}</td>
+                        <td>
+                            {% if sale.sale_type == 'cash' %}Наличные
+                            {% elif sale.sale_type == 'card' %}Карта
+                            {% elif sale.sale_type == 'kaspi' %}Kaspi POS
+                            {% elif sale.sale_type == 'invoice' %}Счёт
+                            {% else %}{{ sale.sale_type or '—' }}
+                            {% endif %}
+                        </td>
+                        <td>{{ sale.status or '—' }}</td>
+                        <td><b>{{ "{:,.0f}".format(sale.total_amount or 0).replace(",", " ") }} ₸</b></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="empty-state">За выбранный период продаж нет</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="employee-sales-mobile">
+            {% for sale in recent_sales %}
+            <div class="employee-sale-card">
+                <div class="sale-top">
+                    <b>Чек № {{ sale.sale_number or sale.id }}</b>
+                    <strong>{{ "{:,.0f}".format(sale.total_amount or 0).replace(",", " ") }} ₸</strong>
+                </div>
+                <div class="sale-line">
+                    <span>Дата</span>
+                    <b>{{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '—' }}</b>
+                </div>
+                <div class="sale-line"><span>Статус</span><b>{{ sale.status or '—' }}</b></div>
+            </div>
+            {% else %}
+            <div class="empty-state">За выбранный период продаж нет</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+new Chart(document.getElementById("employeeChart"), {
+    type: "line",
+    data: {
+        labels: {{ employee_chart_labels | tojson }},
+        datasets: [{
+            data: {{ employee_chart_values | tojson }},
+            borderColor: "#2563eb",
+            backgroundColor: "rgba(37,99,235,.13)",
+            fill: true,
+            borderWidth: 3,
+            pointRadius: 4,
+            tension: .38
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } }
+    }
+});
+</script>
+
+<style>
+.employee-page{display:flex;flex-direction:column;gap:18px;}
+.employee-page-header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;}
+.employee-page-header h1{margin:7px 0 4px;}
+.back-link{color:#2563eb;font-size:13px;font-weight:700;text-decoration:none;}
+.employee-subtitle{color:#64748b;}
+.employee-filter{display:flex;align-items:center;gap:10px;}
+.employee-filter input{height:44px;padding:0 12px;border:1px solid #dbe2ea;border-radius:12px;background:#fff;}
+.employee-stats-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;}
+.employee-stat,.employee-card{border:1px solid #e8edf3;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.05);}
+.employee-stat{padding:16px;border-radius:16px;}
+.employee-stat span{display:block;color:#64748b;font-size:11px;}
+.employee-stat b{display:block;margin-top:7px;color:#0f172a;font-size:18px;}
+.employee-stat.reward{background:linear-gradient(135deg,#16a34a,#059669);}
+.employee-stat.reward span,.employee-stat.reward b{color:#fff;}
+.employee-layout{display:grid;grid-template-columns:2fr 1fr;gap:18px;}
+.employee-card{padding:20px;border-radius:19px;}
+.card-title{margin-bottom:15px;color:#0f172a;font-size:17px;font-weight:800;}
+.chart-card{min-height:350px;}
+#employeeChart{max-height:290px;}
+.employee-info{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.employee-info>div{padding:12px;border-radius:12px;background:#f8fafc;}
+.employee-info span{display:block;color:#64748b;font-size:11px;}
+.employee-info b{display:block;margin-top:5px;font-size:13px;}
+.top-item-row{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:12px 0;border-bottom:1px solid #edf1f5;}
+.top-item-row span{display:block;margin-top:3px;color:#64748b;font-size:11px;}
+.top-item-row strong{white-space:nowrap;}
+.employee-sales-table{overflow-x:auto;}
+.employee-sales-table table{width:100%;border-collapse:collapse;}
+.employee-sales-table th,.employee-sales-table td{padding:12px;border-bottom:1px solid #edf1f5;text-align:left;font-size:13px;}
+.employee-sales-table th{color:#64748b;background:#f8fafc;}
+.employee-sales-mobile{display:none;}
+.empty-state{padding:22px!important;color:#64748b;text-align:center!important;}
+
+@media(max-width:1100px){
+    .employee-stats-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+    .employee-layout{grid-template-columns:1fr;}
+}
+@media(max-width:768px){
+    .employee-page{gap:12px;}
+    .employee-page-header{align-items:stretch;flex-direction:column;}
+    .employee-filter{flex-direction:column;}
+    .employee-filter input,.employee-filter .btn{width:100%;box-sizing:border-box;}
+    .employee-stats-grid{grid-template-columns:1fr 1fr;gap:9px;}
+    .employee-stat{padding:13px;}
+    .employee-stat b{font-size:15px;}
+    .employee-card{padding:14px;border-radius:17px;}
+    .employee-info{grid-template-columns:1fr;}
+    .employee-sales-table{display:none;}
+    .employee-sales-mobile{display:flex;flex-direction:column;gap:9px;}
+    .employee-sale-card{padding:12px;border-radius:13px;background:#f8fafc;}
+    .sale-top,.sale-line{display:flex;justify-content:space-between;gap:12px;}
+    .sale-top{margin-bottom:9px;}
+    .sale-top strong{color:#16a34a;}
+    .sale-line{margin-top:5px;font-size:12px;}
+    .sale-line span{color:#64748b;}
+}
+</style>
+
+{% endblock %}

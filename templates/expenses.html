@@ -2,50 +2,988 @@
 
 {% block content %}
 
-<div class="page-header">
+<div class="page-header expenses-header">
     <div>
         <h1 class="page-title">Расходы</h1>
         <div class="page-note">Управление расходами компании</div>
     </div>
+
+    <button class="primary-action" type="button" onclick="openExpenseModal()">
+        <span class="action-icon">＋</span>
+        Добавить расход
+    </button>
 </div>
 
-<div class="stats-grid">
+<div class="stats-grid expenses-stats">
+    <div class="stat-card blue">
+        <div class="stat-topline">
+            <div class="stat-label">Расходы сегодня</div>
+            <div class="stat-emoji">📅</div>
+        </div>
+        <div class="stat-value">{{ "{:,.0f}".format(today_total|default(0)).replace(',', ' ') }} ₸</div>
+        <div class="stat-hint">За текущий день</div>
+    </div>
 
-<div class="stat-card blue">
-    <div class="stat-label">Аренда</div>
+    <div class="stat-card purple">
+        <div class="stat-topline">
+            <div class="stat-label">Расходы за месяц</div>
+            <div class="stat-emoji">📊</div>
+        </div>
+        <div class="stat-value">{{ "{:,.0f}".format(month_total|default(0)).replace(',', ' ') }} ₸</div>
+        <div class="stat-hint">С начала месяца</div>
+    </div>
+
+    <div class="stat-card cyan">
+        <div class="stat-topline">
+            <div class="stat-label">Крупнейшая категория</div>
+            <div class="stat-emoji">💸</div>
+        </div>
+        <div class="stat-value stat-value-text">{{ largest_category|default('Нет данных') }}</div>
+        <div class="stat-hint">
+            {{ "{:,.0f}".format(largest_category_total|default(0)).replace(',', ' ') }} ₸
+        </div>
+    </div>
 </div>
 
-<div class="stat-card purple">
-    <div class="stat-label">Зарплата</div>
+<div class="card expenses-card">
+    <div class="card-toolbar">
+        <div>
+            <div class="title">История расходов</div>
+            <div class="toolbar-note">Все зарегистрированные операции</div>
+        </div>
+
+        <form class="expense-filters" method="get" action="/expenses">
+            <div class="filter-field search-field">
+                <span>⌕</span>
+                <input
+                    type="search"
+                    name="search"
+                    value="{{ request.args.get('search', '') }}"
+                    placeholder="Поиск по описанию"
+                >
+            </div>
+
+            <select name="category" class="filter-select">
+                <option value="">Все категории</option>
+                {% for category in categories|default([]) %}
+                    <option value="{{ category }}"
+                        {% if request.args.get('category') == category %}selected{% endif %}>
+                        {{ category }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <input
+                class="filter-date"
+                type="date"
+                name="date_from"
+                value="{{ request.args.get('date_from', '') }}"
+                title="Дата начала"
+            >
+
+            <input
+                class="filter-date"
+                type="date"
+                name="date_to"
+                value="{{ request.args.get('date_to', '') }}"
+                title="Дата окончания"
+            >
+
+            <button class="filter-button" type="submit">Применить</button>
+
+            {% if request.args.get('search') or request.args.get('category') or request.args.get('date_from') or request.args.get('date_to') %}
+                <a class="reset-filter" href="/expenses">Сбросить</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="category-summary">
+        {% set category_icons = {
+            'Аренда': '🏢',
+            'Зарплата': '💵',
+            'Транспорт': '🚗',
+            'Закупки': '📦',
+            'Коммунальные': '⚡',
+            'Прочие расходы': '🧾'
+        } %}
+
+        {% for item in category_totals|default([]) %}
+            <div class="category-chip">
+                <div class="category-chip-icon">{{ category_icons.get(item.category, '💳') }}</div>
+                <div>
+                    <div class="category-chip-name">{{ item.category }}</div>
+                    <div class="category-chip-total">
+                        {{ "{:,.0f}".format(item.total|default(0)).replace(',', ' ') }} ₸
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if expenses|default([])|length > 0 %}
+        <div class="expense-table-wrap desktop-expense-list">
+            <table class="expense-table">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Категория</th>
+                        <th>Описание</th>
+                        <th>Способ оплаты</th>
+                        <th class="text-right">Сумма</th>
+                        <th class="actions-column"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in expenses %}
+                        <tr>
+                            <td>
+                                <div class="expense-date">{{ expense.date.strftime('%d.%m.%Y') if expense.date else '—' }}</div>
+                                {% if expense.created_at %}
+                                    <div class="expense-time">{{ expense.created_at.strftime('%H:%M') }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="category-badge">
+                                    {{ category_icons.get(expense.category, '💳') }} {{ expense.category }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="expense-description">{{ expense.description or 'Без описания' }}</div>
+                                {% if expense.comment %}
+                                    <div class="expense-comment">{{ expense.comment }}</div>
+                                {% endif %}
+                            </td>
+                            <td><span class="payment-method">{{ expense.payment_method or 'Не указано' }}</span></td>
+                            <td class="expense-amount text-right">
+                                {{ "{:,.0f}".format(expense.amount|default(0)).replace(',', ' ') }} ₸
+                            </td>
+                            <td class="expense-actions">
+                                <button type="button" class="icon-action edit-action" title="Редактировать"
+                                    onclick='openEditExpenseModal({
+                                        "id": {{ expense.id }},
+                                        "date": {{ (expense.date.strftime("%Y-%m-%d") if expense.date else "")|tojson }},
+                                        "category": {{ expense.category|tojson }},
+                                        "description": {{ (expense.description or "")|tojson }},
+                                        "amount": {{ expense.amount|default(0) }},
+                                        "payment_method": {{ (expense.payment_method or "")|tojson }},
+                                        "comment": {{ (expense.comment or "")|tojson }}
+                                    })'>✎</button>
+                                <form method="post" action="/expenses/{{ expense.id }}/delete" class="delete-form"
+                                      onsubmit="return confirm('Удалить этот расход?');">
+                                    <button type="submit" class="icon-action delete-action" title="Удалить">×</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mobile-expense-list">
+            {% for expense in expenses %}
+                <article class="mobile-expense-card">
+                    <div class="mobile-expense-head">
+                        <div>
+                            <div class="mobile-expense-date">
+                                {{ expense.date.strftime('%d.%m.%Y') if expense.date else '—' }}
+                                {% if expense.created_at %}<span>{{ expense.created_at.strftime('%H:%M') }}</span>{% endif %}
+                            </div>
+                            <div class="mobile-expense-category">
+                                {{ category_icons.get(expense.category, '💳') }} {{ expense.category }}
+                            </div>
+                        </div>
+                        <div class="mobile-expense-amount">
+                            {{ "{:,.0f}".format(expense.amount|default(0)).replace(',', ' ') }} ₸
+                        </div>
+                    </div>
+
+                    <div class="mobile-expense-description">{{ expense.description or 'Без описания' }}</div>
+                    {% if expense.comment %}
+                        <div class="mobile-expense-comment">{{ expense.comment }}</div>
+                    {% endif %}
+
+                    <div class="mobile-expense-footer">
+                        <span class="payment-method">{{ expense.payment_method or 'Не указано' }}</span>
+                        <div class="expense-actions">
+                            <button type="button" class="icon-action edit-action" title="Редактировать"
+                                onclick='openEditExpenseModal({
+                                    "id": {{ expense.id }},
+                                    "date": {{ (expense.date.strftime("%Y-%m-%d") if expense.date else "")|tojson }},
+                                    "category": {{ expense.category|tojson }},
+                                    "description": {{ (expense.description or "")|tojson }},
+                                    "amount": {{ expense.amount|default(0) }},
+                                    "payment_method": {{ (expense.payment_method or "")|tojson }},
+                                    "comment": {{ (expense.comment or "")|tojson }}
+                                })'>✎</button>
+                            <form method="post" action="/expenses/{{ expense.id }}/delete" class="delete-form"
+                                  onsubmit="return confirm('Удалить этот расход?');">
+                                <button type="submit" class="icon-action delete-action" title="Удалить">×</button>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-expenses-panel">
+            <div class="empty-icon">🧾</div>
+            <div class="empty-title">Расходов пока нет</div>
+            <div class="empty-text">Добавьте первую операцию, чтобы начать вести учёт.</div>
+            <button type="button" class="empty-button" onclick="openExpenseModal()">Добавить расход</button>
+        </div>
+    {% endif %}
+
+    {% if pagination is defined and pagination.pages > 1 %}
+        <div class="pagination">
+            {% if pagination.has_prev %}
+                <a href="{{ url_for(request.endpoint, page=pagination.prev_num, search=request.args.get('search'), category=request.args.get('category'), date_from=request.args.get('date_from'), date_to=request.args.get('date_to')) }}">‹</a>
+            {% endif %}
+
+            <span>Страница {{ pagination.page }} из {{ pagination.pages }}</span>
+
+            {% if pagination.has_next %}
+                <a href="{{ url_for(request.endpoint, page=pagination.next_num, search=request.args.get('search'), category=request.args.get('category'), date_from=request.args.get('date_from'), date_to=request.args.get('date_to')) }}">›</a>
+            {% endif %}
+        </div>
+    {% endif %}
 </div>
 
-<div class="stat-card cyan">
-    <div class="stat-label">Прочие расходы</div>
+<div class="expense-modal" id="expenseModal" aria-hidden="true">
+    <div class="expense-modal-backdrop" onclick="closeExpenseModal()"></div>
+
+    <div class="expense-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="expenseModalTitle">
+        <div class="expense-modal-header">
+            <div>
+                <div class="modal-kicker">Финансовая операция</div>
+                <h2 id="expenseModalTitle">Новый расход</h2>
+            </div>
+            <button type="button" class="modal-close" onclick="closeExpenseModal()">×</button>
+        </div>
+
+        <form id="expenseForm" method="post" action="/expenses/add" class="expense-form">
+            <div class="form-grid">
+                <label class="form-field">
+                    <span>Дата расхода</span>
+                    <input id="expenseDate" type="date" name="date" required>
+                </label>
+
+                <label class="form-field">
+                    <span>Категория</span>
+                    <select id="expenseCategory" name="category" required>
+                        <option value="">Выберите категорию</option>
+                        {% for category in categories|default(['Аренда', 'Зарплата', 'Транспорт', 'Закупки', 'Коммунальные', 'Прочие расходы']) %}
+                            <option value="{{ category }}">{{ category }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label class="form-field form-field-wide">
+                    <span>Описание</span>
+                    <input id="expenseDescription" type="text" name="description" maxlength="160"
+                           placeholder="Например: аренда помещения за июль" required>
+                </label>
+
+                <label class="form-field">
+                    <span>Сумма, ₸</span>
+                    <input id="expenseAmount" type="number" name="amount" min="0.01" step="0.01"
+                           inputmode="decimal" placeholder="0" required>
+                </label>
+
+                <label class="form-field">
+                    <span>Способ оплаты</span>
+                    <select id="expensePaymentMethod" name="payment_method" required>
+                        <option value="Наличные">Наличные</option>
+                        <option value="Банковская карта">Банковская карта</option>
+                        <option value="Kaspi">Kaspi</option>
+                        <option value="Расчётный счёт">Расчётный счёт</option>
+                        <option value="Другое">Другое</option>
+                    </select>
+                </label>
+
+                <label class="form-field form-field-wide">
+                    <span>Комментарий</span>
+                    <textarea id="expenseComment" name="comment" rows="3" maxlength="500"
+                              placeholder="Необязательно"></textarea>
+                </label>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" onclick="closeExpenseModal()">Отмена</button>
+                <button type="submit" class="save-expense-button" id="expenseSubmitButton">Сохранить расход</button>
+            </div>
+        </form>
+    </div>
 </div>
 
-</div>
+<style>
+    .expenses-header,
+    .stat-topline,
+    .card-toolbar,
+    .expense-actions,
+    .modal-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+    }
 
-<div class="card">
+    .expenses-header { margin-bottom: 18px; }
 
-<div class="title">Категории расходов</div>
+    .primary-action,
+    .save-expense-button,
+    .empty-button,
+    .filter-button {
+        border: 0;
+        border-radius: 14px;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+        transition: .2s ease;
+    }
 
-<div class="feature-grid">
+    .primary-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        min-height: 44px;
+        padding: 0 18px;
+        color: #fff;
+        background: linear-gradient(135deg, #675cff 0%, #9657f7 55%, #db5bd2 100%);
+        box-shadow: 0 14px 30px rgba(113, 84, 255, .28);
+    }
 
-    <div class="feature-card">🏢 Аренда</div>
+    .primary-action:hover,
+    .save-expense-button:hover,
+    .empty-button:hover,
+    .filter-button:hover { transform: translateY(-2px); }
 
-    <div class="feature-card">💵 Зарплата</div>
+    .action-icon { font-size: 20px; line-height: 1; }
+    .expenses-stats { margin-bottom: 18px; }
+    .stat-topline { align-items: flex-start; }
 
-    <div class="feature-card">🚗 Транспорт</div>
+    .stat-emoji {
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 13px;
+        background: rgba(255,255,255,.08);
+        box-shadow: inset 0 1px rgba(255,255,255,.08);
+        font-size: 19px;
+    }
 
-    <div class="feature-card">📦 Закупки</div>
+    .stat-value {
+        margin-top: 18px;
+        font-size: clamp(25px, 2vw, 34px);
+        font-weight: 900;
+        letter-spacing: -.045em;
+    }
 
-    <div class="feature-card">⚡ Коммунальные</div>
+    .stat-value-text {
+        overflow: hidden;
+        font-size: clamp(20px, 1.7vw, 28px);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
-    <div class="feature-card">🧾 Прочие расходы</div>
+    .stat-hint,
+    .toolbar-note,
+    .expense-time,
+    .expense-comment,
+    .empty-text,
+    .modal-kicker { color: var(--text-muted, #8f96aa); }
 
-</div>
+    .stat-hint { margin-top: 7px; font-size: 13px; }
 
-</div>
+    .expenses-card {
+        overflow: hidden;
+        padding: 20px;
+    }
+
+    .card-toolbar {
+        align-items: flex-start;
+        margin-bottom: 16px;
+    }
+
+    .toolbar-note { margin-top: 4px; font-size: 13px; }
+
+    .expense-filters {
+        display: grid;
+        grid-template-columns: minmax(210px, 1.5fr) minmax(150px, .9fr) 145px 145px auto auto;
+        align-items: center;
+        gap: 9px;
+        width: min(100%, 920px);
+    }
+
+    .filter-field,
+    .filter-select,
+    .filter-date {
+        min-height: 42px;
+        box-sizing: border-box;
+        border: 1px solid var(--border-color, rgba(140,150,180,.2));
+        border-radius: 12px;
+        outline: 0;
+        color: inherit;
+        background: rgba(255,255,255,.045);
+    }
+
+    .search-field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+    }
+
+    .search-field input {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        color: inherit;
+        background: transparent;
+    }
+
+    .filter-select,
+    .filter-date { width: 100%; padding: 0 11px; }
+
+    .filter-button {
+        min-height: 42px;
+        padding: 0 16px;
+        color: #fff;
+        background: linear-gradient(135deg, #5264ff, #8252f5);
+    }
+
+    .reset-filter {
+        color: var(--text-muted, #8f96aa);
+        font-size: 13px;
+        text-align: center;
+        text-decoration: none;
+    }
+
+    .category-summary {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .category-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid rgba(135, 120, 255, .17);
+        border-radius: 15px;
+        background: linear-gradient(145deg, rgba(116,94,255,.085), rgba(255,255,255,.025));
+    }
+
+    .category-chip-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 36px;
+        width: 36px;
+        height: 36px;
+        border-radius: 11px;
+        background: linear-gradient(135deg, rgba(111,93,255,.24), rgba(206,83,225,.16));
+    }
+
+    .category-chip-name {
+        overflow: hidden;
+        color: var(--text-muted, #8f96aa);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .category-chip-total {
+        margin-top: 3px;
+        font-size: 14px;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+
+    .expense-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--border-color, rgba(140,150,180,.16));
+        border-radius: 16px;
+    }
+
+    .expense-table { width: 100%; border-collapse: collapse; }
+
+    .expense-table th,
+    .expense-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border-color, rgba(140,150,180,.12));
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    .expense-table th {
+        color: var(--text-muted, #8f96aa);
+        background: rgba(255,255,255,.035);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .045em;
+        text-transform: uppercase;
+    }
+
+    .expense-table tbody tr:last-child td { border-bottom: 0; }
+    .expense-table tbody tr:hover { background: rgba(118,99,255,.04); }
+    .text-right { text-align: right !important; }
+
+    .expense-date,
+    .expense-description,
+    .expense-amount { font-weight: 750; }
+
+    .expense-time,
+    .expense-comment { margin-top: 3px; font-size: 12px; }
+
+    .category-badge,
+    .payment-method {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 10px;
+        border: 1px solid rgba(118,99,255,.18);
+        border-radius: 999px;
+        background: rgba(118,99,255,.09);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .payment-method {
+        border-color: rgba(28,202,160,.2);
+        background: rgba(28,202,160,.09);
+    }
+
+    .expense-amount { color: #ff819b; font-size: 15px; white-space: nowrap; }
+    .actions-column { width: 90px; }
+    .expense-actions { justify-content: flex-end; }
+    .delete-form { margin: 0; }
+
+    .icon-action {
+        display: grid;
+        place-items: center;
+        width: 33px;
+        height: 33px;
+        border: 1px solid var(--border-color, rgba(140,150,180,.16));
+        border-radius: 10px;
+        cursor: pointer;
+        color: inherit;
+        background: rgba(255,255,255,.045);
+    }
+
+    .delete-action { color: #ff7e96; }
+    .empty-expenses { padding: 48px 20px !important; text-align: center !important; }
+    .empty-icon { font-size: 34px; }
+    .empty-title { margin-top: 10px; font-size: 18px; font-weight: 850; }
+    .empty-text { margin-top: 5px; font-size: 13px; }
+
+    .empty-button {
+        margin-top: 16px;
+        padding: 10px 15px;
+        color: #fff;
+        background: linear-gradient(135deg, #695cff, #a855f7);
+    }
+
+    .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 16px;
+        color: var(--text-muted, #8f96aa);
+        font-size: 13px;
+    }
+
+    .pagination a {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--border-color, rgba(140,150,180,.16));
+        border-radius: 10px;
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .mobile-expense-list { display: none; }
+
+    .empty-expenses-panel {
+        padding: 48px 20px;
+        border: 1px solid var(--border-color, rgba(140,150,180,.16));
+        border-radius: 16px;
+        text-align: center;
+        background: rgba(255,255,255,.02);
+    }
+
+    .mobile-expense-card {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--border-color, rgba(140,150,180,.15));
+        border-radius: 16px;
+        background: rgba(255,255,255,.025);
+    }
+
+    .mobile-expense-head,
+    .mobile-expense-footer {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .mobile-expense-head { padding: 14px 14px 10px; }
+    .mobile-expense-footer {
+        align-items: center;
+        padding: 11px 14px 14px;
+        border-top: 1px solid var(--border-color, rgba(140,150,180,.10));
+    }
+
+    .mobile-expense-date { font-size: 12px; font-weight: 800; }
+    .mobile-expense-date span {
+        margin-left: 6px;
+        color: var(--text-muted, #8f96aa);
+        font-weight: 600;
+    }
+
+    .mobile-expense-category {
+        margin-top: 5px;
+        color: var(--text-muted, #8f96aa);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+
+    .mobile-expense-amount {
+        flex: 0 0 auto;
+        color: #ff819b;
+        font-size: 16px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .mobile-expense-description,
+    .mobile-expense-comment {
+        min-width: 0;
+        padding: 0 14px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .mobile-expense-description { font-size: 14px; font-weight: 750; }
+    .mobile-expense-comment {
+        margin-top: 5px;
+        padding-bottom: 12px;
+        color: var(--text-muted, #8f96aa);
+        font-size: 12px;
+    }
+
+    .expense-modal {
+        position: fixed;
+        z-index: 1500;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+    }
+
+    .expense-modal.is-open { display: flex; }
+
+    .expense-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(18, 20, 35, .48);
+        backdrop-filter: blur(12px) saturate(120%);
+    }
+
+    .expense-modal-dialog {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: min(700px, 100%);
+        height: auto;
+        max-height: min(760px, calc(100dvh - 36px));
+        overflow: hidden;
+        border: 1px solid rgba(150, 125, 255, .32);
+        border-radius: 26px;
+        color: var(--text-color, #f6f7fb);
+        background:
+            radial-gradient(circle at 10% 0%, rgba(113,87,255,.24), transparent 34%),
+            radial-gradient(circle at 95% 15%, rgba(224,82,199,.18), transparent 32%),
+            linear-gradient(145deg, rgba(47,43,79,.98), rgba(32,35,61,.98));
+        box-shadow: 0 28px 90px rgba(38,29,83,.45), inset 0 1px rgba(255,255,255,.08);
+        animation: expenseModalIn .2s ease-out;
+    }
+
+    @keyframes expenseModalIn {
+        from { opacity: 0; transform: translateY(12px) scale(.985); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .expense-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 23px 24px 18px;
+        border-bottom: 1px solid rgba(255,255,255,.1);
+        background: rgba(255,255,255,.025);
+    }
+
+    .expense-modal-header h2 { margin: 4px 0 0; font-size: 25px; }
+
+    .modal-kicker {
+        color: #bfb5ff;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+    }
+
+    .modal-close {
+        display: grid;
+        place-items: center;
+        width: 39px;
+        height: 39px;
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 12px;
+        cursor: pointer;
+        color: #fff;
+        background: rgba(255,255,255,.07);
+        font-size: 24px;
+    }
+
+    .modal-close:hover { background: rgba(255,255,255,.12); }
+    .expense-form {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 22px 24px 24px;
+        scrollbar-width: thin;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .form-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .form-field-wide { grid-column: 1 / -1; }
+
+    .form-field > span {
+        color: #c7c8d8;
+        font-size: 12px;
+        font-weight: 750;
+    }
+
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid rgba(255,255,255,.13);
+        border-radius: 14px;
+        outline: 0;
+        color: #fff;
+        background: rgba(255,255,255,.075);
+        font: inherit;
+        transition: .18s ease;
+    }
+
+    .form-field input::placeholder,
+    .form-field textarea::placeholder { color: rgba(231,232,242,.48); }
+
+    .form-field select option {
+        color: #24263b;
+        background: #fff;
+    }
+
+    .form-field input,
+    .form-field select { min-height: 47px; padding: 0 13px; }
+    .form-field textarea { padding: 12px 13px; resize: vertical; }
+
+    .form-field input:focus,
+    .form-field select:focus,
+    .form-field textarea:focus {
+        border-color: rgba(165,139,255,.86);
+        background: rgba(255,255,255,.105);
+        box-shadow: 0 0 0 4px rgba(121,93,255,.16);
+    }
+
+    .modal-actions {
+        justify-content: flex-end;
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid rgba(255,255,255,.09);
+    }
+
+    .secondary-button,
+    .save-expense-button { min-height: 45px; padding: 0 18px; }
+
+    .secondary-button {
+        border: 1px solid rgba(255,255,255,.13);
+        border-radius: 13px;
+        cursor: pointer;
+        color: #fff;
+        background: rgba(255,255,255,.07);
+        font: inherit;
+        font-weight: 750;
+    }
+
+    .save-expense-button {
+        color: #fff;
+        background: linear-gradient(135deg, #685cff, #a653f0 62%, #db5bc9);
+        box-shadow: 0 13px 28px rgba(105,92,255,.27);
+    }
+
+    body.modal-open { overflow: hidden; }
+
+    @media (max-width: 1250px) {
+        .card-toolbar { flex-direction: column; align-items: stretch; }
+        .expense-filters { width: 100%; }
+        .category-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 900px) {
+        .expense-filters {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .search-field { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 700px) {
+        .expenses-header { align-items: stretch; flex-direction: column; }
+        .primary-action { width: 100%; box-sizing: border-box; }
+        .expenses-card { padding: 14px; }
+        .category-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .expense-filters { grid-template-columns: 1fr 1fr; }
+        .search-field { grid-column: 1 / -1; }
+        .filter-button, .reset-filter { width: 100%; }
+
+        .desktop-expense-list { display: none !important; }
+        .mobile-expense-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            width: 100%;
+            min-width: 0;
+        }
+        .mobile-expense-card { width: 100%; box-sizing: border-box; }
+        .empty-expenses-panel { padding: 38px 16px; }
+
+        .form-grid { grid-template-columns: 1fr; }
+        .form-field-wide { grid-column: auto; }
+        .expense-modal {
+            align-items: flex-start;
+            padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+        }
+        .expense-modal-dialog {
+            width: 100%;
+            max-height: calc(100dvh - max(16px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+            border-radius: 21px;
+        }
+        .expense-modal-header, .expense-form { padding-right: 17px; padding-left: 17px; }
+        .modal-actions {
+            position: sticky;
+            bottom: -24px;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: 1fr 1.25fr;
+            margin-right: -17px;
+            margin-left: -17px;
+            padding: 14px 17px calc(14px + env(safe-area-inset-bottom));
+            background: linear-gradient(180deg, rgba(35,36,63,.86), rgba(35,36,63,.99) 30%);
+            backdrop-filter: blur(12px);
+        }
+    }
+
+    @media (max-width: 480px) {
+        .expenses-card { overflow: visible; }
+        .expense-table-wrap,
+        .expense-table,
+        .expense-table tbody,
+        .expense-table tr { max-width: 100%; }
+        .expense-table td { grid-template-columns: 76px minmax(0, 1fr); }
+        .expense-modal-header { padding-top: 16px; padding-bottom: 13px; }
+        .expense-form { padding-top: 15px; }
+        .form-grid { gap: 12px; }
+        .form-field input,
+        .form-field select { min-height: 44px; }
+        .form-field textarea { min-height: 76px; max-height: 110px; }
+        .category-summary { grid-template-columns: 1fr; }
+        .expense-filters { grid-template-columns: 1fr; }
+        .search-field { grid-column: auto; }
+        .expense-modal-header h2 { font-size: 22px; }
+    }
+</style>
+
+<script>
+    const expenseModal = document.getElementById('expenseModal');
+    const expenseForm = document.getElementById('expenseForm');
+    const expenseModalTitle = document.getElementById('expenseModalTitle');
+    const expenseSubmitButton = document.getElementById('expenseSubmitButton');
+
+    function localDateValue() {
+        const now = new Date();
+        const offset = now.getTimezoneOffset();
+        return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+    }
+
+    function openExpenseModal() {
+        expenseForm.reset();
+        expenseForm.action = '/expenses/add';
+        expenseModalTitle.textContent = 'Новый расход';
+        expenseSubmitButton.textContent = 'Сохранить расход';
+        document.getElementById('expenseDate').value = localDateValue();
+        document.getElementById('expensePaymentMethod').value = 'Наличные';
+        showExpenseModal();
+    }
+
+    function openEditExpenseModal(expense) {
+        expenseForm.reset();
+        expenseForm.action = `/expenses/${expense.id}/edit`;
+        expenseModalTitle.textContent = 'Редактирование расхода';
+        expenseSubmitButton.textContent = 'Сохранить изменения';
+
+        document.getElementById('expenseDate').value = expense.date || localDateValue();
+        document.getElementById('expenseCategory').value = expense.category || '';
+        document.getElementById('expenseDescription').value = expense.description || '';
+        document.getElementById('expenseAmount').value = expense.amount || '';
+        document.getElementById('expensePaymentMethod').value = expense.payment_method || 'Наличные';
+        document.getElementById('expenseComment').value = expense.comment || '';
+
+        showExpenseModal();
+    }
+
+    function showExpenseModal() {
+        expenseModal.classList.add('is-open');
+        expenseModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+        setTimeout(() => document.getElementById('expenseDescription').focus(), 50);
+    }
+
+    function closeExpenseModal() {
+        expenseModal.classList.remove('is-open');
+        expenseModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('modal-open');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (expenseModal && expenseModal.parentElement !== document.body) {
+            document.body.appendChild(expenseModal);
+        }
+    });
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape' && expenseModal.classList.contains('is-open')) {
+            closeExpenseModal();
+        }
+    });
+</script>
 
 {% include "module_cards_style.html" %}
 

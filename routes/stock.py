@@ -65,11 +65,36 @@ def stock_income():
 
     items = cur.fetchall()
 
+    # Получаем последние приходы товара
+    cur.execute("""
+        SELECT
+            stock_movements.*,
+            items.name AS item_name
+
+        FROM stock_movements
+
+        LEFT JOIN items
+            ON items.id = stock_movements.item_id
+
+        WHERE
+            stock_movements.company_id = %s
+            AND stock_movements.movement_type = 'income'
+
+        ORDER BY stock_movements.id DESC
+
+        LIMIT 30
+    """, (
+        session.get("company_id"),
+    ))
+
+    income_rows = cur.fetchall()
+
     pool.putconn(conn)
 
     return render_template(
         "stock_income.html",
-        items=items
+        items=items,
+        income_rows=income_rows
     )
     
 @stock_bp.route("/stock")

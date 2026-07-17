@@ -2,35 +2,2318 @@
 
 {% block content %}
 
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Бухгалтерия</h1>
-        <div class="page-note">Бухгалтерский модуль</div>
+
+<style>
+.accounting-page {
+    visibility: visible;
+}
+</style>
+<style>
+:root {
+    --acc-bg: #f6f7fb;
+    --acc-card: #ffffff;
+    --acc-card-soft: #fafafe;
+    --acc-border: #e5e7ef;
+    --acc-text: #202434;
+    --acc-muted: #73798d;
+    --acc-purple: #7257ff;
+    --acc-purple-dark: #5b43df;
+    --acc-purple-soft: #efecff;
+    --acc-green: #1b8f68;
+    --acc-green-soft: #e8f7f1;
+    --acc-orange: #b96d1b;
+    --acc-orange-soft: #fff2e2;
+    --acc-red: #cb4848;
+    --acc-red-soft: #fdecec;
+    --acc-shadow: 0 10px 28px rgba(52, 48, 89, .08);
+}
+
+.accounting-page {
+    width: 100%;
+    min-width: 0;
+    color: var(--acc-text);
+}
+
+.accounting-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 20px;
+}
+
+.accounting-page .page-title {
+    margin: 0;
+    color: #202434 !important;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-shadow: none !important;
+}
+
+.accounting-page .page-note {
+    margin-top: 5px;
+    color: #6f7689 !important;
+    font-size: 13px;
+    text-shadow: none !important;
+}
+
+.accounting-primary-btn,
+.accounting-secondary-btn,
+.accounting-cancel-btn {
+    min-height: 42px;
+    padding: 0 17px;
+    border-radius: 12px;
+    border: 0;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: .18s ease;
+}
+
+.accounting-primary-btn {
+    color: #fff !important;
+    background: linear-gradient(135deg, var(--acc-purple), #9a59e8);
+    box-shadow: 0 9px 20px rgba(114, 87, 255, .22);
+}
+
+.accounting-primary-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(114, 87, 255, .28);
+}
+
+.accounting-primary-btn--small {
+    min-height: 40px;
+    white-space: nowrap;
+}
+
+.accounting-secondary-btn,
+.accounting-cancel-btn {
+    color: var(--acc-purple) !important;
+    background: var(--acc-purple-soft);
+    border: 1px solid #d9d2ff;
+}
+
+.accounting-secondary-btn:hover,
+.accounting-cancel-btn:hover {
+    background: #e9e4ff;
+}
+
+.accounting-header-actions {
+    display:flex;
+    align-items:center;
+    gap:9px;
+}
+
+.accounting-header-actions form {
+    margin:0;
+}
+
+.accounting-sync-notice {
+    margin-bottom:14px;
+    padding:11px 14px;
+    border:1px solid #ccebdc;
+    border-radius:12px;
+    color:#197454;
+    background:#edf9f4;
+    font-size:12px;
+    font-weight:700;
+}
+
+.accounting-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.accounting-stat {
+    position: relative;
+    min-width: 0;
+    min-height: 112px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid var(--acc-border);
+    border-radius: 18px;
+    background: var(--acc-card);
+    box-shadow: var(--acc-shadow);
+    overflow: hidden;
+}
+
+.accounting-stat::after {
+    content: "";
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    right: -30px;
+    top: -35px;
+    border-radius: 50%;
+    background: var(--stat-color);
+    filter: blur(22px);
+    opacity: .13;
+}
+
+.accounting-stat--violet { --stat-color: #7857ff; }
+.accounting-stat--cyan { --stat-color: #17bed0; }
+.accounting-stat--orange { --stat-color: #ff9f45; }
+.accounting-stat--green { --stat-color: #28c890; }
+
+.accounting-stat__icon {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.accounting-stat__body {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.accounting-stat__label {
+    color: var(--acc-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.accounting-stat__value {
+    color: var(--acc-text);
+    font-size: clamp(18px, 1.6vw, 25px);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.accounting-stat small {
+    color: var(--acc-muted);
+    font-size: 11px;
+}
+
+.accounting-section {
+    min-width: 0;
+    margin-bottom: 18px;
+    padding: 20px;
+    border: 1px solid var(--acc-border);
+    border-radius: 19px;
+    background: var(--acc-card);
+    box-shadow: var(--acc-shadow);
+}
+
+.accounting-section__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 17px;
+}
+
+.accounting-section__head h2 {
+    margin: 0 0 4px;
+    color: var(--acc-text);
+    font-size: 17px;
+}
+
+.accounting-section__head p {
+    margin: 0;
+    color: var(--acc-muted);
+    font-size: 12px;
+}
+
+.accounting-tools {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.accounting-tool {
+    min-width: 0;
+    min-height: 82px;
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 14px;
+    border: 1px solid var(--acc-border);
+    border-radius: 15px;
+    color: var(--acc-text);
+    background: var(--acc-card-soft);
+    text-align: left;
+    cursor: pointer;
+    transition: .18s ease;
+}
+
+.accounting-tool:hover {
+    transform: translateY(-2px);
+    border-color: #d3caff;
+    background: #f6f3ff;
+}
+
+.accounting-tool__icon {
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    color: var(--tool-color);
+    background: color-mix(in srgb, var(--tool-color) 13%, white);
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.accounting-tool--purple { --tool-color: #7457ff; }
+.accounting-tool--blue { --tool-color: #437ef1; }
+.accounting-tool--cyan { --tool-color: #1cb6c4; }
+.accounting-tool--orange { --tool-color: #e68b2f; }
+.accounting-tool--green { --tool-color: #26a87d; }
+.accounting-tool--pink { --tool-color: #d75cab; }
+
+.accounting-tool__content {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.accounting-tool__content strong {
+    color: var(--acc-text);
+    font-size: 13px;
+}
+
+.accounting-tool__content small {
+    color: var(--acc-muted);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.accounting-tool__arrow {
+    margin-left: auto;
+    color: var(--tool-color);
+    font-size: 23px;
+}
+
+.accounting-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+    gap: 18px;
+}
+
+.accounting-timeline,
+.debts-list {
+    display: grid;
+    gap: 10px;
+}
+
+.tax-event,
+.debt-card {
+    min-width: 0;
+    display: flex;
+    gap: 13px;
+    padding: 13px;
+    border: 1px solid var(--acc-border);
+    border-radius: 14px;
+    background: var(--acc-card-soft);
+}
+
+.tax-event__date {
+    flex: 0 0 53px;
+    min-height: 57px;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    border-radius: 13px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+}
+
+.tax-event__date strong {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.tax-event__date span {
+    margin-top: 3px;
+    font-size: 10px;
+}
+
+.tax-event__content,
+.debt-card__content {
+    min-width: 0;
+    flex: 1;
+}
+
+.tax-event__top,
+.debt-card__top,
+.debt-card__bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.tax-event__top strong,
+.debt-card__top strong {
+    color: var(--acc-text);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.tax-event p,
+.debt-card p {
+    margin: 5px 0 0;
+    color: var(--acc-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.tax-event__amount {
+    display: inline-block;
+    margin-top: 7px;
+    color: var(--acc-text);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.debt-card__icon {
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--acc-orange);
+    background: var(--acc-orange-soft);
+    font-weight: 900;
+}
+
+.debt-card__bottom {
+    margin-top: 9px;
+}
+
+.debt-card__bottom span {
+    color: var(--acc-muted);
+    font-size: 10px;
+}
+
+.debt-card__bottom strong {
+    color: var(--acc-text);
+    font-size: 13px;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+.status-badge--planned {
+    color: #674cdb;
+    background: #eeeaff;
+}
+
+.status-badge--paid,
+.status-badge--completed,
+.status-badge--active {
+    color: var(--acc-green);
+    background: var(--acc-green-soft);
+}
+
+.status-badge--overdue,
+.status-badge--debt {
+    color: var(--acc-red);
+    background: var(--acc-red-soft);
+}
+
+.status-badge--warning {
+    color: var(--acc-orange);
+    background: var(--acc-orange-soft);
+}
+
+.accounting-docs-head {
+    align-items: flex-end;
+}
+
+.accounting-doc-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.accounting-search {
+    min-width: 200px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 11px;
+    border: 1px solid var(--acc-border);
+    border-radius: 11px;
+    background: #fff;
+}
+
+.accounting-search:focus-within {
+    border-color: #baaefe;
+    box-shadow: 0 0 0 3px rgba(114, 87, 255, .09);
+}
+
+.accounting-search input,
+.accounting-doc-actions select {
+    color: var(--acc-text);
+    background: transparent;
+    border: 0;
+    outline: none;
+    font: inherit;
+    font-size: 11px;
+}
+
+.accounting-search input {
+    width: 100%;
+    min-width: 0;
+}
+
+.accounting-search input::placeholder {
+    color: #9ca2b1;
+}
+
+.accounting-doc-actions select {
+    height: 40px;
+    padding: 0 30px 0 11px;
+    border: 1px solid var(--acc-border);
+    border-radius: 11px;
+    background: #fff;
+}
+
+.accounting-doc-actions option,
+.accounting-field option {
+    color: var(--acc-text);
+    background: #fff;
+}
+
+.accounting-doc-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.accounting-doc-table {
+    width: 100%;
+    min-width: 750px;
+    border-collapse: collapse;
+}
+
+.accounting-doc-table th,
+.accounting-doc-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--acc-border);
+    text-align: left;
+}
+
+.accounting-doc-table th {
+    color: #858b9e;
+    background: #fafafe;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.accounting-doc-table td {
+    color: var(--acc-text);
+    font-size: 11px;
+}
+
+.accounting-doc-table tbody tr:hover {
+    background: #faf8ff;
+}
+
+.document-name {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.document-name__icon {
+    flex: 0 0 35px;
+    width: 35px;
+    height: 35px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+}
+
+.document-name div {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.document-name strong {
+    color: var(--acc-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.document-name small {
+    color: var(--acc-muted);
+}
+
+.accounting-doc-table td:last-child {
+    position: relative;
+    width: 38px;
+}
+
+.document-menu-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--acc-border);
+    border-radius: 9px;
+    color: #70768a;
+    background: #fff;
+    cursor: pointer;
+}
+
+.document-menu {
+    position: absolute;
+    z-index: 30;
+    right: 8px;
+    top: 45px;
+    display: none;
+    min-width: 155px;
+    padding: 6px;
+    border: 1px solid var(--acc-border);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 18px 45px rgba(35, 38, 58, .15);
+}
+
+.document-menu.is-open {
+    display: grid;
+}
+
+.document-menu a,
+.document-menu button {
+    width: 100%;
+    display: block;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--acc-text);
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    font-size: 10px;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.document-menu a:hover,
+.document-menu button:hover {
+    background: #f4f1ff;
+}
+
+.document-menu .danger-action {
+    color: var(--acc-red);
+}
+
+.document-menu form {
+    margin: 0;
+}
+
+.accounting-mobile-documents {
+    display: none;
+}
+
+.accounting-empty {
+    min-height: 230px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    padding: 25px;
+    text-align: center;
+}
+
+.accounting-empty--compact {
+    min-height: 180px;
+}
+
+.accounting-empty--hidden {
+    display: none;
+}
+
+.accounting-empty > span {
+    width: 55px;
+    height: 55px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 12px;
+    border-radius: 17px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+    font-size: 23px;
+}
+
+.accounting-empty strong {
+    color: var(--acc-text);
+    font-size: 14px;
+}
+
+.accounting-empty p {
+    max-width: 330px;
+    margin: 6px 0 15px;
+    color: var(--acc-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.accounting-empty button {
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid #d9d2ff;
+    border-radius: 10px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.accounting-modal {
+    position: fixed;
+    z-index: 100000;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.accounting-modal.is-open {
+    display: flex;
+}
+
+.accounting-modal__backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(45, 42, 69, .34);
+    backdrop-filter: blur(6px);
+}
+
+.accounting-modal__dialog {
+    position: relative;
+    z-index: 1;
+    width: min(680px, 100%);
+    max-height: calc(100dvh - 40px);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--acc-border);
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 28px 80px rgba(43, 39, 78, .22);
+    overflow: hidden;
+}
+
+.accounting-modal__dialog--small {
+    width: min(520px, 100%);
+}
+
+.accounting-modal__head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 19px 20px;
+    border-bottom: 1px solid var(--acc-border);
+    background: #fbfbfe;
+}
+
+.accounting-modal__head h3 {
+    margin: 0 0 4px;
+    color: var(--acc-text);
+    font-size: 17px;
+}
+
+.accounting-modal__head p {
+    margin: 0;
+    color: var(--acc-muted);
+    font-size: 11px;
+}
+
+.accounting-modal__head > button {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--acc-border);
+    border-radius: 10px;
+    color: #666d7f;
+    background: #f1f2f6;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.accounting-modal__body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 20px;
+}
+
+.accounting-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.accounting-field {
+    min-width: 0;
+    display: grid;
+    gap: 7px;
+}
+
+.accounting-field--wide {
+    grid-column: 1 / -1;
+}
+
+.accounting-field > span {
+    color: #555c70;
+    font-size: 10px;
+    font-weight: 750;
+}
+
+.accounting-field input,
+.accounting-field select,
+.accounting-field textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--acc-border);
+    border-radius: 11px;
+    color: var(--acc-text);
+    background: #fff;
+    outline: none;
+    font: inherit;
+    font-size: 12px;
+}
+
+.accounting-field input,
+.accounting-field select {
+    min-height: 43px;
+    padding: 0 12px;
+}
+
+.accounting-field textarea {
+    padding: 11px 12px;
+    resize: vertical;
+}
+
+.accounting-field input::placeholder,
+.accounting-field textarea::placeholder {
+    color: #9ea4b4;
+}
+
+.accounting-field input:focus,
+.accounting-field select:focus,
+.accounting-field textarea:focus {
+    border-color: #b9adff;
+    box-shadow: 0 0 0 3px rgba(114, 87, 255, .09);
+}
+
+.accounting-field input[type="file"] {
+    padding: 9px;
+}
+
+.accounting-field small {
+    color: var(--acc-muted);
+    font-size: 9px;
+}
+
+.accounting-modal__footer,
+.accounting-report-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 9px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--acc-border);
+    background: #fff;
+}
+
+body.accounting-modal-open {
+    overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+    .accounting-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .accounting-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 850px) {
+    .accounting-tools {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .accounting-docs-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .accounting-doc-actions {
+        width: 100%;
+    }
+
+    .accounting-search {
+        flex: 1;
+    }
+}
+
+@media (max-width: 640px) {
+    .accounting-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .accounting-header-actions {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .accounting-header-actions form,
+    .accounting-header-actions button {
+        width:100%;
+    }
+
+    .accounting-page .page-title {
+        font-size: 24px;
+    }
+
+    .accounting-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+    }
+
+    .accounting-stat {
+        min-height: 104px;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 9px;
+        padding: 13px;
+        border-radius: 15px;
+    }
+
+    .accounting-stat__icon {
+        flex-basis: 34px;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+
+    .accounting-stat__value {
+        font-size: 17px;
+    }
+
+    .accounting-section {
+        padding: 14px;
+        border-radius: 16px;
+    }
+
+    .accounting-section__head {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 11px;
+    }
+
+    .accounting-section__head .accounting-secondary-btn {
+        width: 100%;
+    }
+
+    .accounting-tools {
+        grid-template-columns: 1fr;
+        gap: 9px;
+    }
+
+    .accounting-tool {
+        min-height: 72px;
+    }
+
+    .tax-event__top,
+    .debt-card__top {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .accounting-doc-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .accounting-search {
+        grid-column: 1 / -1;
+        min-width: 0;
+    }
+
+    .accounting-doc-table-wrap {
+        display: none;
+    }
+
+    .accounting-mobile-documents {
+        display: grid;
+        gap: 10px;
+    }
+
+    .mobile-document-card {
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid var(--acc-border);
+        border-radius: 14px;
+        background: var(--acc-card-soft);
+    }
+
+    .mobile-document-card__top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 9px;
+    }
+
+    .mobile-document-card__top .document-name {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .mobile-document-card__top .document-name strong {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .mobile-document-card__info {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+        margin-top: 12px;
+    }
+
+    .mobile-document-card__info span {
+        min-width: 0;
+        display: grid;
+        gap: 3px;
+        padding: 8px;
+        border: 1px solid var(--acc-border);
+        border-radius: 9px;
+        color: var(--acc-text);
+        background: #fff;
+        font-size: 10px;
+        overflow-wrap: anywhere;
+    }
+
+    .mobile-document-card__info small {
+        color: var(--acc-muted);
+        font-size: 8px;
+    }
+
+    .mobile-document-card__actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 11px;
+    }
+
+    .mobile-document-card__actions a,
+    .mobile-document-card__actions button {
+        flex: 1;
+        min-height: 36px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #d9d2ff;
+        border-radius: 9px;
+        color: var(--acc-purple);
+        background: var(--acc-purple-soft);
+        font: inherit;
+        font-size: 10px;
+        font-weight: 750;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .accounting-modal {
+        align-items: flex-start;
+        padding: 10px;
+    }
+
+    .accounting-modal__dialog {
+        width: 100%;
+        max-height: calc(100dvh - 20px);
+        margin: auto 0;
+        border-radius: 17px;
+    }
+
+    .accounting-modal__head,
+    .accounting-modal__body {
+        padding: 15px;
+    }
+
+    .accounting-form-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .accounting-field--wide {
+        grid-column: auto;
+    }
+
+    .accounting-modal__footer,
+    .accounting-report-actions {
+        position: sticky;
+        bottom: -15px;
+        margin: 18px -15px -15px;
+        padding: 13px 15px;
+    }
+
+    .accounting-modal__footer > *,
+    .accounting-report-actions > * {
+        flex: 1;
+    }
+}
+</style>
+<style>
+.accounting-finance-stats { margin-top: -2px; }
+.accounting-operations-table { min-width: 0 !important; table-layout: fixed; }
+.accounting-operations-table th:nth-child(1) { width: 34%; }
+.accounting-operations-table th:nth-child(2) { width: 11%; }
+.accounting-operations-table th:nth-child(3) { width: 12%; }
+.accounting-operations-table th:nth-child(4) { width: 17%; }
+.accounting-operations-table th:nth-child(5) { width: 16%; }
+.accounting-operations-table th:nth-child(6) { width: 10%; }
+.accounting-operations-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.operation-badge--income { color:#14835f !important; background:#e6f7f1 !important; }
+.operation-badge--expense { color:#b56b19 !important; background:#fff1df !important; }
+.operation-badge--refund { color:#c94646 !important; background:#fdeaea !important; }
+.operation-amount { font-size: 12px; }
+.operation-amount--income { color:#14835f; }
+.operation-amount--expense,
+.operation-amount--refund { color:#c94646; }
+.operation-open-link { color:#7257ff; font-size:10px; font-weight:800; text-decoration:none; }
+@media(max-width:640px) {
+    .accounting-operations-table { display:none; }
+}
+</style>
+<style>
+.tax-head-actions,.tax-period-form{display:flex;align-items:center;gap:8px}.tax-period-form input{height:42px;padding:0 11px;border:1px solid var(--acc-border);border-radius:11px;background:#fff;color:var(--acc-text)}
+.tax-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.tax-summary-grid article{display:grid;gap:5px;padding:14px;border:1px solid var(--acc-border);border-radius:14px;background:var(--acc-card-soft)}.tax-summary-grid span,.tax-summary-grid small{color:var(--acc-muted);font-size:10px}.tax-summary-grid strong{font-size:19px;color:var(--acc-text)}
+.tax-two-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tax-panel{padding:15px;border:1px solid var(--acc-border);border-radius:15px;background:#fff}.tax-panel__title{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:11px}.tax-panel__title h3{margin:0 0 3px;font-size:14px}.tax-panel__title p{margin:0;color:var(--acc-muted);font-size:10px}.tax-panel__title>strong{font-size:17px}.tax-lines{display:grid;gap:7px}.tax-lines div{display:flex;justify-content:space-between;gap:10px;padding:8px 9px;border-radius:9px;background:var(--acc-card-soft);font-size:10px}.tax-lines span{color:var(--acc-muted)}
+.tax-employees-table-wrap{width:100%;overflow-x:auto;margin-top:13px}.tax-employees-table{width:100%;min-width:800px;border-collapse:collapse}.tax-employees-table th,.tax-employees-table td{padding:10px 8px;border-bottom:1px solid var(--acc-border);font-size:10px;text-align:left}.tax-employees-table th{color:var(--acc-muted);background:var(--acc-card-soft);font-size:9px;text-transform:uppercase}.tax-empty{margin-top:13px;padding:18px;border:1px dashed var(--acc-border);border-radius:13px;color:var(--acc-muted);text-align:center;font-size:11px}.tax-footer-note{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:14px;padding:13px;border-radius:13px;background:var(--acc-purple-soft)}.tax-footer-note>div{display:grid;gap:3px}.tax-footer-note strong{font-size:11px}.tax-footer-note span{color:var(--acc-muted);font-size:9px}.tax-check{display:flex!important;align-items:center;gap:9px;padding:10px;border:1px solid var(--acc-border);border-radius:10px;background:var(--acc-card-soft)}.tax-check input{width:17px!important;height:17px!important;min-height:0!important}.tax-check span{font-size:11px;color:var(--acc-text)}
+@media(max-width:900px){.tax-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tax-two-columns{grid-template-columns:1fr}.tax-workspace__head{align-items:stretch;flex-direction:column}.tax-head-actions{flex-wrap:wrap}.tax-period-form{flex:1}.tax-period-form input{flex:1}}
+@media(max-width:640px){.tax-summary-grid{grid-template-columns:1fr 1fr}.tax-head-actions{display:grid;grid-template-columns:1fr 1fr}.tax-period-form{grid-column:1/-1}.tax-footer-note{align-items:stretch;flex-direction:column}.tax-footer-note form,.tax-footer-note button{width:100%}}
+</style>
+<style>
+.debt-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 11px;
+}
+
+.debt-card__actions form {
+    margin: 0;
+}
+
+.debt-paid-btn,
+.debt-delete-btn {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 9px;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.debt-paid-btn {
+    color: #16815e;
+    background: #e7f7f1;
+    border: 1px solid #c8ebdf;
+}
+
+.debt-paid-btn:hover {
+    background: #dcf4eb;
+}
+
+.debt-delete-btn {
+    color: #c94646;
+    background: #fdecec;
+    border: 1px solid #f5cece;
+}
+
+.debt-delete-btn:hover {
+    background: #fbe1e1;
+}
+
+.debt-paid-label {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 12px;
+    border-radius: 9px;
+    color: #16815e;
+    background: #e7f7f1;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+@media (max-width: 640px) {
+    .debt-card__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .debt-card__actions form,
+    .debt-paid-btn,
+    .debt-delete-btn,
+    .debt-paid-label {
+        width: 100%;
+        box-sizing: border-box;
+        justify-content: center;
+    }
+}
+</style>
+
+{% set accounting_summary = accounting_summary|default({}) %}
+{% set tax_events = tax_events|default([]) %}
+{% set debts = debts|default([]) %}
+{% set documents = documents|default([]) %}
+{% set operations = operations|default([]) %}
+
+<div class="accounting-page">
+    <div class="page-header accounting-header">
+        <div>
+            <h1 class="page-title">Бухгалтерия</h1>
+            <div class="page-note">Налоги, отчётность, задолженности и документы компании</div>
+        </div>
+
+        <div class="accounting-header-actions">
+            <form method="post" action="/accounting/sync">
+                <button class="accounting-secondary-btn" type="submit">
+                    Обновить данные
+                </button>
+            </form>
+
+            <button class="accounting-primary-btn" type="button" onclick="openAccountingModal('documentModal')">
+                <span>＋</span>
+                Добавить документ
+            </button>
+        </div>
+    </div>
+
+    {% if request.args.get('synced') == '1' %}
+    <div class="accounting-sync-notice">
+        Данные бухгалтерии обновлены.
+    </div>
+    {% endif %}
+
+    <div class="accounting-stats">
+        <article class="accounting-stat accounting-stat--violet">
+            <div class="accounting-stat__icon">₸</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Налогов к оплате</span>
+                <strong class="accounting-stat__value">
+                    {{ "{:,.0f}".format(accounting_summary.get("taxes_due", 0)).replace(",", " ") }} ₸
+                </strong>
+                <small>За текущий период</small>
+            </div>
+        </article>
+
+        <article class="accounting-stat accounting-stat--cyan">
+            <div class="accounting-stat__icon">✓</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Оплачено налогов</span>
+                <strong class="accounting-stat__value">
+                    {{ "{:,.0f}".format(accounting_summary.get("taxes_paid", 0)).replace(",", " ") }} ₸
+                </strong>
+                <small>За текущий период</small>
+            </div>
+        </article>
+
+        <article class="accounting-stat accounting-stat--orange">
+            <div class="accounting-stat__icon">!</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Задолженность</span>
+                <strong class="accounting-stat__value">
+                    {{ "{:,.0f}".format(accounting_summary.get("debt_total", 0)).replace(",", " ") }} ₸
+                </strong>
+                <small>{{ accounting_summary.get("debt_count", 0) }} обязательств</small>
+            </div>
+        </article>
+
+        <article class="accounting-stat accounting-stat--green">
+            <div class="accounting-stat__icon">📄</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Документы</span>
+                <strong class="accounting-stat__value">{{ accounting_summary.get("documents_count", documents|length) }}</strong>
+                <small>В бухгалтерском архиве</small>
+            </div>
+        </article>
+    </div>
+
+    <div class="accounting-stats accounting-finance-stats">
+        <article class="accounting-stat accounting-stat--green">
+            <div class="accounting-stat__icon">＋</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Доходы</span>
+                <strong class="accounting-stat__value">
+                    {{ "{:,.0f}".format(accounting_summary.get("income_total", 0)).replace(",", " ") }} ₸
+                </strong>
+                <small>Автоматически из продаж</small>
+            </div>
+        </article>
+
+        <article class="accounting-stat accounting-stat--orange">
+            <div class="accounting-stat__icon">−</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Расходы</span>
+                <strong class="accounting-stat__value">
+                    {{ "{:,.0f}".format(accounting_summary.get("expense_total", 0)).replace(",", " ") }} ₸
+                </strong>
+                <small>Автоматически из расходов</small>
+            </div>
+        </article>
+
+        <article class="accounting-stat accounting-stat--orange">
+            <div class="accounting-stat__icon">↩</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Возвраты</span>
+                <strong class="accounting-stat__value">
+                    {{ "{:,.0f}".format(accounting_summary.get("refund_total", 0)).replace(",", " ") }} ₸
+                </strong>
+                <small>Возвраты по продажам</small>
+            </div>
+        </article>
+
+        <article class="accounting-stat accounting-stat--violet">
+            <div class="accounting-stat__icon">=</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Денежный результат</span>
+                <strong class="accounting-stat__value">
+                    {{ "{:,.0f}".format(accounting_summary.get("balance", 0)).replace(",", " ") }} ₸
+                </strong>
+                <small>Доходы − расходы − возвраты</small>
+            </div>
+        </article>
+    </div>
+
+    <section class="accounting-section">
+        <div class="accounting-section__head">
+            <div>
+                <h2>Инструменты бухгалтера</h2>
+                <p>Основные формы и разделы бухгалтерского учёта</p>
+            </div>
+        </div>
+
+        <div class="accounting-tools">
+            <button class="accounting-tool accounting-tool--purple" type="button"
+                    onclick="openReportModal('910', 'Форма 910.00')">
+                <span class="accounting-tool__icon">910</span>
+                <span class="accounting-tool__content">
+                    <strong>Форма 910.00</strong>
+                    <small>Упрощённая декларация</small>
+                </span>
+                <span class="accounting-tool__arrow">›</span>
+            </button>
+
+            <button class="accounting-tool accounting-tool--blue" type="button"
+                    onclick="openReportModal('200', 'Форма 200.00')">
+                <span class="accounting-tool__icon">200</span>
+                <span class="accounting-tool__content">
+                    <strong>Форма 200.00</strong>
+                    <small>ИПН и социальный налог</small>
+                </span>
+                <span class="accounting-tool__arrow">›</span>
+            </button>
+
+            <button class="accounting-tool accounting-tool--cyan" type="button"
+                    onclick="scrollToAccountingBlock('taxCalendarBlock')">
+                <span class="accounting-tool__icon">📅</span>
+                <span class="accounting-tool__content">
+                    <strong>Налоговый календарь</strong>
+                    <small>Сроки отчётности и платежей</small>
+                </span>
+                <span class="accounting-tool__arrow">›</span>
+            </button>
+
+            <button class="accounting-tool accounting-tool--orange" type="button"
+                    onclick="scrollToAccountingBlock('debtsBlock')">
+                <span class="accounting-tool__icon">₸</span>
+                <span class="accounting-tool__content">
+                    <strong>Задолженности</strong>
+                    <small>Контроль обязательств</small>
+                </span>
+                <span class="accounting-tool__arrow">›</span>
+            </button>
+
+            <button class="accounting-tool accounting-tool--green" type="button"
+                    onclick="scrollToAccountingBlock('documentsBlock')">
+                <span class="accounting-tool__icon">📁</span>
+                <span class="accounting-tool__content">
+                    <strong>Документы</strong>
+                    <small>Накладные, акты и счета</small>
+                </span>
+                <span class="accounting-tool__arrow">›</span>
+            </button>
+
+            <button class="accounting-tool accounting-tool--purple" type="button"
+                    onclick="scrollToAccountingBlock('taxesBlock')">
+                <span class="accounting-tool__icon">₸%</span>
+                <span class="accounting-tool__content">
+                    <strong>Налоги и зарплата</strong>
+                    <small>Расчёт ИП и работников</small>
+                </span>
+                <span class="accounting-tool__arrow">›</span>
+            </button>
+
+            <button class="accounting-tool accounting-tool--pink" type="button"
+                    onclick="setDocumentFilter('archive')">
+                <span class="accounting-tool__icon">🗄</span>
+                <span class="accounting-tool__content">
+                    <strong>Архив</strong>
+                    <small>Закрытые периоды и документы</small>
+                </span>
+                <span class="accounting-tool__arrow">›</span>
+            </button>
+        </div>
+    </section>
+
+
+    <section class="accounting-section tax-workspace" id="taxesBlock">
+        <div class="accounting-section__head tax-workspace__head">
+            <div>
+                <h2>Налоги и зарплата</h2>
+                <p>Предварительный расчёт. Ставки можно изменить в настройках компании.</p>
+            </div>
+            <div class="tax-head-actions">
+                <form method="get" action="/accounting#taxesBlock" class="tax-period-form">
+                    <input type="month" name="tax_period" value="{{ tax_calculation.period }}">
+                    <button class="accounting-secondary-btn" type="submit">Рассчитать</button>
+                </form>
+                <button class="accounting-secondary-btn" type="button" onclick="openAccountingModal('taxSettingsModal')">Настройки</button>
+                <button class="accounting-primary-btn" type="button" onclick="openAccountingModal('employeeTaxModal')">Добавить сотрудника</button>
+            </div>
+        </div>
+
+        <div class="tax-summary-grid">
+            <article>
+                <span>Доход за месяц</span>
+                <strong>{{ "{:,.0f}".format(tax_calculation.income).replace(",", " ") }} ₸</strong>
+                <small>Оплаченные продажи</small>
+            </article>
+            <article>
+                <span>Возвраты</span>
+                <strong>{{ "{:,.0f}".format(tax_calculation.refunds).replace(",", " ") }} ₸</strong>
+                <small>Уменьшают расчётный доход</small>
+            </article>
+            <article>
+                <span>Налог с оборота</span>
+                <strong>{{ "{:,.0f}".format(tax_calculation.turnover_tax).replace(",", " ") }} ₸</strong>
+                <small>Ставка {{ tax_calculation.turnover_rate }}%</small>
+            </article>
+            <article>
+                <span>Ежемесячно к оплате</span>
+                <strong>{{ "{:,.0f}".format(tax_calculation.monthly_total).replace(",", " ") }} ₸</strong>
+                <small>Срок: {{ tax_calculation.due_date.strftime('%d.%m.%Y') }}</small>
+            </article>
+        </div>
+
+        <div class="tax-two-columns">
+            <article class="tax-panel">
+                <div class="tax-panel__title">
+                    <div><h3>ИП за себя</h3><p>База: {{ "{:,.0f}".format(tax_calculation.owner.base).replace(",", " ") }} ₸</p></div>
+                    <strong>{{ "{:,.0f}".format(tax_calculation.owner.total).replace(",", " ") }} ₸</strong>
+                </div>
+                <div class="tax-lines">
+                    <div><span>ОПВ</span><b>{{ "{:,.0f}".format(tax_calculation.owner.opv).replace(",", " ") }} ₸</b></div>
+                    <div><span>СО</span><b>{{ "{:,.0f}".format(tax_calculation.owner.so).replace(",", " ") }} ₸</b></div>
+                    <div><span>ВОСМС</span><b>{{ "{:,.0f}".format(tax_calculation.owner.vosms).replace(",", " ") }} ₸</b></div>
+                    {% if tax_calculation.owner.opvr %}<div><span>ОПВР</span><b>{{ "{:,.0f}".format(tax_calculation.owner.opvr).replace(",", " ") }} ₸</b></div>{% endif %}
+                </div>
+            </article>
+
+            <article class="tax-panel">
+                <div class="tax-panel__title">
+                    <div><h3>Работники</h3><p>{{ tax_calculation.employees|length }} сотрудников в расчёте</p></div>
+                    <strong>{{ "{:,.0f}".format(tax_calculation.employee_total).replace(",", " ") }} ₸</strong>
+                </div>
+                <div class="tax-lines">
+                    <div><span>ОПВ</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.opv).replace(",", " ") }} ₸</b></div>
+                    <div><span>ВОСМС</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.vosms).replace(",", " ") }} ₸</b></div>
+                    <div><span>ИПН</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.ipn).replace(",", " ") }} ₸</b></div>
+                    <div><span>СО + ОСМС + ОПВР</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.so + tax_calculation.employee_totals.osms + tax_calculation.employee_totals.opvr).replace(",", " ") }} ₸</b></div>
+                </div>
+            </article>
+        </div>
+
+        {% if tax_calculation.employees %}
+        <div class="tax-employees-table-wrap">
+            <table class="tax-employees-table">
+                <thead><tr><th>Сотрудник</th><th>Начислено</th><th>ОПВ</th><th>ВОСМС</th><th>ИПН</th><th>За счёт работодателя</th><th>На руки</th></tr></thead>
+                <tbody>
+                {% for e in tax_calculation.employees %}
+                <tr>
+                    <td>{{ e.name }}</td>
+                    <td>{{ "{:,.0f}".format(e.salary).replace(",", " ") }} ₸</td>
+                    <td>{{ "{:,.0f}".format(e.opv).replace(",", " ") }} ₸</td>
+                    <td>{{ "{:,.0f}".format(e.vosms).replace(",", " ") }} ₸</td>
+                    <td>{{ "{:,.0f}".format(e.ipn).replace(",", " ") }} ₸</td>
+                    <td>{{ "{:,.0f}".format(e.so + e.osms + e.opvr).replace(",", " ") }} ₸</td>
+                    <td><strong>{{ "{:,.0f}".format(e.net_salary).replace(",", " ") }} ₸</strong></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="tax-empty">Работники пока не добавлены в налоговый расчёт.</div>
+        {% endif %}
+
+        <div class="tax-footer-note">
+            <div><strong>Налог с оборота за полугодие</strong><span>Пока показывается как предварительная сумма за выбранный месяц.</span></div>
+            <form method="post" action="/accounting/taxes/create-debts">
+                <input type="hidden" name="period" value="{{ tax_calculation.period }}">
+                <button class="accounting-primary-btn" type="submit" onclick="return confirm('Создать или обновить налоговые задолженности за выбранный месяц?')">Создать задолженности</button>
+            </form>
+        </div>
+    </section>
+
+    <div class="accounting-layout">
+        <section class="accounting-section" id="taxCalendarBlock">
+            <div class="accounting-section__head">
+                <div>
+                    <h2>Налоговый календарь</h2>
+                    <p>Ближайшие сроки сдачи отчётности и оплаты</p>
+                </div>
+                <button class="accounting-secondary-btn" type="button"
+                        onclick="openAccountingModal('taxEventModal')">
+                    Добавить событие
+                </button>
+            </div>
+
+            <div class="accounting-timeline">
+                {% if tax_events %}
+                    {% for event in tax_events %}
+                    <article class="tax-event">
+                        <div class="tax-event__date">
+                            <strong>{{ event.day }}</strong>
+                            <span>{{ event.month }}</span>
+                        </div>
+                        <div class="tax-event__content">
+                            <div class="tax-event__top">
+                                <strong>{{ event.title }}</strong>
+                                <span class="status-badge status-badge--{{ event.status|default('planned') }}">
+                                    {{ event.status_label|default('Запланировано') }}
+                                </span>
+                            </div>
+                            <p>{{ event.description|default('Срок исполнения налогового обязательства') }}</p>
+                            {% if event.amount %}
+                            <span class="tax-event__amount">
+                                {{ "{:,.0f}".format(event.amount).replace(",", " ") }} ₸
+                            </span>
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% endfor %}
+                {% else %}
+                    <div class="accounting-empty accounting-empty--compact">
+                        <span>📅</span>
+                        <strong>Событий пока нет</strong>
+                        <p>Добавьте сроки отчётности и налоговых платежей.</p>
+                        <button type="button" onclick="openAccountingModal('taxEventModal')">
+                            Добавить событие
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="accounting-section" id="debtsBlock">
+            <div class="accounting-section__head">
+                <div>
+                    <h2>Задолженности</h2>
+                    <p>Обязательства перед бюджетом и контрагентами</p>
+                </div>
+                <button class="accounting-secondary-btn" type="button"
+                        onclick="openAccountingModal('debtModal')">
+                    Добавить
+                </button>
+            </div>
+
+            <div class="debts-list">
+                {% if debts %}
+                    {% for debt in debts %}
+                    <article class="debt-card">
+                        <div class="debt-card__icon">{{ debt.icon|default('₸') }}</div>
+                        <div class="debt-card__content">
+                            <div class="debt-card__top">
+                                <strong>{{ debt.title }}</strong>
+                                <span class="status-badge status-badge--{{ debt.status|default('planned') }}">
+                                    {{ debt.status_label|default('К оплате') }}
+                                </span>
+                            </div>
+                            <p>{{ debt.description|default('Финансовое обязательство') }}</p>
+                            <div class="debt-card__bottom">
+                                <span>до {{ debt.due_date }}</span>
+                                <strong>{{ "{:,.0f}".format(debt.amount).replace(",", " ") }} ₸</strong>
+                            </div>
+
+                            <div class="debt-card__actions">
+                                {% if debt.status != "paid" %}
+                                <form method="post"
+                                      action="/accounting/debts/{{ debt.id }}/paid"
+                                      onsubmit="return confirm('Отметить задолженность оплаченной? Сумма автоматически попадёт в расходы.')">
+                                    <button class="debt-paid-btn" type="submit">
+                                        ✓ Оплачено
+                                    </button>
+                                </form>
+                                {% else %}
+                                <span class="debt-paid-label">Платёж проведён</span>
+                                {% endif %}
+
+                                <form method="post"
+                                      action="/accounting/debts/{{ debt.id }}/delete"
+                                      onsubmit="return confirm('Удалить задолженность?')">
+                                    <button class="debt-delete-btn" type="submit">
+                                        Удалить
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                {% else %}
+                    <div class="accounting-empty accounting-empty--compact">
+                        <span>✓</span>
+                        <strong>Задолженностей нет</strong>
+                        <p>Все обязательства будут отображаться здесь.</p>
+                        <button type="button" onclick="openAccountingModal('debtModal')">
+                            Добавить задолженность
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <section class="accounting-section" id="operationsBlock">
+        <div class="accounting-section__head accounting-docs-head">
+            <div>
+                <h2>Финансовые операции</h2>
+                <p>Продажи, расходы и возвраты синхронизируются автоматически</p>
+            </div>
+
+            <div class="accounting-doc-actions">
+                <label class="accounting-search">
+                    <span>⌕</span>
+                    <input id="accountingOperationSearch" type="search"
+                           placeholder="Поиск операций"
+                           oninput="filterAccountingOperations()">
+                </label>
+
+                <select id="accountingOperationFilter" onchange="filterAccountingOperations()">
+                    <option value="all">Все операции</option>
+                    <option value="income">Доходы</option>
+                    <option value="expense">Расходы</option>
+                    <option value="refund">Возвраты</option>
+                </select>
+            </div>
+        </div>
+
+        {% if operations %}
+        <div class="accounting-doc-table-wrap">
+            <table class="accounting-doc-table accounting-operations-table">
+                <thead>
+                    <tr>
+                        <th>Операция</th>
+                        <th>Тип</th>
+                        <th>Дата</th>
+                        <th>Оплата</th>
+                        <th>Сумма</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for operation in operations %}
+                    <tr class="accounting-operation-row"
+                        data-type="{{ operation.type }}"
+                        data-search="{{ (operation.title ~ ' ' ~ operation.counterparty ~ ' ' ~ operation.payment_method)|lower }}">
+                        <td>
+                            <div class="document-name">
+                                <span class="document-name__icon">
+                                    {% if operation.type == 'income' %}＋{% elif operation.type == 'expense' %}−{% else %}↩{% endif %}
+                                </span>
+                                <div>
+                                    <strong>{{ operation.title }}</strong>
+                                    <small>{{ operation.counterparty }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status-badge operation-badge--{{ operation.type }}">
+                                {{ operation.type_label }}
+                            </span>
+                        </td>
+                        <td>{{ operation.date }}</td>
+                        <td>{{ operation.payment_method }}</td>
+                        <td>
+                            <strong class="operation-amount operation-amount--{{ operation.type }}">
+                                {% if operation.type == 'income' %}+{% else %}−{% endif %}
+                                {{ "{:,.0f}".format(operation.amount).replace(",", " ") }} ₸
+                            </strong>
+                        </td>
+                        <td>
+                            {% if operation.document_url %}
+                            <a class="operation-open-link" href="{{ operation.document_url }}" target="_blank">Открыть</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="accounting-mobile-documents">
+            {% for operation in operations %}
+            <article class="mobile-document-card accounting-operation-row"
+                     data-type="{{ operation.type }}"
+                     data-search="{{ (operation.title ~ ' ' ~ operation.counterparty ~ ' ' ~ operation.payment_method)|lower }}">
+                <div class="mobile-document-card__top">
+                    <div class="document-name">
+                        <span class="document-name__icon">
+                            {% if operation.type == 'income' %}＋{% elif operation.type == 'expense' %}−{% else %}↩{% endif %}
+                        </span>
+                        <div>
+                            <strong>{{ operation.title }}</strong>
+                            <small>{{ operation.counterparty }}</small>
+                        </div>
+                    </div>
+                    <span class="status-badge operation-badge--{{ operation.type }}">{{ operation.type_label }}</span>
+                </div>
+                <div class="mobile-document-card__info">
+                    <span><small>Дата</small>{{ operation.date }}</span>
+                    <span><small>Оплата</small>{{ operation.payment_method }}</span>
+                    <span><small>Сумма</small>{{ "{:,.0f}".format(operation.amount).replace(",", " ") }} ₸</span>
+                </div>
+                {% if operation.document_url %}
+                <div class="mobile-document-card__actions">
+                    <a href="{{ operation.document_url }}" target="_blank">Открыть документ</a>
+                </div>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+
+        <div class="accounting-empty accounting-empty--hidden" id="accountingOperationsEmpty">
+            <span>⌕</span>
+            <strong>Операции не найдены</strong>
+            <p>Измените поиск или фильтр.</p>
+        </div>
+        {% else %}
+        <div class="accounting-empty">
+            <span>₸</span>
+            <strong>Финансовых операций пока нет</strong>
+            <p>Продажи, расходы и возвраты появятся здесь автоматически.</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="accounting-section" id="documentsBlock">
+        <div class="accounting-section__head accounting-docs-head">
+            <div>
+                <h2>Документы</h2>
+                <p>Бухгалтерские документы и прикреплённые файлы</p>
+            </div>
+
+            <div class="accounting-doc-actions">
+                <label class="accounting-search">
+                    <span>⌕</span>
+                    <input id="accountingDocumentSearch" type="search"
+                           placeholder="Поиск документов"
+                           oninput="filterAccountingDocuments()">
+                </label>
+
+                <select id="accountingDocumentFilter" onchange="filterAccountingDocuments()">
+                    <option value="all">Все документы</option>
+                    <option value="invoice">Счета</option>
+                    <option value="act">Акты</option>
+                    <option value="waybill">Накладные</option>
+                    <option value="invoice_facture">Счета-фактуры</option>
+                    <option value="report">Отчётность</option>
+                    <option value="archive">Архив</option>
+                </select>
+
+                <button class="accounting-primary-btn accounting-primary-btn--small"
+                        type="button" onclick="openAccountingModal('documentModal')">
+                    ＋ Добавить
+                </button>
+            </div>
+        </div>
+
+        {% if documents %}
+        <div class="accounting-doc-table-wrap">
+            <table class="accounting-doc-table">
+                <thead>
+                    <tr>
+                        <th>Документ</th>
+                        <th>Тип</th>
+                        <th>Дата</th>
+                        <th>Сумма</th>
+                        <th>Статус</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="accountingDocumentsBody">
+                    {% for document in documents %}
+                    <tr class="accounting-document-row"
+                        data-type="{{ document.type|default('other') }}"
+                        data-search="{{ (document.title ~ ' ' ~ document.number|default('') ~ ' ' ~ document.type_label|default(''))|lower }}">
+                        <td>
+                            <div class="document-name">
+                                <span class="document-name__icon">📄</span>
+                                <div>
+                                    <strong>{{ document.title }}</strong>
+                                    <small>{{ document.number|default('Без номера') }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ document.type_label|default('Документ') }}</td>
+                        <td>{{ document.date }}</td>
+                        <td>
+                            {% if document.amount is not none %}
+                                {{ "{:,.0f}".format(document.amount).replace(",", " ") }} ₸
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="status-badge status-badge--{{ document.status|default('planned') }}">
+                                {{ document.status_label|default('Добавлен') }}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="document-menu-btn" type="button"
+                                    onclick="toggleDocumentMenu(this)">•••</button>
+                            <div class="document-menu">
+                                {% if document.file_url %}
+                                <a href="{{ document.file_url }}" target="_blank" rel="noopener">Открыть</a>
+                                {% endif %}
+                                <button type="button"
+                                        onclick="openEditDocumentModal({{ document.id|tojson }})">
+                                    Редактировать
+                                </button>
+                                <form method="post"
+                                      action="/accounting/documents/{{ document.id }}/archive">
+                                    <button type="submit">В архив</button>
+                                </form>
+                                <form method="post"
+                                      action="/accounting/documents/{{ document.id }}/delete"
+                                      onsubmit="return confirm('Удалить документ?')">
+                                    <button type="submit" class="danger-action">Удалить</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="accounting-mobile-documents" id="accountingMobileDocuments">
+            {% for document in documents %}
+            <article class="mobile-document-card accounting-document-row"
+                     data-type="{{ document.type|default('other') }}"
+                     data-search="{{ (document.title ~ ' ' ~ document.number|default('') ~ ' ' ~ document.type_label|default(''))|lower }}">
+                <div class="mobile-document-card__top">
+                    <div class="document-name">
+                        <span class="document-name__icon">📄</span>
+                        <div>
+                            <strong>{{ document.title }}</strong>
+                            <small>{{ document.number|default('Без номера') }}</small>
+                        </div>
+                    </div>
+                    <span class="status-badge status-badge--{{ document.status|default('planned') }}">
+                        {{ document.status_label|default('Добавлен') }}
+                    </span>
+                </div>
+                <div class="mobile-document-card__info">
+                    <span><small>Тип</small>{{ document.type_label|default('Документ') }}</span>
+                    <span><small>Дата</small>{{ document.date }}</span>
+                    <span><small>Сумма</small>
+                        {% if document.amount is not none %}
+                            {{ "{:,.0f}".format(document.amount).replace(",", " ") }} ₸
+                        {% else %}
+                            —
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="mobile-document-card__actions">
+                    {% if document.file_url %}
+                    <a href="{{ document.file_url }}" target="_blank" rel="noopener">Открыть</a>
+                    {% endif %}
+                    <button type="button" onclick="openEditDocumentModal({{ document.id|tojson }})">
+                        Изменить
+                    </button>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+
+        <div class="accounting-empty accounting-empty--hidden" id="accountingFilteredEmpty">
+            <span>⌕</span>
+            <strong>Ничего не найдено</strong>
+            <p>Измените поисковый запрос или фильтр.</p>
+        </div>
+        {% else %}
+        <div class="accounting-empty">
+            <span>📁</span>
+            <strong>Документов пока нет</strong>
+            <p>Добавьте первый счёт, акт, накладную или налоговый документ.</p>
+            <button type="button" onclick="openAccountingModal('documentModal')">
+                Добавить документ
+            </button>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<!-- Документ -->
+<div class="accounting-modal" id="documentModal" aria-hidden="true">
+    <div class="accounting-modal__backdrop" onclick="closeAccountingModal('documentModal')"></div>
+    <div class="accounting-modal__dialog" role="dialog" aria-modal="true">
+        <div class="accounting-modal__head">
+            <div>
+                <h3 id="documentModalTitle">Новый документ</h3>
+                <p>Добавьте данные бухгалтерского документа</p>
+            </div>
+            <button type="button" onclick="closeAccountingModal('documentModal')">×</button>
+        </div>
+
+        <form class="accounting-modal__body"
+              method="post"
+              action="/accounting/documents/add"
+              enctype="multipart/form-data">
+            <input type="hidden" name="document_id" id="documentId">
+
+            <div class="accounting-form-grid">
+                <label class="accounting-field accounting-field--wide">
+                    <span>Название документа *</span>
+                    <input type="text" name="title" id="documentTitle"
+                           placeholder="Например: Счёт за электроэнергию" required>
+                </label>
+
+                <label class="accounting-field">
+                    <span>Тип документа *</span>
+                    <select name="type" id="documentType" required>
+                        <option value="">Выберите тип</option>
+                        <option value="invoice">Счёт</option>
+                        <option value="act">Акт</option>
+                        <option value="waybill">Накладная</option>
+                        <option value="invoice_facture">Счёт-фактура</option>
+                        <option value="report">Налоговая отчётность</option>
+                        <option value="payment">Платёжный документ</option>
+                        <option value="other">Прочее</option>
+                    </select>
+                </label>
+
+                <label class="accounting-field">
+                    <span>Номер</span>
+                    <input type="text" name="number" id="documentNumber"
+                           placeholder="№ документа">
+                </label>
+
+                <label class="accounting-field">
+                    <span>Дата *</span>
+                    <input type="date" name="document_date" id="documentDate" required>
+                </label>
+
+                <label class="accounting-field">
+                    <span>Сумма, ₸</span>
+                    <input type="number" name="amount" id="documentAmount"
+                           min="0" step="0.01" placeholder="0">
+                </label>
+
+                <label class="accounting-field accounting-field--wide">
+                    <span>Контрагент</span>
+                    <input type="text" name="counterparty" id="documentCounterparty"
+                           placeholder="Название организации или ФИО">
+                </label>
+
+                <label class="accounting-field accounting-field--wide">
+                    <span>Файл</span>
+                    <input type="file" name="file"
+                           accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+                    <small>PDF, Word, Excel или изображение</small>
+                </label>
+
+                <label class="accounting-field accounting-field--wide">
+                    <span>Комментарий</span>
+                    <textarea name="comment" id="documentComment"
+                              rows="3" placeholder="Дополнительная информация"></textarea>
+                </label>
+            </div>
+
+            <div class="accounting-modal__footer">
+                <button class="accounting-cancel-btn" type="button"
+                        onclick="closeAccountingModal('documentModal')">
+                    Отмена
+                </button>
+                <button class="accounting-primary-btn" type="submit">
+                    Сохранить документ
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
-<div class="card">
+<!-- Налоговое событие -->
+<div class="accounting-modal" id="taxEventModal" aria-hidden="true">
+    <div class="accounting-modal__backdrop" onclick="closeAccountingModal('taxEventModal')"></div>
+    <div class="accounting-modal__dialog accounting-modal__dialog--small" role="dialog" aria-modal="true">
+        <div class="accounting-modal__head">
+            <div>
+                <h3>Налоговое событие</h3>
+                <p>Добавьте срок отчётности или платежа</p>
+            </div>
+            <button type="button" onclick="closeAccountingModal('taxEventModal')">×</button>
+        </div>
 
-<div class="title">Инструменты бухгалтера</div>
-
-<div class="feature-grid">
-
-    <div class="feature-card">📋 910 Форма</div>
-
-    <div class="feature-card">📋 200 Форма</div>
-
-    <div class="feature-card">📅 Налоговый календарь</div>
-
-    <div class="feature-card">💳 Задолженности</div>
-
-    <div class="feature-card">📁 Документы</div>
-
-    <div class="feature-card">🗄 Архив</div>
-
+        <form class="accounting-modal__body" method="post" action="/accounting/tax-events/add">
+            <div class="accounting-form-grid">
+                <label class="accounting-field accounting-field--wide">
+                    <span>Название *</span>
+                    <input type="text" name="title" placeholder="Например: Оплата ИПН" required>
+                </label>
+                <label class="accounting-field">
+                    <span>Дата *</span>
+                    <input type="date" name="due_date" required>
+                </label>
+                <label class="accounting-field">
+                    <span>Сумма, ₸</span>
+                    <input type="number" name="amount" min="0" step="0.01" placeholder="0">
+                </label>
+                <label class="accounting-field accounting-field--wide">
+                    <span>Описание</span>
+                    <textarea name="description" rows="3" placeholder="Комментарий"></textarea>
+                </label>
+            </div>
+            <div class="accounting-modal__footer">
+                <button class="accounting-cancel-btn" type="button"
+                        onclick="closeAccountingModal('taxEventModal')">Отмена</button>
+                <button class="accounting-primary-btn" type="submit">Добавить</button>
+            </div>
+        </form>
+    </div>
 </div>
 
+<!-- Задолженность -->
+<div class="accounting-modal" id="debtModal" aria-hidden="true">
+    <div class="accounting-modal__backdrop" onclick="closeAccountingModal('debtModal')"></div>
+    <div class="accounting-modal__dialog accounting-modal__dialog--small" role="dialog" aria-modal="true">
+        <div class="accounting-modal__head">
+            <div>
+                <h3>Новая задолженность</h3>
+                <p>Добавьте финансовое обязательство</p>
+            </div>
+            <button type="button" onclick="closeAccountingModal('debtModal')">×</button>
+        </div>
+
+        <form class="accounting-modal__body" method="post" action="/accounting/debts/add">
+            <div class="accounting-form-grid">
+                <label class="accounting-field accounting-field--wide">
+                    <span>Название *</span>
+                    <input type="text" name="title" placeholder="Например: Социальные отчисления" required>
+                </label>
+                <label class="accounting-field">
+                    <span>Срок оплаты *</span>
+                    <input type="date" name="due_date" required>
+                </label>
+                <label class="accounting-field">
+                    <span>Сумма, ₸ *</span>
+                    <input type="number" name="amount" min="0.01" step="0.01" placeholder="0" required>
+                </label>
+                <label class="accounting-field accounting-field--wide">
+                    <span>Описание</span>
+                    <textarea name="description" rows="3" placeholder="Комментарий"></textarea>
+                </label>
+            </div>
+            <div class="accounting-modal__footer">
+                <button class="accounting-cancel-btn" type="button"
+                        onclick="closeAccountingModal('debtModal')">Отмена</button>
+                <button class="accounting-primary-btn" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
 </div>
 
-{% include "module_cards_style.html" %}
+
+<div class="accounting-modal" id="taxSettingsModal" aria-hidden="true">
+  <div class="accounting-modal__backdrop" onclick="closeAccountingModal('taxSettingsModal')"></div>
+  <div class="accounting-modal__dialog" role="dialog" aria-modal="true">
+    <div class="accounting-modal__head"><div><h3>Настройки налогов</h3><p>Ставки сохраняются отдельно для активной компании</p></div><button type="button" onclick="closeAccountingModal('taxSettingsModal')">×</button></div>
+    <form class="accounting-modal__body" method="post" action="/accounting/taxes/settings">
+      <div class="accounting-form-grid">
+        <label class="accounting-field"><span>Ставка с оборота, %</span><input name="turnover_rate" type="number" step="0.01" value="{{ tax_calculation.settings.turnover_rate }}"></label>
+        <label class="accounting-field"><span>База ИП за себя, ₸</span><input name="owner_base" type="number" value="{{ tax_calculation.settings.owner_base }}"></label>
+        <label class="accounting-field"><span>МЗП, ₸</span><input name="mzp" type="number" value="{{ tax_calculation.settings.mzp }}"></label>
+        <label class="accounting-field"><span>МРП, ₸</span><input name="mrp" type="number" value="{{ tax_calculation.settings.mrp }}"></label>
+        <label class="accounting-field"><span>Стандартный вычет, ₸</span><input name="standard_deduction" type="number" value="{{ tax_calculation.settings.standard_deduction }}"></label>
+        <label class="accounting-field"><span>ОПВ ИП, %</span><input name="owner_opv_rate" type="number" step="0.01" value="{{ tax_calculation.settings.owner_opv_rate }}"></label>
+        <label class="accounting-field"><span>СО ИП, %</span><input name="owner_so_rate" type="number" step="0.01" value="{{ tax_calculation.settings.owner_so_rate }}"></label>
+        <label class="accounting-field"><span>ВОСМС ИП, %</span><input name="owner_vosms_rate" type="number" step="0.01" value="{{ tax_calculation.settings.owner_vosms_rate }}"></label>
+        <label class="accounting-field"><span>ОПВ работника, %</span><input name="employee_opv_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employee_opv_rate }}"></label>
+        <label class="accounting-field"><span>ВОСМС работника, %</span><input name="employee_vosms_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employee_vosms_rate }}"></label>
+        <label class="accounting-field"><span>ИПН работника, %</span><input name="employee_ipn_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employee_ipn_rate }}"></label>
+        <label class="accounting-field"><span>СО работодателя, %</span><input name="employer_so_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employer_so_rate }}"></label>
+        <label class="accounting-field"><span>ОСМС работодателя, %</span><input name="employer_osms_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employer_osms_rate }}"></label>
+        <label class="accounting-field"><span>ОПВР работодателя, %</span><input name="employer_opvr_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employer_opvr_rate }}"></label>
+        <label class="tax-check accounting-field--wide"><input type="checkbox" name="include_owner_opvr" value="1" {% if tax_calculation.settings.include_owner_opvr %}checked{% endif %}><span>Начислять ОПВР за ИП</span></label>
+      </div>
+      <div class="accounting-modal__footer"><button class="accounting-cancel-btn" type="button" onclick="closeAccountingModal('taxSettingsModal')">Отмена</button><button class="accounting-primary-btn" type="submit">Сохранить настройки</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="accounting-modal" id="employeeTaxModal" aria-hidden="true">
+  <div class="accounting-modal__backdrop" onclick="closeAccountingModal('employeeTaxModal')"></div>
+  <div class="accounting-modal__dialog accounting-modal__dialog--small" role="dialog" aria-modal="true">
+    <div class="accounting-modal__head"><div><h3>Сотрудник в расчёте</h3><p>Укажите начисленную зарплату и льготы</p></div><button type="button" onclick="closeAccountingModal('employeeTaxModal')">×</button></div>
+    <form class="accounting-modal__body" method="post" action="/accounting/taxes/employee">
+      <div class="accounting-form-grid">
+        <label class="accounting-field accounting-field--wide"><span>Сотрудник</span><select name="user_id" required><option value="">Выберите</option>{% for u in tax_users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}</select></label>
+        <label class="accounting-field accounting-field--wide"><span>Начисленная зарплата, ₸</span><input name="salary" type="number" min="0" value="85000" required></label>
+        <label class="tax-check accounting-field--wide"><input type="checkbox" name="is_active" value="1" checked><span>Включать в ежемесячный расчёт</span></label>
+        <label class="tax-check accounting-field--wide"><input type="checkbox" name="use_standard_deduction" value="1" checked><span>Применять стандартный вычет</span></label>
+        <label class="tax-check accounting-field--wide"><input type="checkbox" name="is_pensioner" value="1"><span>Пенсионер / не начислять ОПВ и ОПВР</span></label>
+        <label class="tax-check accounting-field--wide"><input type="checkbox" name="is_exempt_vosms" value="1"><span>Освобождён от платежей ОСМС</span></label>
+      </div>
+      <div class="accounting-modal__footer"><button class="accounting-cancel-btn" type="button" onclick="closeAccountingModal('employeeTaxModal')">Отмена</button><button class="accounting-primary-btn" type="submit">Добавить в расчёт</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Форма отчётности -->
+<div class="accounting-modal" id="reportModal" aria-hidden="true">
+    <div class="accounting-modal__backdrop" onclick="closeAccountingModal('reportModal')"></div>
+    <div class="accounting-modal__dialog accounting-modal__dialog--small" role="dialog" aria-modal="true">
+        <div class="accounting-modal__head">
+            <div>
+                <h3 id="reportModalTitle">Налоговая форма</h3>
+                <p>Выберите период и действие</p>
+            </div>
+            <button type="button" onclick="closeAccountingModal('reportModal')">×</button>
+        </div>
+
+        <form class="accounting-modal__body" method="get" action="/accounting/report">
+            <input type="hidden" name="form_type" id="reportFormType">
+            <div class="accounting-form-grid">
+                <label class="accounting-field">
+                    <span>Год *</span>
+                    <select name="year" required>
+                        {% for year in range(2024, 2031) %}
+                        <option value="{{ year }}">{{ year }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="accounting-field">
+                    <span>Период *</span>
+                    <select name="period" required>
+                        <option value="1">I полугодие</option>
+                        <option value="2">II полугодие</option>
+                        <option value="q1">I квартал</option>
+                        <option value="q2">II квартал</option>
+                        <option value="q3">III квартал</option>
+                        <option value="q4">IV квартал</option>
+                    </select>
+                </label>
+            </div>
+            <div class="accounting-report-actions">
+                <button class="accounting-secondary-btn" type="submit" name="action" value="history">
+                    История
+                </button>
+                <button class="accounting-primary-btn" type="submit" name="action" value="create">
+                    Открыть форму
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function () {
+    document.querySelectorAll('.accounting-modal').forEach(function (modal) {
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            document.querySelectorAll('.accounting-modal.is-open').forEach(function (modal) {
+                closeAccountingModal(modal.id);
+            });
+        }
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('.document-menu-btn') &&
+            !event.target.closest('.document-menu')) {
+            closeAllDocumentMenus();
+        }
+    });
+
+    var todayInputs = document.querySelectorAll('input[type="date"]');
+    var today = new Date().toISOString().split('T')[0];
+    todayInputs.forEach(function (input) {
+        if (!input.value) input.value = today;
+    });
+})();
+
+function openAccountingModal(id) {
+    var modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('accounting-modal-open');
+
+    window.setTimeout(function () {
+        var firstInput = modal.querySelector('input:not([type="hidden"]), select, textarea');
+        if (firstInput) firstInput.focus();
+    }, 50);
+}
+
+function closeAccountingModal(id) {
+    var modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+
+    if (!document.querySelector('.accounting-modal.is-open')) {
+        document.body.classList.remove('accounting-modal-open');
+    }
+}
+
+function openReportModal(formType, title) {
+    document.getElementById('reportFormType').value = formType;
+    document.getElementById('reportModalTitle').textContent = title;
+    openAccountingModal('reportModal');
+}
+
+function scrollToAccountingBlock(id) {
+    var block = document.getElementById(id);
+    if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setDocumentFilter(type) {
+    var filter = document.getElementById('accountingDocumentFilter');
+    if (filter) {
+        filter.value = type;
+        filterAccountingDocuments();
+    }
+    scrollToAccountingBlock('documentsBlock');
+}
+
+function filterAccountingDocuments() {
+    var search = document.getElementById('accountingDocumentSearch');
+    var filter = document.getElementById('accountingDocumentFilter');
+    var query = search ? search.value.trim().toLowerCase() : '';
+    var type = filter ? filter.value : 'all';
+    var rows = document.querySelectorAll('.accounting-document-row');
+    var visibleCount = 0;
+
+    rows.forEach(function (row) {
+        var rowSearch = (row.dataset.search || '').toLowerCase();
+        var rowType = row.dataset.type || 'other';
+        var matchesSearch = !query || rowSearch.includes(query);
+        var matchesType = type === 'all' || rowType === type;
+        var visible = matchesSearch && matchesType;
+
+        row.style.display = visible ? '' : 'none';
+        if (visible) visibleCount += 1;
+    });
+
+    var empty = document.getElementById('accountingFilteredEmpty');
+    if (empty) {
+        empty.style.display = visibleCount === 0 ? 'grid' : 'none';
+    }
+}
+
+
+function filterAccountingOperations() {
+    var search = document.getElementById('accountingOperationSearch');
+    var filter = document.getElementById('accountingOperationFilter');
+    var query = search ? search.value.trim().toLowerCase() : '';
+    var type = filter ? filter.value : 'all';
+    var rows = document.querySelectorAll('.accounting-operation-row');
+    var visible = 0;
+
+    rows.forEach(function (row) {
+        var matchesSearch = !query || (row.dataset.search || '').includes(query);
+        var matchesType = type === 'all' || row.dataset.type === type;
+        var show = matchesSearch && matchesType;
+        row.style.display = show ? '' : 'none';
+        if (show) visible += 1;
+    });
+
+    var empty = document.getElementById('accountingOperationsEmpty');
+    if (empty) empty.style.display = visible === 0 ? 'grid' : 'none';
+}
+
+function toggleDocumentMenu(button) {
+    var menu = button.nextElementSibling;
+    var wasOpen = menu && menu.classList.contains('is-open');
+    closeAllDocumentMenus();
+    if (menu && !wasOpen) menu.classList.add('is-open');
+}
+
+function closeAllDocumentMenus() {
+    document.querySelectorAll('.document-menu.is-open').forEach(function (menu) {
+        menu.classList.remove('is-open');
+    });
+}
+
+function openEditDocumentModal(documentId) {
+    document.getElementById('documentId').value = documentId;
+    document.getElementById('documentModalTitle').textContent = 'Редактировать документ';
+
+    var form = document.querySelector('#documentModal form');
+    form.action = '/accounting/documents/' + encodeURIComponent(documentId) + '/edit';
+
+    openAccountingModal('documentModal');
+}
+</script>
 
 {% endblock %}

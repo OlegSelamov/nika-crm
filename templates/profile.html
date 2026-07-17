@@ -1,54 +1,312 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Мой профиль</h1>
-        <div class="page-note">
-            Личный кабинет сотрудника
+<div class="profile-page">
+
+    <div class="profile-hero">
+
+        <div>
+            <div class="hero-kicker">Мой кабинет</div>
+
+            <h1>
+                Добро пожаловать,
+                {{ user.full_name or user.username }} !
+            </h1>
+
+            <div class="hero-meta">
+                {{ user.role or 'Сотрудник' }}
+                {% if user.company_name %}
+                    · {{ user.company_name }}
+                {% endif %}
+            </div>
         </div>
-    </div>
-</div>
 
-<div class="stats-grid">
-
-    <div class="stat-card blue">
-        <div class="stat-label">Роль</div>
-        <div class="stat-value">
-            {{ session.get("role","-") }}
+        <div class="hero-earning">
+            <span>Заработано сегодня</span>
+            <b>
+                {{ "{:,.0f}".format(today_reward or 0).replace(",", " ") }} ₸
+            </b>
         </div>
-    </div>
 
-    <div class="stat-card purple">
-        <div class="stat-label">Логин</div>
-        <div class="stat-value">
-            {{ session.get("username","-") }}
-        </div>
-    </div>
-
-</div>
-
-<div class="card">
-
-    <div class="title">
-        Информация о сотруднике
     </div>
 
-    <div class="profile-grid">
+    <div class="profile-stats">
 
-        <div class="profile-item">
-            <span>ФИО</span>
-            <b>{{ session.get("full_name","Не заполнено") }}</b>
+        <div class="profile-stat-card">
+            <span>Продаж сегодня</span>
+            <b>{{ today_stats.sales_count or 0 }}</b>
         </div>
 
-        <div class="profile-item">
-            <span>Телефон</span>
-            <b>{{ session.get("phone","Не заполнено") }}</b>
+        <div class="profile-stat-card">
+            <span>Выручка сегодня</span>
+            <b>
+                {{ "{:,.0f}".format(today_stats.revenue or 0).replace(",", " ") }} ₸
+            </b>
         </div>
 
-        <div class="profile-item">
-            <span>Компания</span>
-            <b>{{ session.get("company_name","-") }}</b>
+        <div class="profile-stat-card">
+            <span>Средний чек сегодня</span>
+            <b>
+                {{ "{:,.0f}".format(today_stats.average_check or 0).replace(",", " ") }} ₸
+            </b>
+        </div>
+
+        <div class="profile-stat-card">
+            <span>Вознаграждение за месяц</span>
+            <b>
+                {{ "{:,.0f}".format(month_reward or 0).replace(",", " ") }} ₸
+            </b>
+        </div>
+
+    </div>
+
+    <div class="profile-columns">
+
+        <div class="profile-card">
+
+            <div class="profile-card-title">
+                Информация о сотруднике
+            </div>
+
+            <div class="info-grid">
+
+                <div class="info-item">
+                    <span>ФИО</span>
+                    <b>{{ user.full_name or 'Не заполнено' }}</b>
+                </div>
+
+                <div class="info-item">
+                    <span>Телефон</span>
+                    <b>{{ user.phone or 'Не заполнено' }}</b>
+                </div>
+
+                <div class="info-item">
+                    <span>Логин</span>
+                    <b>{{ user.username or '—' }}</b>
+                </div>
+
+                <div class="info-item">
+                    <span>Роль</span>
+                    <b>{{ user.role or '—' }}</b>
+                </div>
+
+                <div class="info-item">
+                    <span>Дата создания</span>
+                    <b>
+                        {{ user.created_at.strftime('%d.%m.%Y') if user.created_at else '—' }}
+                    </b>
+                </div>
+
+                <div class="info-item">
+                    <span>Ставка от продаж</span>
+                    <b>{{ user.percent_rate or 0 }}%</b>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="profile-card">
+
+            <div class="profile-card-title">
+                Компания
+            </div>
+
+            <div class="info-grid">
+
+                <div class="info-item">
+                    <span>Название</span>
+                    <b>{{ user.company_name or '—' }}</b>
+                </div>
+
+                <div class="info-item">
+                    <span>БИН</span>
+                    <b>{{ user.company_bin or '—' }}</b>
+                </div>
+
+                <div class="info-item">
+                    <span>Телефон</span>
+                    <b>{{ user.company_phone or '—' }}</b>
+                </div>
+
+                <div class="info-item">
+                    <span>Руководитель</span>
+                    <b>{{ user.company_director or '—' }}</b>
+                </div>
+
+                <div class="info-item info-item-wide">
+                    <span>Адрес</span>
+                    <b>{{ user.company_address or '—' }}</b>
+                </div>
+
+                <div class="info-item">
+                    <span>Тариф</span>
+                    <b>{{ user.company_tariff or '—' }}</b>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="profile-card salary-card">
+
+        <div class="profile-card-title">
+            Расчёт вознаграждения за месяц
+        </div>
+
+        <div class="salary-grid">
+
+            <div>
+                <span>Продаж</span>
+                <b>{{ month_stats.sales_count or 0 }}</b>
+            </div>
+
+            <div>
+                <span>Выручка</span>
+                <b>
+                    {{ "{:,.0f}".format(month_stats.revenue or 0).replace(",", " ") }} ₸
+                </b>
+            </div>
+
+            <div>
+                <span>Средний чек</span>
+                <b>
+                    {{ "{:,.0f}".format(month_stats.average_check or 0).replace(",", " ") }} ₸
+                </b>
+            </div>
+
+            <div>
+                <span>Ставка</span>
+                <b>{{ user.percent_rate or 0 }}%</b>
+            </div>
+
+            <div>
+                <span>Возвратов</span>
+                <b>{{ refund_stats.refund_count or 0 }}</b>
+            </div>
+
+            <div class="salary-total">
+                <span>К выплате по продажам</span>
+                <b>
+                    {{ "{:,.0f}".format(month_reward or 0).replace(",", " ") }} ₸
+                </b>
+            </div>
+
+        </div>
+
+        <div class="salary-note">
+            Здесь рассчитывается личное вознаграждение по проценту от оплаченных продаж.
+        </div>
+
+    </div>
+
+    <div class="profile-card">
+
+        <div class="profile-card-title">
+            Последние продажи
+        </div>
+
+        <div class="recent-sales-table">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Чек</th>
+                        <th>Дата</th>
+                        <th>Оплата</th>
+                        <th>Статус</th>
+                        <th>Сумма</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for sale in recent_sales %}
+
+                        <tr>
+                            <td>№ {{ sale.sale_number or sale.id }}</td>
+
+                            <td>
+                                {{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '—' }}
+                            </td>
+
+                            <td>
+                                {% if sale.sale_type == 'cash' %}
+                                    Наличные
+                                {% elif sale.sale_type == 'card' %}
+                                    Карта
+                                {% elif sale.sale_type == 'kaspi' %}
+                                    Kaspi POS
+                                {% elif sale.sale_type == 'invoice' %}
+                                    Счёт
+                                {% else %}
+                                    {{ sale.sale_type or '—' }}
+                                {% endif %}
+                            </td>
+
+                            <td>{{ sale.status or '—' }}</td>
+
+                            <td>
+                                <b>
+                                    {{ "{:,.0f}".format(sale.total_amount or 0).replace(",", " ") }} ₸
+                                </b>
+                            </td>
+                        </tr>
+
+                    {% else %}
+
+                        <tr>
+                            <td colspan="5" class="empty-row">
+                                У сотрудника пока нет сохранённых продаж
+                            </td>
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <div class="recent-sales-mobile">
+
+            {% for sale in recent_sales %}
+
+                <div class="sale-mobile-card">
+
+                    <div class="sale-mobile-top">
+                        <b>Чек № {{ sale.sale_number or sale.id }}</b>
+                        <strong>
+                            {{ "{:,.0f}".format(sale.total_amount or 0).replace(",", " ") }} ₸
+                        </strong>
+                    </div>
+
+                    <div class="sale-mobile-row">
+                        <span>Дата</span>
+                        <b>
+                            {{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '—' }}
+                        </b>
+                    </div>
+
+                    <div class="sale-mobile-row">
+                        <span>Статус</span>
+                        <b>{{ sale.status or '—' }}</b>
+                    </div>
+
+                </div>
+
+            {% else %}
+
+                <div class="empty-mobile">
+                    У сотрудника пока нет сохранённых продаж
+                </div>
+
+            {% endfor %}
+
         </div>
 
     </div>
@@ -57,27 +315,308 @@
 
 <style>
 
-.profile-grid{
+.profile-page{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+}
+
+.profile-hero{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:20px;
+    padding:26px;
+    border-radius:22px;
+    color:#fff;
+    background:linear-gradient(135deg,#2563eb,#4f46e5);
+    box-shadow:0 16px 40px rgba(37,99,235,.22);
+}
+
+.hero-kicker{
+    font-size:13px;
+    font-weight:700;
+    opacity:.8;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+}
+
+.profile-hero h1{
+    margin:7px 0;
+    font-size:28px;
+}
+
+.hero-meta{
+    opacity:.86;
+}
+
+.hero-earning{
+    min-width:220px;
+    padding:16px 18px;
+    border-radius:17px;
+    background:rgba(255,255,255,.14);
+    backdrop-filter:blur(8px);
+}
+
+.hero-earning span{
+    display:block;
+    font-size:12px;
+    opacity:.8;
+}
+
+.hero-earning b{
+    display:block;
+    margin-top:7px;
+    font-size:25px;
+}
+
+.profile-stats{
     display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
-    gap:16px;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:14px;
 }
 
-.profile-item{
-    background:#f8fafc;
-    border-radius:14px;
-    padding:14px;
+.profile-stat-card,
+.profile-card{
+    background:#fff;
+    border:1px solid #e8edf3;
+    box-shadow:0 8px 24px rgba(15,23,42,.05);
 }
 
-.profile-item span{
+.profile-stat-card{
+    padding:18px;
+    border-radius:17px;
+}
+
+.profile-stat-card span{
     display:block;
     color:#64748b;
     font-size:12px;
+}
+
+.profile-stat-card b{
+    display:block;
+    margin-top:9px;
+    color:#0f172a;
+    font-size:21px;
+}
+
+.profile-columns{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+}
+
+.profile-card{
+    padding:20px;
+    border-radius:19px;
+}
+
+.profile-card-title{
+    margin-bottom:16px;
+    color:#0f172a;
+    font-size:18px;
+    font-weight:800;
+}
+
+.info-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+
+.info-item{
+    padding:13px;
+    border-radius:13px;
+    background:#f8fafc;
+}
+
+.info-item-wide{
+    grid-column:1 / -1;
+}
+
+.info-item span,
+.salary-grid span{
+    display:block;
+    color:#64748b;
+    font-size:11px;
     margin-bottom:6px;
 }
 
-.profile-item b{
+.info-item b{
     color:#0f172a;
+    font-size:14px;
+    overflow-wrap:anywhere;
+}
+
+.salary-grid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:12px;
+}
+
+.salary-grid > div{
+    padding:15px;
+    border-radius:14px;
+    background:#f8fafc;
+}
+
+.salary-grid b{
+    color:#0f172a;
+    font-size:18px;
+}
+
+.salary-grid .salary-total{
+    color:#fff;
+    background:linear-gradient(135deg,#16a34a,#059669);
+}
+
+.salary-total span,
+.salary-total b{
+    color:#fff;
+}
+
+.salary-note{
+    margin-top:13px;
+    color:#64748b;
+    font-size:12px;
+    line-height:1.5;
+}
+
+.recent-sales-table{
+    overflow-x:auto;
+}
+
+.recent-sales-table table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.recent-sales-table th,
+.recent-sales-table td{
+    padding:12px;
+    border-bottom:1px solid #edf1f5;
+    text-align:left;
+    font-size:13px;
+}
+
+.recent-sales-table th{
+    color:#64748b;
+    background:#f8fafc;
+}
+
+.empty-row{
+    padding:25px !important;
+    color:#64748b;
+    text-align:center !important;
+}
+
+.recent-sales-mobile{
+    display:none;
+}
+
+@media (max-width:1000px){
+
+    .profile-stats{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
+    .profile-columns{
+        grid-template-columns:1fr;
+    }
+}
+
+@media (max-width:768px){
+
+    .profile-page{
+        gap:12px;
+    }
+
+    .profile-hero{
+        align-items:stretch;
+        flex-direction:column;
+        padding:18px;
+        border-radius:18px;
+    }
+
+    .profile-hero h1{
+        font-size:22px;
+    }
+
+    .hero-earning{
+        min-width:0;
+    }
+
+    .profile-stats{
+        grid-template-columns:1fr 1fr;
+        gap:10px;
+    }
+
+    .profile-stat-card{
+        padding:14px;
+    }
+
+    .profile-stat-card b{
+        font-size:17px;
+    }
+
+    .profile-card{
+        padding:14px;
+        border-radius:17px;
+    }
+
+    .info-grid,
+    .salary-grid{
+        grid-template-columns:1fr;
+    }
+
+    .recent-sales-table{
+        display:none;
+    }
+
+    .recent-sales-mobile{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+    }
+
+    .sale-mobile-card{
+        padding:13px;
+        border-radius:14px;
+        background:#f8fafc;
+    }
+
+    .sale-mobile-top,
+    .sale-mobile-row{
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+    }
+
+    .sale-mobile-top{
+        margin-bottom:10px;
+    }
+
+    .sale-mobile-top strong{
+        color:#16a34a;
+    }
+
+    .sale-mobile-row{
+        margin-top:6px;
+        font-size:12px;
+    }
+
+    .sale-mobile-row span{
+        color:#64748b;
+    }
+
+    .empty-mobile{
+        padding:20px;
+        color:#64748b;
+        text-align:center;
+        background:#f8fafc;
+        border-radius:14px;
+    }
 }
 
 </style>

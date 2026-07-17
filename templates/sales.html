@@ -15,6 +15,7 @@
 }
 
 .scan-action-btn{
+    display:none;
     width:46px;
     height:46px;
     padding:0;
@@ -28,7 +29,6 @@
         #5B6CFF
     );
 
-    display:flex;
     align-items:center;
     justify-content:center;
 
@@ -81,6 +81,26 @@
 
 		</div>
 
+		<div class="sales-tabs">
+
+			<button
+				class="sales-tab active"
+				onclick="switchSalesTab('cart')"
+				id="cartTabBtn"
+			>
+				Продажа
+			</button>
+
+			<button
+				class="sales-tab"
+				onclick="switchSalesTab('history')"
+				id="historyTabBtn"
+			>
+				История продаж
+			</button>
+
+		</div>
+
         <!-- КОРЗИНА -->
         <div class="cart-box">
 		    <div class="table-wrapper" id="cartTableWrapper">
@@ -129,25 +149,6 @@
 			</div>
         </div>
 		
-		<div class="sales-tabs">
-
-			<button
-				class="sales-tab active"
-				onclick="switchSalesTab('cart')"
-				id="cartTabBtn"
-			>
-				Продажа
-			</button>
-
-			<button
-				class="sales-tab"
-				onclick="switchSalesTab('history')"
-				id="historyTabBtn"
-			>
-				История продаж
-			</button>
-
-		</div>
 
     </div>
 
@@ -174,8 +175,7 @@
 					ОПЛАТА
 				</button>
 
-				<button class="pay-btn"
-						style="background:#3b82f6"
+				<button class="pay-btn invoice-pay-btn"
 						onclick="createInvoiceSale()">
 
 					БЕЗНАЛ
@@ -183,8 +183,7 @@
 				</button>
 				
 				<button
-					class="pay-btn"
-					style="background:#e11d48"
+					class="pay-btn kaspi-pay-btn"
 					onclick="payKaspiPOS()">
 
 					KASPI POS
@@ -259,12 +258,40 @@
 
         <!-- 🔻 FOOTER -->
         <div class="modal-footer">
-            <button onclick="printCheck()" class="btn">🖨 Печать</button>
-			<button onclick="downloadPDF()" class="btn">📸 Сохранить</button>
+            <button onclick="printCurrentDocument()" class="btn">🖨 Печать</button>
+			<button id="saveDocumentBtn" onclick="downloadPDF()" class="btn">▣ Сохранить</button>
+            <button onclick="closeSaleModal()" class="btn modal-close-action">Закрыть</button>
         </div>
 
     </div>
 
+</div>
+
+<div id="quantityModal" class="quantity-modal" style="display:none;">
+    <div class="quantity-modal-box">
+        <button type="button" class="quantity-modal-close" onclick="closeQuantityModal()">✕</button>
+
+        <div class="quantity-modal-kicker">Количество товара</div>
+        <div id="quantityProductName" class="quantity-product-name">Товар</div>
+        <div id="quantityProductPrice" class="quantity-product-price">0 ₸ / шт</div>
+
+        <label for="quantityInput" class="quantity-label">Введите количество</label>
+        <div class="quantity-input-wrap">
+            <input id="quantityInput" type="number" inputmode="decimal" min="0" autocomplete="off">
+            <span id="quantityUnitLabel">шт</span>
+        </div>
+
+        <div id="quantityQuickButtons" class="quantity-quick-buttons"></div>
+
+        <div class="quantity-preview">
+            <span>Сумма</span>
+            <strong id="quantityTotalPreview">0 ₸</strong>
+        </div>
+
+        <button type="button" class="quantity-confirm-btn" onclick="confirmQuantity()">
+            Добавить в продажу
+        </button>
+    </div>
 </div>
 
 <div id="scannerModal" class="scanner-modal" style="display:none;">
@@ -277,8 +304,6 @@
 
     </div>
 </div>
-
-	<h3>Подключить сканер</h3>
 	<img id="qrImg" style="width:200px;">
 </div>
 
@@ -369,6 +394,8 @@ let cart = [];
 let selectedClientData = null;
 let selectedClient = null;
 let currentBarcodeData = {};
+let currentDocumentType = "check";
+let pendingQuantityItem = null;
 
 let company = {}; // 👈 вот сюда
 
@@ -388,7 +415,7 @@ fetch("/api/items")
 
     data.forEach(i => {
         html += `
-            <div class="item-card" onclick="addToCart(${i.id}, '${i.name}', ${i.retail_price || 0}, 1, '${i.gtin || ""}', '${i.ntin || ""}')">
+            <div class="item-card" onclick="selectItemForSale(${i.id}, '${i.name}', ${i.retail_price || 0}, '${i.unit || 'шт'}', '${i.gtin || ""}', '${i.ntin || ""}')">
 
                 <div class="item-image">
                     <img src="${i.image || '/static/img/no-image.png'}">
@@ -427,13 +454,109 @@ fetch("/api/items")
 
 }
 
+// единицы, для которых количество вводится перед добавлением
+function normalizeUnit(unit) {
+    return String(unit || "шт").trim().toLowerCase();
+}
+
+function isVariableQuantityUnit(unit) {
+    return [
+        "кг", "килограмм", "килограммы",
+        "г", "гр", "грамм", "граммы",
+        "литр", "л", "литры",
+        "мл", "миллилитр", "миллилитры"
+    ].includes(normalizeUnit(unit));
+}
+
+function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "") {
+    if (isVariableQuantityUnit(unit)) {
+        openQuantityModal({ id, name, price, unit, gtin, ntin });
+        return;
+    }
+
+    addToCart(id, name, price, 1, gtin, ntin, unit);
+}
+
+function openQuantityModal(item) {
+    pendingQuantityItem = item;
+
+    const unit = normalizeUnit(item.unit);
+    const input = document.getElementById("quantityInput");
+    const quick = document.getElementById("quantityQuickButtons");
+
+    document.getElementById("quantityProductName").textContent = item.name;
+    document.getElementById("quantityProductPrice").textContent =
+        `${Number(item.price || 0).toLocaleString("ru-RU")} ₸ / ${item.unit}`;
+    document.getElementById("quantityUnitLabel").textContent = item.unit;
+
+    const wholeOnly = ["г", "гр", "грамм", "граммы", "мл", "миллилитр", "миллилитры"].includes(unit);
+    input.step = wholeOnly ? "1" : "0.001";
+    input.min = wholeOnly ? "1" : "0.001";
+    input.value = wholeOnly ? "100" : "1";
+
+    const values = wholeOnly
+        ? [50, 100, 250, 500, 1000]
+        : [0.1, 0.25, 0.5, 1, 2];
+
+    quick.innerHTML = values.map(value => `
+        <button type="button" onclick="setQuantityValue(${value})">
+            ${String(value).replace('.', ',')} ${item.unit}
+        </button>
+    `).join("");
+
+    updateQuantityPreview();
+    document.getElementById("quantityModal").style.display = "flex";
+
+    setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 50);
+}
+
+function closeQuantityModal() {
+    document.getElementById("quantityModal").style.display = "none";
+    pendingQuantityItem = null;
+}
+
+function setQuantityValue(value) {
+    document.getElementById("quantityInput").value = value;
+    updateQuantityPreview();
+}
+
+function updateQuantityPreview() {
+    if (!pendingQuantityItem) return;
+
+    const raw = String(document.getElementById("quantityInput").value || "").replace(",", ".");
+    const qty = parseFloat(raw) || 0;
+    const total = Number(pendingQuantityItem.price || 0) * qty;
+
+    document.getElementById("quantityTotalPreview").textContent =
+        total.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " ₸";
+}
+
+function confirmQuantity() {
+    if (!pendingQuantityItem) return;
+
+    const input = document.getElementById("quantityInput");
+    const qty = parseFloat(String(input.value || "").replace(",", "."));
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+        input.focus();
+        return;
+    }
+
+    const item = pendingQuantityItem;
+    addToCart(item.id, item.name, item.price, qty, item.gtin, item.ntin, item.unit);
+    closeQuantityModal();
+}
+
 // добавление в корзину
-function addToCart(id, name, price, qty = 1, gtin = "", ntin = "") {
+function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт") {
 
     const existing = cart.find(i => i.id === id);
 
     if (existing) {
-        existing.qty += 1;
+        existing.qty += Number(qty) || 1;
     } else {
 		cart.push({
 			id,
@@ -441,13 +564,20 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "") {
 			price,
 			qty,
 			gtin,
-			ntin
+			ntin,
+            unit
 		});
     }
 
     renderCart();
 	document.getElementById("itemsList").style.display = "none";
     document.getElementById("search").value = "";
+}
+
+function formatQuantity(qty, unit) {
+    const value = Number(qty || 0);
+    const formatted = value.toLocaleString("ru-RU", { maximumFractionDigits: 3 });
+    return `${formatted}${unit ? ` ${unit}` : ""}`;
 }
 
 // отрисовка корзины
@@ -463,15 +593,20 @@ function renderCart() {
 
         html += `
             <tr>
-                <td>${item.name}</td>
                 <td>
-                    <button type="button" onclick="changeQty(${index}, -1)">-</button>
-                    ${qty}
-                    <button type="button" onclick="changeQty(${index}, 1)">+</button>
+                    <div class="cart-product-name">${item.name}</div>
+                    ${(item.gtin || item.ntin) ? `<div class="cart-product-code">${item.gtin || item.ntin}</div>` : ""}
                 </td>
-                <td>${sum} тг</td>
                 <td>
-                    <button type="button" onclick="removeItem(${index})">❌</button>
+                    <div class="qty-control">
+                        <button type="button" onclick="changeQty(${index}, -1)">−</button>
+                        <span>${formatQuantity(qty, item.unit)}</span>
+                        <button type="button" onclick="changeQty(${index}, 1)">+</button>
+                    </div>
+                </td>
+                <td><strong>${sum.toLocaleString("ru-RU")} ₸</strong></td>
+                <td>
+                    <button type="button" class="remove-cart-btn" onclick="removeItem(${index})" aria-label="Удалить">⌫</button>
                 </td>
             </tr>
         `;
@@ -511,7 +646,7 @@ function renderMobileCart() {
 
 					<div class="mobile-qty">
 						<button onclick="changeQty(${index}, -1)">−</button>
-						<span>${qty}</span>
+						<span>${formatQuantity(qty, item.unit)}</span>
 						<button onclick="changeQty(${index}, 1)">+</button>
 					</div>
 
@@ -533,7 +668,10 @@ function renderMobileCart() {
 }
 
 function changeQty(index, delta) {
-    cart[index].qty = (cart[index].qty || 1) + delta;
+    const item = cart[index];
+    const unit = normalizeUnit(item.unit);
+    const step = ["кг", "килограмм", "килограммы", "литр", "л", "литры"].includes(unit) ? 0.1 : 1;
+    item.qty = Number(((item.qty || step) + (delta * step)).toFixed(3));
 
     if (cart[index].qty <= 0) {
         cart.splice(index, 1);
@@ -545,6 +683,16 @@ function changeQty(index, delta) {
 function removeItem(i) {
     cart.splice(i, 1);
     renderCart();
+}
+
+function resetSaleAmounts() {
+    document.getElementById("cashInput").value = "";
+    document.getElementById("cardInput").value = "";
+    document.getElementById("kaspiInput").value = "";
+    document.getElementById("totalAmount").innerText = "0 ₸";
+
+    window.lastKaspiTransactionId = "";
+    window.lastKaspiMethod = "";
 }
 
 // оплата
@@ -605,6 +753,7 @@ function pay() {
 
         cart = [];
         renderCart();
+        resetSaleAmounts();
 
     })
     .catch(err => {
@@ -624,7 +773,7 @@ function searchItems(query) {
                 (i.barcode && i.barcode.includes(query))
             ) {
 				html += `
-					<div class="item-card" onclick="addToCart(${i.id}, '${i.name}', ${i.retail_price || 0}, 1, '${i.gtin || ""}', '${i.ntin || ""}')">
+					<div class="item-card" onclick="selectItemForSale(${i.id}, '${i.name}', ${i.retail_price || 0}, '${i.unit || 'шт'}', '${i.gtin || ""}', '${i.ntin || ""}')">
 
 						<div class="item-image">
 							<img src="${i.image || '/static/img/no-image.png'}">
@@ -714,6 +863,40 @@ function loadClients() {
 
         document.getElementById("clientList").innerHTML = html;
 		
+    });
+}
+
+function selectDefaultPrivateClient() {
+
+    fetch("/api/clients")
+    .then(res => res.json())
+    .then(clients => {
+
+        const privateClient = clients.find(client => {
+            const companyName = (client.company_name || "").trim().toLowerCase();
+            const fullName = (client.full_name || "").trim().toLowerCase();
+
+            return companyName === "частное лицо" || fullName === "частное лицо";
+        });
+
+        if (!privateClient) {
+            console.warn('Клиент "Частное лицо" не найден');
+            return;
+        }
+
+        selectedClientData = privateClient;
+        selectedClient = privateClient.id;
+
+        const clientInput = document.getElementById("clientSearch");
+        if (clientInput) {
+            clientInput.value =
+                privateClient.company_name ||
+                privateClient.full_name ||
+                "Частное лицо";
+        }
+    })
+    .catch(error => {
+        console.error("DEFAULT CLIENT ERROR:", error);
     });
 }
 
@@ -874,16 +1057,22 @@ function sendAssistant(text) {
 
 function openSaleModal(id) {
 
+    currentDocumentType = "check";
+    const saveBtn = document.getElementById("saveDocumentBtn");
+    if (saveBtn) saveBtn.style.display = "";
+
     const modal =
         document.getElementById("saleModal");
 
     const body =
         document.getElementById("saleBody");
 
+    document.getElementById("saleTitle").innerText = "Чек";
     document.getElementById(
         "saleTitle"
     ).dataset.saleId = id;
 
+    modal.classList.remove("invoice-mode");
     modal.style.display = "flex";
 
     body.innerHTML = `
@@ -922,8 +1111,49 @@ function openSaleModal(id) {
     });
 }
 
+
+function openInvoiceModal(id) {
+
+    currentDocumentType = "invoice";
+
+    const modal = document.getElementById("saleModal");
+    const body = document.getElementById("saleBody");
+    const title = document.getElementById("saleTitle");
+    const saveBtn = document.getElementById("saveDocumentBtn");
+
+    title.innerText = "Счёт на оплату";
+    title.dataset.saleId = id;
+
+    if (saveBtn) saveBtn.style.display = "none";
+
+    modal.classList.add("invoice-mode");
+    modal.style.display = "flex";
+    body.innerHTML = `
+        <iframe
+            id="invoiceFrame"
+            src="/docs/invoice/${id}"
+            style="width:100%;height:100%;min-height:65vh;border:0;background:white;"
+        ></iframe>
+    `;
+}
+
+function printCurrentDocument() {
+    if (currentDocumentType === "invoice") {
+        const frame = document.getElementById("invoiceFrame");
+        if (frame && frame.contentWindow) {
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+        }
+        return;
+    }
+
+    printCheck();
+}
+
 function closeSaleModal() {
-    document.getElementById("saleModal").style.display = "none";
+    const modal = document.getElementById("saleModal");
+    modal.style.display = "none";
+    modal.classList.remove("invoice-mode");
 }
 
 function formatDate(dateStr) {
@@ -1053,12 +1283,13 @@ function createInvoiceSale() {
             return;
         }
 
-        // 🔥 открываем счет
-        window.open(`/docs/invoice/${data.sale_id}`, "_blank");
+        // открываем исходный счёт внутри модального окна
+        openInvoiceModal(data.sale_id);
 
         // очищаем
         cart = [];
         renderCart();
+        resetSaleAmounts();
 
     });
 }
@@ -1244,38 +1475,14 @@ function handleBarcode(code) {
         // ✅ нашли товар
         if (data.found) {
 
-            // 🔥 ВЕСОВОЙ ТОВАР
-            if (
-                data.unit === "кг" ||
-                data.unit === "литр"
-            ) {
-
-                const qty = prompt(
-                    "Введите количество"
-                );
-
-                if (!qty) return;
-
-				addToCart(
-					data.id,
-					data.name,
-					data.price,
-					parseFloat(qty),
-					data.gtin || "",
-					data.ntin || ""
-				);
-
-            } else {
-
-				addToCart(
-					data.id,
-					data.name,
-					data.price,
-					1,
-					data.gtin || "",
-					data.ntin || ""
-				);
-            }
+            selectItemForSale(
+                data.id,
+                data.name,
+                data.price,
+                data.unit || "шт",
+                data.gtin || "",
+                data.ntin || ""
+            );
 
         }
 
@@ -1603,6 +1810,17 @@ document.addEventListener("keydown", function(e) {
     }
 });
 
+document.getElementById("quantityInput").addEventListener("input", updateQuantityPreview);
+
+document.getElementById("quantityInput").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") confirmQuantity();
+    if (e.key === "Escape") closeQuantityModal();
+});
+
+document.getElementById("quantityModal").addEventListener("click", function(e) {
+    if (e.target === this) closeQuantityModal();
+});
+
 window.addEventListener("load", function () {
     document.querySelector(".sales-page").classList.add("ready");
 });
@@ -1610,6 +1828,7 @@ window.addEventListener("load", function () {
 window.addEventListener("load", () => {
 
     loadItems();
+    selectDefaultPrivateClient();
 
 });
 
@@ -2147,6 +2366,8 @@ function refundSale(id){
     margin-top: 10px;
     max-height: 250px;
     overflow-y: auto;
+    position: relative;
+    z-index: 1;
 }
 
 .cart-table {
@@ -2198,6 +2419,8 @@ function refundSale(id){
 .top-bar {
     display: flex;
     gap: 10px;
+    position: relative;
+    z-index: 30;
 }
 
 #clientSearch {
@@ -2660,6 +2883,10 @@ function refundSale(id){
 
 @media (max-width: 768px) {
 
+	.scan-action-btn {
+		display:flex;
+	}
+
 	/* GRID */
 
 	.sales-grid {
@@ -2922,6 +3149,1033 @@ function refundSale(id){
 
 
 
+</style>
+
+
+<style id="sales-mockup-final-style">
+:root {
+    --pos-blue: #2864e8;
+    --pos-blue-dark: #1f55cc;
+    --pos-green: #159447;
+    --pos-red: #ef3f46;
+    --pos-border: #d9e0ea;
+    --pos-text: #111827;
+    --pos-muted: #7c8799;
+    --pos-panel: rgba(255,255,255,.92);
+}
+
+.sales-page {
+    padding: 14px;
+    min-height: calc(100vh - 72px);
+}
+
+.sales-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 20px;
+    align-items: stretch;
+    min-height: calc(100vh - 100px);
+}
+
+.left-side,
+.payment-box {
+    min-width: 0;
+    border: 1px solid var(--pos-border);
+    background: var(--pos-panel);
+    box-shadow: 0 14px 38px rgba(31, 45, 72, .06);
+}
+
+.left-side {
+    border-radius: 16px;
+    padding: 18px;
+    gap: 14px;
+    overflow: visible;
+}
+
+.top-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    z-index: 70;
+}
+
+#clientSearch,
+#search {
+    width: 100% !important;
+    height: 56px;
+    padding: 0 18px 0 54px;
+    border: 1px solid #cfd7e3;
+    border-radius: 9px;
+    background: #fff;
+    color: var(--pos-text);
+    font-size: 17px;
+    box-sizing: border-box;
+    outline: none;
+    box-shadow: none;
+}
+
+#clientSearch {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23828da0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21a8 8 0 0 0-16 0'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 18px center;
+}
+
+.search-row {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    position: relative;
+}
+
+#search {
+    padding-left: 54px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23828da0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 18px center;
+}
+
+#clientSearch:focus,
+#search:focus {
+    border-color: #6e92ee;
+    box-shadow: 0 0 0 3px rgba(40, 100, 232, .10);
+}
+
+.search-box {
+    position: relative;
+    width: 100%;
+    z-index: 80;
+}
+
+.scan-action-btn {
+    display: none;
+    flex: 0 0 56px;
+    width: 56px;
+    height: 56px;
+    margin-left: -56px;
+    z-index: 2;
+    border-radius: 0 9px 9px 0;
+    box-shadow: none;
+    background: linear-gradient(135deg, #3474f4, #1f56d8);
+}
+
+.scan-action-btn img {
+    width: 34px;
+    height: 34px;
+}
+
+.sales-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 4px 0 2px;
+    position: relative;
+    z-index: 20;
+}
+
+.sales-tab {
+    height: 50px;
+    border: 1px solid #d7deea;
+    border-radius: 8px;
+    background: #f8f9fc;
+    color: #202938;
+    font-size: 16px;
+    font-weight: 600;
+    transition: .18s ease;
+}
+
+.sales-tab.active {
+    border-color: var(--pos-blue);
+    background: linear-gradient(135deg, #326eed, #2059db);
+    color: #fff;
+    box-shadow: 0 7px 18px rgba(40,100,232,.20);
+}
+
+.cart-box {
+    flex: 1;
+    margin: 0;
+    max-height: none;
+    min-height: 420px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--pos-border);
+    border-radius: 10px;
+    background: #fff;
+}
+
+#cartTableWrapper,
+#salesHistoryBox .table-wrapper {
+    width: 100%;
+    overflow-x: auto !important;
+    overflow-y: auto;
+    max-height: calc(100vh - 310px);
+}
+
+.cart-table,
+.history-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin: 0;
+    background: #fff;
+}
+
+.cart-table thead,
+.history-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+}
+
+.cart-table thead th,
+.history-table thead th {
+    padding: 15px 18px;
+    border-right: none;
+    border-bottom: 1px solid var(--pos-border);
+    background: #fff !important;
+    color: #151c28;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.cart-table tbody td,
+.history-table tbody td {
+    padding: 15px 18px;
+    border-bottom: 1px solid #e6ebf1;
+    color: #111827;
+    vertical-align: middle;
+    background: #fff;
+}
+
+.cart-table tbody tr:hover td,
+.history-table tbody tr:hover td {
+    background: #fafcff;
+}
+
+.cart-table th:nth-child(1), .cart-table td:nth-child(1) { width: 48%; min-width: 0; }
+.cart-table th:nth-child(2), .cart-table td:nth-child(2) { width: 20%; text-align: center; }
+.cart-table th:nth-child(3), .cart-table td:nth-child(3) { width: 20%; text-align: right; }
+.cart-table th:nth-child(4), .cart-table td:nth-child(4) { width: 12%; text-align: center; }
+
+.cart-product-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.cart-product-code {
+    margin-top: 4px;
+    color: #6e7a8d;
+    font-size: 12px;
+    letter-spacing: .02em;
+}
+
+.qty-control {
+    display: inline-grid;
+    grid-template-columns: 36px minmax(44px, 1fr) 36px;
+    align-items: center;
+    min-width: 122px;
+    height: 42px;
+    border: 1px solid #d7dfea;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.cart-table .qty-control button {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #f7f9fc;
+    color: #4a5567;
+    font-size: 18px;
+}
+
+.qty-control span {
+    font-weight: 600;
+}
+
+.remove-cart-btn {
+    width: 38px;
+    height: 38px;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: #ef3f46;
+    font-size: 22px;
+}
+
+.payment-box {
+    position: sticky;
+    top: 14px;
+    height: calc(100vh - 100px);
+    padding: 28px 30px;
+    border-radius: 16px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.total-title {
+    color: #111827;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: .01em;
+}
+
+.total-amount {
+    margin: 18px 0 28px;
+    color: #090b10;
+    font-size: clamp(42px, 4vw, 58px);
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: .02em;
+}
+
+.payment-methods {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.pay-input {
+    width: 100%;
+    height: 56px;
+    margin: 0;
+    padding: 0 18px;
+    box-sizing: border-box;
+    border: 1px solid #cfd7e3;
+    border-radius: 8px;
+    background: #fff;
+    color: #111827;
+    font-size: 16px;
+}
+
+.pay-input:focus {
+    border-color: #6e92ee;
+    box-shadow: 0 0 0 3px rgba(40,100,232,.10);
+}
+
+.payment-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 28px;
+}
+
+.pay-btn,
+.payment-actions .pay-btn {
+    width: 100%;
+    height: 58px;
+    margin: 0;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: .01em;
+    box-shadow: 0 8px 18px rgba(17,24,39,.10);
+}
+
+.payment-actions .pay-btn:first-child {
+    background: linear-gradient(135deg, #20a552, #11853d);
+}
+.payment-actions .invoice-pay-btn {
+    background: linear-gradient(135deg, #3474f4, #2059db) !important;
+}
+.payment-actions .kaspi-pay-btn {
+    background: linear-gradient(135deg, #f54d52, #e6323a) !important;
+}
+
+.items-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 390px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid var(--pos-border);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 20px 50px rgba(25,37,61,.18);
+    z-index: 99999;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+}
+
+.item-card {
+    width: 100%;
+    border: 1px solid #e0e6ee;
+    border-radius: 10px;
+    box-shadow: none;
+}
+
+.item-image { height: 95px; }
+.item-name { height: auto; min-height: 34px; font-size: 12px; font-weight: 600; }
+.new-price { font-size: 14px; font-weight: 800; color: var(--pos-blue); }
+
+.modal {
+    z-index: 100000;
+    padding: 24px;
+    background: rgba(15,23,42,.42);
+    backdrop-filter: blur(4px);
+}
+
+.modal-box {
+    width: min(760px, 94vw);
+    height: min(82vh, 820px);
+    border: 1px solid #d9e0e8;
+    border-radius: 14px;
+    box-shadow: 0 28px 80px rgba(15,23,42,.28);
+}
+
+.modal-header {
+    min-height: 58px;
+    padding: 0 20px;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.modal-header b { font-size: 18px; }
+.modal-header > button {
+    position: absolute;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    font-size: 20px;
+}
+
+.modal-body {
+    padding: 14px 20px;
+    background: #f8fafc;
+}
+
+.modal-footer {
+    padding: 14px 20px;
+    align-items: center;
+}
+
+.modal-footer button {
+    min-width: 122px;
+    background: #fff;
+    color: #1f2937;
+    border: 1px solid #d9e0e8;
+    font-weight: 600;
+}
+
+.modal-footer .modal-close-action { margin-left: auto; }
+
+#invoiceFrame {
+    border: 1px solid #d8dee8 !important;
+    border-radius: 6px;
+}
+
+#salesHistoryBox { min-width: 0; }
+.history-table { min-width: 880px; }
+.history-actions { flex-wrap: nowrap; }
+.mini-doc-btn { flex: 0 0 32px; }
+
+@media (max-width: 1020px) {
+    .sales-grid { grid-template-columns: minmax(0,1fr) 310px; gap: 14px; }
+    .payment-box { padding: 22px; }
+}
+
+@media (max-width: 768px) {
+    .sales-page { padding: 8px; padding-bottom: 220px; }
+    .sales-grid { display: flex !important; flex-direction: column !important; min-height: auto; }
+    .left-side { padding: 10px; border-radius: 13px; overflow: visible; }
+    #clientSearch, #search { height: 48px; font-size: 14px; padding-left: 46px; }
+    #clientSearch, #search { background-position: 14px center; }
+    .scan-action-btn { display: flex; flex: 0 0 48px; width: 48px; height: 48px; margin-left: -48px; }
+    .sales-tab { height: 44px; font-size: 14px; }
+    .cart-box { min-height: 230px; overflow: visible; border: 0; background: transparent; }
+    #cartTableWrapper .cart-table { display: none; }
+    .mobile-cart { display: flex; }
+    .payment-box {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        bottom: 0;
+        top: auto;
+        width: auto !important;
+        height: auto;
+        max-height: 58vh;
+        padding: 14px;
+        border-radius: 18px 18px 0 0;
+        z-index: 100;
+    }
+    .total-title { font-size: 12px; }
+    .total-amount { font-size: 30px; margin: 2px 0 10px; }
+    .payment-methods { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+    .pay-input { height: 42px; padding: 0 7px; font-size: 12px; text-align: center; }
+    .payment-actions { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; margin-top: 10px; }
+    .pay-btn, .payment-actions .pay-btn { height: 48px; font-size: 12px; border-radius: 10px; }
+    .items-dropdown { grid-template-columns: repeat(2,minmax(0,1fr)); max-height: 50vh; }
+    .modal { padding: 8px; }
+    .modal-box { width: 100%; height: 88vh; }
+    .modal-footer { gap: 6px; padding: 10px; }
+    .modal-footer button { min-width: 0; flex: 1; padding: 10px 6px; font-size: 12px; }
+}
+</style>
+
+
+
+<style id="sales-compact-screen-fix">
+/* Компьютер: вся рабочая область помещается в экран */
+@media (min-width: 769px) {
+    .sales-page {
+        height: calc(100vh - 72px);
+        min-height: 0;
+        padding: 8px;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    .sales-grid {
+        height: 100%;
+        min-height: 0;
+        grid-template-columns: minmax(0, 1fr) 292px;
+        gap: 10px;
+    }
+
+    .left-side {
+        height: 100%;
+        min-height: 0;
+        padding: 10px;
+        gap: 8px;
+        border-radius: 12px;
+        box-sizing: border-box;
+    }
+
+    .top-bar { gap: 7px; }
+
+    #clientSearch,
+    #search {
+        height: 42px;
+        padding-left: 44px;
+        font-size: 14px;
+        background-position: 13px center;
+        background-size: 20px;
+    }
+
+    .sales-tabs {
+        gap: 8px;
+        margin: 0;
+    }
+
+    .sales-tab {
+        height: 38px;
+        font-size: 13px;
+        border-radius: 7px;
+    }
+
+    .cart-box {
+        min-height: 0;
+        height: 100%;
+        flex: 1 1 auto;
+        border-radius: 9px;
+    }
+
+    #cartTableWrapper,
+    #salesHistoryBox .table-wrapper {
+        height: 100%;
+        max-height: none;
+        overflow-x: hidden !important;
+        overflow-y: auto;
+    }
+
+    .cart-table,
+    .history-table {
+        min-width: 0 !important;
+        width: 100%;
+        table-layout: fixed;
+        font-size: 12px;
+    }
+
+    .cart-table thead th,
+    .history-table thead th {
+        padding: 9px 10px;
+        font-size: 12px;
+    }
+
+    .cart-table tbody td,
+    .history-table tbody td {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    .cart-product-name { font-size: 13px; }
+    .cart-product-code { margin-top: 2px; font-size: 10px; }
+
+    .qty-control {
+        grid-template-columns: 28px minmax(34px, 1fr) 28px;
+        min-width: 92px;
+        height: 32px;
+    }
+
+    .cart-table .qty-control button { font-size: 15px; }
+    .remove-cart-btn { width: 30px; height: 30px; font-size: 17px; }
+
+    .payment-box {
+        position: static;
+        height: 100%;
+        min-height: 0;
+        padding: 16px;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .total-title { font-size: 14px; }
+    .total-amount {
+        margin: 8px 0 14px;
+        font-size: clamp(30px, 3vw, 40px);
+    }
+
+    .payment-methods { gap: 8px; }
+    .pay-input {
+        height: 40px;
+        padding: 0 12px;
+        font-size: 13px;
+    }
+
+    .payment-actions {
+        gap: 8px;
+        margin-top: 14px;
+    }
+
+    .pay-btn,
+    .payment-actions .pay-btn {
+        height: 43px;
+        padding: 0 10px;
+        font-size: 13px;
+        border-radius: 7px;
+    }
+
+    .items-dropdown {
+        max-height: min(300px, calc(100vh - 190px));
+        padding: 8px;
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 7px;
+    }
+
+    .item-image { height: 68px; }
+    .item-info { padding: 6px; }
+    .item-name { min-height: 28px; font-size: 11px; }
+    .new-price { font-size: 12px; }
+
+    /* История также умещается без горизонтального скролла */
+    .history-table th:nth-child(1), .history-table td:nth-child(1) { width: 7%; }
+    .history-table th:nth-child(2), .history-table td:nth-child(2) { width: 17%; }
+    .history-table th:nth-child(3), .history-table td:nth-child(3) { width: 22%; }
+    .history-table th:nth-child(4), .history-table td:nth-child(4) { width: 13%; }
+    .history-table th:nth-child(5), .history-table td:nth-child(5) { width: 14%; }
+    .history-table th:nth-child(6), .history-table td:nth-child(6) { width: 27%; }
+    .history-actions { gap: 2px; justify-content: center; }
+    .mini-doc-btn { width: 27px; height: 27px; flex-basis: 27px; font-size: 12px; }
+}
+
+/* Телефон: блок оплаты жёстко приклеен к нижнему краю */
+@media (max-width: 768px) {
+    .sales-page {
+        padding-bottom: calc(205px + env(safe-area-inset-bottom));
+    }
+
+    .payment-box {
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 12px 12px calc(10px + env(safe-area-inset-bottom)) !important;
+        border-radius: 18px 18px 0 0 !important;
+        box-sizing: border-box;
+        z-index: 10000 !important;
+        overflow: visible !important;
+        transform: translateZ(0);
+    }
+}
+</style>
+
+<style id="sales-accounting-theme">
+/* Продажи в общем светлом стиле страницы бухгалтерии */
+.sales-page {
+    --sales-bg: #f6f7fb;
+    --sales-card: #ffffff;
+    --sales-card-soft: #fafafe;
+    --sales-border: #e5e7ef;
+    --sales-text: #202434;
+    --sales-muted: #73798d;
+    --sales-purple: #7257ff;
+    --sales-purple-soft: #efecff;
+    --sales-shadow: 0 10px 28px rgba(52, 48, 89, .08);
+    color: var(--sales-text);
+}
+
+.sales-page .left-side,
+.sales-page .payment-box,
+.sales-page .cart-box {
+    border-color: var(--sales-border) !important;
+    background: var(--sales-card) !important;
+    box-shadow: var(--sales-shadow) !important;
+}
+
+.sales-page .left-side,
+.sales-page .payment-box {
+    border-radius: 18px !important;
+}
+
+.sales-page #clientSearch,
+.sales-page #search,
+.sales-page .pay-input {
+    border: 1px solid var(--sales-border) !important;
+    background-color: #fff !important;
+    color: var(--sales-text) !important;
+    border-radius: 12px !important;
+}
+
+.sales-page #clientSearch:focus,
+.sales-page #search:focus,
+.sales-page .pay-input:focus {
+    border-color: #baaefe !important;
+    box-shadow: 0 0 0 3px rgba(114, 87, 255, .09) !important;
+}
+
+.sales-page .sales-tab {
+    border-color: var(--sales-border) !important;
+    background: var(--sales-card-soft) !important;
+    color: var(--sales-muted) !important;
+    border-radius: 12px !important;
+    font-weight: 800 !important;
+}
+
+.sales-page .sales-tab.active {
+    color: #fff !important;
+    border-color: transparent !important;
+    background: linear-gradient(135deg, var(--sales-purple), #9a59e8) !important;
+    box-shadow: 0 9px 20px rgba(114, 87, 255, .22) !important;
+}
+
+.sales-page .cart-table thead th,
+.sales-page .history-table thead th {
+    color: #858b9e !important;
+    background: #fafafe !important;
+    border-bottom-color: var(--sales-border) !important;
+    font-weight: 800 !important;
+}
+
+.sales-page .cart-table tbody td,
+.sales-page .history-table tbody td {
+    color: var(--sales-text) !important;
+    border-bottom-color: var(--sales-border) !important;
+}
+
+.sales-page .cart-table tbody tr:hover td,
+.sales-page .history-table tbody tr:hover td {
+    background: #faf8ff !important;
+}
+
+.sales-page .qty-control,
+.sales-page .mini-doc-btn {
+    border-color: var(--sales-border) !important;
+    background: #fff !important;
+}
+
+.sales-page .qty-control button {
+    background: var(--sales-purple-soft) !important;
+    color: var(--sales-purple) !important;
+}
+
+.sales-page .total-title { color: var(--sales-muted) !important; }
+.sales-page .total-amount { color: var(--sales-text) !important; }
+
+.sales-page .payment-actions .pay-btn:first-child {
+    background: linear-gradient(135deg, #28a879, #1b8f68) !important;
+}
+
+.sales-page .payment-actions .invoice-pay-btn {
+    background: linear-gradient(135deg, var(--sales-purple), #9a59e8) !important;
+}
+
+.sales-page .items-dropdown {
+    border-color: var(--sales-border) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 18px 45px rgba(35, 38, 58, .15) !important;
+}
+
+.sales-page .item-card {
+    border-color: var(--sales-border) !important;
+    border-radius: 14px !important;
+    background: var(--sales-card-soft) !important;
+}
+
+.sales-page .new-price { color: var(--sales-purple) !important; }
+
+/* Большой просмотр счёта почти на весь экран */
+#saleModal.invoice-mode {
+    padding: 10px !important;
+}
+
+#saleModal.invoice-mode .modal-box {
+    width: min(1380px, 98vw) !important;
+    height: calc(100dvh - 20px) !important;
+    max-height: none !important;
+    border: 1px solid var(--sales-border) !important;
+    border-radius: 20px !important;
+    background: #fff !important;
+    box-shadow: 0 28px 80px rgba(43, 39, 78, .22) !important;
+}
+
+#saleModal.invoice-mode .modal-header {
+    min-height: 54px !important;
+    padding: 0 20px !important;
+    background: #fbfbfe !important;
+    border-bottom: 1px solid var(--sales-border) !important;
+}
+
+#saleModal.invoice-mode .modal-body {
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #eef0f6 !important;
+}
+
+#saleModal.invoice-mode #invoiceFrame {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+}
+
+#saleModal.invoice-mode .modal-footer {
+    min-height: 60px !important;
+    padding: 10px 16px !important;
+    border-top: 1px solid var(--sales-border) !important;
+    background: #fff !important;
+}
+
+#saleModal.invoice-mode .modal-footer button {
+    min-height: 40px !important;
+    border-radius: 11px !important;
+}
+
+#saleModal.invoice-mode .modal-footer button:first-child {
+    color: #fff !important;
+    border: 0 !important;
+    background: linear-gradient(135deg, var(--sales-purple), #9a59e8) !important;
+}
+
+@media (max-width: 768px) {
+    #saleModal.invoice-mode { padding: 0 !important; }
+    #saleModal.invoice-mode .modal-box {
+        width: 100vw !important;
+        height: 100dvh !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+    }
+    #saleModal.invoice-mode .modal-header { min-height: 50px !important; }
+    #saleModal.invoice-mode .modal-footer {
+        padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    }
+}
+</style>
+
+
+<style>
+.quantity-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(15, 23, 42, .54);
+    backdrop-filter: blur(8px);
+}
+
+.quantity-modal-box {
+    position: relative;
+    width: min(440px, 100%);
+    padding: 26px;
+    border: 1px solid rgba(99, 102, 241, .16);
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: 0 28px 80px rgba(15, 23, 42, .28);
+}
+
+.quantity-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 11px;
+    background: #f1f5f9;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.quantity-modal-kicker {
+    color: #6366f1;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.quantity-product-name {
+    margin-top: 8px;
+    padding-right: 34px;
+    color: #172033;
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.quantity-product-price {
+    margin-top: 6px;
+    color: #64748b;
+    font-size: 14px;
+}
+
+.quantity-label {
+    display: block;
+    margin: 22px 0 8px;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.quantity-input-wrap {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    border: 2px solid #dfe3ff;
+    border-radius: 16px;
+    background: #f8f9ff;
+}
+
+.quantity-input-wrap:focus-within {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, .10);
+}
+
+.quantity-input-wrap input {
+    min-width: 0;
+    flex: 1;
+    height: 58px;
+    padding: 0 16px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #172033;
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.quantity-input-wrap span {
+    padding: 0 18px;
+    color: #6366f1;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.quantity-quick-buttons {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 10px;
+}
+
+.quantity-quick-buttons button {
+    min-width: 0;
+    padding: 9px 4px;
+    border: 1px solid #e4e7f5;
+    border-radius: 10px;
+    background: #fff;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.quantity-quick-buttons button:hover {
+    border-color: #a5b4fc;
+    background: #f4f5ff;
+    color: #4f46e5;
+}
+
+.quantity-preview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 18px;
+    padding: 15px 16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #f5f3ff, #eef2ff);
+    color: #64748b;
+}
+
+.quantity-preview strong {
+    color: #312e81;
+    font-size: 20px;
+}
+
+.quantity-confirm-btn {
+    width: 100%;
+    height: 52px;
+    margin-top: 14px;
+    border: 0;
+    border-radius: 15px;
+    background: linear-gradient(135deg, #315bff, #6d5dfc);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 12px 28px rgba(79, 70, 229, .24);
+}
+
+@media (max-width: 600px) {
+    .quantity-modal {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .quantity-modal-box {
+        width: 100%;
+        padding: 22px 16px calc(18px + env(safe-area-inset-bottom));
+        border-radius: 24px 24px 0 0;
+    }
+
+    .quantity-product-name {
+        font-size: 19px;
+    }
+
+    .quantity-quick-buttons {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
 </style>
 
 {% endblock %}

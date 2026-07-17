@@ -311,6 +311,34 @@ def delete_category(id):
 
     return jsonify({"success": True})
     
+@items_bp.route("/edit_category/<int:id>", methods=["POST"])
+def edit_category(id):
+    data = request.json
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE categories
+        SET name = %s,
+            markup_percent = %s
+        WHERE id = %s
+          AND company_id = %s
+        RETURNING id, name, markup_percent
+    """, (
+        data["name"],
+        data.get("markup", 0),
+        id,
+        session.get("company_id")
+    ))
+
+    category = cur.fetchone()
+
+    conn.commit()
+    pool.putconn(conn)
+
+    return jsonify(dict(category))
+    
 @items_bp.route("/api/barcode-info/<barcode>")
 def barcode_info(barcode):
 

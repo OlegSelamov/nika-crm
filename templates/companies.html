@@ -1,265 +1,941 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2>Организации</h2>
+<div class="companies-page">
+    <div class="page-header companies-header">
+        <div>
+            <h1 class="page-title">Организации</h1>
+            <div class="page-note">Управление компаниями и реквизитами</div>
+        </div>
 
-<form method="POST" action="/companies/add" class="card">
+        <button class="companies-btn companies-btn--primary"
+                type="button"
+                onclick="toggleCompanyForm()">
+            ＋ Добавить организацию
+        </button>
+    </div>
 
-    <input name="name" placeholder="Название">
-	<input name="director" placeholder="ФИО директора">
-    <input name="bin" placeholder="БИН / ИИН">
-    <input name="address" placeholder="Адрес">
-    <input name="phone" placeholder="Телефон">
-	<input name="iik" placeholder="ИИК (IBAN)">
-    <input name="bik" placeholder="БИК">
-    <input name="bank" placeholder="Банк">
-	<input name="kbe" placeholder="КБЕ (например 19)">
-	<input name="knp" placeholder="КНП (например 890)">
+    <section class="companies-toolbar">
+        <label class="companies-search">
+            <span>⌕</span>
+            <input
+                id="companySearch"
+                type="search"
+                placeholder="Поиск по названию, БИН, телефону, директору или адресу"
+                oninput="filterCompanies()">
+        </label>
 
-    <button class="btn">Добавить</button>
+        <div class="companies-count">
+            Всего: <strong id="companyVisibleCount">{{ companies|length }}</strong>
+        </div>
+    </section>
 
-</form>
+    <section class="companies-form-card" id="companyFormCard">
+        <div class="companies-section-head">
+            <div>
+                <h2>Новая организация</h2>
+                <p>Основные реквизиты компании</p>
+            </div>
 
-<br>
+            <button class="companies-close-form"
+                    type="button"
+                    onclick="toggleCompanyForm(false)">
+                ×
+            </button>
+        </div>
 
-<div class="desktop-table">
-	<table class="table">
-		<tr>
-			<th>Название</th>
-			<th>БИН</th>
-			<th>Телефон</th>
-			<th>Статус</th>
-			<th></th>
-		</tr>
+        <form method="POST" action="/companies/add" class="companies-form">
+            <label>
+                <span>Название *</span>
+                <input name="name" placeholder="Название организации" required>
+            </label>
 
-		{% for c in companies %}
-		<tr>
-			<td>{{ c.name }}</td>
-			<td>{{ c.bin }}</td>
-			<td>{{ c.phone }}</td>
+            <label>
+                <span>ФИО директора</span>
+                <input name="director" placeholder="ФИО директора">
+            </label>
 
-			<td>
-				{% if c.is_active %}
-					<span style="color:green;">Активна</span>
-				{% endif %}
-			</td>
+            <label>
+                <span>БИН / ИИН *</span>
+                <input name="bin" placeholder="БИН / ИИН" required>
+            </label>
 
-			<td style="display:flex; gap:10px;">
-				<a href="/companies/activate/{{ c.id }}">Выбрать</a>
+            <label>
+                <span>Телефон</span>
+                <input name="phone" placeholder="+7 ...">
+            </label>
 
-				<a href="/companies/delete/{{ c.id }}"
-				   onclick="return confirm('Удалить организацию?')"
-			       style="color:red;">
-					Удалить
-				</a>
-			</td>
-		</tr>
-		{% endfor %}
+            <label class="companies-field-wide">
+                <span>Адрес</span>
+                <input name="address" placeholder="Юридический адрес">
+            </label>
 
-	</table>
-</div>
+            <label>
+                <span>ИИК (IBAN)</span>
+                <input name="iik" placeholder="KZ...">
+            </label>
 
-<div class="mobile-company-list">
+            <label>
+                <span>БИК</span>
+                <input name="bik" placeholder="БИК банка">
+            </label>
 
-{% for c in companies %}
+            <label>
+                <span>Банк</span>
+                <input name="bank" placeholder="Название банка">
+            </label>
 
-	<div class="mobile-company-card">
+            <label>
+                <span>КБЕ</span>
+                <input name="kbe" placeholder="Например 19">
+            </label>
 
-		<div class="mobile-company-top">
+            <label>
+                <span>КНП</span>
+                <input name="knp" placeholder="Например 890">
+            </label>
 
-			<div class="mobile-company-name">
-				{{ c.name }}
-			</div>
+            <div class="companies-form-actions companies-field-wide">
+                <button class="companies-btn companies-btn--light"
+                        type="button"
+                        onclick="toggleCompanyForm(false)">
+                    Отмена
+                </button>
 
-			{% if c.is_active %}
-				<div class="company-badge">
-					Активна
-				</div>
-			{% endif %}
+                <button class="companies-btn companies-btn--primary" type="submit">
+                    Сохранить организацию
+                </button>
+            </div>
+        </form>
+    </section>
 
-		</div>
+    <section class="companies-section">
+        <div class="companies-section-head">
+            <div>
+                <h2>Список организаций</h2>
+                <p>Выберите активную компанию или удалите ненужную</p>
+            </div>
+        </div>
 
-		<div class="mobile-company-meta">
-			БИН: {{ c.bin }}
-		</div>
+        {% if companies %}
+        <div class="companies-table-wrap">
+            <table class="companies-table">
+                <thead>
+                    <tr>
+                        <th>Организация</th>
+                        <th>БИН / ИИН</th>
+                        <th>Телефон</th>
+                        <th>Директор</th>
+                        <th>Статус</th>
+                        <th></th>
+                    </tr>
+                </thead>
 
-		<div class="mobile-company-meta">
-			📞 {{ c.phone }}
-		</div>
+                <tbody id="companiesTableBody">
+                    {% for c in companies %}
+                    <tr class="company-row"
+                        data-search="{{ (
+                            (c.name or '') ~ ' ' ~
+                            (c.bin or '') ~ ' ' ~
+                            (c.phone or '') ~ ' ' ~
+                            (c.director or '') ~ ' ' ~
+                            (c.address or '')
+                        )|lower }}">
 
-		<div class="mobile-company-actions">
+                        <td>
+                            <div class="company-main">
+                                <div class="company-logo">
+                                    {{ (c.name or 'О')[:1]|upper }}
+                                </div>
 
-			<a href="/companies/activate/{{ c.id }}"
-			   class="btn btn-edit">
+                                <div>
+                                    <strong>{{ c.name }}</strong>
+                                    <small>{{ c.address or "Адрес не указан" }}</small>
+                                </div>
+                            </div>
+                        </td>
 
-				Выбрать
+                        <td>{{ c.bin or "—" }}</td>
+                        <td>{{ c.phone or "—" }}</td>
+                        <td>{{ c.director or "—" }}</td>
 
-			</a>
+                        <td>
+                            {% if c.is_active %}
+                                <span class="company-status company-status--active">
+                                    Активна
+                                </span>
+                            {% else %}
+                                <span class="company-status">
+                                    Не выбрана
+                                </span>
+                            {% endif %}
+                        </td>
 
-			<a href="/companies/delete/{{ c.id }}"
-			   class="btn btn-close"
-			   onclick="return confirm('Удалить организацию?')">
+                        <td>
+                            <div class="company-actions">
+                                {% if not c.is_active %}
+                                <a href="/companies/activate/{{ c.id }}"
+                                   class="company-action company-action--select">
+                                    Выбрать
+                                </a>
+                                {% endif %}
 
-				Удалить
+                                <a href="/companies/delete/{{ c.id }}"
+                                   class="company-action company-action--delete"
+                                   onclick="return confirm('Удалить организацию?')">
+                                    Удалить
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-			</a>
+        <div class="mobile-company-list" id="mobileCompanyList">
+            {% for c in companies %}
+            <article class="mobile-company-card company-row"
+                     data-search="{{ (
+                        (c.name or '') ~ ' ' ~
+                        (c.bin or '') ~ ' ' ~
+                        (c.phone or '') ~ ' ' ~
+                        (c.director or '') ~ ' ' ~
+                        (c.address or '')
+                     )|lower }}">
 
-		</div>
+                <div class="mobile-company-top">
+                    <div class="company-main">
+                        <div class="company-logo">
+                            {{ (c.name or 'О')[:1]|upper }}
+                        </div>
 
-	</div>
+                        <div>
+                            <strong>{{ c.name }}</strong>
+                            <small>{{ c.bin or "БИН не указан" }}</small>
+                        </div>
+                    </div>
 
-{% endfor %}
+                    {% if c.is_active %}
+                    <span class="company-status company-status--active">
+                        Активна
+                    </span>
+                    {% endif %}
+                </div>
 
+                <div class="mobile-company-info">
+                    <span><small>Телефон</small>{{ c.phone or "—" }}</span>
+                    <span><small>Директор</small>{{ c.director or "—" }}</span>
+                    <span class="mobile-company-address">
+                        <small>Адрес</small>{{ c.address or "—" }}
+                    </span>
+                </div>
+
+                <div class="mobile-company-actions">
+                    {% if not c.is_active %}
+                    <a href="/companies/activate/{{ c.id }}"
+                       class="company-action company-action--select">
+                        Выбрать
+                    </a>
+                    {% endif %}
+
+                    <a href="/companies/delete/{{ c.id }}"
+                       class="company-action company-action--delete"
+                       onclick="return confirm('Удалить организацию?')">
+                        Удалить
+                    </a>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+
+        <div class="companies-empty companies-empty--hidden" id="companiesSearchEmpty">
+            <span>⌕</span>
+            <strong>Организации не найдены</strong>
+            <p>Попробуйте изменить поисковый запрос.</p>
+        </div>
+
+        {% else %}
+        <div class="companies-empty">
+            <span>🏢</span>
+            <strong>Организаций пока нет</strong>
+            <p>Добавьте первую компанию, чтобы начать работу.</p>
+            <button class="companies-btn companies-btn--primary"
+                    type="button"
+                    onclick="toggleCompanyForm(true)">
+                Добавить организацию
+            </button>
+        </div>
+        {% endif %}
+    </section>
 </div>
 
 <style>
-
-/* ================= MOBILE COMPANIES ================= */
-
-.mobile-company-list{
-	display:none;
+.companies-page {
+    --c-card:#fff;
+    --c-soft:#fafafe;
+    --c-border:#e5e7ef;
+    --c-text:#202434;
+    --c-muted:#747a8d;
+    --c-purple:#7257ff;
+    --c-purple-soft:#efecff;
+    --c-shadow:0 10px 28px rgba(52,48,89,.08);
+    width:100%;
+    min-width:0;
+    color:var(--c-text);
 }
 
-@media (max-width:768px){
-
-	/* title */
-
-	h2{
-		font-size:24px;
-		margin-bottom:14px;
-	}
-
-	/* form */
-
-	form.card{
-
-		display:flex !important;
-		flex-direction:column !important;
-
-		gap:12px;
-
-		padding:14px;
-
-		border-radius:20px;
-	}
-
-	form.card input{
-
-		height:48px;
-
-		border-radius:14px;
-
-		font-size:14px;
-
-		padding:0 14px;
-	}
-
-	form.card .btn{
-
-		height:50px;
-
-		border-radius:14px;
-
-		font-size:15px;
-		font-weight:700;
-	}
-
-	/* desktop */
-
-	.desktop-table{
-		display:none;
-	}
-
-	/* list */
-
-	.mobile-company-list{
-
-		display:flex;
-		flex-direction:column;
-
-		gap:12px;
-
-		margin-top:14px;
-	}
-
-	/* card */
-
-	.mobile-company-card{
-
-		background:white;
-
-		padding:14px;
-
-		border-radius:18px;
-
-		box-shadow:
-		0 4px 14px rgba(0,0,0,.06);
-	}
-
-	.mobile-company-top{
-
-		display:flex;
-
-		justify-content:space-between;
-
-		gap:10px;
-	}
-
-	.mobile-company-name{
-
-		font-size:15px;
-		font-weight:700;
-
-		flex:1;
-	}
-
-	.company-badge{
-
-		padding:4px 10px;
-
-		border-radius:999px;
-
-		background:#dcfce7;
-		color:#16a34a;
-
-		font-size:11px;
-		font-weight:700;
-	}
-
-	.mobile-company-meta{
-
-		margin-top:8px;
-
-		font-size:13px;
-
-		color:#475569;
-	}
-
-	.mobile-company-actions{
-
-		display:flex;
-
-		gap:8px;
-
-		margin-top:14px;
-	}
-
-	.mobile-company-actions .btn{
-
-		flex:1;
-
-		height:42px;
-
-		display:flex;
-		align-items:center;
-		justify-content:center;
-
-		border-radius:12px;
-
-		font-size:14px;
-	}
+.companies-page .page-title {
+    color:var(--c-text) !important;
+    text-shadow:none !important;
 }
 
+.companies-page .page-note {
+    color:var(--c-muted) !important;
+}
+
+.companies-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:16px;
+}
+
+.companies-btn {
+    min-height:46px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 15px;
+    border:0;
+    border-radius:11px;
+    font:inherit;
+    font-size:13px;
+    font-weight:800;
+    text-decoration:none;
+    cursor:pointer;
+}
+
+.companies-btn--primary {
+    color:#fff !important;
+    background:linear-gradient(135deg,#7257ff,#9958e7);
+    box-shadow:0 8px 18px rgba(114,87,255,.2);
+}
+
+.companies-btn--light {
+    color:var(--c-purple) !important;
+    background:var(--c-purple-soft);
+    border:1px solid #d9d2ff;
+}
+
+.companies-toolbar,
+.companies-form-card,
+.companies-section {
+    margin-bottom:15px;
+    padding:18px;
+    border:1px solid var(--c-border);
+    border-radius:16px;
+    background:var(--c-card);
+    box-shadow:var(--c-shadow);
+}
+
+.companies-toolbar {
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.companies-search {
+    flex:1;
+    min-width:0;
+    height:46px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:0 11px;
+    border:1px solid var(--c-border);
+    border-radius:10px;
+    background:#fff;
+}
+
+.companies-search:focus-within {
+    border-color:#b8adff;
+    box-shadow:0 0 0 3px rgba(114,87,255,.09);
+}
+
+.companies-search input {
+    width:100%;
+    min-width:0;
+    border:0;
+    outline:0;
+    color:var(--c-text);
+    background:transparent;
+    font:inherit;
+    font-size:13px;
+}
+
+.companies-search input::placeholder {
+    color:#9da3b3;
+}
+
+.companies-count {
+    color:var(--c-muted);
+    font-size:11px;
+    white-space:nowrap;
+}
+
+.companies-count strong {
+    color:var(--c-text);
+}
+
+.companies-form-card {
+    display:none;
+}
+
+.companies-form-card.is-open {
+    display:block;
+}
+
+.companies-section-head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:13px;
+}
+
+.companies-section-head h2 {
+    margin:0 0 3px;
+    color:var(--c-text);
+    font-size:18px;
+}
+
+.companies-section-head p {
+    margin:0;
+    color:var(--c-muted);
+    font-size:12px;
+}
+
+.companies-close-form {
+    width:32px;
+    height:32px;
+    border:1px solid var(--c-border);
+    border-radius:9px;
+    color:#676d7f;
+    background:#f3f4f7;
+    font-size:20px;
+    cursor:pointer;
+}
+
+.companies-form {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:10px;
+}
+
+.companies-form label {
+    min-width:0;
+    display:grid;
+    gap:5px;
+}
+
+.companies-form label > span {
+    color:#5b6174;
+    font-size:11px;
+    font-weight:750;
+}
+
+.companies-form input {
+    width:100%;
+    min-width:0;
+    height:46px;
+    box-sizing:border-box;
+    padding:0 12px;
+    border:1px solid var(--c-border);
+    border-radius:9px;
+    color:var(--c-text);
+    background:#fff;
+    outline:0;
+    font:inherit;
+    font-size:13px;
+}
+
+.companies-form input:focus {
+    border-color:#b8adff;
+    box-shadow:0 0 0 3px rgba(114,87,255,.08);
+}
+
+.companies-field-wide {
+    grid-column:span 2;
+}
+
+.companies-form-actions {
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    padding-top:4px;
+}
+
+.companies-table-wrap {
+    width:100%;
+    overflow:hidden;
+}
+
+.companies-table {
+    width:100%;
+    table-layout:fixed;
+    border-collapse:collapse;
+}
+
+.companies-table th,
+.companies-table td {
+    padding:13px 10px;
+    border-bottom:1px solid var(--c-border);
+    text-align:left;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.companies-table th {
+    color:#858b9e;
+    background:#fafafe;
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.companies-table td {
+    color:var(--c-text);
+    font-size:12px;
+}
+
+.companies-table th:nth-child(1),
+.companies-table td:nth-child(1) { width:28%; }
+
+.companies-table th:nth-child(2),
+.companies-table td:nth-child(2) { width:14%; }
+
+.companies-table th:nth-child(3),
+.companies-table td:nth-child(3) { width:14%; }
+
+.companies-table th:nth-child(4),
+.companies-table td:nth-child(4) { width:16%; }
+
+.companies-table th:nth-child(5),
+.companies-table td:nth-child(5) { width:12%; }
+
+.companies-table th:nth-child(6),
+.companies-table td:nth-child(6) { width:16%; }
+
+.company-main {
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:9px;
+}
+
+.company-logo {
+    flex:0 0 42px;
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:10px;
+    color:var(--c-purple);
+    background:var(--c-purple-soft);
+    font-size:18px;
+    font-weight:900;
+}
+
+.company-main > div:last-child {
+    min-width:0;
+    display:grid;
+    gap:2px;
+}
+
+.company-main strong {
+    color:var(--c-text);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.company-main small {
+    color:var(--c-muted);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.company-status {
+    min-height:28px;
+    display:inline-flex;
+    align-items:center;
+    padding:0 8px;
+    border-radius:999px;
+    color:#757b8e;
+    background:#f0f1f5;
+    font-size:11px;
+    font-weight:800;
+}
+
+.company-status--active {
+    color:#16815e;
+    background:#e7f7f1;
+}
+
+.company-actions {
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+
+.company-action {
+    min-height:36px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 12px;
+    border-radius:8px;
+    font-size:11px;
+    font-weight:800;
+    text-decoration:none;
+}
+
+.company-action--select {
+    color:var(--c-purple);
+    background:var(--c-purple-soft);
+}
+
+.company-action--delete {
+    color:#c94646;
+    background:#fdecec;
+}
+
+.mobile-company-list {
+    display:none;
+}
+
+.companies-empty {
+    min-height:220px;
+    display:grid;
+    place-content:center;
+    justify-items:center;
+    text-align:center;
+}
+
+.companies-empty--hidden {
+    display:none;
+}
+
+.companies-empty > span {
+    width:52px;
+    height:52px;
+    display:grid;
+    place-items:center;
+    margin-bottom:10px;
+    border-radius:15px;
+    color:var(--c-purple);
+    background:var(--c-purple-soft);
+    font-size:20px;
+}
+
+.companies-empty strong {
+    color:var(--c-text);
+    font-size:13px;
+}
+
+.companies-empty p {
+    margin:5px 0 14px;
+    color:var(--c-muted);
+    font-size:12px;
+}
+
+@media(max-width:1000px) {
+    .companies-form {
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+}
+
+@media(max-width:700px) {
+    .companies-header {
+        align-items:stretch;
+        flex-direction:column;
+    }
+
+    .companies-header .companies-btn {
+        width:100%;
+    }
+
+    .companies-toolbar {
+        align-items:stretch;
+        flex-direction:column;
+    }
+
+    .companies-search {
+        width:100%;
+        box-sizing:border-box;
+    }
+
+    .companies-count {
+        align-self:flex-end;
+    }
+
+    .companies-form {
+        grid-template-columns:1fr;
+    }
+
+    .companies-field-wide {
+        grid-column:auto;
+    }
+
+    .companies-form-actions {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .companies-table-wrap {
+        display:none;
+    }
+
+    .mobile-company-list {
+        display:grid;
+        gap:9px;
+    }
+
+    .mobile-company-card {
+        padding:12px;
+        border:1px solid var(--c-border);
+        border-radius:13px;
+        background:var(--c-soft);
+    }
+
+    .mobile-company-top {
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:8px;
+    }
+
+    .mobile-company-info {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:7px;
+        margin-top:10px;
+    }
+
+    .mobile-company-info > span {
+        min-width:0;
+        display:grid;
+        gap:2px;
+        padding:7px;
+        border:1px solid var(--c-border);
+        border-radius:8px;
+        color:var(--c-text);
+        background:#fff;
+        font-size:11px;
+        overflow-wrap:anywhere;
+    }
+
+    .mobile-company-info small {
+        color:var(--c-muted);
+        font-size:7px;
+    }
+
+    .mobile-company-address {
+        grid-column:1 / -1;
+    }
+
+    .mobile-company-actions {
+        display:flex;
+        gap:7px;
+        margin-top:10px;
+    }
+
+    .mobile-company-actions .company-action {
+        flex:1;
+        min-height:34px;
+    }
+}
+</style>
+
+<script>
+function toggleCompanyForm(forceState) {
+    const formCard = document.getElementById('companyFormCard');
+    const shouldOpen = typeof forceState === 'boolean'
+        ? forceState
+        : !formCard.classList.contains('is-open');
+
+    formCard.classList.toggle('is-open', shouldOpen);
+
+    if (shouldOpen) {
+        formCard.scrollIntoView({ behavior:'smooth', block:'start' });
+        window.setTimeout(() => {
+            formCard.querySelector('input[name="name"]')?.focus();
+        }, 200);
+    }
+}
+
+function filterCompanies() {
+    const query = document.getElementById('companySearch').value
+        .trim()
+        .toLowerCase();
+
+    const rows = document.querySelectorAll('.company-row');
+    const countedIds = new Set();
+    let visibleCount = 0;
+
+    rows.forEach((row, index) => {
+        const searchText = (row.dataset.search || '').toLowerCase();
+        const visible = !query || searchText.includes(query);
+        row.style.display = visible ? '' : 'none';
+
+        if (visible) {
+            const key = row.querySelector('.company-main strong')?.textContent.trim() + '|' +
+                        row.querySelector('.company-main small')?.textContent.trim();
+
+            if (!countedIds.has(key)) {
+                countedIds.add(key);
+                visibleCount++;
+            }
+        }
+    });
+
+    document.getElementById('companyVisibleCount').textContent = visibleCount;
+
+    const empty = document.getElementById('companiesSearchEmpty');
+    if (empty) {
+        empty.style.display = visibleCount === 0 ? 'grid' : 'none';
+    }
+}
+</script>
+
+
+<style>
+.companies-page .page-title {
+    font-size: 30px !important;
+}
+
+.companies-page .page-note {
+    font-size: 14px !important;
+}
+
+.companies-btn {
+    min-height: 46px !important;
+    padding: 0 18px !important;
+    font-size: 13px !important;
+}
+
+.companies-toolbar,
+.companies-form-card,
+.companies-section {
+    padding: 18px !important;
+}
+
+.companies-search {
+    height: 46px !important;
+}
+
+.companies-search input {
+    font-size: 13px !important;
+}
+
+.companies-count {
+    font-size: 13px !important;
+}
+
+.companies-section-head h2 {
+    font-size: 18px !important;
+}
+
+.companies-section-head p {
+    font-size: 12px !important;
+}
+
+.companies-form label > span {
+    font-size: 11px !important;
+}
+
+.companies-form input {
+    height: 46px !important;
+    padding: 0 12px !important;
+    font-size: 13px !important;
+}
+
+.companies-table th,
+.companies-table td {
+    padding: 13px 10px !important;
+}
+
+.companies-table th {
+    font-size: 11px !important;
+}
+
+.companies-table td {
+    font-size: 13px !important;
+}
+
+.company-logo {
+    flex: 0 0 42px !important;
+    width: 42px !important;
+    height: 42px !important;
+    font-size: 16px !important;
+}
+
+.company-main strong {
+    font-size: 14px !important;
+}
+
+.company-main small {
+    font-size: 11px !important;
+}
+
+.company-status {
+    min-height: 28px !important;
+    padding: 0 10px !important;
+    font-size: 11px !important;
+}
+
+.company-action {
+    min-height: 36px !important;
+    padding: 0 12px !important;
+    font-size: 12px !important;
+}
+
+.mobile-company-card {
+    padding: 15px !important;
+}
+
+.mobile-company-info > span {
+    padding: 10px !important;
+    font-size: 11px !important;
+}
+
+.mobile-company-info small {
+    font-size: 9px !important;
+}
+
+@media(max-width:700px) {
+    .companies-page .page-title {
+        font-size: 26px !important;
+    }
+
+    .companies-page .page-note {
+        font-size: 13px !important;
+    }
+
+    .companies-toolbar,
+    .companies-form-card,
+    .companies-section {
+        padding: 15px !important;
+    }
+
+    .companies-form-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+}
 </style>
 
 {% endblock %}

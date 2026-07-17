@@ -61,6 +61,7 @@ def add_sale():
 def pay_sale():
     data = request.get_json()
     company_id = session.get("company_id")
+    user_id = session.get("user_id")
     
     print("=" * 50)
     print("COMPANY_ID =", company_id)
@@ -120,6 +121,7 @@ def pay_sale():
             INSERT INTO sales (
                 client_id,
                 company_id,
+                user_id,
                 sale_number,
                 total_amount,
                 paid_amount,
@@ -132,11 +134,12 @@ def pay_sale():
                 kaspi_transaction_id,
                 kaspi_method
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             client_id,
             company_id,
+            user_id,
             sale_number,
             total,
             paid,
@@ -1258,6 +1261,72 @@ def analytics():
 
     today = cur.fetchone()["total"] or 0
     
+    # 👥 Аналитика по сотрудникам
+    cur.execute("""
+        SELECT
+            u.id,
+            u.full_name,
+            u.username,
+            COALESCE(u.percent_rate,0) AS percent_rate,
+
+            COUNT(s.id) FILTER (
+                WHERE s.status='Оплачено'
+            ) AS sales_count,
+
+            COALESCE(
+                SUM(s.total_amount) FILTER (
+                    WHERE s.status='Оплачено'
+                ),
+                0
+            ) AS revenue,
+
+            COALESCE(
+                AVG(s.total_amount) FILTER (
+                    WHERE s.status='Оплачено'
+                ),
+                0
+            ) AS average_check,
+
+            COUNT(s.id) FILTER (
+                WHERE s.status='Возврат'
+                   OR COALESCE(s.is_refunded,FALSE)=TRUE
+            ) AS refunds
+
+        FROM users u
+
+        LEFT JOIN sales s
+            ON s.user_id=u.id
+           AND s.company_id=%s
+           AND DATE(s.created_at)
+               BETWEEN %s AND %s
+
+        WHERE u.company_id=%s
+
+        GROUP BY
+            u.id,
+            u.full_name,
+            u.username,
+            u.percent_rate
+
+        ORDER BY revenue DESC
+    """,(
+        company_id,
+        date_from,
+        date_to,
+        company_id
+    ))
+
+    employee_stats = cur.fetchall()
+
+    for employee in employee_stats:
+
+        employee["reward"] = (
+            float(employee["revenue"] or 0)
+            *
+            float(employee["percent_rate"] or 0)
+            / 100
+        )
+    
     pool.putconn(conn)
 
     return render_template(
@@ -1272,7 +1341,209 @@ def analytics():
         date_to=date_to,
         today=today,
         profit=profit,
+        employee_stats=employee_stats
     )
+    
+@sales_bp.route("/analytics/employee/<int:user_id>")
+def employee_analytics(user_id):
+
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    company_id = session.get("company_id")
+
+    date_from = request.args.get("from")
+    date_to = request.args.get("to")
+
+    if not date_from or not date_to:
+        date_to = now_kz().strftime("%Y-%m-%d")
+        date_from = (
+            now_kz() - timedelta(days=30)
+        ).strftime("%Y-%m-%d")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+
+        # Данные сотрудника
+        cur.execute("""
+            SELECT
+                id,
+                full_name,
+                username,
+                role,
+                phone,
+                created_at,
+                COALESCE(percent_rate, 0) AS percent_rate
+            FROM users
+            WHERE id = %s
+            AND company_id = %s
+        """, (
+            user_id,
+            company_id
+        ))
+
+        employee = cur.fetchone()
+
+        if not employee:
+            return "Сотрудник не найден", 404
+
+        # Общие показатели сотрудника
+        cur.execute("""
+            SELECT
+
+                COUNT(*) FILTER (
+                    WHERE status = 'Оплачено'
+                ) AS sales_count,
+
+                COALESCE(
+                    SUM(total_amount) FILTER (
+                        WHERE status = 'Оплачено'
+                    ),
+                    0
+                ) AS revenue,
+
+                COALESCE(
+                    AVG(total_amount) FILTER (
+                        WHERE status = 'Оплачено'
+                    ),
+                    0
+                ) AS average_check,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'Возврат'
+                    OR COALESCE(is_refunded, FALSE) = TRUE
+                ) AS refund_count,
+
+                COALESCE(
+                    SUM(total_amount) FILTER (
+                        WHERE status = 'Возврат'
+                        OR COALESCE(is_refunded, FALSE) = TRUE
+                    ),
+                    0
+                ) AS refund_total
+
+            FROM sales
+
+            WHERE company_id = %s
+            AND user_id = %s
+            AND DATE(created_at) BETWEEN %s AND %s
+        """, (
+            company_id,
+            user_id,
+            date_from,
+            date_to
+        ))
+
+        stats = cur.fetchone()
+
+        revenue = float(stats["revenue"] or 0)
+        percent_rate = float(employee["percent_rate"] or 0)
+
+        reward = revenue * percent_rate / 100
+
+        # График сотрудника
+        cur.execute("""
+            SELECT
+                DATE(created_at) AS date,
+                COALESCE(SUM(total_amount), 0) AS total
+            FROM sales
+            WHERE company_id = %s
+            AND user_id = %s
+            AND status = 'Оплачено'
+            AND DATE(created_at) BETWEEN %s AND %s
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        """, (
+            company_id,
+            user_id,
+            date_from,
+            date_to
+        ))
+
+        chart_rows = cur.fetchall()
+
+        employee_chart_labels = [
+            row["date"].strftime("%d.%m")
+            for row in chart_rows
+        ]
+
+        employee_chart_values = [
+            float(row["total"] or 0)
+            for row in chart_rows
+        ]
+
+        # Лучшие товары
+        cur.execute("""
+            SELECT
+                sale_items.name,
+                COALESCE(SUM(sale_items.quantity), 0) AS quantity,
+                COALESCE(SUM(sale_items.total), 0) AS total
+            FROM sale_items
+
+            JOIN sales
+                ON sales.id = sale_items.sale_id
+
+            WHERE sales.company_id = %s
+            AND sales.user_id = %s
+            AND sales.status = 'Оплачено'
+            AND DATE(sales.created_at) BETWEEN %s AND %s
+
+            GROUP BY sale_items.name
+
+            ORDER BY total DESC
+
+            LIMIT 10
+        """, (
+            company_id,
+            user_id,
+            date_from,
+            date_to
+        ))
+
+        top_employee_items = cur.fetchall()
+
+        # Последние продажи
+        cur.execute("""
+            SELECT
+                id,
+                sale_number,
+                total_amount,
+                sale_type,
+                status,
+                created_at
+            FROM sales
+            WHERE company_id = %s
+            AND user_id = %s
+            AND DATE(created_at) BETWEEN %s AND %s
+            ORDER BY id DESC
+            LIMIT 50
+        """, (
+            company_id,
+            user_id,
+            date_from,
+            date_to
+        ))
+
+        recent_sales = cur.fetchall()
+
+        return render_template(
+            "employee_analytics.html",
+            employee=employee,
+            stats=stats,
+            reward=reward,
+            top_employee_items=top_employee_items,
+            recent_sales=recent_sales,
+            employee_chart_labels=employee_chart_labels,
+            employee_chart_values=employee_chart_values,
+            date_from=date_from,
+            date_to=date_to
+        )
+
+    finally:
+        cur.close()
+        pool.putconn(conn)
     
 @sales_bp.route("/api/analytics")
 def analytics_api():

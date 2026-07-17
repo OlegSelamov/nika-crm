@@ -2,335 +2,877 @@
 
 {% block content %}
 
-<h2>Каталог</h2>
-
-<a class="btn" href="/items/add">+ Добавить</a>
-
-<br><br>
-
-<div class="desktop-table">
-	<table class="client-table">
-
-	<tr>
-		<th style="width:70px;">Фото</th>
-		<th>Название</th>
-		<th style="width:120px;">Цена</th>
-		<th style="width:80px;">Скидка</th>
-		<th style="width:120px;">Ед.изм.</th>
-		<th style="width:120px;">Действия</th>
-	</tr>
-
-	{% for i in items %}
-	<tr>
-
-		<td>
-			{% if i.image %}
-				<img src="{{ i.image }}" class="table-img">
-			{% else %}
-				<img src="/static/img/no-photo.png" class="table-img">
-			{% endif %}
-		</td>
-
-		<td>{{ i.name }}</td>
-		<td>{{ i.retail_price or 0 }} тг</td>
-		<td>{{ i.discount_percent or 0 }}%</td>
-		<td>{{ i.unit or 'шт' }}</td>
-
-		<td>
-			<a href="/items/{{ i.id }}/edit" class="btn btn-edit">✏️</a>
-			<a href="/items/{{ i.id }}/delete" class="btn btn-close">🗑</a>
-		</td>
-
-	</tr>
-	{% endfor %}
-
-	</table>
-</div>
-
-<div class="mobile-items-list">
-
-{% for i in items %}
-
-	<div class="mobile-item-card">
-
-		<div class="mobile-item-left">
-
-			{% if i.image %}
-				<img src="{{ i.image }}" class="mobile-item-img">
-			{% else %}
-				<img src="/static/img/no-photo.png"
-					 class="mobile-item-img">
-			{% endif %}
-
-		</div>
-
-		<div class="mobile-item-body">
-
-			<div class="mobile-item-name">
-				{{ i.name }}
-			</div>
-
-			<div class="mobile-item-meta">
-
-				<div class="mobile-price">
-					{{ i.retail_price or 0 }} ₸
-				</div>
-
-				<div class="mobile-discount">
-					-{{ i.discount_percent or 0 }}%
-				</div>
-
-			</div>
-
-			<div class="mobile-unit">
-				{{ i.unit or 'шт' }}
-			</div>
-
-			<div class="mobile-actions">
-
-				<a href="/items/{{ i.id }}/edit"
-				   class="btn btn-edit">
-
-					Изменить
-
-				</a>
-
-				<a href="/items/{{ i.id }}/delete"
-				   class="btn btn-close">
-
-					Удалить
-
-				</a>
-
-			</div>
-
-		</div>
-
-	</div>
-
-{% endfor %}
-
-</div>
-
 <style>
-
-/* ================= MOBILE ITEMS ================= */
-
-.mobile-items-list {
-	display: none;
+:root {
+    --cat-card: #ffffff;
+    --cat-card-soft: #fafafe;
+    --cat-border: #e5e7ef;
+    --cat-text: #202434;
+    --cat-muted: #73798d;
+    --cat-purple: #7257ff;
+    --cat-purple-soft: #efecff;
+    --cat-green: #1b8f68;
+    --cat-green-soft: #e8f7f1;
+    --cat-orange: #b96d1b;
+    --cat-orange-soft: #fff2e2;
+    --cat-red: #cb4848;
+    --cat-red-soft: #fdecec;
+    --cat-shadow: 0 10px 28px rgba(52, 48, 89, .08);
 }
 
-@media (max-width:768px){
-
-	/* desktop */
-
-	.desktop-table {
-		display: none;
-	}
-
-	/* top */
-
-	h2 {
-		font-size: 24px;
-		margin-bottom: 12px;
-	}
-
-	/* add button */
-
-	.btn {
-		height: 44px;
-		font-size: 14px;
-		border-radius: 12px;
-	}
-
-	/* list */
-
-	.mobile-items-list {
-
-		display: flex;
-		flex-direction: column;
-
-		gap: 12px;
-
-		margin-top: 12px;
-	}
-
-	/* card */
-
-	.mobile-item-card {
-
-		display: flex;
-		gap: 12px;
-
-		padding: 12px;
-
-		border-radius: 18px;
-
-		background: rgba(255,255,255,.92);
-
-		box-shadow:
-		0 4px 14px rgba(0,0,0,.06);
-	}
-
-	/* image */
-
-	.mobile-item-img {
-
-		width: 84px;
-		height: 84px;
-
-		border-radius: 14px;
-
-		object-fit: cover;
-
-		background: #f1f5f9;
-	}
-
-	/* body */
-
-	.mobile-item-body {
-
-		flex: 1;
-
-		min-width: 0;
-	}
-
-	.mobile-item-name {
-
-		font-size: 14px;
-		font-weight: 700;
-
-		color: #0f172a;
-
-		line-height: 1.3;
-	}
-
-	/* meta */
-
-	.mobile-item-meta {
-
-		display: flex;
-		align-items: center;
-
-		gap: 8px;
-
-		margin-top: 8px;
-	}
-
-	.mobile-price {
-
-		font-size: 16px;
-		font-weight: 800;
-
-		color: #111827;
-	}
-
-	.mobile-discount {
-
-		font-size: 12px;
-
-		padding: 4px 8px;
-
-		border-radius: 999px;
-
-		background: rgba(239,68,68,.12);
-
-		color: #ef4444;
-
-		font-weight: 700;
-	}
-
-	.mobile-unit {
-
-		margin-top: 6px;
-
-		font-size: 12px;
-
-		color: #64748b;
-	}
-
-	/* buttons */
-
-	.mobile-actions {
-
-		display: flex;
-
-		gap: 8px;
-
-		margin-top: 10px;
-	}
-
-	.mobile-actions .btn {
-
-		flex: 1;
-
-		height: 42px;
-
-		display: flex;
-		align-items: center;
-		justify-content: center;
-
-		gap: 6px;
-
-		padding: 0 12px !important;
-
-		border-radius: 12px;
-
-		font-size: 15px;
-		font-weight: 600;
-
-		line-height: 1;
-
-		min-width: 0;
-	}
-	
-	.mobile-actions .btn-edit {
-
-		background: linear-gradient(
-		135deg,
-		#3b82f6,
-		#2563eb
-		);
-
-		color: white;
-	}
-
-	.mobile-actions .btn-close {
-
-		background: linear-gradient(
-		135deg,
-		#ef4444,
-		#dc2626
-		);
-
-		color: white;
-	}
-
-	/* shell */
-
-	.page-shell {
-		padding: 12px !important;
-	}
+.catalog-page { width:100%; min-width:0; color:var(--cat-text); }
+.catalog-header { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:18px; }
+.catalog-title { margin:0; color:var(--cat-text)!important; font-size:28px; font-weight:800; line-height:1.2; }
+.catalog-note { margin-top:5px; color:var(--cat-muted); font-size:13px; }
+.catalog-primary-btn,.catalog-secondary-btn,.catalog-icon-btn,.catalog-danger-btn {
+    min-height:42px; border-radius:12px; border:0; font:inherit; font-size:12px; font-weight:800;
+    cursor:pointer; transition:.18s ease; text-decoration:none; box-sizing:border-box;
 }
+.catalog-primary-btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 17px; color:#fff!important; background:linear-gradient(135deg,var(--cat-purple),#9a59e8); box-shadow:0 9px 20px rgba(114,87,255,.22); }
+.catalog-primary-btn:hover { transform:translateY(-1px); box-shadow:0 12px 24px rgba(114,87,255,.28); }
+.catalog-secondary-btn { display:inline-flex; align-items:center; justify-content:center; padding:0 16px; color:var(--cat-purple)!important; background:var(--cat-purple-soft); border:1px solid #d9d2ff; }
+.catalog-section { min-width:0; padding:20px; border:1px solid var(--cat-border); border-radius:19px; background:var(--cat-card); box-shadow:var(--cat-shadow); }
+.catalog-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:17px; }
+.catalog-search { flex:1; min-width:220px; height:42px; display:flex; align-items:center; gap:8px; padding:0 12px; border:1px solid var(--cat-border); border-radius:12px; background:#fff; }
+.catalog-search:focus-within { border-color:#baaefe; box-shadow:0 0 0 3px rgba(114,87,255,.09); }
+.catalog-search input { width:100%; min-width:0; border:0; outline:0; color:var(--cat-text); background:transparent; font:inherit; font-size:12px; }
+.catalog-search input::placeholder { color:#9ca2b1; }
+.catalog-filter { height:42px; min-width:170px; padding:0 34px 0 12px; border:1px solid var(--cat-border); border-radius:12px; color:var(--cat-text); background:#fff; outline:0; font:inherit; font-size:11px; }
+.catalog-scan-link { display:none; }
+.catalog-table-wrap { width:100%; overflow-x:auto; }
+.catalog-table { width:100%; min-width:930px; border-collapse:collapse; }
+.catalog-table th,.catalog-table td { padding:12px 10px; border-bottom:1px solid var(--cat-border); text-align:left; vertical-align:middle; }
+.catalog-table th { color:#858b9e; background:#fafafe; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+.catalog-table td { color:var(--cat-text); font-size:11px; }
+.catalog-table tbody tr:hover { background:#faf8ff; }
+.catalog-product { display:flex; align-items:center; gap:11px; min-width:220px; }
+.catalog-product__image { flex:0 0 46px; width:46px; height:46px; border-radius:12px; object-fit:cover; background:#f1f2f6; border:1px solid var(--cat-border); }
+.catalog-product__info { min-width:0; display:grid; gap:3px; }
+.catalog-product__info strong { max-width:310px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--cat-text); font-size:12px; }
+.catalog-product__info small { color:var(--cat-muted); font-size:9px; }
+.catalog-code { display:grid; gap:3px; min-width:120px; }
+.catalog-code strong { font-size:10px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+.catalog-code small { color:var(--cat-muted); font-size:8px; }
+.catalog-category { display:inline-flex; align-items:center; min-height:25px; padding:0 9px; border-radius:999px; color:#674cdb; background:#eeeaff; font-size:9px; font-weight:800; white-space:nowrap; }
+.catalog-price { color:var(--cat-text); font-size:12px; font-weight:850; white-space:nowrap; }
+.catalog-unit { color:var(--cat-muted); white-space:nowrap; }
+.catalog-actions { display:flex; justify-content:flex-end; gap:7px; }
+.catalog-icon-btn { width:34px; min-height:34px; display:grid; place-items:center; padding:0; color:var(--cat-purple); background:var(--cat-purple-soft); border:1px solid #d9d2ff; }
+.catalog-danger-btn { width:34px; min-height:34px; display:grid; place-items:center; padding:0; color:var(--cat-red); background:var(--cat-red-soft); border:1px solid #f4cccc; }
+.catalog-empty { display:none; min-height:220px; place-content:center; justify-items:center; padding:24px; text-align:center; }
+.catalog-empty span { width:55px; height:55px; display:grid; place-items:center; margin-bottom:12px; border-radius:17px; color:var(--cat-purple); background:var(--cat-purple-soft); font-size:23px; }
+.catalog-empty strong { font-size:14px; }
+.catalog-empty p { margin:6px 0 0; color:var(--cat-muted); font-size:11px; }
+.catalog-mobile-list { display:none; }
 
-/* ===== SMALL PHONES ===== */
+.catalog-modal { position:fixed !important; z-index:2147483000 !important; inset:0 !important; width:100vw !important; height:100dvh !important; display:none; align-items:center; justify-content:center; padding:10px; overflow:hidden; margin:0 !important; transform:none !important; contain:none !important; }
+.catalog-modal.is-open { display:flex; }
+.catalog-modal__backdrop { position:fixed; inset:0; background:rgba(45,42,69,.34); backdrop-filter:blur(6px); }
+.catalog-modal__dialog { position:relative; z-index:1; width:min(760px,100%); height:min(760px,calc(100dvh - 20px)); max-height:calc(100dvh - 20px); display:flex; flex-direction:column; border:1px solid var(--cat-border); border-radius:20px; background:#fff; box-shadow:0 28px 80px rgba(43,39,78,.22); overflow:hidden; }
+.catalog-modal__head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; padding:19px 20px; border-bottom:1px solid var(--cat-border); background:#fbfbfe; }
+.catalog-modal__head h3 { margin:0 0 4px; font-size:17px; }
+.catalog-modal__head p { margin:0; color:var(--cat-muted); font-size:11px; }
+.catalog-modal__close { flex:0 0 34px; width:34px; height:34px; border:1px solid var(--cat-border); border-radius:10px; color:#666d7f; background:#f1f2f6; font-size:22px; cursor:pointer; }
+.catalog-modal__form { min-height:0; flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.catalog-modal__body { min-height:0; flex:1; overflow-y:auto; padding:20px; overscroll-behavior:contain; }
+.catalog-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.catalog-field { min-width:0; display:grid; gap:7px; }
+.catalog-field--wide { grid-column:1/-1; }
+.catalog-field>span { color:#555c70; font-size:10px; font-weight:750; }
+.catalog-field input,.catalog-field select,.catalog-field textarea { width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--cat-border); border-radius:11px; color:var(--cat-text); background:#fff; outline:none; font:inherit; font-size:12px; }
+.catalog-field input,.catalog-field select { min-height:43px; padding:0 12px; }
+.catalog-field textarea { padding:11px 12px; resize:vertical; }
+.catalog-field input:focus,.catalog-field select:focus,.catalog-field textarea:focus { border-color:#b9adff; box-shadow:0 0 0 3px rgba(114,87,255,.09); }
+.catalog-field small { color:var(--cat-muted); font-size:9px; }
+.catalog-barcode-row { display:flex; gap:8px; align-items:stretch; }
+.catalog-barcode-row input { flex:1; }
+.catalog-barcode-search { flex:0 0 auto; min-width:112px; min-height:43px; padding:0 13px; border:1px solid #d9d2ff; border-radius:11px; color:var(--cat-purple); background:var(--cat-purple-soft); font:inherit; font-size:10px; font-weight:850; cursor:pointer; }
+.catalog-barcode-status { display:none; align-items:center; gap:8px; min-height:36px; margin-top:2px; padding:8px 11px; border:1px solid var(--cat-border); border-radius:10px; font-size:10px; font-weight:750; }
+.catalog-barcode-status.is-visible { display:flex; }
+.catalog-barcode-status.is-loading { color:#6652c9; background:#f4f1ff; border-color:#ddd6ff; }
+.catalog-barcode-status.is-success { color:var(--cat-green); background:var(--cat-green-soft); border-color:#c9eadf; }
+.catalog-barcode-status.is-warning { color:var(--cat-orange); background:var(--cat-orange-soft); border-color:#f5d7b4; }
+.catalog-barcode-status.is-error { color:var(--cat-red); background:var(--cat-red-soft); border-color:#f4cccc; }
+.catalog-marked-row { display:flex; align-items:center; gap:9px; min-height:43px; padding:0 12px; border:1px solid var(--cat-border); border-radius:11px; background:#fff; }
+.catalog-marked-row input { width:17px; height:17px; accent-color:var(--cat-purple); }
+.catalog-marked-badge { display:inline-flex; align-items:center; min-height:24px; padding:0 9px; border-radius:999px; color:#5f6678; background:#f1f2f6; font-size:9px; font-weight:850; }
+.catalog-marked-badge.is-marked { color:var(--cat-green); background:var(--cat-green-soft); }
+.catalog-modal__footer { flex:0 0 auto; display:flex; align-items:center; justify-content:flex-end; gap:9px; padding:14px 20px; border-top:1px solid var(--cat-border); background:#fff; }
+body.catalog-modal-open { overflow:hidden; }
+.catalog-category-control { display:flex; gap:8px; align-items:stretch; }
+.catalog-category-control select { flex:1; min-width:0; }
+.catalog-category-manage-btn { flex:0 0 auto; min-height:43px; padding:0 14px; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid #d9d2ff; border-radius:11px; color:var(--cat-purple); background:linear-gradient(180deg,#f7f4ff,#eee9ff); font:inherit; font-size:10px; font-weight:850; cursor:pointer; white-space:nowrap; box-shadow:0 5px 14px rgba(114,87,255,.10); transition:.18s ease; }
+.catalog-category-manage-btn:hover { transform:translateY(-1px); border-color:#bfb3ff; box-shadow:0 8px 18px rgba(114,87,255,.16); }
+.catalog-category-manage-btn__icon { width:21px; height:21px; display:grid; place-items:center; border-radius:7px; color:#fff; background:var(--cat-purple); font-size:16px; line-height:1; }
+.category-manager { position:fixed !important; inset:0 !important; z-index:2147483646 !important; display:none; align-items:center; justify-content:center; padding:12px; background:rgba(36,31,67,.48); backdrop-filter:blur(8px); }
+.category-manager.is-open { display:flex !important; }
+.category-manager__dialog { width:min(560px,100%); max-height:calc(100dvh - 24px); display:flex; flex-direction:column; overflow:hidden; border:1px solid #ddd8f7; border-radius:20px; background:#fff; box-shadow:0 32px 100px rgba(28,20,74,.32); }
+.category-manager__head { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:17px 18px; border-bottom:1px solid var(--cat-border); background:#fbfaff; }
+.category-manager__head h4 { margin:0; font-size:16px; }
+.category-manager__close { width:34px; height:34px; border:1px solid var(--cat-border); border-radius:10px; color:#666d7f; background:#f1f2f6; font-size:22px; cursor:pointer; }
+.category-manager__body { min-height:0; overflow-y:auto; padding:18px; }
+.category-manager__form { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:9px; padding:12px; border:1px solid var(--cat-border); border-radius:14px; background:#faf9ff; }
+.category-manager__form input { width:100%; min-height:42px; padding:0 12px; border:1px solid var(--cat-border); border-radius:10px; font:inherit; box-sizing:border-box; }
+.category-manager__save { min-height:42px; padding:0 15px; border:0; border-radius:10px; color:#fff; background:var(--cat-purple); font:inherit; font-size:10px; font-weight:850; cursor:pointer; }
+.category-manager__list { display:grid; gap:8px; margin-top:12px; }
+.category-manager__item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 12px; border:1px solid var(--cat-border); border-radius:12px; background:#fff; }
+.category-manager__meta { min-width:0; display:grid; gap:3px; }
+.category-manager__meta b { font-size:11px; overflow-wrap:anywhere; }
+.category-manager__meta small { color:var(--cat-muted); font-size:9px; }
+.category-manager__actions { display:flex; gap:7px; }
+.category-manager__actions button { width:34px; height:34px; display:grid; place-items:center; border:1px solid #ddd8f7; border-radius:9px; color:var(--cat-purple); background:var(--cat-purple-soft); cursor:pointer; }
+.category-manager__actions button.delete { color:var(--cat-red); border-color:#f3d0d0; background:var(--cat-red-soft); }
+@media(max-width:600px){ .catalog-category-control { display:grid; grid-template-columns:1fr; } .catalog-category-manage-btn { width:100%; } .category-manager { padding:6px; } .category-manager__dialog { max-height:calc(100dvh - 12px); border-radius:16px; } .category-manager__form { grid-template-columns:1fr; } .category-manager__save { width:100%; } }
 
-@media (max-width:420px){
 
-	.mobile-item-img {
-		width: 72px;
-		height: 72px;
-	}
-
-	.mobile-item-name {
-		font-size: 13px;
-	}
-
-	.mobile-price {
-		font-size: 15px;
-	}
+@media(max-width:760px) {
+    .catalog-header { align-items:stretch; flex-direction:column; gap:12px; }
+    .catalog-title { font-size:24px; }
+    .catalog-primary-btn { width:100%; }
+    .catalog-section { padding:14px; border-radius:16px; }
+    .catalog-toolbar { display:grid; grid-template-columns:1fr; }
+    .catalog-search { min-width:0; }
+    .catalog-filter { width:100%; }
+    .catalog-scan-link { width:100%; min-height:44px; display:flex; align-items:center; justify-content:center; gap:9px; padding:0 14px; border:1px solid #d9d2ff; border-radius:12px; color:var(--cat-purple); background:var(--cat-purple-soft); text-decoration:none; font-size:11px; font-weight:850; box-sizing:border-box; }
+    .catalog-table-wrap { display:none; }
+    .catalog-mobile-list { display:grid; gap:10px; }
+    .catalog-mobile-card { padding:13px; border:1px solid var(--cat-border); border-radius:15px; background:var(--cat-card-soft); }
+    .catalog-mobile-card__top { display:flex; align-items:flex-start; gap:11px; }
+    .catalog-mobile-card__top .catalog-product { flex:1; min-width:0; }
+    .catalog-mobile-card__top .catalog-product__info strong { white-space:normal; overflow-wrap:anywhere; }
+    .catalog-mobile-card__meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:12px; }
+    .catalog-mobile-card__meta>div { min-width:0; display:grid; gap:3px; padding:9px; border:1px solid var(--cat-border); border-radius:10px; background:#fff; font-size:10px; overflow-wrap:anywhere; }
+    .catalog-mobile-card__meta small { color:var(--cat-muted); font-size:8px; }
+    .catalog-mobile-card__actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:11px; }
+    .catalog-mobile-card__actions button,.catalog-mobile-card__actions a { width:100%; min-height:37px; display:grid; place-items:center; border-radius:10px; font:inherit; font-size:10px; font-weight:800; text-decoration:none; cursor:pointer; box-sizing:border-box; }
+    .catalog-mobile-card__actions button { color:var(--cat-purple); background:var(--cat-purple-soft); border:1px solid #d9d2ff; }
+    .catalog-mobile-card__actions a { color:var(--cat-red); background:var(--cat-red-soft); border:1px solid #f4cccc; }
+    .catalog-modal { align-items:center; padding:6px; }
+    .catalog-modal__dialog { width:100%; height:calc(100dvh - 12px); max-height:calc(100dvh - 12px); margin:0; border-radius:16px; }
+    .catalog-modal__head,.catalog-modal__body { padding:14px; }
+    .catalog-form-grid { grid-template-columns:1fr; gap:12px; }
+    .catalog-field--wide { grid-column:auto; }
+    .catalog-modal__footer { padding:12px 14px; }
+    .catalog-modal__footer>* { flex:1; }
+    .catalog-barcode-row { display:grid; grid-template-columns:1fr; }
+    .catalog-barcode-search { width:100%; }
 }
-
 </style>
+
+{% set categories = categories|default([]) %}
+{% set category_source = categories %}
+{% if not category_source %}
+    {% set ns = namespace(values=[]) %}
+    {% for product in items %}
+        {% set cname = product.category_name|default(product.category|default('', true), true) %}
+        {% if cname and cname not in ns.values %}
+            {% set _ = ns.values.append(cname) %}
+        {% endif %}
+    {% endfor %}
+    {% set category_source = ns.values %}
+{% endif %}
+
+<div class="catalog-page">
+    <div class="catalog-header">
+        <div>
+            <h1 class="catalog-title">Каталог товаров</h1>
+            <div class="catalog-note">Товары, цены, категории, штрихкоды и единицы измерения</div>
+        </div>
+        <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()">＋ Добавить товар</button>
+    </div>
+
+    <section class="catalog-section">
+        <div class="catalog-toolbar">
+            <label class="catalog-search">
+                <span>⌕</span>
+                <input type="search" id="catalogSearch" placeholder="Название, штрихкод, GTIN или NTIN" autocomplete="off">
+            </label>
+
+            <select class="catalog-filter" id="catalogCategoryFilter" onchange="filterCatalogItems()">
+                <option value="all">Все категории</option>
+                {% for category in category_source %}
+                <option value="{{ (category.name if category.name is defined else category)|lower }}">
+                    {{ category.name if category.name is defined else category }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <a href="/scanner" class="catalog-scan-link" aria-label="Сканировать штрихкод"><span aria-hidden="true">▥</span><span>Сканировать штрихкод камерой</span></a>
+        </div>
+
+        <div class="catalog-table-wrap">
+            <table class="catalog-table">
+                <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Категория</th>
+                        <th>Штрихкод</th>
+                        <th>Цена</th>
+                        <th>Ед. изм.</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for i in items %}
+                    {% set category_name = i.category_name|default(i.category|default('Без категории'), true) %}
+                    <tr class="catalog-item"
+                        data-category="{{ category_name|lower }}"
+                        data-search="{{ ((i.name or '') ~ ' ' ~ (i.barcode or '') ~ ' ' ~ (i.gtin or '') ~ ' ' ~ (i.ntin or '') ~ ' ' ~ category_name)|lower }}">
+                        <td>
+                            <div class="catalog-product">
+                                <img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">
+                                <div class="catalog-product__info">
+                                    <strong>{{ i.name }}</strong>
+                                    <small>
+                                        {% if i.gtin %}GTIN: {{ i.gtin }}{% elif i.ntin %}NTIN: {{ i.ntin }}{% else %}ID: {{ i.id }}{% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="catalog-category">{{ category_name }}</span></td>
+                        <td>
+                            <div class="catalog-code">
+                                <strong>{{ i.barcode or '—' }}</strong>
+                                <small>{% if i.barcode %}Основной штрихкод{% else %}Не указан{% endif %}</small>
+                            </div>
+                        </td>
+                        <td><span class="catalog-price">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</span></td>
+                        <td><span class="catalog-unit">{{ i.unit or 'шт' }}</span></td>
+                        <td>
+                            <div class="catalog-actions">
+                                <button class="catalog-icon-btn" type="button" title="Редактировать"
+                                    onclick='openEditItemModal({{ {
+                                        "id": i.id,
+                                        "name": i.name or "",
+                                        "category": category_name,
+                                        "category_id": i.category_id|default(""),
+                                        "barcode": i.barcode or "",
+                                        "gtin": i.gtin or "",
+                                        "ntin": i.ntin or "",
+                                        "retail_price": i.retail_price or 0,
+                                        "purchase_price": i.purchase_price|default(0),
+                                        "unit": i.unit or "шт",
+                                        "is_marked": i.is_marked|default(false),
+                                        "image": i.image or ""
+                                    }|tojson }})'>✎</button>
+                                <a class="catalog-danger-btn" href="/items/{{ i.id }}/delete" title="Удалить" onclick="return confirm('Удалить товар «{{ i.name|e }}»?')">×</a>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="catalog-mobile-list">
+        {% for i in items %}
+            {% set category_name = i.category_name|default(i.category|default('Без категории'), true) %}
+            <article class="catalog-mobile-card catalog-item"
+                     data-category="{{ category_name|lower }}"
+                     data-search="{{ ((i.name or '') ~ ' ' ~ (i.barcode or '') ~ ' ' ~ (i.gtin or '') ~ ' ' ~ (i.ntin or '') ~ ' ' ~ category_name)|lower }}">
+                <div class="catalog-mobile-card__top">
+                    <div class="catalog-product">
+                        <img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">
+                        <div class="catalog-product__info">
+                            <strong>{{ i.name }}</strong>
+                            <small>{{ category_name }}</small>
+                        </div>
+                    </div>
+                    <span class="catalog-price">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</span>
+                </div>
+                <div class="catalog-mobile-card__meta">
+                    <div><small>Штрихкод</small>{{ i.barcode or '—' }}</div>
+                    <div><small>Единица</small>{{ i.unit or 'шт' }}</div>
+                    <div><small>GTIN</small>{{ i.gtin or '—' }}</div>
+                    <div><small>NTIN</small>{{ i.ntin or '—' }}</div>
+                </div>
+                <div class="catalog-mobile-card__actions">
+                    <button type="button" onclick='openEditItemModal({{ {
+                        "id": i.id,
+                        "name": i.name or "",
+                        "category": category_name,
+                        "category_id": i.category_id|default(""),
+                        "barcode": i.barcode or "",
+                        "gtin": i.gtin or "",
+                        "ntin": i.ntin or "",
+                        "retail_price": i.retail_price or 0,
+                        "purchase_price": i.purchase_price|default(0),
+                        "unit": i.unit or "шт",
+                        "is_marked": i.is_marked|default(false),
+                        "image": i.image or ""
+                    }|tojson }})'>Изменить</button>
+                    <a href="/items/{{ i.id }}/delete" onclick="return confirm('Удалить товар «{{ i.name|e }}»?')">Удалить</a>
+                </div>
+            </article>
+        {% endfor %}
+        </div>
+
+        <div id="catalogNoResults" class="catalog-empty">
+            <span>⌕</span>
+            <strong>Товары не найдены</strong>
+            <p>Измените поисковый запрос или выбранную категорию.</p>
+        </div>
+    </section>
+</div>
+
+<div class="catalog-modal" id="itemModal" aria-hidden="true">
+    <div class="catalog-modal__backdrop" onclick="closeItemModal()"></div>
+    <div class="catalog-modal__dialog" role="dialog" aria-modal="true">
+        <div class="catalog-modal__head">
+            <div>
+                <h3 id="itemModalTitle">Новый товар</h3>
+                <p>Основные данные товара и идентификаторы маркировки</p>
+            </div>
+            <button class="catalog-modal__close" type="button" onclick="closeItemModal()">×</button>
+        </div>
+
+        <form class="catalog-modal__form" id="itemForm" method="post" action="/items/add" enctype="multipart/form-data">
+            <div class="catalog-modal__body">
+            <div class="catalog-form-grid">
+                <div class="catalog-field catalog-field--wide">
+                    <span>Штрихкод</span>
+                    <div class="catalog-barcode-row">
+                        <input type="text" name="barcode" id="itemBarcode" inputmode="numeric" autocomplete="off" placeholder="Сканируйте или введите код">
+                        <button class="catalog-barcode-search" id="barcodeSearchButton" type="button" onclick="lookupBarcode(true)">Найти товар</button>
+                    </div>
+                    <div class="catalog-barcode-status" id="barcodeLookupStatus" role="status" aria-live="polite"></div>
+                    <small>USB-сканер: после считывания и Enter поиск запускается сразу.</small>
+                </div>
+
+                <label class="catalog-field catalog-field--wide">
+                    <span>Название товара *</span>
+                    <input type="text" name="name" id="itemName" required placeholder="Например: Молоко 3,2%">
+                </label>
+
+                <label class="catalog-field">
+                    <span>Категория</span>
+                    <div class="catalog-category-control">
+                        <select name="category_id" id="itemCategoryId">
+                            <option value="">Без категории</option>
+                            {% for category in category_source %}
+                                {% set category_name = category.name if category.name is defined else category %}
+                                {% set category_value = category.id if category.id is defined else category_name %}
+                                {% set category_markup = category.markup_percent if category.markup_percent is defined else 0 %}
+                                <option value="{{ category_value }}" data-id="{{ category.id if category.id is defined else '' }}" data-markup="{{ category_markup }}">{{ category_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="catalog-category-manage-btn" onclick="openCategoryManager()" title="Добавить или изменить категорию"><span class="catalog-category-manage-btn__icon">＋</span><span>Добавить категорию</span></button>
+                    </div>
+                    <input type="hidden" name="category" id="itemCategory">
+                </label>
+
+                <label class="catalog-field">
+                    <span>Единица измерения</span>
+                    <select name="unit" id="itemUnit">
+                        <option value="шт">шт</option>
+                        <option value="кг">кг</option>
+                        <option value="г">г</option>
+                        <option value="л">л</option>
+                        <option value="мл">мл</option>
+                        <option value="м">м</option>
+                        <option value="час">час</option>
+                        <option value="услуга">услуга</option>
+                    </select>
+                </label>
+
+                <label class="catalog-field">
+                    <span>GTIN</span>
+                    <input type="text" name="gtin" id="itemGtin" placeholder="Код из Национального каталога">
+                </label>
+
+                <label class="catalog-field">
+                    <span>NTIN</span>
+                    <input type="text" name="ntin" id="itemNtin" placeholder="NTIN товара">
+                </label>
+
+                <label class="catalog-field">
+                    <span>Маркировка</span>
+                    <span class="catalog-marked-row">
+                        <input type="checkbox" name="is_marked" id="itemIsMarked" value="1" onchange="updateMarkedBadge()">
+                        <span class="catalog-marked-badge" id="itemMarkedBadge">Обычный товар</span>
+                    </span>
+                </label>
+
+                <label class="catalog-field">
+                    <span>Закупочная цена, ₸</span>
+                    <input type="number" name="purchase_price" id="itemPurchasePrice" min="0" step="1" placeholder="0">
+                </label>
+
+                <label class="catalog-field">
+                    <span>Розничная цена, ₸ *</span>
+                    <input type="number" name="retail_price" id="itemRetailPrice" min="0" step="1" required placeholder="0">
+                </label>
+
+                <label class="catalog-field catalog-field--wide">
+                    <span>Изображение</span>
+                    <input type="file" name="images" accept="image/*">
+                    <small>При редактировании можно оставить поле пустым, чтобы сохранить текущее фото.</small>
+                </label>
+            </div>
+            </div>
+
+            <div class="catalog-modal__footer">
+                <button class="catalog-secondary-btn" type="button" onclick="closeItemModal()">Отмена</button>
+                <button class="catalog-primary-btn" type="submit">Сохранить товар</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<div class="category-manager" id="categoryManager" aria-hidden="true">
+    <div class="category-manager__dialog" role="dialog" aria-modal="true">
+        <div class="category-manager__head">
+            <h4 id="categoryManagerTitle">Категории</h4>
+            <button type="button" class="category-manager__close" onclick="closeCategoryManager()">×</button>
+        </div>
+        <div class="category-manager__body">
+            <div class="category-manager__form">
+                <input type="hidden" id="editingCategoryId">
+                <input type="text" id="categoryNameInput" placeholder="Название категории">
+                <input type="number" id="categoryMarkupInput" min="0" step="0.01" placeholder="Наценка %">
+                <button type="button" class="category-manager__save" id="saveCategoryButton" onclick="saveCategory()">Добавить</button>
+            </div>
+            <div class="category-manager__list" id="categoryManagerList">
+                {% for category in category_source %}
+                    {% if category.id is defined %}
+                    <div class="category-manager__item" data-id="{{ category.id }}" data-name="{{ category.name }}" data-markup="{{ category.markup_percent|default(0) }}">
+                        <div class="category-manager__meta"><b>{{ category.name }}</b><small>Наценка: {{ category.markup_percent|default(0) }}%</small></div>
+                        <div class="category-manager__actions">
+                            <button type="button" onclick="startEditCategory(this.closest('.category-manager__item'))" title="Редактировать">✎</button>
+                            <button type="button" class="delete" onclick="removeCategory(this.closest('.category-manager__item'))" title="Удалить">🗑</button>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var input = document.getElementById('catalogSearch');
+        if (input) input.addEventListener('input', filterCatalogItems);
+    });
+
+    var categorySelect = document.getElementById('itemCategoryId');
+    if (categorySelect) {
+        categorySelect.addEventListener('change', syncCategoryName);
+    }
+
+    var retailPriceInput = document.getElementById('itemRetailPrice');
+    var purchasePriceInput = document.getElementById('itemPurchasePrice');
+
+    if (retailPriceInput) {
+        retailPriceInput.addEventListener('input', function () {
+            priceCalculationSource = 'retail';
+            calculatePurchasePrice();
+        });
+    }
+
+    if (purchasePriceInput) {
+        purchasePriceInput.addEventListener('input', function () {
+            priceCalculationSource = 'purchase';
+            calculateRetailPrice();
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeItemModal();
+    });
+})();
+
+document.addEventListener('DOMContentLoaded', function () {
+    mountItemModalToBody();
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeItemModal();
+    });
+});
+
+function filterCatalogItems() {
+    var search = document.getElementById('catalogSearch');
+    var category = document.getElementById('catalogCategoryFilter');
+    var query = search ? search.value.trim().toLowerCase() : '';
+    var selectedCategory = category ? category.value.toLowerCase() : 'all';
+    var rows = document.querySelectorAll('.catalog-item');
+    var visible = 0;
+
+    rows.forEach(function (row) {
+        var matchesSearch = !query || (row.dataset.search || '').includes(query);
+        var matchesCategory = selectedCategory === 'all' || (row.dataset.category || '') === selectedCategory;
+        var show = matchesSearch && matchesCategory;
+        row.style.display = show ? '' : 'none';
+        if (show) visible += 1;
+    });
+
+    var empty = document.getElementById('catalogNoResults');
+    if (empty) empty.style.display = visible === 0 ? 'grid' : 'none';
+}
+
+function getSelectedCategoryMarkup() {
+    var select = document.getElementById('itemCategoryId');
+    if (!select || select.selectedIndex < 0) return 0;
+
+    var option = select.options[select.selectedIndex];
+    return parseFloat(option.dataset.markup || '0') || 0;
+}
+
+var priceCalculationSource = 'purchase';
+var suppressPriceCalculation = false;
+
+function roundPrice(value) {
+    // В обе стороны всегда округляем вверх до целого тенге.
+    return Math.ceil(Number(value) || 0);
+}
+
+function calculatePurchasePrice() {
+    if (suppressPriceCalculation) return;
+
+    var retailField = document.getElementById('itemRetailPrice');
+    var purchaseField = document.getElementById('itemPurchasePrice');
+    if (!retailField || !purchaseField) return;
+
+    var retail = parseFloat(retailField.value) || 0;
+    var markup = getSelectedCategoryMarkup();
+
+    if (retail <= 0) {
+        purchaseField.value = '';
+        return;
+    }
+
+    var divisor = 1 + (markup / 100);
+    var purchase = divisor > 0 ? retail / divisor : retail;
+    purchaseField.value = roundPrice(purchase);
+}
+
+function calculateRetailPrice() {
+    if (suppressPriceCalculation) return;
+
+    var retailField = document.getElementById('itemRetailPrice');
+    var purchaseField = document.getElementById('itemPurchasePrice');
+    if (!retailField || !purchaseField) return;
+
+    var purchase = parseFloat(purchaseField.value) || 0;
+    var markup = getSelectedCategoryMarkup();
+
+    if (purchase <= 0) {
+        retailField.value = '';
+        return;
+    }
+
+    var retail = purchase * (1 + markup / 100);
+    retailField.value = roundPrice(retail);
+}
+
+function recalculatePricesByLastSource() {
+    if (priceCalculationSource === 'retail') {
+        calculatePurchasePrice();
+    } else {
+        calculateRetailPrice();
+    }
+}
+
+function syncCategoryName(skipPriceCalculation) {
+    var select = document.getElementById('itemCategoryId');
+    var hidden = document.getElementById('itemCategory');
+    if (!select || !hidden) return;
+
+    hidden.value = select.options[select.selectedIndex]
+        ? select.options[select.selectedIndex].text
+        : '';
+
+    if (!skipPriceCalculation) recalculatePricesByLastSource();
+}
+
+
+function mountItemModalToBody() {
+    var modal = document.getElementById('itemModal');
+    if (!modal) return null;
+
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+
+    return modal;
+}
+
+function openItemModal() {
+    var modal = mountItemModalToBody();
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('catalog-modal-open');
+    setTimeout(function () { document.getElementById('itemBarcode').focus(); }, 50);
+}
+
+function closeItemModal() {
+    var modal = mountItemModalToBody();
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('catalog-modal-open');
+}
+
+function openAddItemModal() {
+    var form = document.getElementById('itemForm');
+    form.reset();
+    form.action = '/items/add';
+    document.getElementById('itemModalTitle').textContent = 'Новый товар';
+    document.getElementById('itemUnit').value = 'шт';
+    document.getElementById('itemIsMarked').checked = false;
+    updateMarkedBadge();
+    clearBarcodeStatus();
+    priceCalculationSource = 'purchase';
+    syncCategoryName(true);
+    openItemModal();
+}
+
+function setValue(id, value) {
+    var field = document.getElementById(id);
+    if (field) field.value = value === null || value === undefined ? '' : value;
+}
+
+function selectItemCategory(value, name) {
+    var select = document.getElementById('itemCategoryId');
+    if (!select) return;
+
+    var wantedValue = value === null || value === undefined ? '' : String(value);
+    var wantedName = name === null || name === undefined ? '' : String(name).trim().toLowerCase();
+    var matched = false;
+
+    Array.from(select.options).forEach(function (option) {
+        if (matched) return;
+        var optionValue = String(option.value);
+        var optionName = option.textContent.trim().toLowerCase();
+        if ((wantedValue && optionValue === wantedValue) || (wantedName && optionName === wantedName)) {
+            select.value = option.value;
+            matched = true;
+        }
+    });
+
+    if (!matched) select.value = '';
+}
+
+var barcodeLookupController = null;
+
+function clearBarcodeStatus() {
+    var status = document.getElementById('barcodeLookupStatus');
+    if (!status) return;
+    status.className = 'catalog-barcode-status';
+    status.textContent = '';
+}
+
+function showBarcodeStatus(type, message) {
+    var status = document.getElementById('barcodeLookupStatus');
+    if (!status) return;
+    status.className = 'catalog-barcode-status is-visible is-' + type;
+    status.textContent = message;
+}
+
+function updateMarkedBadge() {
+    var checkbox = document.getElementById('itemIsMarked');
+    var badge = document.getElementById('itemMarkedBadge');
+    if (!checkbox || !badge) return;
+    badge.textContent = checkbox.checked ? 'Маркированный товар' : 'Обычный товар';
+    badge.classList.toggle('is-marked', checkbox.checked);
+}
+
+function normalizeMeasure(measure) {
+    var value = String(measure || '').trim().toLowerCase();
+    var aliases = {
+        'штука':'шт','штук':'шт','шт.':'шт','piece':'шт','pcs':'шт',
+        'килограмм':'кг','kg':'кг',
+        'грамм':'г','gr':'г',
+        'литр':'л','liter':'л','l':'л',
+        'миллилитр':'мл','ml':'мл',
+        'метр':'м','meter':'м'
+    };
+    return aliases[value] || value;
+}
+
+function setUnitFromCatalog(measure) {
+    var select = document.getElementById('itemUnit');
+    if (!select || !measure) return;
+    var normalized = normalizeMeasure(measure);
+    var option = Array.from(select.options).find(function (item) {
+        return item.value.toLowerCase() === normalized || item.textContent.trim().toLowerCase() === normalized;
+    });
+    if (option) select.value = option.value;
+}
+
+async function lookupBarcode(force) {
+    var barcodeField = document.getElementById('itemBarcode');
+    var button = document.getElementById('barcodeSearchButton');
+    if (!barcodeField) return;
+
+    var barcode = barcodeField.value.trim();
+    if (!barcode) {
+        if (force) showBarcodeStatus('warning', 'Введите или отсканируйте штрихкод.');
+        return;
+    }
+
+    if (barcodeLookupController) barcodeLookupController.abort();
+    barcodeLookupController = new AbortController();
+
+    showBarcodeStatus('loading', 'Ищем товар в базе и Национальном каталоге…');
+    if (button) { button.disabled = true; button.textContent = 'Поиск…'; }
+
+    try {
+        var response = await fetch('/api/barcode-info/' + encodeURIComponent(barcode), {
+            headers: { 'Accept': 'application/json' },
+            signal: barcodeLookupController.signal
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        var data = await response.json();
+
+        if (!data.found) {
+            showBarcodeStatus('warning', 'Товар не найден. Заполните данные вручную.');
+            document.getElementById('itemName').focus();
+            return;
+        }
+
+        if (data.name) setValue('itemName', data.name);
+        if (data.gtin) setValue('itemGtin', data.gtin);
+        if (data.ntin) setValue('itemNtin', data.ntin);
+        if (data.measure) setUnitFromCatalog(data.measure);
+        if (typeof data.is_marked !== 'undefined' && data.is_marked !== null) {
+            document.getElementById('itemIsMarked').checked = Boolean(data.is_marked);
+            updateMarkedBadge();
+        }
+        if (data.category) selectItemCategory('', data.category);
+        syncCategoryName();
+
+        var source = data.local ? 'локальной базе' : 'Национальном каталоге';
+        showBarcodeStatus('success', 'Товар найден в ' + source + '. Данные заполнены автоматически.');
+
+        if (data.local && data.price && !document.getElementById('itemRetailPrice').value) {
+            setValue('itemRetailPrice', data.price);
+        }
+        document.getElementById('itemRetailPrice').focus();
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            showBarcodeStatus('error', 'Не удалось выполнить поиск. Проверьте соединение и попробуйте снова.');
+        }
+    } finally {
+        if (button) { button.disabled = false; button.textContent = 'Найти товар'; }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var barcodeField = document.getElementById('itemBarcode');
+    if (!barcodeField) return;
+
+    barcodeField.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            lookupBarcode(true);
+        }
+    });
+
+    barcodeField.addEventListener('input', function () {
+        clearBarcodeStatus();
+    });
+});
+
+function openEditItemModal(item) {
+    var form = document.getElementById('itemForm');
+    form.reset();
+    form.action = '/items/' + encodeURIComponent(item.id) + '/edit';
+    document.getElementById('itemModalTitle').textContent = 'Редактировать товар';
+
+    setValue('itemName', item.name);
+    setValue('itemBarcode', item.barcode);
+    setValue('itemGtin', item.gtin);
+    setValue('itemNtin', item.ntin);
+    setValue('itemPurchasePrice', item.purchase_price);
+    setValue('itemRetailPrice', item.retail_price);
+    setValue('itemUnit', item.unit || 'шт');
+    document.getElementById('itemIsMarked').checked = Boolean(item.is_marked);
+    updateMarkedBadge();
+    clearBarcodeStatus();
+    selectItemCategory(item.category_id, item.category);
+    priceCalculationSource = 'purchase';
+    syncCategoryName(true);
+
+    openItemModal();
+}
+
+function mountCategoryManagerToBody(){
+    var modal=document.getElementById('categoryManager');
+    if(modal && modal.parentElement!==document.body) document.body.appendChild(modal);
+    return modal;
+}
+function openCategoryManager(){
+    var modal=mountCategoryManagerToBody();
+    resetCategoryEditor();
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden','false');
+    setTimeout(function(){document.getElementById('categoryNameInput').focus();},30);
+}
+function closeCategoryManager(){
+    var modal=mountCategoryManagerToBody();
+    if(!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden','true');
+    resetCategoryEditor();
+}
+function resetCategoryEditor(){
+    setValue('editingCategoryId','');setValue('categoryNameInput','');setValue('categoryMarkupInput','');
+    var b=document.getElementById('saveCategoryButton'); if(b) b.textContent='Добавить';
+    var t=document.getElementById('categoryManagerTitle'); if(t) t.textContent='Категории';
+}
+function startEditCategory(row){
+    setValue('editingCategoryId',row.dataset.id);setValue('categoryNameInput',row.dataset.name);setValue('categoryMarkupInput',row.dataset.markup||0);
+    document.getElementById('saveCategoryButton').textContent='Сохранить';
+    document.getElementById('categoryManagerTitle').textContent='Редактирование категории';
+    document.getElementById('categoryNameInput').focus();
+}
+function escapeHtml(value){var d=document.createElement('div');d.textContent=value;return d.innerHTML;}
+function upsertCategoryOption(category, oldName){
+    var select=document.getElementById('itemCategoryId');
+    var option=Array.from(select.options).find(function(o){return String(o.dataset.id||'')===String(category.id);});
+    if(!option){option=document.createElement('option');select.appendChild(option);}
+    option.value=category.id;option.dataset.id=category.id;option.dataset.markup=category.markup_percent||0;option.textContent=category.name;
+    if(!oldName || select.value===String(category.id) || document.getElementById('itemCategory').value===oldName){select.value=String(category.id);syncCategoryName();}
+}
+function upsertCategoryRow(category){
+    var list=document.getElementById('categoryManagerList');
+    var row=list.querySelector('[data-id="'+CSS.escape(String(category.id))+'"]');
+    if(!row){row=document.createElement('div');row.className='category-manager__item';list.appendChild(row);}
+    row.dataset.id=category.id;row.dataset.name=category.name;row.dataset.markup=category.markup_percent||0;
+    row.innerHTML='<div class="category-manager__meta"><b>'+escapeHtml(category.name)+'</b><small>Наценка: '+escapeHtml(String(category.markup_percent||0))+'%</small></div><div class="category-manager__actions"><button type="button" onclick="startEditCategory(this.closest(\'.category-manager__item\'))" title="Редактировать">✎</button><button type="button" class="delete" onclick="removeCategory(this.closest(\'.category-manager__item\'))" title="Удалить">🗑</button></div>';
+}
+async function saveCategory(){
+    var id=document.getElementById('editingCategoryId').value;
+    var name=document.getElementById('categoryNameInput').value.trim();
+    var markup=document.getElementById('categoryMarkupInput').value||0;
+    if(!name){alert('Введите название категории');return;}
+    var button=document.getElementById('saveCategoryButton');button.disabled=true;
+    try{
+        var url=id?'/edit_category/'+encodeURIComponent(id):'/add_category';
+        var response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,markup:markup})});
+        var data=await response.json(); if(!response.ok) throw new Error(data.error||'Ошибка сохранения');
+        var category={id:data.id||id,name:data.name||name,markup_percent:data.markup_percent!==undefined?data.markup_percent:markup};
+        var oldRow=id?document.querySelector('#categoryManagerList [data-id="'+CSS.escape(String(id))+'"]'):null;
+        var oldName=oldRow?oldRow.dataset.name:'';
+        upsertCategoryOption(category,oldName);upsertCategoryRow(category);resetCategoryEditor();
+    }catch(e){alert(e.message||'Не удалось сохранить категорию');}finally{button.disabled=false;}
+}
+async function removeCategory(row){
+    if(!confirm('Удалить категорию «'+row.dataset.name+'»?')) return;
+    var id=row.dataset.id;
+    try{
+        var response=await fetch('/delete_category/'+encodeURIComponent(id),{method:'POST'});var data=await response.json();
+        if(!response.ok || data.success===false) throw new Error('Не удалось удалить категорию');
+        var select=document.getElementById('itemCategoryId');var option=Array.from(select.options).find(function(o){return String(o.dataset.id||'')===String(id);});
+        if(option){var wasSelected=select.value===option.value;option.remove();if(wasSelected){select.value='';syncCategoryName();}}
+        row.remove();resetCategoryEditor();
+    }catch(e){alert(e.message||'Не удалось удалить категорию');}
+}
+
+</script>
 
 {% endblock %}

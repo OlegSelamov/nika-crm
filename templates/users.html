@@ -1,292 +1,1198 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2>Пользователи</h2>
+{% set users = users|default([]) %}
+{% set companies = companies|default([]) %}
 
-<form method="POST" class="card" style="max-width:500px; display:grid; gap:10px;">
-    <input name="username" placeholder="Логин" required>
-    <input name="password" placeholder="Пароль" required>
-	
-	<input name="full_name" placeholder="ФИО">
+<div class="users-page">
+    <div class="page-header users-header">
+        <div>
+            <h1 class="page-title">Пользователи</h1>
+            <div class="page-note">Сотрудники, роли и доступ к организациям</div>
+        </div>
 
-	<input name="phone" placeholder="Телефон">
+        <button class="users-btn users-btn--primary"
+                type="button"
+                onclick="openUserModal()">
+            ＋ Добавить пользователя
+        </button>
+    </div>
 
-	<input name="percent_rate"
-		   type="number"
-		   step="0.01"
-		   placeholder="Процент">
+    <div class="users-stats">
+        <article>
+            <span>Всего пользователей</span>
+            <strong>{{ users|length }}</strong>
+            <small>Все учётные записи</small>
+        </article>
 
-    <select name="role">
-		<option value="owner">Владелец</option>
-		<option value="admin">Администратор</option>
-		<option value="accountant">Бухгалтер</option>
-		<option value="manager">Менеджер</option>
-		<option value="cto">Специалист ЦТО</option>
-		<option value="cashier">Кассир</option>
-    </select>
+        <article>
+            <span>Администраторы</span>
+            <strong>
+                {{ users|selectattr("role", "equalto", "admin")|list|length }}
+            </strong>
+            <small>Системный доступ</small>
+        </article>
 
-    <select name="company_id">
-        <option value="">Без компании</option>
-        {% for c in companies %}
-            <option value="{{ c.id }}">{{ c.name }}</option>
-        {% endfor %}
-    </select>
+        <article>
+            <span>Кассиры</span>
+            <strong>
+                {{ users|selectattr("role", "equalto", "cashier")|list|length }}
+            </strong>
+            <small>Работа с продажами</small>
+        </article>
 
-    <label style="display:flex; gap:8px; align-items:center;">
-        <input type="checkbox" name="is_super_admin" value="1" style="width:auto;">
-        Супер-админ
-    </label>
+        <article>
+            <span>Супер-админы</span>
+            <strong>
+                {{ users|selectattr("is_super_admin")|list|length }}
+            </strong>
+            <small>Полный доступ</small>
+        </article>
+    </div>
 
-    <button class="btn">Добавить пользователя</button>
-</form>
+    <section class="users-toolbar">
+        <label class="users-search">
+            <span>⌕</span>
+            <input id="userSearch"
+                   type="search"
+                   placeholder="Поиск по логину, ФИО, телефону, роли или компании"
+                   oninput="filterUsers()">
+        </label>
 
-<br>
+        <select id="userRoleFilter" onchange="filterUsers()">
+            <option value="all">Все роли</option>
+            <option value="owner">Владелец</option>
+            <option value="admin">Администратор</option>
+            <option value="accountant">Бухгалтер</option>
+            <option value="manager">Менеджер</option>
+            <option value="cto">Специалист ЦТО</option>
+            <option value="cashier">Кассир</option>
+        </select>
 
-<div class="desktop-table">
-	<table class="table">
-		<tr>
-			<th>ID</th>
-			<th>Логин</th>
-			<th>ФИО</th>
-			<th>Телефон</th>
-			<th>%</th>
-			<th>Роль</th>
-			<th>Компания</th>
-			<th>Супер-админ</th>
-			<th>Действия</th>
-		</tr>
+        <select id="userCompanyFilter" onchange="filterUsers()">
+            <option value="all">Все компании</option>
+            <option value="none">Без компании</option>
+            {% for c in companies %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+        </select>
 
-		{% for u in users %}
-		<tr>
-			<td>{{ u.id }}</td>
+        <div class="users-count">
+            Найдено: <strong id="visibleUsersCount">{{ users|length }}</strong>
+        </div>
+    </section>
 
-			<td>{{ u.username }}</td>
+    <section class="users-section">
+        <div class="users-section__head">
+            <div>
+                <h2>Список пользователей</h2>
+                <p>Управление сотрудниками и доступом</p>
+            </div>
+        </div>
 
-			<td>{{ u.full_name or "-" }}</td>
+        {% if users %}
+        <div class="users-table-wrap">
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>Пользователь</th>
+                        <th>Телефон</th>
+                        <th>Процент</th>
+                        <th>Роль</th>
+                        <th>Компания</th>
+                        <th>Доступ</th>
+                        <th></th>
+                    </tr>
+                </thead>
 
-			<td>{{ u.phone or "-" }}</td>
+                <tbody>
+                    {% for u in users %}
+                    <tr class="user-row"
+                        data-role="{{ u.role or '' }}"
+                        data-company="{{ u.company_id or 'none' }}"
+                        data-search="{{ (
+                            (u.username or '') ~ ' ' ~
+                            (u.full_name or '') ~ ' ' ~
+                            (u.phone or '') ~ ' ' ~
+                            (u.role or '') ~ ' ' ~
+                            (u.company_name or '')
+                        )|lower }}">
 
-			<td>{{ u.percent_rate or 0 }}%</td>
+                        <td>
+                            <div class="user-main">
+                                <div class="user-avatar">
+                                    {{ (u.full_name or u.username or 'П')[:1]|upper }}
+                                </div>
 
-			<td>{{ u.role }}</td>
+                                <div>
+                                    <strong>{{ u.full_name or u.username }}</strong>
+                                    <small>@{{ u.username }}</small>
+                                </div>
+                            </div>
+                        </td>
 
-			<td>{{ u.company_name or "-" }}</td>
+                        <td>{{ u.phone or "—" }}</td>
 
-			<td>{{ "Да" if u.is_super_admin else "Нет" }}</td>
+                        <td>
+                            {{ u.percent_rate or 0 }}%
+                        </td>
 
-			<td>
-				{% if not u.is_creator %}
-				<a href="/users/delete/{{ u.id }}"
-				   onclick="return confirm('Удалить пользователя?')"
-				   style="color:red;">
-				   Удалить
-				</a>
-				{% else %}
-				<span style="color:gray;">Создатель</span>
-				{% endif %}
-			</td>
-		</tr>
-		{% endfor %}
-	</table>
+                        <td>
+                            <span class="user-role user-role--{{ u.role }}">
+                                {% if u.role == "owner" %}
+                                    Владелец
+                                {% elif u.role == "admin" %}
+                                    Администратор
+                                {% elif u.role == "accountant" %}
+                                    Бухгалтер
+                                {% elif u.role == "manager" %}
+                                    Менеджер
+                                {% elif u.role == "cto" %}
+                                    Специалист ЦТО
+                                {% elif u.role == "cashier" %}
+                                    Кассир
+                                {% else %}
+                                    {{ u.role or "Не указана" }}
+                                {% endif %}
+                            </span>
+                        </td>
+
+                        <td>{{ u.company_name or "Без компании" }}</td>
+
+                        <td>
+                            {% if u.is_super_admin %}
+                                <span class="user-access user-access--super">SUPER</span>
+                            {% elif u.is_creator %}
+                                <span class="user-access user-access--creator">Создатель</span>
+                            {% else %}
+                                <span class="user-access">Обычный</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if not u.is_creator %}
+                                <a href="/users/delete/{{ u.id }}"
+                                   class="user-delete"
+                                   onclick="return confirm('Удалить пользователя?')">
+                                    Удалить
+                                </a>
+                            {% else %}
+                                <span class="user-protected">Защищён</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mobile-users-list">
+            {% for u in users %}
+            <article class="mobile-user-card user-row"
+                     data-role="{{ u.role or '' }}"
+                     data-company="{{ u.company_id or 'none' }}"
+                     data-search="{{ (
+                        (u.username or '') ~ ' ' ~
+                        (u.full_name or '') ~ ' ' ~
+                        (u.phone or '') ~ ' ' ~
+                        (u.role or '') ~ ' ' ~
+                        (u.company_name or '')
+                     )|lower }}">
+
+                <div class="mobile-user-top">
+                    <div class="user-main">
+                        <div class="user-avatar">
+                            {{ (u.full_name or u.username or 'П')[:1]|upper }}
+                        </div>
+
+                        <div>
+                            <strong>{{ u.full_name or u.username }}</strong>
+                            <small>@{{ u.username }}</small>
+                        </div>
+                    </div>
+
+                    {% if u.is_super_admin %}
+                        <span class="user-access user-access--super">SUPER</span>
+                    {% elif u.is_creator %}
+                        <span class="user-access user-access--creator">Создатель</span>
+                    {% endif %}
+                </div>
+
+                <div class="mobile-user-info">
+                    <span>
+                        <small>Телефон</small>
+                        {{ u.phone or "—" }}
+                    </span>
+
+                    <span>
+                        <small>Процент</small>
+                        {{ u.percent_rate or 0 }}%
+                    </span>
+
+                    <span>
+                        <small>Роль</small>
+                        {% if u.role == "owner" %}
+                            Владелец
+                        {% elif u.role == "admin" %}
+                            Администратор
+                        {% elif u.role == "accountant" %}
+                            Бухгалтер
+                        {% elif u.role == "manager" %}
+                            Менеджер
+                        {% elif u.role == "cto" %}
+                            Специалист ЦТО
+                        {% elif u.role == "cashier" %}
+                            Кассир
+                        {% else %}
+                            {{ u.role or "—" }}
+                        {% endif %}
+                    </span>
+
+                    <span>
+                        <small>Компания</small>
+                        {{ u.company_name or "Без компании" }}
+                    </span>
+                </div>
+
+                {% if not u.is_creator %}
+                <div class="mobile-user-actions">
+                    <a href="/users/delete/{{ u.id }}"
+                       class="user-delete"
+                       onclick="return confirm('Удалить пользователя?')">
+                        Удалить пользователя
+                    </a>
+                </div>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+
+        <div class="users-empty users-empty--hidden" id="usersSearchEmpty">
+            <span>⌕</span>
+            <strong>Пользователи не найдены</strong>
+            <p>Измените запрос или параметры фильтра.</p>
+        </div>
+
+        {% else %}
+        <div class="users-empty">
+            <span>👥</span>
+            <strong>Пользователей пока нет</strong>
+            <p>Добавьте первого сотрудника и назначьте ему роль.</p>
+            <button class="users-btn users-btn--primary"
+                    type="button"
+                    onclick="openUserModal()">
+                Добавить пользователя
+            </button>
+        </div>
+        {% endif %}
+    </section>
 </div>
 
-<div class="mobile-users-list">
+<div class="user-modal" id="userModal" aria-hidden="true">
+    <div class="user-modal__backdrop" onclick="closeUserModal()"></div>
 
-{% for u in users %}
+    <div class="user-modal__dialog" role="dialog" aria-modal="true">
+        <div class="user-modal__head">
+            <div>
+                <h3>Новый пользователь</h3>
+                <p>Создайте учётную запись и назначьте права</p>
+            </div>
 
-	<div class="mobile-user-card">
+            <button type="button" onclick="closeUserModal()">×</button>
+        </div>
 
-		<div class="mobile-user-top">
+        <form method="POST" class="user-modal__body">
+            <div class="user-form-grid">
+                <label class="user-field">
+                    <span>Логин *</span>
+                    <input name="username"
+                           placeholder="Логин для входа"
+                           autocomplete="off"
+                           required>
+                </label>
 
-			<div class="mobile-user-name">
-				{{ u.username }}
-			</div>
+                <label class="user-field">
+                    <span>Пароль *</span>
+                    <input name="password"
+                           type="password"
+                           placeholder="Пароль"
+                           autocomplete="new-password"
+                           required>
+                </label>
 
-			{% if u.is_super_admin %}
-				<div class="super-badge">
-					SUPER
-				</div>
-			{% endif %}
+                <label class="user-field user-field--wide">
+                    <span>ФИО</span>
+                    <input name="full_name" placeholder="Фамилия Имя Отчество">
+                </label>
 
-		</div>
+                <label class="user-field">
+                    <span>Телефон</span>
+                    <input name="phone" placeholder="+7 ...">
+                </label>
 
-		<div class="mobile-user-meta">
-			Роль: {{ u.role }}
-		</div>
+                <label class="user-field">
+                    <span>Процент сотрудника</span>
+                    <input name="percent_rate"
+                           type="number"
+                           min="0"
+                           step="0.01"
+                           placeholder="0">
+                </label>
 
-		<div class="mobile-user-meta">
-			Компания: {{ u.company_name or "-" }}
-		</div>
+                <label class="user-field">
+                    <span>Роль *</span>
+                    <select name="role" required>
+                        <option value="owner">Владелец</option>
+                        <option value="admin">Администратор</option>
+                        <option value="accountant">Бухгалтер</option>
+                        <option value="manager">Менеджер</option>
+                        <option value="cto">Специалист ЦТО</option>
+                        <option value="cashier">Кассир</option>
+                    </select>
+                </label>
 
-		<div class="mobile-user-actions">
+                <label class="user-field">
+                    <span>Компания</span>
+                    <select name="company_id">
+                        <option value="">Без компании</option>
+                        {% for c in companies %}
+                            <option value="{{ c.id }}">{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
 
-			{% if not u.is_creator %}
+                <label class="user-checkbox user-field--wide">
+                    <input type="checkbox"
+                           name="is_super_admin"
+                           value="1">
+                    <span>
+                        <strong>Супер-администратор</strong>
+                        <small>Полный доступ ко всем компаниям и разделам</small>
+                    </span>
+                </label>
+            </div>
 
-			<a href="/users/delete/{{ u.id }}"
-			   class="btn btn-close"
-			   onclick="return confirm('Удалить пользователя?')">
+            <div class="user-modal__footer">
+                <button class="users-btn users-btn--light"
+                        type="button"
+                        onclick="closeUserModal()">
+                    Отмена
+                </button>
 
-				Удалить
-
-			</a>
-
-			{% else %}
-
-			<div class="creator-label">
-				Создатель
-			</div>
-
-			{% endif %}
-
-		</div>
-
-	</div>
-
-{% endfor %}
-
+                <button class="users-btn users-btn--primary" type="submit">
+                    Добавить пользователя
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <style>
-
-/* ================= MOBILE USERS ================= */
-
-.mobile-users-list{
-	display:none;
+.users-page {
+    --u-card:#fff;
+    --u-soft:#fafafe;
+    --u-border:#e5e7ef;
+    --u-text:#202434;
+    --u-muted:#747a8d;
+    --u-purple:#7257ff;
+    --u-purple-soft:#efecff;
+    --u-shadow:0 10px 28px rgba(52,48,89,.08);
+    width:100%;
+    min-width:0;
+    color:var(--u-text);
 }
 
-@media (max-width:768px){
-
-	h2{
-		font-size:24px;
-		margin-bottom:14px;
-	}
-
-	form.card{
-
-		display:flex !important;
-		flex-direction:column !important;
-
-		gap:12px;
-
-		max-width:none !important;
-
-		padding:14px;
-
-		border-radius:20px;
-	}
-
-	form.card input,
-	form.card select{
-
-		height:48px;
-
-		border-radius:14px;
-
-		font-size:14px;
-
-		padding:0 14px;
-	}
-
-	form.card .btn{
-
-		height:50px;
-
-		border-radius:14px;
-
-		font-size:15px;
-		font-weight:700;
-	}
-
-	.desktop-table{
-		display:none;
-	}
-
-	.mobile-users-list{
-
-		display:flex;
-		flex-direction:column;
-
-		gap:12px;
-
-		margin-top:14px;
-	}
-
-	.mobile-user-card{
-
-		background:white;
-
-		padding:14px;
-
-		border-radius:18px;
-
-		box-shadow:
-		0 4px 14px rgba(0,0,0,.06);
-	}
-
-	.mobile-user-top{
-
-		display:flex;
-
-		justify-content:space-between;
-
-		gap:10px;
-	}
-
-	.mobile-user-name{
-
-		font-size:15px;
-		font-weight:700;
-	}
-
-	.super-badge{
-
-		padding:4px 10px;
-
-		border-radius:999px;
-
-		background:#ede9fe;
-		color:#7c3aed;
-
-		font-size:11px;
-		font-weight:700;
-	}
-
-	.mobile-user-meta{
-
-		margin-top:8px;
-
-		font-size:13px;
-
-		color:#475569;
-	}
-
-	.mobile-user-actions{
-
-		margin-top:14px;
-	}
-
-	.mobile-user-actions .btn{
-
-		width:100%;
-
-		height:42px;
-
-		display:flex;
-		align-items:center;
-		justify-content:center;
-
-		border-radius:12px;
-	}
-
-	.creator-label{
-
-		font-size:13px;
-
-		color:#64748b;
-
-		text-align:center;
-	}
+.users-page .page-title {
+    color:var(--u-text) !important;
+    font-size:30px !important;
+    text-shadow:none !important;
 }
 
+.users-page .page-note {
+    color:var(--u-muted) !important;
+    font-size:14px;
+}
+
+.users-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:16px;
+}
+
+.users-btn {
+    min-height:46px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 18px;
+    border:0;
+    border-radius:11px;
+    font:inherit;
+    font-size:13px;
+    font-weight:800;
+    text-decoration:none;
+    cursor:pointer;
+}
+
+.users-btn--primary {
+    color:#fff !important;
+    background:linear-gradient(135deg,#7257ff,#9958e7);
+    box-shadow:0 8px 18px rgba(114,87,255,.2);
+}
+
+.users-btn--light {
+    color:var(--u-purple) !important;
+    background:var(--u-purple-soft);
+    border:1px solid #d9d2ff;
+}
+
+.users-stats {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:13px;
+    margin-bottom:16px;
+}
+
+.users-stats article {
+    min-width:0;
+    display:grid;
+    gap:5px;
+    padding:18px;
+    border:1px solid var(--u-border);
+    border-radius:16px;
+    background:var(--u-card);
+    box-shadow:var(--u-shadow);
+}
+
+.users-stats span,
+.users-stats small {
+    color:var(--u-muted);
+}
+
+.users-stats span {
+    font-size:12px;
+    font-weight:700;
+}
+
+.users-stats strong {
+    color:var(--u-text);
+    font-size:25px;
+}
+
+.users-stats small {
+    font-size:11px;
+}
+
+.users-toolbar,
+.users-section {
+    margin-bottom:16px;
+    padding:18px;
+    border:1px solid var(--u-border);
+    border-radius:17px;
+    background:var(--u-card);
+    box-shadow:var(--u-shadow);
+}
+
+.users-toolbar {
+    display:grid;
+    grid-template-columns:minmax(280px,1fr) auto auto auto;
+    align-items:center;
+    gap:10px;
+}
+
+.users-search {
+    height:46px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:0 12px;
+    border:1px solid var(--u-border);
+    border-radius:10px;
+    background:#fff;
+}
+
+.users-search:focus-within {
+    border-color:#b8adff;
+    box-shadow:0 0 0 3px rgba(114,87,255,.09);
+}
+
+.users-search input {
+    width:100%;
+    min-width:0;
+    border:0;
+    outline:0;
+    color:var(--u-text);
+    background:transparent;
+    font:inherit;
+    font-size:13px;
+}
+
+.users-search input::placeholder {
+    color:#9da3b3;
+}
+
+.users-toolbar select {
+    height:46px;
+    max-width:200px;
+    padding:0 32px 0 12px;
+    border:1px solid var(--u-border);
+    border-radius:10px;
+    color:var(--u-text);
+    background:#fff;
+    font:inherit;
+    font-size:12px;
+}
+
+.users-count {
+    color:var(--u-muted);
+    font-size:12px;
+    white-space:nowrap;
+}
+
+.users-count strong {
+    color:var(--u-text);
+}
+
+.users-section__head {
+    margin-bottom:14px;
+}
+
+.users-section__head h2 {
+    margin:0 0 4px;
+    color:var(--u-text);
+    font-size:18px;
+}
+
+.users-section__head p {
+    margin:0;
+    color:var(--u-muted);
+    font-size:12px;
+}
+
+.users-table-wrap {
+    width:100%;
+    overflow:hidden;
+}
+
+.users-table {
+    width:100%;
+    table-layout:fixed;
+    border-collapse:collapse;
+}
+
+.users-table th,
+.users-table td {
+    padding:13px 10px;
+    border-bottom:1px solid var(--u-border);
+    text-align:left;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.users-table th {
+    color:#858b9e;
+    background:#fafafe;
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.users-table td {
+    color:var(--u-text);
+    font-size:13px;
+}
+
+.users-table th:nth-child(1),
+.users-table td:nth-child(1) { width:24%; }
+
+.users-table th:nth-child(2),
+.users-table td:nth-child(2) { width:13%; }
+
+.users-table th:nth-child(3),
+.users-table td:nth-child(3) { width:9%; }
+
+.users-table th:nth-child(4),
+.users-table td:nth-child(4) { width:16%; }
+
+.users-table th:nth-child(5),
+.users-table td:nth-child(5) { width:16%; }
+
+.users-table th:nth-child(6),
+.users-table td:nth-child(6) { width:11%; }
+
+.users-table th:nth-child(7),
+.users-table td:nth-child(7) { width:11%; }
+
+.user-main {
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.user-avatar {
+    flex:0 0 42px;
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:12px;
+    color:var(--u-purple);
+    background:var(--u-purple-soft);
+    font-size:16px;
+    font-weight:900;
+}
+
+.user-main > div:last-child {
+    min-width:0;
+    display:grid;
+    gap:2px;
+}
+
+.user-main strong,
+.user-main small {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.user-main strong {
+    color:var(--u-text);
+    font-size:14px;
+}
+
+.user-main small {
+    color:var(--u-muted);
+    font-size:11px;
+}
+
+.user-role,
+.user-access {
+    min-height:28px;
+    display:inline-flex;
+    align-items:center;
+    padding:0 10px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:800;
+}
+
+.user-role {
+    color:#6250c7;
+    background:#efecff;
+}
+
+.user-role--owner {
+    color:#a06c0d;
+    background:#fff6d9;
+}
+
+.user-role--admin {
+    color:#684bda;
+    background:#eeeaff;
+}
+
+.user-role--accountant {
+    color:#177e78;
+    background:#e6f7f5;
+}
+
+.user-role--manager {
+    color:#2566c7;
+    background:#eaf2ff;
+}
+
+.user-role--cto {
+    color:#b2671a;
+    background:#fff0df;
+}
+
+.user-role--cashier {
+    color:#16815e;
+    background:#e7f7f1;
+}
+
+.user-access {
+    color:#6e7487;
+    background:#f0f1f5;
+}
+
+.user-access--super {
+    color:#6945d8;
+    background:#eee9ff;
+}
+
+.user-access--creator {
+    color:#16815e;
+    background:#e7f7f1;
+}
+
+.user-delete,
+.user-protected {
+    min-height:36px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 12px;
+    border-radius:9px;
+    font-size:12px;
+    font-weight:800;
+}
+
+.user-delete {
+    color:#c94646;
+    background:#fdecec;
+    text-decoration:none;
+}
+
+.user-protected {
+    color:#777d8f;
+    background:#f0f1f5;
+}
+
+.mobile-users-list {
+    display:none;
+}
+
+.users-empty {
+    min-height:260px;
+    display:grid;
+    place-content:center;
+    justify-items:center;
+    text-align:center;
+}
+
+.users-empty--hidden {
+    display:none;
+}
+
+.users-empty > span {
+    width:54px;
+    height:54px;
+    display:grid;
+    place-items:center;
+    margin-bottom:10px;
+    border-radius:16px;
+    color:var(--u-purple);
+    background:var(--u-purple-soft);
+    font-size:21px;
+}
+
+.users-empty strong {
+    color:var(--u-text);
+    font-size:14px;
+}
+
+.users-empty p {
+    margin:6px 0 15px;
+    color:var(--u-muted);
+    font-size:11px;
+}
+
+.user-modal {
+    position:fixed;
+    z-index:100000;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    overflow-y:auto;
+}
+
+.user-modal.is-open {
+    display:flex;
+}
+
+.user-modal__backdrop {
+    position:fixed;
+    inset:0;
+    background:rgba(45,42,69,.34);
+    backdrop-filter:blur(6px);
+}
+
+.user-modal__dialog {
+    position:relative;
+    z-index:1;
+    width:min(650px,100%);
+    max-height:calc(100dvh - 40px);
+    display:flex;
+    flex-direction:column;
+    border:1px solid var(--u-border);
+    border-radius:20px;
+    background:#fff;
+    box-shadow:0 28px 80px rgba(43,39,78,.22);
+    overflow:hidden;
+}
+
+.user-modal__head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:15px;
+    padding:18px 20px;
+    border-bottom:1px solid var(--u-border);
+    background:#fbfbfe;
+}
+
+.user-modal__head h3 {
+    margin:0 0 4px;
+    color:var(--u-text);
+    font-size:18px;
+}
+
+.user-modal__head p {
+    margin:0;
+    color:var(--u-muted);
+    font-size:12px;
+}
+
+.user-modal__head > button {
+    width:34px;
+    height:34px;
+    flex:0 0 34px;
+    border:1px solid var(--u-border);
+    border-radius:10px;
+    color:#676d7f;
+    background:#f1f2f6;
+    font-size:22px;
+    cursor:pointer;
+}
+
+.user-modal__body {
+    min-height:0;
+    overflow-y:auto;
+    padding:20px;
+}
+
+.user-form-grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px;
+}
+
+.user-field {
+    min-width:0;
+    display:grid;
+    gap:7px;
+}
+
+.user-field--wide {
+    grid-column:1 / -1;
+}
+
+.user-field > span {
+    color:#555c70;
+    font-size:11px;
+    font-weight:750;
+}
+
+.user-field input,
+.user-field select {
+    width:100%;
+    min-width:0;
+    height:46px;
+    box-sizing:border-box;
+    padding:0 12px;
+    border:1px solid var(--u-border);
+    border-radius:11px;
+    color:var(--u-text);
+    background:#fff;
+    outline:0;
+    font:inherit;
+    font-size:13px;
+}
+
+.user-field input:focus,
+.user-field select:focus {
+    border-color:#b9adff;
+    box-shadow:0 0 0 3px rgba(114,87,255,.09);
+}
+
+.user-checkbox {
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding:12px;
+    border:1px solid var(--u-border);
+    border-radius:11px;
+    background:#fafafe;
+    cursor:pointer;
+}
+
+.user-checkbox input {
+    width:18px;
+    height:18px;
+    margin-top:2px;
+}
+
+.user-checkbox > span {
+    display:grid;
+    gap:3px;
+}
+
+.user-checkbox strong {
+    color:var(--u-text);
+    font-size:12px;
+}
+
+.user-checkbox small {
+    color:var(--u-muted);
+    font-size:10px;
+}
+
+.user-modal__footer {
+    position:sticky;
+    bottom:-20px;
+    display:flex;
+    justify-content:flex-end;
+    gap:9px;
+    margin:20px -20px -20px;
+    padding:14px 20px;
+    border-top:1px solid var(--u-border);
+    background:#fff;
+}
+
+body.user-modal-open {
+    overflow:hidden;
+}
+
+@media(max-width:1100px) {
+    .users-stats {
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
+    .users-toolbar {
+        grid-template-columns:1fr 1fr;
+    }
+
+    .users-search {
+        grid-column:1 / -1;
+    }
+}
+
+@media(max-width:750px) {
+    .users-header {
+        align-items:stretch;
+        flex-direction:column;
+    }
+
+    .users-header .users-btn {
+        width:100%;
+    }
+
+    .users-page .page-title {
+        font-size:26px !important;
+    }
+
+    .users-page .page-note {
+        font-size:13px;
+    }
+
+    .users-stats {
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:9px;
+    }
+
+    .users-stats article {
+        padding:14px;
+    }
+
+    .users-toolbar,
+    .users-section {
+        padding:15px;
+    }
+
+    .users-toolbar {
+        grid-template-columns:1fr;
+    }
+
+    .users-search {
+        grid-column:auto;
+    }
+
+    .users-toolbar select {
+        width:100%;
+        max-width:none;
+    }
+
+    .users-count {
+        justify-self:end;
+    }
+
+    .users-table-wrap {
+        display:none;
+    }
+
+    .mobile-users-list {
+        display:grid;
+        gap:10px;
+    }
+
+    .mobile-user-card {
+        padding:15px;
+        border:1px solid var(--u-border);
+        border-radius:14px;
+        background:var(--u-soft);
+    }
+
+    .mobile-user-top {
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:9px;
+    }
+
+    .mobile-user-info {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:12px;
+    }
+
+    .mobile-user-info > span {
+        min-width:0;
+        display:grid;
+        gap:3px;
+        padding:10px;
+        border:1px solid var(--u-border);
+        border-radius:9px;
+        color:var(--u-text);
+        background:#fff;
+        font-size:11px;
+        overflow-wrap:anywhere;
+    }
+
+    .mobile-user-info small {
+        color:var(--u-muted);
+        font-size:9px;
+    }
+
+    .mobile-user-actions {
+        margin-top:10px;
+    }
+
+    .mobile-user-actions .user-delete {
+        width:100%;
+        box-sizing:border-box;
+    }
+
+    .user-modal {
+        align-items:flex-start;
+        padding:10px;
+    }
+
+    .user-modal__dialog {
+        width:100%;
+        max-height:calc(100dvh - 20px);
+        margin:auto 0;
+        border-radius:17px;
+    }
+
+    .user-modal__head,
+    .user-modal__body {
+        padding:15px;
+    }
+
+    .user-form-grid {
+        grid-template-columns:1fr;
+    }
+
+    .user-field--wide {
+        grid-column:auto;
+    }
+
+    .user-modal__footer {
+        bottom:-15px;
+        margin:18px -15px -15px;
+        padding:13px 15px;
+    }
+
+    .user-modal__footer > * {
+        flex:1;
+    }
+}
 </style>
+
+<script>
+(function () {
+    const modal = document.getElementById('userModal');
+
+    if (modal && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeUserModal();
+    });
+})();
+
+function openUserModal() {
+    const modal = document.getElementById('userModal');
+    if (!modal) return;
+
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('user-modal-open');
+
+    window.setTimeout(function () {
+        modal.querySelector('input[name="username"]')?.focus();
+    }, 50);
+}
+
+function closeUserModal() {
+    const modal = document.getElementById('userModal');
+    if (!modal) return;
+
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('user-modal-open');
+}
+
+function filterUsers() {
+    const query = document.getElementById('userSearch').value
+        .trim()
+        .toLowerCase();
+
+    const role = document.getElementById('userRoleFilter').value;
+    const company = document.getElementById('userCompanyFilter').value;
+
+    const rows = document.querySelectorAll('.user-row');
+    const countedUsers = new Set();
+    let visibleCount = 0;
+
+    rows.forEach(function (row) {
+        const searchText = (row.dataset.search || '').toLowerCase();
+        const rowRole = row.dataset.role || '';
+        const rowCompany = row.dataset.company || 'none';
+
+        const matchesSearch = !query || searchText.includes(query);
+        const matchesRole = role === 'all' || rowRole === role;
+        const matchesCompany = company === 'all' || rowCompany === company;
+        const visible = matchesSearch && matchesRole && matchesCompany;
+
+        row.style.display = visible ? '' : 'none';
+
+        if (visible) {
+            const username = row.querySelector('.user-main small')?.textContent.trim();
+
+            if (username && !countedUsers.has(username)) {
+                countedUsers.add(username);
+                visibleCount++;
+            }
+        }
+    });
+
+    document.getElementById('visibleUsersCount').textContent = visibleCount;
+
+    const empty = document.getElementById('usersSearchEmpty');
+    if (empty) {
+        empty.style.display = visibleCount === 0 ? 'grid' : 'none';
+    }
+}
+</script>
+
 {% endblock %}

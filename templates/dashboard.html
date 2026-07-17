@@ -2,666 +2,864 @@
 
 {% block content %}
 
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Главная</h1>
-        <div class="page-note">Обзор бизнеса</div>
-    </div>
-</div>
-
-<!-- 💰 КАРТОЧКИ -->
-<div class="stats-grid">
-
-    <div class="stat-card blue">
-        <div class="stat-label">Общая выручка</div>
-        <div class="stat-value">
-            {{ "{:,.2f}".format(total).replace(",", " ") }} ₸
+<div class="director-page">
+    <div class="page-header director-header">
+        <div>
+            <h1 class="page-title">Панель директора</h1>
+            <div class="page-note">Главные показатели бизнеса за сегодня</div>
         </div>
+
+        <a href="/analytics" class="director-btn director-btn--primary">
+            Подробная аналитика
+        </a>
     </div>
 
-    <div class="stat-card purple">
-        <div class="stat-label">Сегодня</div>
-        <div class="stat-value">
-            {{ "{:,.2f}".format(today).replace(",", " ") }} ₸
+    <section class="director-kpis">
+        <article class="director-kpi">
+            <div class="director-kpi__icon director-kpi__icon--blue">₸</div>
+            <div>
+                <span>Выручка сегодня</span>
+                <strong>{{ "{:,.0f}".format(today or 0).replace(",", " ") }} ₸</strong>
+                <small>{{ sales_today or 0 }} продаж</small>
+            </div>
+        </article>
+
+        <article class="director-kpi">
+            <div class="director-kpi__icon director-kpi__icon--green">↗</div>
+            <div>
+                <span>Прибыль сегодня</span>
+                <strong>{{ "{:,.0f}".format(today_profit or 0).replace(",", " ") }} ₸</strong>
+                <small>Валовая прибыль</small>
+            </div>
+        </article>
+
+        <article class="director-kpi">
+            <div class="director-kpi__icon director-kpi__icon--purple">🧾</div>
+            <div>
+                <span>Чеков сегодня</span>
+                <strong>{{ sales_today or 0 }}</strong>
+                <small>Оплаченных операций</small>
+            </div>
+        </article>
+
+        <article class="director-kpi">
+            <div class="director-kpi__icon director-kpi__icon--orange">🛒</div>
+            <div>
+                <span>Средний чек</span>
+                <strong>{{ "{:,.0f}".format(average_check or 0).replace(",", " ") }} ₸</strong>
+                <small>За текущий день</small>
+            </div>
+        </article>
+
+        <article class="director-kpi">
+            <div class="director-kpi__icon director-kpi__icon--red">↩</div>
+            <div>
+                <span>Возвратов сегодня</span>
+                <strong>{{ refunds_today or 0 }}</strong>
+                <small>Количество возвратов</small>
+            </div>
+        </article>
+
+        <article class="director-kpi">
+            <div class="director-kpi__icon director-kpi__icon--yellow">★</div>
+            <div>
+                <span>Лучший сотрудник</span>
+                <strong class="director-kpi__text">
+                    {% if best_employee %}
+                        {{ best_employee.full_name or 'Без имени' }}
+                    {% else %}
+                        Пока нет продаж
+                    {% endif %}
+                </strong>
+                <small>
+                    {% if best_employee %}
+                        {{ "{:,.0f}".format(best_employee.revenue or 0).replace(",", " ") }} ₸
+                    {% else %}
+                        За сегодня
+                    {% endif %}
+                </small>
+            </div>
+        </article>
+
+        <article class="director-kpi">
+            <div class="director-kpi__icon director-kpi__icon--cyan">📦</div>
+            <div>
+                <span>Лучший товар</span>
+                <strong class="director-kpi__text">
+                    {% if best_item %}
+                        {{ best_item.name }}
+                    {% else %}
+                        Пока нет продаж
+                    {% endif %}
+                </strong>
+                <small>
+                    {% if best_item %}
+                        Продано: {{ best_item.qty or 0 }}
+                    {% else %}
+                        За сегодня
+                    {% endif %}
+                </small>
+            </div>
+        </article>
+
+        <article class="director-kpi">
+            <div class="director-kpi__icon director-kpi__icon--violet">🏦</div>
+            <div>
+                <span>Общая выручка</span>
+                <strong>{{ "{:,.0f}".format(total or 0).replace(",", " ") }} ₸</strong>
+                <small>За всё время</small>
+            </div>
+        </article>
+    </section>
+
+    <section class="director-section">
+        <div class="director-section__head">
+            <div>
+                <h2>Способы оплаты</h2>
+                <p>Распределение выручки за сегодня</p>
+            </div>
         </div>
-    </div>
 
-	<div class="stat-card cyan payments-card">
+        <div class="director-payments">
+            <article>
+                <span>Наличные</span>
+                <strong>{{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }} ₸</strong>
+            </article>
+            <article>
+                <span>Карта</span>
+                <strong>{{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }} ₸</strong>
+            </article>
+            <article>
+                <span>Kaspi POS</span>
+                <strong>{{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }} ₸</strong>
+            </article>
+        </div>
+    </section>
 
-		<div class="stat-label">
-			Способы оплаты
-		</div>
+    <section class="director-section">
+        <div class="director-section__head">
+            <div>
+                <h2>Быстрые действия</h2>
+                <p>Основные разделы управления</p>
+            </div>
+        </div>
 
-		<div class="payment-list">
+        <div class="director-actions">
+            <a href="/sales"><span>🧾</span><strong>Продажи</strong></a>
+            <a href="/analytics"><span>📊</span><strong>Аналитика</strong></a>
+            <a href="/stock"><span>📦</span><strong>Остатки</strong></a>
+            <a href="/stock/income"><span>➕</span><strong>Приход</strong></a>
+            <a href="/items"><span>🏷️</span><strong>Каталог</strong></a>
+            <a href="/users"><span>👥</span><strong>Сотрудники</strong></a>
+        </div>
+    </section>
 
-			<div class="payment-item">
+    <section class="director-section">
+        <div class="director-section__head">
+            <div>
+                <h2>График продаж</h2>
+                <p>Динамика выручки</p>
+            </div>
+        </div>
 
-				<div class="payment-name">
-					Наличные
-				</div>
+        <div class="director-chart">
+            <canvas id="salesChart"></canvas>
+        </div>
+    </section>
 
-				<div class="payment-value">
-					{{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }} ₸
-				</div>
-
-			</div>
-
-			<div class="payment-item">
-
-				<div class="payment-name">
-					Карта
-				</div>
-
-				<div class="payment-value">
-					{{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }} ₸
-				</div>
-
-			</div>
-
-			<div class="payment-item">
-
-				<div class="payment-name">
-					Kaspi
-				</div>
-
-				<div class="payment-value">
-					{{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }} ₸
-				</div>
-
-			</div>
-
-		</div>
-
-	</div>
-
-</div>
-
-<div class="card">
-    <div class="title">График продаж</div>
-
-	<div class="chart-box">
-		<canvas id="salesChart"></canvas>
-	</div>
-</div>
-
-<!-- 🧾 ПОСЛЕДНИЕ ПРОДАЖИ -->
-<div class="card">
-    <div class="title">Последние продажи</div>
-
-    <div class="table-wrapper">
-	    <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Клиент</th>
-					<th>Сумма</th>
-					<th>Статус</th>
-				</tr>
-			</thead>
-			<tbody>
-				{% for s in sales %}
-				<tr>
-					<td>#{{ s.id }}</td>
-					<td>{{ s.full_name or "—" }}</td>
-					<td>
-						{{ "{:,.2f}".format(s.total_amount).replace(",", " ") }} ₸
-					</td>
-					<td>
-						<span class="{{ 'status-ok' if s.status == 'Оплачено' else 'status-bad' }}">
-							{{ s.status }}
-						</span>
-					</td>
-				</tr>
-				{% endfor %}
-			</tbody>
-		</table>
-	</div>
-</div>
-
-<div class="mobile-sales-list">
-
-    {% for s in sales %}
-
-    <div class="mobile-sale-card">
-
-        <div class="m-sale-top">
-
-            <div class="m-sale-client">
-                {{ s.full_name or "Без клиента" }}
+    <div class="director-grid">
+        <section class="director-section">
+            <div class="director-section__head">
+                <div>
+                    <h2>Последние продажи</h2>
+                    <p>Недавние операции</p>
+                </div>
             </div>
 
-            <div class="m-sale-status
-                {{ 'ok' if s.status == 'Оплачено' else 'bad' }}">
-                {{ s.status }}
+            <div class="director-table-wrap">
+                <table class="director-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Клиент</th>
+                            <th>Сумма</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sales %}
+                        <tr>
+                            <td>#{{ s.id }}</td>
+                            <td>{{ s.full_name or "—" }}</td>
+                            <td>{{ "{:,.2f}".format(s.total_amount).replace(",", " ") }} ₸</td>
+                            <td>
+                                <span class="director-status {{ 'director-status--ok' if s.status == 'Оплачено' else 'director-status--bad' }}">
+                                    {{ s.status }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
 
-        </div>
+            <div class="director-mobile-list">
+                {% for s in sales %}
+                <article class="director-mobile-card">
+                    <div class="director-mobile-card__top">
+                        <strong>{{ s.full_name or "Без клиента" }}</strong>
+                        <span class="director-status {{ 'director-status--ok' if s.status == 'Оплачено' else 'director-status--bad' }}">
+                            {{ s.status }}
+                        </span>
+                    </div>
+                    <div class="director-mobile-card__bottom">
+                        <span>#{{ s.id }}</span>
+                        <strong>{{ "{:,.0f}".format(s.total_amount).replace(",", " ") }} ₸</strong>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
 
-        <div class="m-sale-bottom">
-
-            <div class="m-sale-id">
-                #{{ s.id }}
+        <section class="director-section">
+            <div class="director-section__head">
+                <div>
+                    <h2>Долги</h2>
+                    <p>Неоплаченные суммы клиентов</p>
+                </div>
             </div>
 
-            <div class="m-sale-price">
-                {{ "{:,.0f}".format(s.total_amount).replace(",", " ") }} ₸
+            <div class="director-table-wrap">
+                <table class="director-table">
+                    <thead>
+                        <tr>
+                            <th>Клиент</th>
+                            <th>Сумма</th>
+                            <th>Долг</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in debts %}
+                        <tr>
+                            <td>{{ d.full_name }}</td>
+                            <td>{{ "{:,.0f}".format(d.total_amount).replace(",", " ") }} ₸</td>
+                            <td class="director-danger">
+                                {{ "{:,.0f}".format(d.total_amount - d.paid_amount).replace(",", " ") }} ₸
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
 
-        </div>
-
+            <div class="director-mobile-list">
+                {% for d in debts %}
+                <article class="director-mobile-card">
+                    <strong>{{ d.full_name }}</strong>
+                    <div class="director-mobile-card__row">
+                        <span>Сумма</span>
+                        <b>{{ "{:,.0f}".format(d.total_amount).replace(",", " ") }} ₸</b>
+                    </div>
+                    <div class="director-mobile-card__row director-danger">
+                        <span>Долг</span>
+                        <b>{{ "{:,.0f}".format(d.total_amount - d.paid_amount).replace(",", " ") }} ₸</b>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
     </div>
 
-    {% endfor %}
+    <div class="director-grid">
+        <section class="director-section">
+            <div class="director-section__head">
+                <div>
+                    <h2>Низкие остатки</h2>
+                    <p>Товары, которые скоро закончатся</p>
+                </div>
+            </div>
 
-</div>
+            <div class="director-table-wrap">
+                <table class="director-table">
+                    <thead>
+                        <tr>
+                            <th>Товар</th>
+                            <th>Остаток</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in low_stock %}
+                        <tr>
+                            <td>{{ item.name }}</td>
+                            <td class="director-danger">{{ item.stock }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
 
-<div class="card">
-    <div class="title">Долги</div>
+            <div class="director-mobile-list">
+                {% for item in low_stock %}
+                <article class="director-mobile-card">
+                    <strong>{{ item.name }}</strong>
+                    <div class="director-mobile-card__row director-danger">
+                        <span>Остаток</span>
+                        <b>{{ item.stock }}</b>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
 
-    <div class="table-wrapper">
-		<table>
-			<thead>
-				<tr>
-					<th>Клиент</th>
-					<th>Сумма</th>
-					<th>Долг</th>
-				</tr>
-			</thead>
-			<tbody>
-				{% for d in debts %}
-				<tr>
-					<td>{{ d.full_name }}</td>
-					<td>{{ d.total_amount }} ₸</td>
-					<td style="color:red;">
-						{{ d.total_amount - d.paid_amount }} ₸
-					</td>
-				</tr>
-				{% endfor %}
-			</tbody>
-		</table>
-	</div>	
-</div>
+        <section class="director-section">
+            <div class="director-section__head">
+                <div>
+                    <h2>Уведомления</h2>
+                    <p>События, требующие внимания</p>
+                </div>
+            </div>
 
-<div class="mobile-debts-list">
-
-	{% for d in debts %}
-
-	<div class="mobile-debt-card">
-
-		<div class="m-debt-client">
-			{{ d.full_name }}
-		</div>
-
-		<div class="m-debt-row">
-			<span>Сумма</span>
-			<b>{{ "{:,.0f}".format(d.total_amount).replace(",", " ") }} ₸</b>
-		</div>
-
-		<div class="m-debt-row danger">
-			<span>Долг</span>
-
-			<b>
-				{{ "{:,.0f}".format(d.total_amount - d.paid_amount).replace(",", " ") }} ₸
-			</b>
-		</div>
-
-	</div>
-
-	{% endfor %}
-
-</div>
-
-<div class="card">
-
-    <div class="title">
-        ⚠ Низкие остатки
+            <div class="director-notifications">
+                {% if notifications %}
+                    {% for n in notifications %}
+                    <div class="director-notification">
+                        <span>🔔</span>
+                        <p>{{ n }}</p>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="director-empty">
+                        <span>✓</span>
+                        <strong>Уведомлений нет</strong>
+                        <p>Все важные события появятся здесь.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
     </div>
-
-    <div class="table-wrapper">
-		<table>
-
-			<thead>
-				<tr>
-					<th>Товар</th>
-					<th>Остаток</th>
-				</tr>
-			</thead>
-
-			<tbody>
-
-			{% for item in low_stock %}
-
-				<tr>
-
-					<td>
-						{{ item.name }}
-					</td>
-
-					<td style="color:#ef4444;font-weight:bold;">
-						{{ item.stock }}
-					</td>
-
-				</tr>
-
-			{% endfor %}
-
-			</tbody>
-
-		</table>
-	</div>
-</div>
-
-<div class="mobile-stock-list">
-
-	{% for item in low_stock %}
-
-	<div class="mobile-stock-card">
-
-		<div class="m-stock-name">
-			{{ item.name }}
-		</div>
-
-		<div class="m-stock-value">
-			Остаток: {{ item.stock }}
-		</div>
-
-	</div>
-
-	{% endfor %}
-
-</div>
-
-<div class="card">
-    <div class="title">Уведомления</div>
-
-    {% for n in notifications %}
-        <div style="padding:6px 0;">
-            🔔 {{ n }}
-        </div>
-    {% endfor %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
-const ctx = document.getElementById('salesChart');
+const chartCanvas = document.getElementById('salesChart');
 
-new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: {{ chart_labels | tojson }},
-        datasets: [{
-            label: 'Продажи',
-            data: {{ chart_values | tojson }},
-            borderWidth: 2,
-            tension: 0.3
-        }]
-    },
-	options: {
-		responsive: true,
-		maintainAspectRatio: false,
-
-		plugins: {
-			legend: {
-				display: false
-			}
-		},
-
-		scales: {
-
-			x: {
-
-				ticks: {
-					maxTicksLimit: 7,
-
-					callback: function(value) {
-
-						let label = this.getLabelForValue(value);
-
-						if(label.includes('-')){
-
-							const p = label.split('-');
-
-							return p[2] + '.' + p[1];
-						}
-
-						return label;
-					}
-				}
-			},
-
-			y: {
-
-				ticks: {
-
-					maxTicksLimit: 5
-				}
-			}
-		}
-	}
-});
+if (chartCanvas) {
+    new Chart(chartCanvas, {
+        type: 'line',
+        data: {
+            labels: {{ chart_labels | tojson }},
+            datasets: [{
+                label: 'Продажи',
+                data: {{ chart_values | tojson }},
+                borderWidth: 3,
+                tension: 0.35,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        maxTicksLimit: 7,
+                        callback: function(value) {
+                            const label = this.getLabelForValue(value);
+                            if (label.includes('-')) {
+                                const p = label.split('-');
+                                return p[2] + '.' + p[1];
+                            }
+                            return label;
+                        }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { maxTicksLimit: 5 }
+                }
+            }
+        }
+    });
+}
 </script>
 
 <style>
-
-/* ================= MOBILE DASHBOARD ================= */
-
-@media (max-width: 768px) {
-
-	/* HEADER */
-
-	.page-header {
-		margin-bottom: 14px;
-	}
-
-	.page-title {
-		font-size: 24px;
-	}
-
-	.page-note {
-		font-size: 13px;
-	}
-
-	/* КАРТОЧКИ */
-
-	.stats-grid {
-		display: flex !important;
-		flex-direction: column !important;
-		gap: 12px;
-	}
-
-	.stat-card {
-		border-radius: 18px;
-		padding: 16px;
-	}
-
-	.stat-label {
-		font-size: 12px;
-	}
-
-	.stat-value {
-		font-size: 24px !important;
-		word-break: break-word;
-	}
-
-	/* ОПЛАТЫ */
-
-	.payment-list {
-		gap: 8px;
-	}
-
-	.payment-item {
-		padding: 10px;
-		border-radius: 12px;
-	}
-
-	.payment-name {
-		font-size: 12px;
-	}
-
-	.payment-value {
-		font-size: 13px;
-	}
-
-	/* КАРТОЧКИ */
-
-	.card {
-		padding: 14px;
-		border-radius: 18px;
-		margin-bottom: 14px;
-	}
-
-	.title {
-		font-size: 16px;
-		margin-bottom: 12px;
-	}
-
-	/* ГРАФИК */
-
-	#salesChart {
-		max-height: 240px !important;
-	}
-
-	/* ТАБЛИЦЫ */
-
-	.table-wrapper {
-		overflow-x: auto;
-		border-radius: 14px;
-	}
-
-	table {
-		min-width: 520px !important;
-		font-size: 13px;
-	}
-
-	th,
-	td {
-		padding: 10px 8px !important;
-	}
-
-	/* УВЕДОМЛЕНИЯ */
-
-	.card div[style*="padding:6px 0"] {
-		font-size: 13px;
-		padding: 8px 0 !important;
-	}
-
-	/* PAGE */
-
-	.page-shell {
-		padding: 12px !important;
-	}
+.director-page {
+    --d-card: #ffffff;
+    --d-soft: #fafafe;
+    --d-border: #e5e7ef;
+    --d-text: #202434;
+    --d-muted: #747a8d;
+    --d-purple: #7257ff;
+    --d-purple-soft: #efecff;
+    --d-shadow: 0 10px 28px rgba(52,48,89,.08);
+    width: 100%;
+    min-width: 0;
+    color: var(--d-text);
 }
 
-/* ===== VERY SMALL PHONES ===== */
-
-@media (max-width: 420px) {
-
-	.stat-value {
-		font-size: 20px !important;
-	}
-
-	.page-title {
-		font-size: 21px;
-	}
-
-	.card {
-		padding: 12px;
-	}
+.director-page .page-title {
+    color: var(--d-text) !important;
+    text-shadow: none !important;
 }
 
-/* ===== MOBILE CARDS ===== */
-
-.mobile-sales-list {
-	display: none;
+.director-page .page-note {
+    color: var(--d-muted) !important;
 }
 
-@media (max-width:768px){
-
-	/* скрываем desktop */
-
-	table {
-		display: none;
-	}
-
-	.mobile-sales-list {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-
-	.mobile-sale-card {
-
-		background: rgba(255,255,255,.9);
-
-		border-radius: 16px;
-
-		padding: 12px;
-
-		box-shadow:
-		0 4px 15px rgba(0,0,0,.06);
-	}
-
-	.m-sale-top {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 10px;
-	}
-
-	.m-sale-client {
-		font-size: 14px;
-		font-weight: 700;
-		flex: 1;
-	}
-
-	.m-sale-status {
-
-		font-size: 11px;
-
-		padding: 4px 8px;
-
-		border-radius: 999px;
-
-		font-weight: 600;
-	}
-
-	.m-sale-status.ok {
-		background: rgba(34,197,94,.15);
-		color: #16a34a;
-	}
-
-	.m-sale-status.bad {
-		background: rgba(239,68,68,.12);
-		color: #ef4444;
-	}
-
-	.m-sale-bottom {
-
-		display: flex;
-
-		justify-content: space-between;
-
-		align-items: center;
-
-		margin-top: 10px;
-	}
-
-	.m-sale-id {
-		font-size: 12px;
-		color: #64748b;
-	}
-
-	.m-sale-price {
-		font-size: 16px;
-		font-weight: 800;
-		color: #0f172a;
-	}
+.director-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
 }
 
-/* ===== MOBILE DASHBOARD CARDS ===== */
-
-.mobile-sales-list,
-.mobile-debts-list,
-.mobile-stock-list {
-	display: none;
+.director-btn {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 17px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 800;
+    text-decoration: none;
 }
 
-@media (max-width:768px){
-
-	/* desktop table */
-
-	.desktop-table {
-		display: none;
-	}
-
-	/* ===== SALES ===== */
-
-	.mobile-sales-list,
-	.mobile-debts-list,
-	.mobile-stock-list {
-
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-
-	.mobile-sale-card,
-	.mobile-debt-card,
-	.mobile-stock-card {
-
-		background: rgba(255,255,255,.92);
-
-		border-radius: 16px;
-
-		padding: 12px;
-
-		box-shadow:
-		0 4px 14px rgba(0,0,0,.06);
-	}
-
-	/* ===== CLIENT ===== */
-
-	.m-sale-client,
-	.m-debt-client,
-	.m-stock-name {
-
-		font-size: 14px;
-		font-weight: 700;
-		color: #0f172a;
-	}
-
-	/* ===== ROW ===== */
-
-	.m-debt-row {
-
-		display: flex;
-		justify-content: space-between;
-
-		margin-top: 8px;
-
-		font-size: 13px;
-	}
-
-	.m-debt-row span {
-		color: #64748b;
-	}
-
-	.m-debt-row.danger b {
-		color: #ef4444;
-	}
-
-	/* ===== STOCK ===== */
-
-	.m-stock-value {
-
-		margin-top: 8px;
-
-		font-size: 13px;
-
-		color: #ef4444;
-		font-weight: 700;
-	}
-
-	/* ===== HIDE TABLES ===== */
-
-	.card table {
-		display: none;
-	}
+.director-btn--primary {
+    color: #fff;
+    background: linear-gradient(135deg, #7257ff, #9958e7);
+    box-shadow: 0 8px 18px rgba(114,87,255,.22);
 }
 
-.chart-box{
-    position:relative;
-    height:320px;
+.director-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 13px;
+    margin-bottom: 17px;
 }
 
-@media (max-width:768px){
+.director-kpi {
+    min-width: 0;
+    min-height: 112px;
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    padding: 17px;
+    border: 1px solid var(--d-border);
+    border-radius: 17px;
+    background: var(--d-card);
+    box-shadow: var(--d-shadow);
+}
 
-    .chart-box{
-        height:180px;
+.director-kpi__icon {
+    flex: 0 0 43px;
+    width: 43px;
+    height: 43px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.director-kpi__icon--blue { color:#3978e8; background:#edf4ff; }
+.director-kpi__icon--green { color:#1a936b; background:#e8f7f1; }
+.director-kpi__icon--purple { color:#7257ff; background:#efecff; }
+.director-kpi__icon--orange { color:#c1771f; background:#fff2e2; }
+.director-kpi__icon--red { color:#cf4949; background:#fdecec; }
+.director-kpi__icon--yellow { color:#b98a12; background:#fff7d9; }
+.director-kpi__icon--cyan { color:#1e9ead; background:#e8f8fa; }
+.director-kpi__icon--violet { color:#8657d8; background:#f2ebff; }
+
+.director-kpi > div:last-child {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.director-kpi span,
+.director-kpi small {
+    color: var(--d-muted);
+}
+
+.director-kpi span {
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.director-kpi strong {
+    color: var(--d-text);
+    font-size: clamp(18px, 1.65vw, 24px);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.director-kpi__text {
+    font-size: 15px !important;
+}
+
+.director-kpi small {
+    font-size: 10px;
+}
+
+.director-section {
+    min-width: 0;
+    margin-bottom: 17px;
+    padding: 18px;
+    border: 1px solid var(--d-border);
+    border-radius: 18px;
+    background: var(--d-card);
+    box-shadow: var(--d-shadow);
+}
+
+.director-section__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.director-section__head h2 {
+    margin: 0 0 4px;
+    color: var(--d-text);
+    font-size: 17px;
+}
+
+.director-section__head p {
+    margin: 0;
+    color: var(--d-muted);
+    font-size: 11px;
+}
+
+.director-payments {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 10px;
+}
+
+.director-payments article {
+    min-width: 0;
+    display: grid;
+    gap: 7px;
+    padding: 15px;
+    border: 1px solid var(--d-border);
+    border-radius: 14px;
+    background: var(--d-soft);
+}
+
+.director-payments span {
+    color: var(--d-muted);
+    font-size: 11px;
+}
+
+.director-payments strong {
+    color: var(--d-text);
+    font-size: 18px;
+    overflow-wrap: anywhere;
+}
+
+.director-actions {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0,1fr));
+    gap: 10px;
+}
+
+.director-actions a {
+    min-width: 0;
+    min-height: 78px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 7px;
+    padding: 10px;
+    border: 1px solid var(--d-border);
+    border-radius: 14px;
+    color: var(--d-text);
+    background: var(--d-soft);
+    text-decoration: none;
+    transition: .18s ease;
+}
+
+.director-actions a:hover {
+    transform: translateY(-2px);
+    border-color: #cfc5ff;
+    background: #f5f2ff;
+}
+
+.director-actions span {
+    font-size: 21px;
+}
+
+.director-actions strong {
+    font-size: 11px;
+}
+
+.director-chart {
+    position: relative;
+    height: 310px;
+}
+
+.director-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 17px;
+}
+
+.director-table-wrap {
+    width: 100%;
+    overflow: hidden;
+}
+
+.director-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.director-table th,
+.director-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--d-border);
+    text-align: left;
+
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.director-grid .director-section:nth-child(2) .director-table th:nth-child(1),
+.director-grid .director-section:nth-child(2) .director-table td:nth-child(1){
+    width:45%;
+}
+
+.director-grid .director-section:nth-child(2) .director-table th:nth-child(2),
+.director-grid .director-section:nth-child(2) .director-table td:nth-child(2){
+    width:27%;
+}
+
+.director-grid .director-section:nth-child(2) .director-table th:nth-child(3),
+.director-grid .director-section:nth-child(2) .director-table td:nth-child(3){
+    width:28%;
+}
+
+.director-table th {
+    color: #858b9e;
+    background: #fafafe;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.director-table td {
+    color: var(--d-text);
+    font-size: 11px;
+}
+
+.director-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 23px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.director-status--ok {
+    color: #17805f;
+    background: #e7f7f1;
+}
+
+.director-status--bad {
+    color: #c94646;
+    background: #fdeaea;
+}
+
+.director-danger {
+    color: #d64c4c !important;
+    font-weight: 800;
+}
+
+.director-mobile-list {
+    display: none;
+}
+
+.director-notifications {
+    display: grid;
+    gap: 9px;
+}
+
+.director-notification {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 12px;
+    border: 1px solid var(--d-border);
+    border-radius: 13px;
+    background: var(--d-soft);
+}
+
+.director-notification p {
+    margin: 0;
+    color: var(--d-text);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.director-empty {
+    min-height: 180px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    text-align: center;
+}
+
+.director-empty > span {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 10px;
+    border-radius: 15px;
+    color: #198363;
+    background: #e7f7f1;
+}
+
+.director-empty strong {
+    color: var(--d-text);
+    font-size: 13px;
+}
+
+.director-empty p {
+    margin: 5px 0 0;
+    color: var(--d-muted);
+    font-size: 10px;
+}
+
+@media(max-width: 1100px) {
+    .director-kpis {
+        grid-template-columns: repeat(2, minmax(0,1fr));
+    }
+
+    .director-actions {
+        grid-template-columns: repeat(3, minmax(0,1fr));
     }
 }
 
+@media(max-width: 850px) {
+    .director-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media(max-width: 640px) {
+    .director-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .director-btn {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .director-kpis {
+        grid-template-columns: repeat(2, minmax(0,1fr));
+        gap: 9px;
+    }
+
+    .director-kpi {
+        min-height: 104px;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 9px;
+        padding: 13px;
+    }
+
+    .director-kpi__icon {
+        flex-basis: 34px;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+
+    .director-kpi strong {
+        font-size: 17px;
+    }
+
+    .director-kpi__text {
+        font-size: 13px !important;
+    }
+
+    .director-payments {
+        grid-template-columns: 1fr;
+    }
+
+    .director-actions {
+        grid-template-columns: repeat(3, minmax(0,1fr));
+    }
+
+    .director-section {
+        padding: 14px;
+        border-radius: 16px;
+    }
+
+    .director-chart {
+        height: 190px;
+    }
+
+    .director-table-wrap {
+        display: none;
+    }
+
+    .director-mobile-list {
+        display: grid;
+        gap: 9px;
+    }
+
+    .director-mobile-card {
+        padding: 12px;
+        border: 1px solid var(--d-border);
+        border-radius: 13px;
+        background: var(--d-soft);
+    }
+
+    .director-mobile-card__top,
+    .director-mobile-card__bottom,
+    .director-mobile-card__row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 9px;
+    }
+
+    .director-mobile-card__top {
+        align-items: flex-start;
+    }
+
+    .director-mobile-card__bottom,
+    .director-mobile-card__row {
+        margin-top: 9px;
+    }
+
+    .director-mobile-card strong {
+        color: var(--d-text);
+        font-size: 12px;
+    }
+
+    .director-mobile-card span {
+        color: var(--d-muted);
+        font-size: 10px;
+    }
+}
 </style>
 
 {% endblock %}

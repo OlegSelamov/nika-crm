@@ -34,6 +34,130 @@ def dashboard():
     """, (today_str, company_id))
 
     today = cur.fetchone()["total"] or 0
+    
+    cur.execute("""
+        SELECT COUNT(*) AS total
+        FROM sales
+        WHERE company_id = %s
+        AND DATE(created_at) = %s
+        AND status = 'Оплачено'
+    """, (
+        company_id,
+        today_str
+    ))
+
+    sales_today = cur.fetchone()["total"] or 0
+    
+    cur.execute("""
+        SELECT
+            COALESCE(AVG(total_amount),0) AS avg_check
+        FROM sales
+        WHERE company_id=%s
+        AND DATE(created_at)=%s
+        AND status='Оплачено'
+    """,(
+        company_id,
+        today_str
+    ))
+
+    average_check = cur.fetchone()["avg_check"] or 0
+    
+    cur.execute("""
+    SELECT
+    COALESCE(SUM(sale_items.profit),0) AS profit
+    FROM sale_items
+
+    JOIN sales
+    ON sales.id=sale_items.sale_id
+
+    WHERE sales.company_id=%s
+    AND DATE(sales.created_at)=%s
+    AND sales.status='Оплачено'
+    """,(
+    company_id,
+    today_str
+    ))
+
+    today_profit = cur.fetchone()["profit"] or 0
+    
+    cur.execute("""
+    SELECT COUNT(*) AS total
+
+    FROM sales
+
+    WHERE company_id=%s
+
+    AND DATE(created_at)=%s
+
+    AND (
+    status='Возврат'
+    OR COALESCE(is_refunded,FALSE)=TRUE
+    )
+    """,(
+    company_id,
+    today_str
+    ))
+
+    refunds_today=cur.fetchone()["total"] or 0
+    
+    cur.execute("""
+    SELECT
+
+    users.full_name,
+
+    SUM(sales.total_amount) revenue
+
+    FROM sales
+
+    JOIN users
+    ON users.id=sales.user_id
+
+    WHERE sales.company_id=%s
+
+    AND DATE(sales.created_at)=%s
+
+    AND sales.status='Оплачено'
+
+    GROUP BY users.full_name
+
+    ORDER BY revenue DESC
+
+    LIMIT 1
+    """,(
+    company_id,
+    today_str
+    ))
+
+    best_employee=cur.fetchone()
+    
+    cur.execute("""
+    SELECT
+
+    sale_items.name,
+
+    SUM(sale_items.quantity) qty
+
+    FROM sale_items
+
+    JOIN sales
+
+    ON sales.id=sale_items.sale_id
+
+    WHERE sales.company_id=%s
+
+    AND DATE(sales.created_at)=%s
+
+    GROUP BY sale_items.name
+
+    ORDER BY qty DESC
+
+    LIMIT 1
+    """,(
+    company_id,
+    today_str
+    ))
+
+    best_item=cur.fetchone()
 
     # 💳 ОПЛАТЫ
     cur.execute("""
@@ -183,7 +307,13 @@ def dashboard():
         chart_values=chart_values,
         debts=debts,
         low_stock=low_stock,
-        notifications=notifications
+        notifications=notifications,
+        sales_today=sales_today,
+        average_check=average_check,
+        today_profit=today_profit,
+        refunds_today=refunds_today,
+        best_employee=best_employee,
+        best_item=best_item
     )
     
 @dashboard_bp.route("/api/dashboard")

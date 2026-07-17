@@ -70,6 +70,126 @@
 
 </div>
 
+<!-- 👥 СОТРУДНИКИ -->
+<div class="employees-section">
+    <div class="employees-heading">
+        <div>
+            <div class="title">Продажи сотрудников</div>
+            <div class="employees-note">Рейтинг за выбранный период</div>
+        </div>
+
+        {% if employee_stats %}
+        <div class="best-employee">
+            🏆 Лидер:
+            <b>{{ employee_stats[0].full_name or employee_stats[0].username }}</b>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="desktop-table employee-table-wrap">
+        <table class="employee-table">
+            <thead>
+                <tr>
+                    <th>Место</th>
+                    <th>Сотрудник</th>
+                    <th>Продаж</th>
+                    <th>Выручка</th>
+                    <th>Средний чек</th>
+                    <th>Возвраты</th>
+                    <th>Ставка</th>
+                    <th>Вознаграждение</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for employee in employee_stats %}
+                <tr class="employee-row"
+                    onclick="window.location='/analytics/employee/{{ employee.id }}?from={{ date_from }}&to={{ date_to }}'">
+					<td class="employee-rank">
+
+						{% if loop.index == 1 %}
+							🥇
+						{% elif loop.index == 2 %}
+							🥈
+						{% elif loop.index == 3 %}
+							🥉
+						{% else %}
+							{{ loop.index }}
+						{% endif %}
+
+					</td>
+                    <td>
+                        <div class="employee-name">{{ employee.full_name or employee.username }}</div>
+                        <div class="employee-role">{{ employee.role or 'Сотрудник' }}</div>
+                        <div class="employee-progress">
+                            <span style="width:{{ employee.progress_percent }}%;"></span>
+                        </div>
+                    </td>
+                    <td>{{ employee.sales_count or 0 }}</td>
+                    <td><b>{{ "{:,.0f}".format(employee.revenue or 0).replace(",", " ") }} ₸</b></td>
+                    <td>{{ "{:,.0f}".format(employee.average_check or 0).replace(",", " ") }} ₸</td>
+                    <td>{{ employee.refund_count or 0 }}</td>
+                    <td>{{ employee.percent_rate or 0 }}%</td>
+                    <td class="employee-reward">
+                        {{ "{:,.0f}".format(employee.reward or 0).replace(",", " ") }} ₸
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="employee-empty">
+                        За выбранный период данных по сотрудникам нет
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mobile-employees-list">
+        {% for employee in employee_stats %}
+        <a href="/analytics/employee/{{ employee.id }}?from={{ date_from }}&to={{ date_to }}"
+           class="mobile-employee-card">
+            <div class="mobile-employee-top">
+                <div class="mobile-employee-person">
+                    <div class="mobile-rank">
+                        {% if employee.rank == 1 %}🥇
+                        {% elif employee.rank == 2 %}🥈
+                        {% elif employee.rank == 3 %}🥉
+                        {% else %}{{ employee.rank }}
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div class="mobile-employee-name">
+                            {{ employee.full_name or employee.username }}
+                        </div>
+                        <div class="mobile-employee-role">
+                            {{ employee.role or 'Сотрудник' }}
+                        </div>
+                    </div>
+                </div>
+                <div class="mobile-employee-revenue">
+                    {{ "{:,.0f}".format(employee.revenue or 0).replace(",", " ") }} ₸
+                </div>
+            </div>
+
+            <div class="employee-progress mobile-progress">
+                <span style="width:{{ employee.progress_percent }}%;"></span>
+            </div>
+
+            <div class="mobile-employee-grid">
+                <div><span>Продаж</span><b>{{ employee.sales_count or 0 }}</b></div>
+                <div><span>Средний чек</span><b>{{ "{:,.0f}".format(employee.average_check or 0).replace(",", " ") }} ₸</b></div>
+                <div><span>Возвраты</span><b>{{ employee.refund_count or 0 }}</b></div>
+                <div><span>Вознаграждение</span><b>{{ "{:,.0f}".format(employee.reward or 0).replace(",", " ") }} ₸</b></div>
+            </div>
+        </a>
+        {% else %}
+        <div class="employee-empty-mobile">
+            За выбранный период данных по сотрудникам нет
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
 <div class="analytics-row">
 	<div class="card payments-card">
 
@@ -244,6 +364,61 @@ new Chart(document.getElementById('paymentsChart'), {
 </script>
 
 <style>
+.employees-section{
+    margin-top:18px;
+    padding:20px;
+    border:1px solid #e8edf3;
+    border-radius:20px;
+    background:#fff;
+    box-shadow:0 8px 24px rgba(15,23,42,.05);
+}
+.employees-heading{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:15px;
+    margin-bottom:16px;
+}
+.employees-heading .title{margin-bottom:3px;}
+.employees-note{color:#64748b;font-size:12px;}
+.best-employee{
+    padding:9px 12px;
+    border-radius:12px;
+    color:#92400e;
+    background:#fef3c7;
+    font-size:13px;
+}
+.employee-table{width:100%;border-collapse:collapse;}
+.employee-table th,.employee-table td{
+    padding:12px;
+    border-bottom:1px solid #edf1f5;
+    text-align:left;
+    font-size:13px;
+}
+.employee-table th{color:#64748b;background:#f8fafc;}
+.employee-row{cursor:pointer;transition:.16s ease;}
+.employee-row:hover{background:#f8fbff;}
+.employee-rank{font-size:20px!important;text-align:center!important;}
+.employee-name{color:#0f172a;font-size:14px;font-weight:800;}
+.employee-role{margin-top:2px;color:#64748b;font-size:11px;}
+.employee-progress{
+    width:100%;
+    height:6px;
+    margin-top:8px;
+    overflow:hidden;
+    border-radius:999px;
+    background:#e8edf3;
+}
+.employee-progress span{
+    display:block;
+    height:100%;
+    border-radius:inherit;
+    background:linear-gradient(90deg,#2563eb,#7c3aed);
+}
+.employee-reward{color:#16a34a;font-weight:800;}
+.employee-empty{padding:25px!important;color:#64748b;text-align:center!important;}
+.mobile-employees-list{display:none;}
+
 .analytics-row{
 
     display:grid;
@@ -265,6 +440,51 @@ new Chart(document.getElementById('paymentsChart'), {
 #chart{
 
     max-height:300px;
+}
+
+@media(max-width:768px){
+    .employees-section{padding:14px;border-radius:18px;}
+    .employees-heading{align-items:flex-start;flex-direction:column;}
+    .best-employee{width:100%;box-sizing:border-box;}
+    .employee-table-wrap{display:none;}
+    .mobile-employees-list{display:flex;flex-direction:column;gap:10px;}
+    .mobile-employee-card{
+        display:block;
+        padding:13px;
+        border:1px solid #e8edf3;
+        border-radius:16px;
+        color:inherit;
+        background:#f8fafc;
+        text-decoration:none;
+    }
+    .mobile-employee-top{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:10px;
+    }
+    .mobile-employee-person{display:flex;align-items:center;gap:9px;min-width:0;}
+    .mobile-rank{font-size:20px;}
+    .mobile-employee-name{font-size:14px;font-weight:800;}
+    .mobile-employee-role{margin-top:2px;color:#64748b;font-size:11px;}
+    .mobile-employee-revenue{
+        color:#0f172a;
+        font-size:14px;
+        font-weight:800;
+        white-space:nowrap;
+    }
+    .mobile-progress{margin:12px 0;}
+    .mobile-employee-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .mobile-employee-grid>div{padding:9px;border-radius:11px;background:#fff;}
+    .mobile-employee-grid span{display:block;color:#64748b;font-size:10px;}
+    .mobile-employee-grid b{display:block;margin-top:4px;font-size:13px;}
+    .employee-empty-mobile{
+        padding:20px;
+        color:#64748b;
+        text-align:center;
+        border-radius:14px;
+        background:#f8fafc;
+    }
 }
 
 @media(max-width:768px){

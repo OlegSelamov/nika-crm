@@ -8,17 +8,80 @@
 
     <form method="POST" class="income-form">
 
-        <select name="item_id" required>
+        <div class="product-picker">
 
-            {% for item in items %}
+            <div class="product-search-row">
 
-                <option value="{{ item.id }}">
-                    {{ item.name }}
-                </option>
+                <div class="product-search-box">
 
-            {% endfor %}
+                    <input
+                        type="text"
+                        id="incomeProductSearch"
+                        class="product-search-input"
+                        placeholder="Выберите или найдите товар"
+                        autocomplete="off"
+                    >
 
-        </select>
+                    <input
+                        type="hidden"
+                        id="incomeItemId"
+                        name="item_id"
+                        required
+                    >
+
+                    <div
+                        id="incomeProductList"
+                        class="product-dropdown"
+                    >
+
+                        {% for item in items %}
+
+                            <button
+                                type="button"
+                                class="product-option"
+                                data-id="{{ item.id }}"
+                                data-name="{{ item.name }}"
+                                data-search="{{ (item.name or '')|lower }} {{ item.barcode or '' }} {{ item.gtin or '' }} {{ item.ntin or '' }}"
+                                data-name-search="{{ (item.name or '')|lower }}"
+                                data-barcode="{{ item.barcode or '' }}"
+                                data-gtin="{{ item.gtin or '' }}"
+                                data-ntin="{{ item.ntin or '' }}"
+                            >
+                                <span class="product-option-name">
+                                    {{ item.name }}
+                                </span>
+
+                                {% if item.barcode or item.gtin or item.ntin %}
+                                    <span class="product-option-code">
+                                        {{ item.barcode or item.gtin or item.ntin }}
+                                    </span>
+                                {% endif %}
+                            </button>
+
+                        {% endfor %}
+
+                        <div
+                            id="incomeNoProducts"
+                            class="product-empty"
+                        >
+                            Товар не найден
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <a
+                    href="/scanner"
+                    class="income-scan-link"
+                    aria-label="Открыть сканер"
+                >
+                    📷
+                </a>
+
+            </div>
+
+        </div>
 
         <input
             type="number"
@@ -47,10 +110,349 @@
         </button>
 
     </form>
+	
+	<div class="income-history">
+
+		<h3>Последние приходы</h3>
+
+		<div class="income-history-table">
+
+			<table class="client-table">
+
+				<thead>
+					<tr>
+						<th>Товар</th>
+						<th>Количество</th>
+						<th>Цена</th>
+						<th>Сумма</th>
+						<th>Комментарий</th>
+						<th>Дата</th>
+					</tr>
+				</thead>
+
+				<tbody>
+
+					{% for row in income_rows %}
+
+						<tr>
+
+							<td>
+								{{ row.item_name }}
+							</td>
+
+							<td>
+								{{ row.quantity }}
+							</td>
+
+							<td>
+								{{ "{:,.0f}".format(row.price or 0).replace(",", " ") }} ₸
+							</td>
+
+							<td>
+								{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸
+							</td>
+
+							<td>
+								{{ row.comment or '—' }}
+							</td>
+
+							<td>
+								{{ row.created_at.strftime('%d.%m.%Y %H:%M') if row.created_at else '—' }}
+							</td>
+
+						</tr>
+
+					{% else %}
+
+						<tr>
+							<td colspan="6" class="income-empty">
+								Приходов пока нет
+							</td>
+						</tr>
+
+					{% endfor %}
+
+				</tbody>
+
+			</table>
+
+		</div>
+
+	</div>
 
 </div>
 
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const searchInput = document.getElementById("incomeProductSearch");
+    const itemIdInput = document.getElementById("incomeItemId");
+    const dropdown = document.getElementById("incomeProductList");
+    const options = Array.from(
+        document.querySelectorAll(".product-option")
+    );
+    const noProducts = document.getElementById("incomeNoProducts");
+    const form = document.querySelector(".income-form");
+
+    if (!searchInput || !itemIdInput || !dropdown) {
+        return;
+    }
+
+    function openDropdown() {
+        dropdown.classList.add("open");
+    }
+
+    function closeDropdown() {
+        dropdown.classList.remove("open");
+    }
+
+    function selectProduct(option) {
+        itemIdInput.value = option.dataset.id || "";
+        searchInput.value = option.dataset.name || "";
+        searchInput.setCustomValidity("");
+        closeDropdown();
+    }
+
+    function filterProducts() {
+        const query = searchInput.value.trim().toLowerCase();
+        let visibleCount = 0;
+        let exactCodeOption = null;
+        let exactNameOption = null;
+
+        itemIdInput.value = "";
+
+        options.forEach(function (option) {
+            const haystack = (option.dataset.search || "").toLowerCase();
+            const name = (option.dataset.nameSearch || "").trim();
+            const barcode = (option.dataset.barcode || "").trim().toLowerCase();
+            const gtin = (option.dataset.gtin || "").trim().toLowerCase();
+            const ntin = (option.dataset.ntin || "").trim().toLowerCase();
+
+            const visible = !query || haystack.includes(query);
+
+            option.style.display = visible ? "flex" : "none";
+
+            if (visible) {
+                visibleCount++;
+            }
+
+            if (
+                query &&
+                (
+                    query === barcode ||
+                    query === gtin ||
+                    query === ntin
+                )
+            ) {
+                exactCodeOption = option;
+            }
+
+            if (query && query === name) {
+                exactNameOption = option;
+            }
+        });
+
+        if (noProducts) {
+            noProducts.style.display =
+                visibleCount === 0 ? "block" : "none";
+        }
+
+        openDropdown();
+
+        /*
+         * Аппаратный сканер вводит штрихкод как клавиатура.
+         * Как только код полностью совпал, товар выбирается сразу,
+         * без ожидания Enter.
+         */
+        if (exactCodeOption) {
+            selectProduct(exactCodeOption);
+            return exactCodeOption;
+        }
+
+        /*
+         * При полном ручном вводе названия выбираем товар только тогда,
+         * когда совпадение одно и название введено целиком.
+         */
+        if (exactNameOption && visibleCount === 1) {
+            selectProduct(exactNameOption);
+            return exactNameOption;
+        }
+
+        return null;
+    }
+
+    searchInput.addEventListener("focus", function () {
+        filterProducts();
+    });
+
+    searchInput.addEventListener("click", function () {
+        filterProducts();
+    });
+
+    searchInput.addEventListener("input", function () {
+        /*
+         * Фильтрация происходит после каждого введённого символа:
+         * список обновляется сразу, без Enter и без отдельной кнопки.
+         */
+        filterProducts();
+    });
+
+    searchInput.addEventListener("keydown", function (event) {
+
+        if (event.key === "Escape") {
+            closeDropdown();
+            return;
+        }
+
+        if (event.key !== "Enter") {
+            return;
+        }
+
+        event.preventDefault();
+
+        const exactOption = filterProducts();
+
+        if (exactOption) {
+            selectProduct(exactOption);
+            return;
+        }
+
+        const firstVisible = options.find(function (option) {
+            return option.style.display !== "none";
+        });
+
+        if (firstVisible) {
+            selectProduct(firstVisible);
+        }
+    });
+
+    options.forEach(function (option) {
+        option.addEventListener("click", function () {
+            selectProduct(option);
+        });
+    });
+
+    document.addEventListener("click", function (event) {
+        if (!event.target.closest(".product-picker")) {
+            closeDropdown();
+        }
+    });
+
+    if (form) {
+        form.addEventListener("submit", function (event) {
+            if (!itemIdInput.value) {
+                event.preventDefault();
+                searchInput.setCustomValidity("Выберите товар из списка");
+                searchInput.reportValidity();
+                openDropdown();
+            }
+        });
+    }
+});
+</script>
+
 <style>
+
+.product-picker{
+    position:relative;
+    min-width:0;
+}
+
+.product-search-row{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+}
+
+.product-search-box{
+    position:relative;
+    flex:1;
+    min-width:0;
+}
+
+.product-search-input{
+    width:100%;
+    height:46px;
+    box-sizing:border-box;
+    padding:0 14px;
+    border:1px solid #ddd;
+    border-radius:10px;
+    background:#fff;
+    font-size:14px;
+    outline:none;
+}
+
+.product-search-input:focus{
+    border-color:#2563eb;
+    box-shadow:0 0 0 3px rgba(37,99,235,.12);
+}
+
+.product-dropdown{
+    display:none;
+    position:absolute;
+    top:calc(100% + 6px);
+    left:0;
+    right:0;
+    z-index:50;
+    max-height:300px;
+    overflow-y:auto;
+    padding:6px;
+    border:1px solid #dbe2ea;
+    border-radius:12px;
+    background:#fff;
+    box-shadow:0 14px 35px rgba(15,23,42,.14);
+}
+
+.product-dropdown.open{
+    display:block;
+}
+
+.product-option{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    width:100%;
+    padding:10px 12px;
+    border:0;
+    border-radius:9px;
+    background:transparent;
+    text-align:left;
+    cursor:pointer;
+}
+
+.product-option:hover{
+    background:#eff6ff;
+}
+
+.product-option[hidden]{
+    display:none !important;
+}
+
+.product-option-name{
+    font-size:14px;
+    font-weight:600;
+    color:#0f172a;
+}
+
+.product-option-code{
+    margin-top:3px;
+    font-size:12px;
+    color:#64748b;
+}
+
+.product-empty{
+    display:none;
+    padding:14px 12px;
+    text-align:center;
+    font-size:13px;
+    color:#64748b;
+}
+
+.income-scan-link{
+    display:none;
+}
+
 
 .page{
     padding:20px;
@@ -92,7 +494,76 @@
     cursor:pointer;
 }
 
+.income-history {
+    margin-top: 35px;
+}
+
+.income-history h3 {
+    margin-bottom: 15px;
+    font-size: 20px;
+}
+
+.income-history-table {
+    overflow-x: auto;
+}
+
+.income-history-table table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.income-history-table th,
+.income-history-table td {
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+}
+
+.income-history-table th {
+    background: #f8fafc;
+    font-size: 13px;
+    color: #475569;
+}
+
+.income-history-table td {
+    font-size: 14px;
+}
+
+.income-empty {
+    padding: 25px !important;
+    text-align: center !important;
+    color: #64748b;
+}
+
 @media (max-width:768px){
+
+    .product-search-input{
+        height:48px;
+        font-size:14px;
+        border-radius:14px;
+    }
+
+    .income-scan-link{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        width:48px;
+        height:48px;
+        flex:0 0 48px;
+        border-radius:14px;
+        background:#2563eb;
+        color:#fff;
+        text-decoration:none;
+        font-size:20px;
+    }
+
+    .product-dropdown{
+        max-height:260px;
+    }
+
 
 	.page{
 		padding:12px;

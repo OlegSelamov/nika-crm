@@ -1,0 +1,754 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+.report-form-page {
+    --r-card:#fff;
+    --r-soft:#fafafe;
+    --r-border:#e5e7ef;
+    --r-text:#202434;
+    --r-muted:#747a8d;
+    --r-purple:#7257ff;
+    --r-purple-soft:#efecff;
+    --r-green:#16815e;
+    --r-green-soft:#e7f7f1;
+    --r-red:#c94646;
+    --r-red-soft:#fdecec;
+    --r-shadow:0 10px 28px rgba(52,48,89,.08);
+    width:100%;
+    min-width:0;
+    color:var(--r-text);
+}
+
+.report-form-page .page-title {
+    color:var(--r-text) !important;
+    text-shadow:none !important;
+}
+
+.report-form-page .page-note {
+    color:var(--r-muted) !important;
+}
+
+.report-form-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:15px;
+    margin-bottom:16px;
+}
+
+.report-form-actions {
+    display:flex;
+    gap:8px;
+}
+
+.report-btn {
+    min-height:42px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 15px;
+    border:0;
+    border-radius:11px;
+    font:inherit;
+    font-size:11px;
+    font-weight:800;
+    text-decoration:none;
+    cursor:pointer;
+}
+
+.report-btn--primary {
+    color:#fff !important;
+    background:linear-gradient(135deg,#7257ff,#9958e7);
+}
+
+.report-btn--light {
+    color:var(--r-purple) !important;
+    background:var(--r-purple-soft);
+    border:1px solid #d9d2ff;
+}
+
+.report-filter,
+.report-card {
+    margin-bottom:16px;
+    padding:18px;
+    border:1px solid var(--r-border);
+    border-radius:17px;
+    background:var(--r-card);
+    box-shadow:var(--r-shadow);
+}
+
+.report-filter form {
+    display:flex;
+    align-items:end;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.report-filter label {
+    display:grid;
+    gap:6px;
+}
+
+.report-filter label span {
+    color:var(--r-muted);
+    font-size:10px;
+    font-weight:700;
+}
+
+.report-filter select {
+    min-height:42px;
+    padding:0 32px 0 11px;
+    border:1px solid var(--r-border);
+    border-radius:10px;
+    color:var(--r-text);
+    background:#fff;
+    font:inherit;
+    font-size:11px;
+}
+
+.report-status-grid,
+.report-summary-grid {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:11px;
+}
+
+.report-status,
+.report-summary {
+    min-width:0;
+    display:grid;
+    gap:5px;
+    padding:14px;
+    border:1px solid var(--r-border);
+    border-radius:13px;
+    background:var(--r-soft);
+}
+
+.report-status span,
+.report-summary span,
+.report-status small {
+    color:var(--r-muted);
+    font-size:10px;
+}
+
+.report-status strong,
+.report-summary strong {
+    color:var(--r-text);
+    font-size:18px;
+    overflow-wrap:anywhere;
+}
+
+.report-status--ready {
+    border-color:#cceadf;
+    background:var(--r-green-soft);
+}
+
+.report-status--warning {
+    border-color:#f1d5d5;
+    background:#fffafa;
+}
+
+.report-card__head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:14px;
+}
+
+.report-card__head h2 {
+    margin:0 0 4px;
+    color:var(--r-text);
+    font-size:17px;
+}
+
+.report-card__head p {
+    margin:0;
+    color:var(--r-muted);
+    font-size:11px;
+}
+
+.report-checks {
+    display:grid;
+    gap:8px;
+}
+
+.report-check {
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:10px 11px;
+    border:1px solid var(--r-border);
+    border-radius:10px;
+    background:var(--r-soft);
+}
+
+.report-check__icon {
+    width:28px;
+    height:28px;
+    flex:0 0 28px;
+    display:grid;
+    place-items:center;
+    border-radius:8px;
+    font-size:12px;
+    font-weight:900;
+}
+
+.report-check--ok .report-check__icon {
+    color:var(--r-green);
+    background:var(--r-green-soft);
+}
+
+.report-check--bad .report-check__icon {
+    color:var(--r-red);
+    background:var(--r-red-soft);
+}
+
+.report-check div {
+    display:grid;
+    gap:2px;
+}
+
+.report-check strong {
+    color:var(--r-text);
+    font-size:11px;
+}
+
+.report-check small {
+    color:var(--r-muted);
+    font-size:9px;
+}
+
+.report-table-wrap {
+    width:100%;
+    overflow-x:auto;
+}
+
+.report-table {
+    width:100%;
+    min-width:760px;
+    border-collapse:collapse;
+}
+
+.report-table th,
+.report-table td {
+    padding:11px 9px;
+    border-bottom:1px solid var(--r-border);
+    text-align:left;
+}
+
+.report-table th {
+    color:#858b9e;
+    background:#fafafe;
+    font-size:9px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.report-table td {
+    color:var(--r-text);
+    font-size:11px;
+}
+
+.report-footer-actions {
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+}
+
+@media(max-width:900px) {
+    .report-status-grid,
+    .report-summary-grid {
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+}
+
+@media(max-width:640px) {
+    .report-form-header {
+        align-items:stretch;
+        flex-direction:column;
+    }
+
+    .report-form-actions {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .report-filter form {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .report-filter .report-btn {
+        grid-column:1 / -1;
+    }
+
+    .report-status-grid,
+    .report-summary-grid {
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
+    .report-footer-actions {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+}
+
+
+.report-lines-note {
+    margin: 0 0 13px;
+    padding: 11px 12px;
+    border: 1px solid #e5e7ef;
+    border-radius: 11px;
+    color: #62697d;
+    background: #fafafe;
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.report-line-code {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 9px;
+    border-radius: 8px;
+    color: #674cdb;
+    background: #efecff;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.report-source {
+    color: #6f7588;
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+
+.official-form-sheet {
+    margin-bottom:16px;
+    padding:24px;
+    border:1px solid #cfd3dc;
+    border-radius:10px;
+    background:#fff;
+    box-shadow:0 12px 30px rgba(40,44,70,.10);
+    font-family:Arial, sans-serif;
+}
+.official-form-title { text-align:center; margin-bottom:16px; }
+.official-form-title strong { display:block; font-size:20px; color:#111827; }
+.official-form-title span { font-size:12px; color:#4b5563; }
+.official-form-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid #111827; }
+.official-cell { min-height:58px; padding:8px; border-right:1px solid #111827; border-bottom:1px solid #111827; }
+.official-cell:nth-child(4n) { border-right:0; }
+.official-cell label { display:block; font-size:9px; color:#4b5563; text-transform:uppercase; margin-bottom:5px; }
+.official-cell b { color:#111827; font-size:13px; overflow-wrap:anywhere; }
+.official-lines { width:100%; border-collapse:collapse; margin-top:14px; }
+.official-lines th,.official-lines td { border:1px solid #111827; padding:8px; font-size:11px; }
+.official-lines th { background:#f3f4f6; color:#111827; text-align:left; }
+.official-lines .code { width:120px; font-weight:800; }
+.official-lines .value { width:160px; text-align:right; font-weight:800; }
+.official-section-title { margin-top:14px; padding:7px 8px; border:1px solid #111827; background:#e5e7eb; color:#111827; font-size:11px; font-weight:800; text-transform:uppercase; }
+@media(max-width:700px){ .official-form-sheet{padding:12px;overflow-x:auto}.official-form-grid{min-width:720px}.official-lines{min-width:720px} }
+
+@media print {
+    body * {
+        visibility:hidden !important;
+    }
+
+    .report-form-page,
+    .report-form-page * {
+        visibility:visible !important;
+    }
+
+    .report-form-page {
+        position:absolute;
+        inset:0;
+        padding:0;
+    }
+
+    .report-form-actions,
+    .report-filter,
+    .report-footer-actions {
+        display:none !important;
+    }
+
+    .report-card {
+        box-shadow:none;
+        break-inside:avoid;
+    }
+}
+</style>
+
+<div class="report-form-page">
+    <div class="page-header report-form-header">
+        <div>
+            <h1 class="page-title">{{ report.title }}</h1>
+            <div class="page-note">
+                {{ report.period_label }} · автозаполняемый черновик
+            </div>
+        </div>
+
+        <div class="report-form-actions">
+            <a class="report-btn report-btn--light" href="/accounting">
+                ← Бухгалтерия
+            </a>
+            <a class="report-btn report-btn--light"
+               href="/accounting/report/export-json?form_type={{ report.form_type }}&year={{ selected_year }}&period={{ selected_period }}">
+                Скачать JSON
+            </a>
+            <button class="report-btn report-btn--primary"
+                    type="button"
+                    onclick="window.print()">
+                Печать / PDF
+            </button>
+        </div>
+    </div>
+
+    <section class="report-filter">
+        <form method="get" action="/accounting/report">
+            <input type="hidden" name="form_type" value="{{ report.form_type }}">
+
+            <label>
+                <span>Форма</span>
+                <select onchange="location.href='/accounting/report?form_type='+this.value">
+                    <option value="910" {% if report.form_type == "910" %}selected{% endif %}>910.00</option>
+                    <option value="200" {% if report.form_type == "200" %}selected{% endif %}>200.00</option>
+                </select>
+            </label>
+
+            <label>
+                <span>Год</span>
+                <select name="year">
+                    {% for year in range(selected_year - 2, selected_year + 2) %}
+                    <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>
+                        {{ year }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label>
+                <span>Период</span>
+                <select name="period">
+                    {% if report.form_type == "910" %}
+                        <option value="1" {% if selected_period == "1" %}selected{% endif %}>I полугодие</option>
+                        <option value="2" {% if selected_period == "2" %}selected{% endif %}>II полугодие</option>
+                    {% else %}
+                        {% for quarter in range(1, 5) %}
+                        <option value="{{ quarter }}" {% if selected_period == quarter|string %}selected{% endif %}>
+                            {{ quarter }} квартал
+                        </option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </label>
+
+            <button class="report-btn report-btn--primary" type="submit">
+                Пересчитать
+            </button>
+        </form>
+    </section>
+
+    <div class="report-status-grid">
+        <article class="report-status {% if report.ready %}report-status--ready{% else %}report-status--warning{% endif %}">
+            <span>Статус</span>
+            <strong>{{ "Готово" if report.ready else "Нужна проверка" }}</strong>
+            <small>{{ "Основные данные заполнены" if report.ready else "Есть незаполненные данные" }}</small>
+        </article>
+
+        <article class="report-status">
+            <span>Период</span>
+            <strong>{{ report.period_label }}</strong>
+            <small>{{ report.date_from.strftime("%d.%m.%Y") }} — {{ report.date_to.strftime("%d.%m.%Y") }}</small>
+        </article>
+
+        <article class="report-status">
+            <span>Срок сдачи</span>
+            <strong>{{ report.submit_due.strftime("%d.%m.%Y") }}</strong>
+            <small>Черновик для подготовки ФНО</small>
+        </article>
+
+        <article class="report-status">
+            <span>Срок оплаты</span>
+            <strong>{{ report.payment_due.strftime("%d.%m.%Y") }}</strong>
+            <small>По данным расчёта</small>
+        </article>
+    </div>
+
+    <section class="official-form-sheet">\n        <div class="official-form-title">\n            <strong>{{ report.title }}</strong>\n            <span>{{ report.period_label }} · версия {{ report.form_version }} · ревизия {{ report.form_revision }}</span>\n        </div>\n\n        <div class="official-form-grid">\n            <div class="official-cell"><label>ИИН / БИН</label><b>{{ company.bin or "—" }}</b></div>\n            <div class="official-cell"><label>Наименование</label><b>{{ company.name or "—" }}</b></div>\n            <div class="official-cell"><label>Налоговый период</label><b>{{ report.period_label }}</b></div>\n            <div class="official-cell"><label>Вид декларации</label><b>Первоначальная</b></div>\n            <div class="official-cell"><label>Адрес</label><b>{{ company.address or "—" }}</b></div>\n            <div class="official-cell"><label>Руководитель</label><b>{{ company.director or "—" }}</b></div>\n            <div class="official-cell"><label>Срок сдачи</label><b>{{ report.submit_due.strftime("%d.%m.%Y") }}</b></div>\n            <div class="official-cell"><label>Срок оплаты</label><b>{{ report.payment_due.strftime("%d.%m.%Y") }}</b></div>\n        </div>\n\n        <div class="official-section-title">Основные показатели формы</div>\n        <table class="official-lines">\n            <thead>\n                <tr><th>Код строки</th><th>Наименование показателя</th><th>Значение</th></tr>\n            </thead>\n            <tbody>\n                {% for line in report.official_lines %}\n                <tr>\n                    <td class="code">{{ line.code }}</td>\n                    <td>{{ line.name }}</td>\n                    <td class="value">{{ "{:,.0f}".format(line.amount or 0).replace(",", " ") }} ₸</td>\n                </tr>\n                {% endfor %}\n            </tbody>\n        </table>\n\n        {% if report.form_type == "200" %}\n        <div class="official-section-title">Приложение 200.01 — сведения по физическим лицам</div>\n        <table class="official-lines">\n            <thead>\n                <tr><th>Работник</th><th>Доход</th><th>ОПВ</th><th>ВОСМС</th><th>ИПН</th></tr>\n            </thead>\n            <tbody>\n                {% for employee in report.employees %}\n                <tr>\n                    <td>{{ employee.name }}</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.salary or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.opv or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.vosms or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.ipn or 0).replace(",", " ") }} ₸</td>\n                </tr>\n                {% endfor %}\n            </tbody>\n        </table>\n        {% endif %}\n    </section>\n\n    <section class="report-card">
+        <div class="report-card__head">
+            <div>
+                <h2>Проверка готовности</h2>
+                <p>Система показывает, какие данные уже заполнены</p>
+            </div>
+        </div>
+
+        <div class="report-checks">
+            {% for check in report.checks %}
+            <div class="report-check {% if check.ok %}report-check--ok{% else %}report-check--bad{% endif %}">
+                <span class="report-check__icon">{{ "✓" if check.ok else "!" }}</span>
+                <div>
+                    <strong>{{ check.label }}</strong>
+                    <small>{{ check.message }}</small>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% if report.form_type == "910" %}
+    <section class="report-card">
+        <div class="report-card__head">
+            <div>
+                <h2>Расчёт формы 910.00</h2>
+                <p>Работники в этот расчёт не включены</p>
+            </div>
+        </div>
+
+        <div class="report-summary-grid">
+            <article class="report-summary">
+                <span>Доход</span>
+                <strong>{{ "{:,.0f}".format(report.income).replace(",", " ") }} ₸</strong>
+            </article>
+
+            <article class="report-summary">
+                <span>Возвраты</span>
+                <strong>{{ "{:,.0f}".format(report.refunds).replace(",", " ") }} ₸</strong>
+            </article>
+
+            <article class="report-summary">
+                <span>Облагаемый доход</span>
+                <strong>{{ "{:,.0f}".format(report.taxable_income).replace(",", " ") }} ₸</strong>
+            </article>
+
+            <article class="report-summary">
+                <span>Налог {{ report.rate }}%</span>
+                <strong>{{ "{:,.0f}".format(report.tax_amount).replace(",", " ") }} ₸</strong>
+            </article>
+        </div>
+    </section>
+
+    <section class="report-card">
+        <div class="report-card__head">
+            <div>
+                <h2>Доход по месяцам</h2>
+                <p>Расшифровка полугодового расчёта</p>
+            </div>
+        </div>
+
+        <div class="report-table-wrap">
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Месяц</th>
+                        <th>Доход</th>
+                        <th>Возвраты</th>
+                        <th>Облагаемый доход</th>
+                        <th>Налог</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report.months %}
+                    <tr>
+                        <td>{{ row.label }}</td>
+                        <td>{{ "{:,.0f}".format(row.income).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.refunds).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.taxable_income).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.tax).replace(",", " ") }} ₸</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% else %}
+    <section class="report-card">
+        <div class="report-card__head">
+            <div>
+                <h2>Расчёт формы 200.00</h2>
+                <p>Данные по наёмным работникам за квартал</p>
+            </div>
+        </div>
+
+        <div class="report-summary-grid">
+            <article class="report-summary">
+                <span>Работников</span>
+                <strong>{{ report.employee_count }}</strong>
+            </article>
+
+            <article class="report-summary">
+                <span>Начислено зарплаты</span>
+                <strong>{{ "{:,.0f}".format(report.totals.salary).replace(",", " ") }} ₸</strong>
+            </article>
+
+            <article class="report-summary">
+                <span>ИПН работников</span>
+                <strong>{{ "{:,.0f}".format(report.totals.ipn).replace(",", " ") }} ₸</strong>
+            </article>
+
+            <article class="report-summary">
+                <span>Всего платежей</span>
+                <strong>{{ "{:,.0f}".format(report.total_payments).replace(",", " ") }} ₸</strong>
+            </article>
+        </div>
+    </section>
+
+    <section class="report-card">
+        <div class="report-card__head">
+            <div>
+                <h2>По месяцам квартала</h2>
+                <p>Сводка удержаний и платежей работодателя</p>
+            </div>
+        </div>
+
+        <div class="report-table-wrap">
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Месяц</th>
+                        <th>Работников</th>
+                        <th>Зарплата</th>
+                        <th>ОПВ</th>
+                        <th>ВОСМС</th>
+                        <th>ИПН</th>
+                        <th>СО</th>
+                        <th>ОСМС</th>
+                        <th>ОПВР</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report.months %}
+                    <tr>
+                        <td>{{ row.label }}</td>
+                        <td>{{ row.employee_count }}</td>
+                        <td>{{ "{:,.0f}".format(row.salary).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.opv).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.vosms).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.ipn).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.so).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.osms).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(row.opvr).replace(",", " ") }} ₸</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="report-card">
+        <div class="report-card__head">
+            <div>
+                <h2>Расшифровка по работникам</h2>
+                <p>Суммы за весь квартал</p>
+            </div>
+        </div>
+
+        <div class="report-table-wrap">
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Работник</th>
+                        <th>Зарплата</th>
+                        <th>ОПВ</th>
+                        <th>ВОСМС</th>
+                        <th>ИПН</th>
+                        <th>СО</th>
+                        <th>ОСМС</th>
+                        <th>ОПВР</th>
+                        <th>На руки</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for employee in report.employees %}
+                    <tr>
+                        <td>{{ employee.name }}</td>
+                        <td>{{ "{:,.0f}".format(employee.salary).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(employee.opv).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(employee.vosms).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(employee.ipn).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(employee.so).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(employee.osms).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(employee.opvr).replace(",", " ") }} ₸</td>
+                        <td>{{ "{:,.0f}".format(employee.net_salary).replace(",", " ") }} ₸</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="report-card">
+        <div class="report-card__head">
+            <div>
+                <h2>Перенос в официальный бланк</h2>
+                <p>
+                    Версия {{ report.form_version }},
+                    ревизия {{ report.form_revision }}
+                </p>
+            </div>
+        </div>
+
+        <div class="report-lines-note">
+            Это рабочая расшифровка Nika Business: она показывает, из каких данных
+            получена сумма и в какую строку формы её переносить. Перед окончательной
+            отправкой нужно пройти форматно-логический контроль в кабинете КГД.
+        </div>
+
+        <div class="report-table-wrap">
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Строка ФНО</th>
+                        <th>Показатель</th>
+                        <th>Сумма</th>
+                        <th>Источник в системе</th>
+                        <th>Примечание</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in report.official_lines %}
+                    <tr>
+                        <td>
+                            <span class="report-line-code">{{ line.code }}</span>
+                        </td>
+                        <td>{{ line.name }}</td>
+                        <td>
+                            {{ "{:,.0f}".format(line.amount or 0).replace(",", " ") }} ₸
+                        </td>
+                        <td>
+                            <div class="report-source">{{ line.source }}</div>
+                        </td>
+                        <td>
+                            <div class="report-source">{{ line.note }}</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="report-card">
+        <div class="report-footer-actions">
+            <button class="report-btn report-btn--light"
+                    type="button"
+                    onclick="window.print()">
+                Печать / PDF
+            </button>
+
+            <form method="post" action="/accounting/report/create-debt">
+                <input type="hidden" name="form_type" value="{{ report.form_type }}">
+                <input type="hidden" name="year" value="{{ selected_year }}">
+                <input type="hidden" name="period" value="{{ selected_period }}">
+                <button class="report-btn report-btn--primary" type="submit"
+                        onclick="return confirm('Создать или обновить задолженность по этой форме?')">
+                    Создать задолженность
+                </button>
+            </form>
+        </div>
+    </section>
+</div>
+
+{% endblock %}
