@@ -1,11 +1,10 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, session, g
 from routes.dashboard import dashboard_bp
 from routes.clients import clients_bp
 from routes.tasks import tasks_bp
 from routes.items import items_bp
 from routes.sales import sales_bp
 from routes.kaspi_pos import kaspi_pos_bp
-from flask import redirect, session
 from models import init_db
 from routes.sales import sales_api
 from routes.companies import companies_bp
@@ -21,6 +20,9 @@ from routes.expenses import expenses_bp
 from routes.cto import cto_bp
 from routes.accounting import accounting_bp
 from routes.rekassa import rekassa_bp
+from routes.subscriptions import subscriptions_bp
+from subscriptions import load_subscription_context
+from routes.communications import communications_bp
 import os
 from dotenv import load_dotenv
 
@@ -55,47 +57,85 @@ app.register_blueprint(expenses_bp)
 app.register_blueprint(cto_bp)
 app.register_blueprint(accounting_bp)
 app.register_blueprint(rekassa_bp)
+app.register_blueprint(subscriptions_bp)
+app.register_blueprint(communications_bp)
     
+# Какой URL относится к какому платному модулю.
+# Более длинные пути ставим выше коротких, чтобы проверка была точной.
+MODULE_PATHS = (
+    ("/accounting", "accounting"),
+    ("/analytics", "analytics"),
+    ("/reports", "reports"),
+    ("/expenses", "expenses"),
+    ("/clients", "clients"),
+    ("/tasks", "tasks"),
+    ("/items", "catalog"),
+    ("/categories", "catalog"),
+    ("/stock", "warehouse"),
+    ("/sales", "sales"),
+    ("/api/sales", "sales"),
+    ("/cto", "cto"),
+)
+
+
 @app.before_request
 def check_company_access():
+    # На каждом запросе загружаем подписку и подключённые модули в flask.g.
+    load_subscription_context()
 
-    # 🔥 супер-админ и creator — НЕ блокируются
-    if session.get("is_super_admin") or session.get("is_creator"):
-        return
+    # Системный супер-администратор видит и открывает всё.
+    if session.get("is_super_admin"):
+        return None
 
-    if not session.get("company_id"):
-        return
+    # Не мешаем открывать публичные страницы до авторизации.
+    allowed_paths = (
+        "/",
+        "/login",
+        "/logout",
+        "/register",
+        "/subscription",
+        "/static/",
+    )
+    if any(
+        request.path == path or request.path.startswith(path)
+        for path in allowed_paths
+    ):
+        return None
 
-    conn = get_db()
-    cur = None
+    # Остальные проверки применяются только к авторизованной компании.
+    if not session.get("user_id") or not session.get("company_id"):
+        return None
 
-    try:
-        cur = conn.cursor()
+    subscription = getattr(g, "company_subscription", None)
 
-        cur.execute(
-            "SELECT * FROM companies WHERE id = %s",
-            (session.get("company_id"),)
-        )
+    # Если подписка ещё не создана или заблокирована — отправляем на управление подпиской.
+    if not subscription:
+        return redirect("/subscription")
 
-        company = cur.fetchone()
+    if subscription["status"] in ("expired", "suspended", "cancelled"):
+        return redirect("/subscription")
 
-    finally:
-        if cur:
-            cur.close()
+    company_modules = getattr(g, "company_modules", set())
 
-        pool.putconn(conn)
+    # Проверяем доступ к разделу даже при ручном вводе URL.
+    for path_prefix, module_code in MODULE_PATHS:
+        if request.path == path_prefix or request.path.startswith(path_prefix + "/"):
+            if module_code not in company_modules:
+                return redirect(
+                    f"/subscription?required={module_code}&next={request.path}"
+                )
+            break
 
-    if not company:
-        return
+    return None
 
-    #if not company["is_active"]:
-        #return "Доступ ограничен. Обратитесь к администратору"
 
-    if company["paid_until"]:
-        from datetime import datetime
-        if datetime.now() > datetime.fromisoformat(company["paid_until"]):
-            return "Доступ приостановлен. Оплатите подписку"
-            
+@app.context_processor
+def inject_subscription_context():
+    return {
+        "company_modules": getattr(g, "company_modules", set()),
+        "company_subscription": getattr(g, "company_subscription", None),
+    }
+
 @app.route("/")
 def landing():
 

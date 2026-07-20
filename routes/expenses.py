@@ -18,8 +18,20 @@ EXPENSE_CATEGORIES = [
     "Закупки",
     "Коммунальные",
     "Налоги и обязательные платежи",
+    "Комиссии",
+    "Реклама",
+    "Оборудование",
+    "Доставка",
     "Прочие расходы",
 ]
+
+AUTOMATIC_SOURCE_TYPES = {
+    "stock_income",
+    "salary",
+    "tax",
+    "bank_commission",
+    "delivery",
+}
 
 PAYMENT_METHODS = {
     "Наличные",
@@ -194,6 +206,103 @@ def _delete_expense_from_accounting(cur, expense_id, company_id):
           AND source_id = %s
     """, (company_id, expense_id))
 
+
+def upsert_expense_from_source(
+    cur,
+    *,
+    company_id,
+    source_type,
+    source_id,
+    category,
+    description,
+    amount,
+    expense_date,
+    payment_method=None,
+    comment=None,
+    user_id=None,
+):
+    """
+    Создаёт или обновляет автоматический расход.
+
+    Вызывайте эту функцию из прихода, зарплаты, налогов и других модулей.
+    Повторный вызов не создаст дубль благодаря уникальному source_type/source_id.
+    """
+    if source_type not in AUTOMATIC_SOURCE_TYPES:
+        raise ValueError("Неизвестный источник автоматического расхода")
+
+    if category not in EXPENSE_CATEGORIES:
+        raise ValueError("Неизвестная категория расхода")
+
+    amount = _parse_amount(amount)
+
+    cur.execute("""
+        INSERT INTO expenses (
+            company_id,
+            user_id,
+            category,
+            description,
+            amount,
+            payment_method,
+            comment,
+            date,
+            created_at,
+            updated_at,
+            source_type,
+            source_id
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (company_id, source_type, source_id)
+        WHERE source_type IS NOT NULL AND source_id IS NOT NULL
+        DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            category = EXCLUDED.category,
+            description = EXCLUDED.description,
+            amount = EXCLUDED.amount,
+            payment_method = EXCLUDED.payment_method,
+            comment = EXCLUDED.comment,
+            date = EXCLUDED.date,
+            updated_at = EXCLUDED.updated_at
+        RETURNING id
+    """, (
+        company_id,
+        user_id,
+        category,
+        description,
+        amount,
+        payment_method,
+        comment,
+        expense_date,
+        now_kz(),
+        now_kz(),
+        source_type,
+        source_id,
+    ))
+
+    return cur.fetchone()["id"]
+
+
+def delete_expense_by_source(cur, *, company_id, source_type, source_id):
+    """Удаляет автоматический расход при отмене исходной операции."""
+    cur.execute("""
+        DELETE FROM expenses
+        WHERE company_id = %s
+          AND source_type = %s
+          AND source_id = %s
+        RETURNING id
+    """, (company_id, source_type, source_id))
+    row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def _source_filter_sql(source):
+    if source == "manual":
+        return "source_type IS NULL"
+    if source == "automatic":
+        return "source_type IS NOT NULL"
+    return None
+
+
+
 def _parse_date(value, field_name="Дата"):
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
@@ -263,6 +372,7 @@ def expenses():
 
     search = request.args.get("search", "").strip()
     category = request.args.get("category", "").strip()
+    source = request.args.get("source", "").strip()
     date_from_raw = request.args.get("date_from", "").strip()
     date_to_raw = request.args.get("date_to", "").strip()
 
@@ -347,15 +457,21 @@ def expenses():
         params = [company_id]
 
         if search:
-            where_parts.append("(description ILIKE %s OR comment ILIKE %s)")
+            where_parts.append("(description ILIKE %s OR comment ILIKE %s OR category ILIKE %s OR payment_method ILIKE %s)")
             search_pattern = f"%{search}%"
-            params.extend([search_pattern, search_pattern])
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
 
         if category:
             if category not in EXPENSE_CATEGORIES:
                 return _error_response("Указана неизвестная категория")
             where_parts.append("category = %s")
             params.append(category)
+
+        source_condition = _source_filter_sql(source)
+        if source and not source_condition:
+            return _error_response("Указан неизвестный источник расходов")
+        if source_condition:
+            where_parts.append(source_condition)
 
         if date_from:
             where_parts.append("date >= %s")
@@ -394,7 +510,11 @@ def expenses():
                     comment,
                     date,
                     created_at,
-                    updated_at
+                    updated_at,
+                    source_type,
+                    source_id,
+                    CASE WHEN source_type IS NULL THEN 'manual' ELSE 'automatic' END AS source,
+                    CASE WHEN source_type IS NOT NULL THEN TRUE ELSE FALSE END AS is_automatic
                 FROM expenses
                 WHERE {where_sql}
                 ORDER BY date DESC, id DESC
@@ -413,6 +533,7 @@ def expenses():
             month_total=month_total,
             largest_category=largest_category,
             largest_category_total=largest_category_total,
+            total_expenses_count=total_rows,
             pagination=pagination,
         )
 
@@ -511,6 +632,19 @@ def edit_expense(expense_id):
         _ensure_expenses_table(cur)
 
         cur.execute("""
+            SELECT source_type
+            FROM expenses
+            WHERE id = %s AND company_id = %s
+        """, (expense_id, company_id))
+        existing = cur.fetchone()
+
+        if not existing:
+            return "Расход не найден", 404
+
+        if existing["source_type"]:
+            return "Автоматический расход изменяется в исходном разделе", 409
+
+        cur.execute("""
             UPDATE expenses
             SET
                 category = %s,
@@ -571,6 +705,19 @@ def delete_expense(expense_id):
 
     try:
         _ensure_expenses_table(cur)
+
+        cur.execute("""
+            SELECT source_type
+            FROM expenses
+            WHERE id = %s AND company_id = %s
+        """, (expense_id, company_id))
+        existing = cur.fetchone()
+
+        if not existing:
+            return "Расход не найден", 404
+
+        if existing["source_type"]:
+            return "Автоматический расход удаляется в исходном разделе", 409
 
         cur.execute("""
             DELETE FROM expenses

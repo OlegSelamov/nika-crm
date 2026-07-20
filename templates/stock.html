@@ -2,227 +2,1129 @@
 
 {% block content %}
 
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Остатки склада</h1>
-        <div class="page-note">
-            Актуальные остатки товаров
+{% set ns = namespace(total=0, out=0, low=0, normal=0, purchase_sum=0, retail_sum=0) %}
+{% for item in items %}
+    {% set stock_value = item.stock or 0 %}
+    {% set ns.total = ns.total + 1 %}
+    {% set ns.purchase_sum = ns.purchase_sum + (stock_value * (item.purchase_price or 0)) %}
+    {% set ns.retail_sum = ns.retail_sum + (stock_value * (item.retail_price or 0)) %}
+
+    {% if stock_value <= 0 %}
+        {% set ns.out = ns.out + 1 %}
+    {% elif stock_value <= 5 %}
+        {% set ns.low = ns.low + 1 %}
+    {% else %}
+        {% set ns.normal = ns.normal + 1 %}
+    {% endif %}
+{% endfor %}
+
+<div class="stock-page">
+
+    <header class="stock-header">
+        <div>
+            <h1>Остатки товаров</h1>
+            <p>Контроль наличия, стоимости запасов и товаров, которые требуют пополнения</p>
         </div>
-    </div>
-</div>
 
-<div class="card">
+        <div class="stock-header-actions">
+            <a href="/stock/income" class="stock-btn stock-btn--primary">
+                <span>＋</span>
+                Приход товара
+            </a>
 
-    <table>
+            <a href="/stock/movements" class="stock-btn stock-btn--light">
+                Движение товара
+            </a>
+        </div>
+    </header>
 
-        <thead>
-            <tr>
-                <th>Товар</th>
-                <th>Категория</th>
-                <th>Ед.</th>
-                <th>Остаток</th>
-                <th>Закуп</th>
-                <th>Розница</th>
-            </tr>
-        </thead>
+    <section class="stock-stats">
+        <article class="stock-stat stock-stat--purple">
+            <div class="stock-stat-icon">▦</div>
+            <div>
+                <span>Всего позиций</span>
+                <strong>{{ ns.total }}</strong>
+                <small>товаров в каталоге</small>
+            </div>
+        </article>
 
-        <tbody>
+        <article class="stock-stat stock-stat--green">
+            <div class="stock-stat-icon">✓</div>
+            <div>
+                <span>В наличии</span>
+                <strong>{{ ns.normal }}</strong>
+                <small>остаток больше 5</small>
+            </div>
+        </article>
 
-        {% for item in items %}
+        <article class="stock-stat stock-stat--orange">
+            <div class="stock-stat-icon">!</div>
+            <div>
+                <span>Заканчиваются</span>
+                <strong>{{ ns.low }}</strong>
+                <small>остаток от 1 до 5</small>
+            </div>
+        </article>
 
-            <tr>
+        <article class="stock-stat stock-stat--red">
+            <div class="stock-stat-icon">×</div>
+            <div>
+                <span>Нет в наличии</span>
+                <strong>{{ ns.out }}</strong>
+                <small>нулевой или минусовой остаток</small>
+            </div>
+        </article>
+    </section>
 
-                <td>
-                    {{ item.name }}
-                </td>
+    <section class="stock-value-panel">
+        <div>
+            <span>Закупочная стоимость остатков</span>
+            <strong>{{ "{:,.0f}".format(ns.purchase_sum).replace(",", " ") }} ₸</strong>
+        </div>
 
-                <td>
-                    {{ item.category }}
-                </td>
+        <div>
+            <span>Розничная стоимость остатков</span>
+            <strong>{{ "{:,.0f}".format(ns.retail_sum).replace(",", " ") }} ₸</strong>
+        </div>
 
-                <td>
-                    {{ item.unit }}
-                </td>
+        <div>
+            <span>Потенциальная валовая прибыль</span>
+            <strong>{{ "{:,.0f}".format(ns.retail_sum - ns.purchase_sum).replace(",", " ") }} ₸</strong>
+        </div>
+    </section>
 
-                <td>
+    <section class="stock-toolbar">
+        <div class="stock-tabs" role="tablist">
+            <button class="stock-tab is-active" type="button" data-filter="all">
+                Все
+                <span>{{ ns.total }}</span>
+            </button>
 
-                    {% if item.stock <= 0 %}
+            <button class="stock-tab" type="button" data-filter="normal">
+                В наличии
+                <span>{{ ns.normal }}</span>
+            </button>
 
-                        <span style="color:#ef4444;font-weight:bold;">
-                            {{ item.stock }}
-                        </span>
+            <button class="stock-tab" type="button" data-filter="low">
+                Заканчиваются
+                <span>{{ ns.low }}</span>
+            </button>
 
-                    {% elif item.stock <= 5 %}
+            <button class="stock-tab" type="button" data-filter="out">
+                Нет в наличии
+                <span>{{ ns.out }}</span>
+            </button>
+        </div>
 
-                        <span style="color:#f59e0b;font-weight:bold;">
-                            {{ item.stock }}
-                        </span>
+        <div class="stock-toolbar-row">
+            <label class="stock-search">
+                <span>⌕</span>
+                <input
+                    id="stockSearch"
+                    type="search"
+                    placeholder="Поиск по товару, категории или единице измерения"
+                    autocomplete="off"
+                >
+            </label>
 
+            <label class="stock-select-wrap">
+                <span>Категория</span>
+                <select id="stockCategory">
+                    <option value="">Все категории</option>
+                    {% set categories = [] %}
+                    {% for item in items %}
+                        {% if item.category and item.category not in categories %}
+                            {% set _ = categories.append(item.category) %}
+                        {% endif %}
+                    {% endfor %}
+                    {% for category in categories|sort %}
+                        <option value="{{ category|lower }}">{{ category }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="stock-select-wrap">
+                <span>Сортировка</span>
+                <select id="stockSort">
+                    <option value="name">По названию</option>
+                    <option value="stock-asc">Остаток: сначала меньше</option>
+                    <option value="stock-desc">Остаток: сначала больше</option>
+                    <option value="retail-desc">Розница: сначала дороже</option>
+                    <option value="retail-asc">Розница: сначала дешевле</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="stock-toolbar-result">
+            Показано: <strong id="stockVisibleCount">{{ ns.total }}</strong>
+        </div>
+    </section>
+
+    <section class="stock-content">
+        {% if items %}
+
+        <div class="stock-table-wrap">
+            <table class="stock-table">
+                <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Категория</th>
+                        <th>Ед.</th>
+                        <th>Остаток</th>
+                        <th>Закуп</th>
+                        <th>Розница</th>
+                        <th>Стоимость остатка</th>
+                    </tr>
+                </thead>
+
+                <tbody id="stockTableBody">
+                    {% for item in items %}
+                    {% set stock_value = item.stock or 0 %}
+                    {% if stock_value <= 0 %}
+                        {% set stock_status = "out" %}
+                        {% set stock_status_text = "Нет в наличии" %}
+                    {% elif stock_value <= 5 %}
+                        {% set stock_status = "low" %}
+                        {% set stock_status_text = "Заканчивается" %}
                     {% else %}
-
-                        <span style="color:#16a34a;font-weight:bold;">
-                            {{ item.stock }}
-                        </span>
-
+                        {% set stock_status = "normal" %}
+                        {% set stock_status_text = "В наличии" %}
                     {% endif %}
 
-                </td>
+                    <tr class="stock-record"
+                        data-name="{{ (item.name or '')|lower }}"
+                        data-category="{{ (item.category or '')|lower }}"
+                        data-unit="{{ (item.unit or '')|lower }}"
+                        data-status="{{ stock_status }}"
+                        data-stock="{{ stock_value }}"
+                        data-retail="{{ item.retail_price or 0 }}">
 
-                <td>
-                    {{ "{:,.0f}".format(item.purchase_price or 0).replace(",", " ") }}
-                </td>
+                        <td>
+                            <div class="stock-product">
+                                <div class="stock-product-icon">
+                                    {{ (item.name or "Т")[:1]|upper }}
+                                </div>
 
-                <td>
-                    {{ "{:,.0f}".format(item.retail_price or 0).replace(",", " ") }}
-                </td>
+                                <div>
+                                    <strong>{{ item.name or "Без названия" }}</strong>
+                                    <small>{{ stock_status_text }}</small>
+                                </div>
+                            </div>
+                        </td>
 
-            </tr>
+                        <td>
+                            <span class="stock-category-badge">
+                                {{ item.category or "Без категории" }}
+                            </span>
+                        </td>
 
-        {% endfor %}
+                        <td>{{ item.unit or "—" }}</td>
 
-        </tbody>
+                        <td>
+                            <div class="stock-balance">
+                                <strong class="stock-balance-value stock-balance-value--{{ stock_status }}">
+                                    {{ stock_value }}
+                                </strong>
+                                <span class="stock-status stock-status--{{ stock_status }}">
+                                    {{ stock_status_text }}
+                                </span>
+                            </div>
+                        </td>
 
-    </table>
+                        <td>
+                            {{ "{:,.0f}".format(item.purchase_price or 0).replace(",", " ") }} ₸
+                        </td>
 
-</div>
+                        <td>
+                            <strong class="stock-price">
+                                {{ "{:,.0f}".format(item.retail_price or 0).replace(",", " ") }} ₸
+                            </strong>
+                        </td>
 
-<div class="mobile-stock-list">
+                        <td>
+                            {{ "{:,.0f}".format(stock_value * (item.purchase_price or 0)).replace(",", " ") }} ₸
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-{% for item in items %}
+        <div class="stock-mobile-list" id="stockMobileList">
+            {% for item in items %}
+            {% set stock_value = item.stock or 0 %}
+            {% if stock_value <= 0 %}
+                {% set stock_status = "out" %}
+                {% set stock_status_text = "Нет в наличии" %}
+            {% elif stock_value <= 5 %}
+                {% set stock_status = "low" %}
+                {% set stock_status_text = "Заканчивается" %}
+            {% else %}
+                {% set stock_status = "normal" %}
+                {% set stock_status_text = "В наличии" %}
+            {% endif %}
 
-	<div class="mobile-stock-card">
+            <article class="stock-mobile-card stock-record"
+                     data-name="{{ (item.name or '')|lower }}"
+                     data-category="{{ (item.category or '')|lower }}"
+                     data-unit="{{ (item.unit or '')|lower }}"
+                     data-status="{{ stock_status }}"
+                     data-stock="{{ stock_value }}"
+                     data-retail="{{ item.retail_price or 0 }}">
 
-		<div class="stock-name">
-			{{ item.name }}
-		</div>
+                <div class="stock-mobile-top">
+                    <div class="stock-product">
+                        <div class="stock-product-icon">
+                            {{ (item.name or "Т")[:1]|upper }}
+                        </div>
 
-		<div class="stock-category">
-			{{ item.category }}
-		</div>
+                        <div>
+                            <strong>{{ item.name or "Без названия" }}</strong>
+                            <small>{{ item.category or "Без категории" }}</small>
+                        </div>
+                    </div>
 
-		<div class="stock-grid">
+                    <span class="stock-status stock-status--{{ stock_status }}">
+                        {{ stock_status_text }}
+                    </span>
+                </div>
 
-			<div>
-				<span>Остаток</span>
+                <div class="stock-mobile-grid">
+                    <div>
+                        <span>Остаток</span>
+                        <strong class="stock-balance-value stock-balance-value--{{ stock_status }}">
+                            {{ stock_value }} {{ item.unit or "" }}
+                        </strong>
+                    </div>
 
-				<b class="
-				{% if item.stock <= 0 %}
-					red
-				{% elif item.stock <= 5 %}
-					orange
-				{% else %}
-					green
-				{% endif %}
-				">
-					{{ item.stock }}
-				</b>
-			</div>
+                    <div>
+                        <span>Закуп</span>
+                        <strong>{{ "{:,.0f}".format(item.purchase_price or 0).replace(",", " ") }} ₸</strong>
+                    </div>
 
-			<div>
-				<span>Розница</span>
+                    <div>
+                        <span>Розница</span>
+                        <strong>{{ "{:,.0f}".format(item.retail_price or 0).replace(",", " ") }} ₸</strong>
+                    </div>
 
-				<b>
-					{{ "{:,.0f}".format(item.retail_price or 0).replace(",", " ") }} ₸
-				</b>
-			</div>
+                    <div>
+                        <span>Стоимость остатка</span>
+                        <strong>{{ "{:,.0f}".format(stock_value * (item.purchase_price or 0)).replace(",", " ") }} ₸</strong>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
 
-		</div>
+        <div class="stock-empty stock-empty--search" id="stockSearchEmpty" hidden>
+            <div>⌕</div>
+            <strong>Товары не найдены</strong>
+            <p>Измените поиск или выбранные фильтры.</p>
+        </div>
 
-	</div>
-
-{% endfor %}
+        {% else %}
+        <div class="stock-empty">
+            <div>▦</div>
+            <strong>На складе пока нет товаров</strong>
+            <p>Добавьте товары в каталог, затем оформите приход.</p>
+            <a href="/stock/income" class="stock-btn stock-btn--primary">Оформить приход</a>
+        </div>
+        {% endif %}
+    </section>
 
 </div>
 
 <style>
-
-.mobile-stock-list{
-	display:none;
+.stock-page{
+    --st-card:#fff;
+    --st-soft:#f8f9fd;
+    --st-border:#e5e8f0;
+    --st-text:#202536;
+    --st-muted:#747c8f;
+    --st-purple:#7357ff;
+    --st-purple-soft:#efecff;
+    --st-green:#169873;
+    --st-green-soft:#e7f7f1;
+    --st-orange:#c87a10;
+    --st-orange-soft:#fff1d9;
+    --st-red:#d45151;
+    --st-red-soft:#fdecec;
+    --st-shadow:0 12px 34px rgba(42,46,74,.08);
+    width:100%;
+    min-width:0;
+    color:var(--st-text);
 }
 
-@media (max-width:768px){
-
-	.card table{
-		display:none;
-	}
-
-	.mobile-stock-list{
-
-		display:flex;
-		flex-direction:column;
-
-		gap:10px;
-	}
-
-	.mobile-stock-card{
-
-		background:white;
-
-		padding:12px;
-
-		border-radius:16px;
-
-		box-shadow:
-		0 4px 14px rgba(0,0,0,.06);
-	}
-
-	.stock-name{
-
-		font-size:14px;
-		font-weight:700;
-	}
-
-	.stock-category{
-
-		margin-top:4px;
-
-		font-size:12px;
-
-		color:#64748b;
-	}
-
-	.stock-grid{
-
-		display:grid;
-
-		grid-template-columns:1fr 1fr;
-
-		gap:10px;
-
-		margin-top:12px;
-	}
-
-	.stock-grid span{
-
-		display:block;
-
-		font-size:11px;
-
-		color:#64748b;
-	}
-
-	.stock-grid b{
-
-		display:block;
-
-		margin-top:4px;
-
-		font-size:15px;
-	}
-
-	.red{
-		color:#ef4444;
-	}
-
-	.orange{
-		color:#f59e0b;
-	}
-
-	.green{
-		color:#16a34a;
-	}
+.stock-header{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:16px;
 }
 
+.stock-header h1{
+    margin:0;
+    color:var(--st-text)!important;
+    font-size:30px!important;
+    line-height:1.1;
+    text-shadow:none!important;
+}
+
+.stock-header p{
+    margin:6px 0 0;
+    color:var(--st-muted);
+    font-size:13px;
+}
+
+.stock-header-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.stock-btn{
+    min-height:44px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    padding:0 16px;
+    border:1px solid transparent;
+    border-radius:11px;
+    font:inherit;
+    font-size:12px;
+    font-weight:800;
+    text-decoration:none;
+    white-space:nowrap;
+    cursor:pointer;
+}
+
+.stock-btn--primary{
+    color:#fff!important;
+    background:linear-gradient(135deg,#7357ff,#9658e8);
+    box-shadow:0 9px 20px rgba(115,87,255,.22);
+}
+
+.stock-btn--light{
+    color:#5f6678!important;
+    border-color:var(--st-border);
+    background:#fff;
+}
+
+.stock-stats{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:11px;
+    margin-bottom:12px;
+}
+
+.stock-stat{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:16px;
+    border:1px solid var(--st-border);
+    border-radius:15px;
+    background:var(--st-card);
+    box-shadow:var(--st-shadow);
+}
+
+.stock-stat-icon{
+    flex:0 0 42px;
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:12px;
+    font-size:17px;
+    font-weight:900;
+}
+
+.stock-stat>div:last-child{
+    min-width:0;
+    display:grid;
+}
+
+.stock-stat span{
+    color:var(--st-muted);
+    font-size:10px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+}
+
+.stock-stat strong{
+    margin-top:2px;
+    font-size:24px;
+    line-height:1;
+}
+
+.stock-stat small{
+    margin-top:5px;
+    overflow:hidden;
+    color:#939aac;
+    font-size:9px;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.stock-stat--purple .stock-stat-icon{color:var(--st-purple);background:var(--st-purple-soft)}
+.stock-stat--green .stock-stat-icon{color:var(--st-green);background:var(--st-green-soft)}
+.stock-stat--orange .stock-stat-icon{color:var(--st-orange);background:var(--st-orange-soft)}
+.stock-stat--red .stock-stat-icon{color:var(--st-red);background:var(--st-red-soft)}
+
+.stock-value-panel{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:1px;
+    margin-bottom:12px;
+    overflow:hidden;
+    border:1px solid var(--st-border);
+    border-radius:15px;
+    background:var(--st-border);
+    box-shadow:var(--st-shadow);
+}
+
+.stock-value-panel>div{
+    min-width:0;
+    display:grid;
+    gap:4px;
+    padding:15px 17px;
+    background:#fff;
+}
+
+.stock-value-panel span{
+    color:var(--st-muted);
+    font-size:10px;
+    font-weight:700;
+}
+
+.stock-value-panel strong{
+    overflow:hidden;
+    font-size:17px;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.stock-toolbar,
+.stock-content{
+    margin-bottom:12px;
+    padding:16px;
+    border:1px solid var(--st-border);
+    border-radius:16px;
+    background:var(--st-card);
+    box-shadow:var(--st-shadow);
+}
+
+.stock-tabs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:7px;
+    margin-bottom:13px;
+}
+
+.stock-tab{
+    min-height:38px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:0 12px;
+    border:1px solid var(--st-border);
+    border-radius:10px;
+    color:#737b8e;
+    background:#f6f7fa;
+    font:inherit;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.stock-tab span{
+    min-width:22px;
+    height:20px;
+    display:grid;
+    place-items:center;
+    padding:0 5px;
+    border-radius:999px;
+    background:#fff;
+    font-size:9px;
+}
+
+.stock-tab.is-active{
+    color:var(--st-purple);
+    border-color:#d8d1ff;
+    background:var(--st-purple-soft);
+}
+
+.stock-toolbar-row{
+    display:grid;
+    grid-template-columns:minmax(260px,1fr) 210px 240px;
+    gap:10px;
+}
+
+.stock-search{
+    min-width:0;
+    height:46px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:0 12px;
+    border:1px solid var(--st-border);
+    border-radius:10px;
+    background:#fff;
+}
+
+.stock-search:focus-within,
+.stock-select-wrap:focus-within{
+    border-color:#b9afff;
+    box-shadow:0 0 0 3px rgba(115,87,255,.08);
+}
+
+.stock-search input{
+    width:100%;
+    min-width:0;
+    height:auto;
+    padding:0;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    box-shadow:none;
+    font-size:12px;
+}
+
+.stock-select-wrap{
+    min-width:0;
+    height:46px;
+    display:grid;
+    grid-template-rows:auto 1fr;
+    padding:5px 10px 4px;
+    border:1px solid var(--st-border);
+    border-radius:10px;
+    background:#fff;
+}
+
+.stock-select-wrap>span{
+    color:#9299aa;
+    font-size:8px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.stock-select-wrap select{
+    width:100%;
+    min-width:0;
+    height:auto;
+    padding:0;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    box-shadow:none;
+    font-size:11px;
+    font-weight:700;
+}
+
+.stock-toolbar-result{
+    margin-top:10px;
+    color:var(--st-muted);
+    font-size:11px;
+    text-align:right;
+}
+
+.stock-toolbar-result strong{
+    color:var(--st-text);
+}
+
+.stock-table-wrap{
+    width:100%;
+    overflow-x:auto;
+}
+
+.stock-table{
+    width:100%;
+    min-width:980px;
+    border-collapse:collapse;
+    table-layout:fixed;
+    background:#fff;
+    box-shadow:none;
+}
+
+.stock-table th,
+.stock-table td{
+    padding:13px 10px;
+    border-bottom:1px solid var(--st-border);
+    text-align:left;
+    vertical-align:middle;
+}
+
+.stock-table th{
+    color:#8790a3;
+    background:#fafafe;
+    font-size:10px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.025em;
+}
+
+.stock-table td{
+    color:#303648;
+    font-size:12px;
+}
+
+.stock-table th:nth-child(1),
+.stock-table td:nth-child(1){width:23%}
+
+.stock-table th:nth-child(2),
+.stock-table td:nth-child(2){width:14%}
+
+.stock-table th:nth-child(3),
+.stock-table td:nth-child(3){width:8%}
+
+.stock-table th:nth-child(4),
+.stock-table td:nth-child(4){width:18%}
+
+.stock-table th:nth-child(5),
+.stock-table td:nth-child(5){width:12%}
+
+.stock-table th:nth-child(6),
+.stock-table td:nth-child(6){width:12%}
+
+.stock-table th:nth-child(7),
+.stock-table td:nth-child(7){width:13%}
+
+.stock-product{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:9px;
+}
+
+.stock-product-icon{
+    flex:0 0 40px;
+    width:40px;
+    height:40px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    color:var(--st-purple);
+    background:var(--st-purple-soft);
+    font-size:15px;
+    font-weight:900;
+}
+
+.stock-product>div:last-child{
+    min-width:0;
+    display:grid;
+    gap:3px;
+}
+
+.stock-product strong,
+.stock-product small{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.stock-product strong{
+    font-size:13px;
+}
+
+.stock-product small{
+    color:var(--st-muted);
+    font-size:9px;
+}
+
+.stock-category-badge{
+    display:inline-flex;
+    max-width:100%;
+    padding:6px 9px;
+    overflow:hidden;
+    border-radius:8px;
+    color:#596174;
+    background:#f0f2f6;
+    font-size:10px;
+    font-weight:700;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.stock-balance{
+    display:flex;
+    align-items:center;
+    gap:7px;
+}
+
+.stock-balance-value{
+    min-width:34px;
+    font-size:15px;
+}
+
+.stock-balance-value--normal{color:var(--st-green)}
+.stock-balance-value--low{color:var(--st-orange)}
+.stock-balance-value--out{color:var(--st-red)}
+
+.stock-status{
+    min-height:25px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 8px;
+    border-radius:999px;
+    font-size:9px;
+    font-weight:800;
+    white-space:nowrap;
+}
+
+.stock-status--normal{color:var(--st-green);background:var(--st-green-soft)}
+.stock-status--low{color:var(--st-orange);background:var(--st-orange-soft)}
+.stock-status--out{color:var(--st-red);background:var(--st-red-soft)}
+
+.stock-price{
+    color:#252b3c;
+}
+
+.stock-mobile-list{
+    display:none;
+}
+
+.stock-empty{
+    min-height:270px;
+    display:grid;
+    place-content:center;
+    justify-items:center;
+    text-align:center;
+}
+
+.stock-empty[hidden]{
+    display:none!important;
+}
+
+.stock-empty>div{
+    width:54px;
+    height:54px;
+    display:grid;
+    place-items:center;
+    margin-bottom:10px;
+    border-radius:16px;
+    color:var(--st-purple);
+    background:var(--st-purple-soft);
+    font-size:21px;
+}
+
+.stock-empty strong{
+    font-size:14px;
+}
+
+.stock-empty p{
+    margin:5px 0 13px;
+    color:var(--st-muted);
+    font-size:11px;
+}
+
+.stock-empty--search{
+    min-height:190px;
+}
+
+@media(max-width:1100px){
+    .stock-stats{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
+    .stock-toolbar-row{
+        grid-template-columns:minmax(220px,1fr) 190px;
+    }
+
+    .stock-toolbar-row .stock-select-wrap:last-child{
+        grid-column:1/-1;
+    }
+}
+
+@media(max-width:768px){
+    .stock-header{
+        flex-direction:column;
+    }
+
+    .stock-header-actions{
+        width:100%;
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .stock-value-panel{
+        grid-template-columns:1fr;
+    }
+
+    .stock-toolbar-row{
+        grid-template-columns:1fr;
+    }
+
+    .stock-toolbar-row .stock-select-wrap:last-child{
+        grid-column:auto;
+    }
+
+    .stock-table-wrap{
+        display:none;
+    }
+
+    .stock-mobile-list{
+        display:grid;
+        gap:9px;
+    }
+
+    .stock-mobile-card{
+        padding:14px;
+        border:1px solid var(--st-border);
+        border-radius:13px;
+        background:var(--st-soft);
+    }
+
+    .stock-mobile-top{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:8px;
+    }
+
+    .stock-mobile-grid{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:7px;
+        margin-top:11px;
+    }
+
+    .stock-mobile-grid>div{
+        min-width:0;
+        display:grid;
+        gap:3px;
+        padding:10px;
+        border:1px solid var(--st-border);
+        border-radius:9px;
+        background:#fff;
+    }
+
+    .stock-mobile-grid span{
+        color:var(--st-muted);
+        font-size:8px;
+        font-weight:700;
+        text-transform:uppercase;
+    }
+
+    .stock-mobile-grid strong{
+        overflow-wrap:anywhere;
+        font-size:11px;
+    }
+}
+
+@media(max-width:560px){
+    .stock-header h1{
+        font-size:26px!important;
+    }
+
+    .stock-header-actions{
+        grid-template-columns:1fr;
+    }
+
+    .stock-stats{
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+    }
+
+    .stock-stat{
+        align-items:flex-start;
+        gap:8px;
+        padding:12px;
+    }
+
+    .stock-stat-icon{
+        flex-basis:34px;
+        width:34px;
+        height:34px;
+        border-radius:10px;
+        font-size:14px;
+    }
+
+    .stock-stat strong{
+        font-size:20px;
+    }
+
+    .stock-stat small{
+        display:none;
+    }
+
+    .stock-toolbar,
+    .stock-content{
+        padding:13px;
+    }
+
+    .stock-tabs{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .stock-tab{
+        justify-content:center;
+    }
+
+    .stock-mobile-top{
+        flex-direction:column;
+    }
+
+    .stock-mobile-grid{
+        grid-template-columns:1fr 1fr;
+    }
+}
+</style>
+
+<script>
+let activeStockFilter = "all";
+
+function getStockRecords() {
+    const desktopVisible = window.innerWidth > 768;
+    const selector = desktopVisible
+        ? "#stockTableBody .stock-record"
+        : "#stockMobileList .stock-record";
+
+    return Array.from(document.querySelectorAll(selector));
+}
+
+function applyStockFilters() {
+    const query = (document.getElementById("stockSearch")?.value || "").trim().toLowerCase();
+    const category = (document.getElementById("stockCategory")?.value || "").toLowerCase();
+    const records = document.querySelectorAll(".stock-record");
+    const visibleKeys = new Set();
+
+    records.forEach(record => {
+        const searchText = [
+            record.dataset.name || "",
+            record.dataset.category || "",
+            record.dataset.unit || ""
+        ].join(" ");
+
+        const matchesSearch = !query || searchText.includes(query);
+        const matchesCategory = !category || record.dataset.category === category;
+        const matchesStatus = activeStockFilter === "all" || record.dataset.status === activeStockFilter;
+        const visible = matchesSearch && matchesCategory && matchesStatus;
+
+        record.style.display = visible ? "" : "none";
+
+        if (visible) {
+            const key = [
+                record.dataset.name,
+                record.dataset.category,
+                record.dataset.stock,
+                record.dataset.retail
+            ].join("|");
+            visibleKeys.add(key);
+        }
+    });
+
+    const count = visibleKeys.size;
+    const countNode = document.getElementById("stockVisibleCount");
+    const emptyNode = document.getElementById("stockSearchEmpty");
+
+    if (countNode) countNode.textContent = count;
+    if (emptyNode) emptyNode.hidden = count !== 0;
+}
+
+function sortStockRecords() {
+    const sortValue = document.getElementById("stockSort")?.value || "name";
+    const containers = [
+        document.getElementById("stockTableBody"),
+        document.getElementById("stockMobileList")
+    ].filter(Boolean);
+
+    containers.forEach(container => {
+        const records = Array.from(container.querySelectorAll(".stock-record"));
+
+        records.sort((a, b) => {
+            if (sortValue === "stock-asc") {
+                return Number(a.dataset.stock || 0) - Number(b.dataset.stock || 0);
+            }
+
+            if (sortValue === "stock-desc") {
+                return Number(b.dataset.stock || 0) - Number(a.dataset.stock || 0);
+            }
+
+            if (sortValue === "retail-desc") {
+                return Number(b.dataset.retail || 0) - Number(a.dataset.retail || 0);
+            }
+
+            if (sortValue === "retail-asc") {
+                return Number(a.dataset.retail || 0) - Number(b.dataset.retail || 0);
+            }
+
+            return (a.dataset.name || "").localeCompare(
+                b.dataset.name || "",
+                "ru",
+                {sensitivity: "base"}
+            );
+        });
+
+        records.forEach(record => container.appendChild(record));
+    });
+
+    applyStockFilters();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".stock-tab").forEach(button => {
+        button.addEventListener("click", () => {
+            activeStockFilter = button.dataset.filter || "all";
+
+            document.querySelectorAll(".stock-tab").forEach(tab => {
+                tab.classList.toggle("is-active", tab === button);
+            });
+
+            applyStockFilters();
+        });
+    });
+
+    document.getElementById("stockSearch")?.addEventListener("input", applyStockFilters);
+    document.getElementById("stockCategory")?.addEventListener("change", applyStockFilters);
+    document.getElementById("stockSort")?.addEventListener("change", sortStockRecords);
+
+    window.addEventListener("resize", applyStockFilters);
+
+    sortStockRecords();
+});
+</script>
+
+
+<style>
+/* Увеличение мелкой типографики */
+
+.stock-header p{font-size:14px!important;}
+.stock-btn{font-size:13px!important;}
+
+.stock-stat span{font-size:12px!important;}
+.stock-stat small{font-size:11px!important;}
+
+.stock-value-panel span{font-size:12px!important;}
+.stock-value-panel strong{font-size:20px!important;}
+
+.stock-tab{font-size:12px!important;}
+.stock-tab span{font-size:10px!important;}
+
+.stock-search input{font-size:13px!important;}
+.stock-select-wrap>span{font-size:10px!important;}
+.stock-select-wrap select{font-size:12px!important;}
+.stock-toolbar-result{font-size:12px!important;}
+
+.stock-table th{font-size:11px!important;}
+.stock-table td{font-size:13px!important;}
+
+.stock-product strong{font-size:14px!important;}
+.stock-product small{font-size:11px!important;}
+
+.stock-category-badge{font-size:11px!important;}
+.stock-balance-value{font-size:17px!important;}
+.stock-status{font-size:10px!important;}
+
+.stock-mobile-grid span{font-size:10px!important;}
+.stock-mobile-grid strong{font-size:12px!important;}
+
+.stock-empty p{font-size:12px!important;}
 </style>
 
 {% endblock %}

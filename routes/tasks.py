@@ -125,6 +125,66 @@ def _ensure_tasks_table(cur):
     """)
 
 
+
+def _ensure_notifications_table(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            notification_type VARCHAR(40) DEFAULT 'system',
+            title TEXT NOT NULL,
+            message TEXT,
+            related_id INTEGER,
+            link TEXT,
+            is_read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP NOT NULL
+        )
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+        ON notifications(user_id, is_read, id DESC)
+    """)
+
+
+def _create_task_notification(
+    cur,
+    *,
+    company_id,
+    assigned_user_id,
+    task_id,
+    title,
+    due_date,
+):
+    if not assigned_user_id:
+        return
+
+    _ensure_notifications_table(cur)
+
+    due_text = due_date.strftime("%d.%m.%Y") if due_date else "без срока"
+    cur.execute("""
+        INSERT INTO notifications (
+            company_id,
+            user_id,
+            notification_type,
+            title,
+            message,
+            related_id,
+            link,
+            is_read,
+            created_at
+        )
+        VALUES (%s, %s, 'task', %s, %s, %s, %s, FALSE, %s)
+    """, (
+        company_id,
+        assigned_user_id,
+        "Новая задача",
+        f"{title} · срок: {due_text}",
+        task_id,
+        "/profile",
+        now_kz(),
+    ))
+
 def _task_view(row, today):
     status = row["status"] or "new"
     due_date = row.get("due_date_parsed") if hasattr(row, "get") else row["due_date_parsed"]
@@ -318,6 +378,7 @@ def add_task():
                 created_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, 'new', %s, %s)
+            RETURNING id
         """, (
             company_id,
             session.get("user_id"),
@@ -328,6 +389,18 @@ def add_task():
             due_date.isoformat() if due_date else None,
             now_kz(),
         ))
+
+        created_task = cur.fetchone()
+        task_id = created_task["id"] if hasattr(created_task, "keys") else created_task[0]
+
+        _create_task_notification(
+            cur,
+            company_id=company_id,
+            assigned_user_id=int(assigned_user_id) if assigned_user_id else None,
+            task_id=task_id,
+            title=title,
+            due_date=due_date,
+        )
 
         conn.commit()
         return redirect("/tasks")
@@ -448,6 +521,11 @@ def change_task_status(task_id):
                 updated_at = %s
             WHERE id = %s
               AND company_id = %s
+              AND (
+                    assigned_user_id = %s
+                    OR %s = TRUE
+                    OR %s IN ('admin', 'owner')
+              )
             RETURNING id
         """, (
             status,
@@ -455,11 +533,14 @@ def change_task_status(task_id):
             now_kz(),
             task_id,
             company_id,
+            session.get("user_id"),
+            bool(session.get("is_super_admin")),
+            session.get("role"),
         ))
 
         if not cur.fetchone():
             conn.rollback()
-            return jsonify({"success": False, "error": "Задача не найдена"}), 404
+            return jsonify({"success": False, "error": "Задача не найдена или недоступна"}), 404
 
         conn.commit()
         return jsonify({"success": True})

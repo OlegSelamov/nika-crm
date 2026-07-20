@@ -433,6 +433,18 @@ def init_db():
         conn.commit()
     except:
         conn.rollback()
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP")
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN last_seen_at TIMESTAMP")
+        conn.commit()
+    except:
+        conn.rollback()
                 
     try:
         cur.execute("ALTER TABLE companies ADD COLUMN owner_id INTEGER")
@@ -689,6 +701,163 @@ def init_db():
     except:
         conn.rollback()
         
+    # ================== SAAS / SUBSCRIPTIONS ==================
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS modules (
+        id SERIAL PRIMARY KEY,
+        code TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT DEFAULT 'Основное',
+        monthly_price NUMERIC(12,2) DEFAULT 0,
+        annual_price NUMERIC(12,2) DEFAULT 0,
+        route_prefix TEXT,
+        icon TEXT,
+        is_core BOOLEAN DEFAULT FALSE,
+        is_active BOOLEAN DEFAULT TRUE,
+        sort_order INTEGER DEFAULT 100,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS company_subscriptions (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER UNIQUE NOT NULL,
+        status TEXT DEFAULT 'trial',
+        billing_period TEXT DEFAULT 'month',
+        base_price NUMERIC(12,2) DEFAULT 2990,
+        employees_price NUMERIC(12,2) DEFAULT 0,
+        branches_price NUMERIC(12,2) DEFAULT 0,
+        modules_price NUMERIC(12,2) DEFAULT 0,
+        discount NUMERIC(12,2) DEFAULT 0,
+        total_price NUMERIC(12,2) DEFAULT 0,
+        trial_ends_at TIMESTAMP,
+        period_start TIMESTAMP,
+        period_end TIMESTAMP,
+        next_payment_at TIMESTAMP,
+        auto_renew BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS company_modules (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL,
+        module_id INTEGER NOT NULL,
+        enabled BOOLEAN DEFAULT TRUE,
+        status TEXT DEFAULT 'trial',
+        price NUMERIC(12,2) DEFAULT 0,
+        billing_period TEXT DEFAULT 'month',
+        activated_at TIMESTAMP DEFAULT NOW(),
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(company_id, module_id)
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS employee_module_permissions (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER NOT NULL,
+        module_id INTEGER NOT NULL,
+        allowed BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(employee_id, module_id)
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS subscription_payments (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL,
+        subscription_id INTEGER,
+        amount NUMERIC(12,2) NOT NULL,
+        currency TEXT DEFAULT 'KZT',
+        provider TEXT,
+        payment_method TEXT,
+        provider_payment_id TEXT,
+        status TEXT DEFAULT 'created',
+        description TEXT,
+        paid_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS subscription_changes (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL,
+        user_id INTEGER,
+        action TEXT NOT NULL,
+        old_value JSONB,
+        new_value JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """)
+
+    module_seed = [
+        ('profile', 'Профиль', 'Профиль сотрудника и личная статистика.', 'Основное', 0, '/profile', '/static/icons/profile.png', True, 10),
+        ('dashboard', 'Главная', 'Главная панель компании.', 'Основное', 0, '/dashboard', '/static/icons/home.png', True, 20),
+        ('sales', 'Продажи', 'Кассовое рабочее место, чеки, возвраты и история продаж.', 'Торговля', 1490, '/sales', '/static/icons/sales.png', False, 30),
+        ('analytics', 'Аналитика', 'Выручка, прибыль, средний чек и показатели сотрудников.', 'Управление', 1490, '/analytics', '/static/icons/analytics.png', False, 40),
+        ('catalog', 'Каталог', 'Товары, категории, цены, штрихкоды и единицы измерения.', 'Торговля', 790, '/items', '/static/icons/items.png', False, 50),
+        ('tasks', 'Задачи', 'Задачи, сроки и контроль исполнения.', 'Управление', 490, '/tasks', '/static/icons/tasks.png', False, 60),
+        ('cto', 'ККМ и ЦТО', 'Кассовые аппараты и обслуживание ЦТО.', 'Интеграции', 1490, '/cto', '/static/icons/cto.png', False, 70),
+        ('accounting', 'Бухгалтерия', 'Налоги, платежи и бухгалтерский контроль.', 'Финансы', 1990, '/accounting', '/static/icons/buh.png', False, 80),
+        ('reports', 'Отчёты', 'Формы 910, 200 и управленческие отчёты.', 'Финансы', 1490, '/reports', '/static/icons/otchet.png', False, 90),
+        ('expenses', 'Расходы', 'Учет расходов и движения денежных средств.', 'Финансы', 990, '/expenses', '/static/icons/rashod.png', False, 100),
+        ('warehouse', 'Склад', 'Остатки, приход, списание и движение товара.', 'Склад', 990, '/stock', '/static/icons/stock.png', False, 110),
+        ('clients', 'Клиенты', 'Клиентская база, статусы, история и документы.', 'CRM', 990, '/clients', '/static/icons/clients.png', False, 120),
+        ('settings', 'Настройки', 'Настройки компании и интеграций.', 'Система', 0, '/settings', '/static/icons/settings.png', True, 200)
+    ]
+
+    for module in module_seed:
+        cur.execute("""
+            INSERT INTO modules (
+                code, name, description, category, monthly_price,
+                route_prefix, icon, is_core, sort_order
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (code) DO UPDATE SET
+                name = EXCLUDED.name,
+                description = EXCLUDED.description,
+                category = EXCLUDED.category,
+                monthly_price = EXCLUDED.monthly_price,
+                route_prefix = EXCLUDED.route_prefix,
+                icon = EXCLUDED.icon,
+                is_core = EXCLUDED.is_core,
+                sort_order = EXCLUDED.sort_order,
+                is_active = TRUE
+        """, module)
+
+    cur.execute("""
+        INSERT INTO company_subscriptions (
+            company_id, status, billing_period, base_price,
+            trial_ends_at, period_start, next_payment_at
+        )
+        SELECT id, 'trial', 'month', 2990,
+               NOW() + INTERVAL '14 days', NOW(), NOW() + INTERVAL '14 days'
+        FROM companies
+        ON CONFLICT (company_id) DO NOTHING
+    """)
+
+    cur.execute("""
+        INSERT INTO company_modules (
+            company_id, module_id, enabled, status, price, billing_period
+        )
+        SELECT c.id, m.id, TRUE, 'trial', m.monthly_price, 'month'
+        FROM companies c
+        CROSS JOIN modules m
+        WHERE m.is_core = TRUE
+           OR m.code IN ('sales', 'catalog', 'warehouse', 'clients', 'analytics')
+        ON CONFLICT (company_id, module_id) DO NOTHING
+    """)
+
     # 🔥 INDEXES
 
     cur.execute("""

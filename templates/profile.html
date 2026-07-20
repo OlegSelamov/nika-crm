@@ -1,624 +1,995 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="profile-page">
+{% set display_name = user.full_name or user.username or 'Сотрудник' %}
+{% set position_name = user.position or 'Сотрудник' %}
+{% set initials = employee_initials or display_name[:1]|upper %}
 
-    <div class="profile-hero">
 
-        <div>
-            <div class="hero-kicker">Мой кабинет</div>
+<div class="employee-dashboard">
 
-            <h1>
-                Добро пожаловать,
-                {{ user.full_name or user.username }} !
-            </h1>
+    <section class="employee-topbar">
+        <div class="employee-topbar__identity">
+            <div class="employee-topbar__avatar">
+                {{ initials }}
+                <span class="employee-topbar__presence-dot {{ 'online' if is_online else 'offline' }}"></span>
+            </div>
 
-            <div class="hero-meta">
-                {{ user.role or 'Сотрудник' }}
-                {% if user.company_name %}
-                    · {{ user.company_name }}
-                {% endif %}
+            <div class="employee-topbar__identity-copy">
+                <span class="employee-topbar__eyebrow">Личный кабинет сотрудника</span>
+                <h1>{{ display_name }}</h1>
+                <div class="employee-topbar__meta">
+                    <span>{{ position_name }}</span>
+                    <span>{{ user.company_name or 'Компания не указана' }}</span>
+                    <span class="{{ 'online' if is_online else 'offline' }}">
+                        {{ 'В сети' if is_online else 'Не в сети' }}
+                    </span>
+                </div>
             </div>
         </div>
 
-        <div class="hero-earning">
-            <span>Заработано сегодня</span>
-            <b>
-                {{ "{:,.0f}".format(today_reward or 0).replace(",", " ") }} ₸
-            </b>
+        <div class="employee-topbar__metrics">
+            <article class="employee-topbar__metric">
+                <div class="metric-icon metric-icon--purple">↗</div>
+                <span>Сегодня</span>
+                <b>{{ "{:,.0f}".format(today_stats.revenue or 0).replace(",", " ") }} ₸</b>
+                <small>{{ today_stats.sales_count or 0 }} продаж</small>
+                <i style="--value: {{ [((today_stats.revenue or 0) / (bonus_target or 1) * 100), 100]|min }}%"></i>
+            </article>
+
+            <article class="employee-topbar__metric">
+                <div class="metric-icon metric-icon--blue">▣</div>
+                <span>За месяц</span>
+                <b>{{ "{:,.0f}".format(month_stats.revenue or 0).replace(",", " ") }} ₸</b>
+                <small>{{ month_stats.sales_count or 0 }} продаж</small>
+                <i style="--value: {{ [((month_stats.revenue or 0) / (bonus_target or 1) * 100), 100]|min }}%"></i>
+            </article>
+
+            <article class="employee-topbar__metric">
+                <div class="metric-icon metric-icon--green">₸</div>
+                <span>Зарплата</span>
+                <b>{{ "{:,.0f}".format(salary_payable or 0).replace(",", " ") }} ₸</b>
+                <small>к выплате</small>
+                <i style="--value: {{ bonus_progress or 0 }}%"></i>
+            </article>
+
+            <article class="employee-topbar__metric">
+                <div class="metric-icon metric-icon--orange">✓</div>
+                <span>Мои задачи</span>
+                <b>{{ task_summary.active_count or 0 }}</b>
+                <small>{{ task_summary.overdue_count or 0 }} просрочено</small>
+                <i style="--value: {{ 100 if not (task_summary.active_count or 0) else [(((task_summary.done_month_count or 0) / ((task_summary.done_month_count or 0) + (task_summary.active_count or 0))) * 100), 100]|min }}%"></i>
+            </article>
+
+            <article class="employee-topbar__metric">
+                <div class="metric-icon metric-icon--cyan">◎</div>
+                <span>План</span>
+                <b>{{ bonus_progress or 0 }}%</b>
+                <small>выполнено</small>
+                <i style="--value: {{ bonus_progress or 0 }}%"></i>
+            </article>
         </div>
+    </section>
 
-    </div>
+    <section class="employee-dashboard__grid">
+        <div class="employee-dashboard__main">
 
-    <div class="profile-stats">
+            <section class="employee-card employee-tasks-card">
+                <div class="employee-card__head">
+                    <div class="employee-card__title">
+                        <div class="employee-card__icon">▣</div>
+                        <div>
+                            <span>Рабочий день</span>
+                            <h2>Мои задачи</h2>
+                        </div>
+                    </div>
 
-        <div class="profile-stat-card">
-            <span>Продаж сегодня</span>
-            <b>{{ today_stats.sales_count or 0 }}</b>
-        </div>
-
-        <div class="profile-stat-card">
-            <span>Выручка сегодня</span>
-            <b>
-                {{ "{:,.0f}".format(today_stats.revenue or 0).replace(",", " ") }} ₸
-            </b>
-        </div>
-
-        <div class="profile-stat-card">
-            <span>Средний чек сегодня</span>
-            <b>
-                {{ "{:,.0f}".format(today_stats.average_check or 0).replace(",", " ") }} ₸
-            </b>
-        </div>
-
-        <div class="profile-stat-card">
-            <span>Вознаграждение за месяц</span>
-            <b>
-                {{ "{:,.0f}".format(month_reward or 0).replace(",", " ") }} ₸
-            </b>
-        </div>
-
-    </div>
-
-    <div class="profile-columns">
-
-        <div class="profile-card">
-
-            <div class="profile-card-title">
-                Информация о сотруднике
-            </div>
-
-            <div class="info-grid">
-
-                <div class="info-item">
-                    <span>ФИО</span>
-                    <b>{{ user.full_name or 'Не заполнено' }}</b>
+                    <div class="employee-task-tabs">
+                        <span>Активные {{ task_summary.active_count or 0 }}</span>
+                        {% if task_summary.overdue_count or 0 %}
+                        <span class="danger">Просроченные {{ task_summary.overdue_count or 0 }}</span>
+                        {% endif %}
+                        <span>Сегодня {{ task_summary.today_count or 0 }}</span>
+                    </div>
                 </div>
 
-                <div class="info-item">
-                    <span>Телефон</span>
-                    <b>{{ user.phone or 'Не заполнено' }}</b>
-                </div>
+                {% if profile_tasks %}
+                <div class="employee-task-list">
+                    {% for task in profile_tasks %}
+                    <article class="employee-task-row {{ 'is-overdue' if task.overdue else '' }} {{ 'is-done' if task.status == 'done' else '' }}">
+                        <div class="employee-task-row__badge priority-{{ task.priority }}">
+                            {% if task.priority == 'urgent' %}!{% elif task.priority == 'high' %}↑{% elif task.priority == 'medium' %}→{% else %}↓{% endif %}
+                        </div>
 
-                <div class="info-item">
-                    <span>Логин</span>
-                    <b>{{ user.username or '—' }}</b>
-                </div>
+                        <div class="employee-task-row__content">
+                            <h3>{{ task.title }}</h3>
+                            {% if task.description %}
+                            <p>{{ task.description }}</p>
+                            {% endif %}
+                        </div>
 
-                <div class="info-item">
-                    <span>Роль</span>
-                    <b>{{ user.role or '—' }}</b>
-                </div>
+                        <div class="employee-task-row__date {{ 'danger' if task.overdue else '' }}">
+                            <span>▣</span>
+                            {{ task.due_date_label }}
+                        </div>
 
-                <div class="info-item">
-                    <span>Дата создания</span>
-                    <b>
-                        {{ user.created_at.strftime('%d.%m.%Y') if user.created_at else '—' }}
-                    </b>
-                </div>
+                        <div class="employee-task-row__priority priority-{{ task.priority }}">
+                            {{ task.priority_label }}
+                        </div>
 
-                <div class="info-item">
-                    <span>Ставка от продаж</span>
-                    <b>{{ user.percent_rate or 0 }}%</b>
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="profile-card">
-
-            <div class="profile-card-title">
-                Компания
-            </div>
-
-            <div class="info-grid">
-
-                <div class="info-item">
-                    <span>Название</span>
-                    <b>{{ user.company_name or '—' }}</b>
-                </div>
-
-                <div class="info-item">
-                    <span>БИН</span>
-                    <b>{{ user.company_bin or '—' }}</b>
-                </div>
-
-                <div class="info-item">
-                    <span>Телефон</span>
-                    <b>{{ user.company_phone or '—' }}</b>
-                </div>
-
-                <div class="info-item">
-                    <span>Руководитель</span>
-                    <b>{{ user.company_director or '—' }}</b>
-                </div>
-
-                <div class="info-item info-item-wide">
-                    <span>Адрес</span>
-                    <b>{{ user.company_address or '—' }}</b>
-                </div>
-
-                <div class="info-item">
-                    <span>Тариф</span>
-                    <b>{{ user.company_tariff or '—' }}</b>
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-    <div class="profile-card salary-card">
-
-        <div class="profile-card-title">
-            Расчёт вознаграждения за месяц
-        </div>
-
-        <div class="salary-grid">
-
-            <div>
-                <span>Продаж</span>
-                <b>{{ month_stats.sales_count or 0 }}</b>
-            </div>
-
-            <div>
-                <span>Выручка</span>
-                <b>
-                    {{ "{:,.0f}".format(month_stats.revenue or 0).replace(",", " ") }} ₸
-                </b>
-            </div>
-
-            <div>
-                <span>Средний чек</span>
-                <b>
-                    {{ "{:,.0f}".format(month_stats.average_check or 0).replace(",", " ") }} ₸
-                </b>
-            </div>
-
-            <div>
-                <span>Ставка</span>
-                <b>{{ user.percent_rate or 0 }}%</b>
-            </div>
-
-            <div>
-                <span>Возвратов</span>
-                <b>{{ refund_stats.refund_count or 0 }}</b>
-            </div>
-
-            <div class="salary-total">
-                <span>К выплате по продажам</span>
-                <b>
-                    {{ "{:,.0f}".format(month_reward or 0).replace(",", " ") }} ₸
-                </b>
-            </div>
-
-        </div>
-
-        <div class="salary-note">
-            Здесь рассчитывается личное вознаграждение по проценту от оплаченных продаж.
-        </div>
-
-    </div>
-
-    <div class="profile-card">
-
-        <div class="profile-card-title">
-            Последние продажи
-        </div>
-
-        <div class="recent-sales-table">
-
-            <table>
-
-                <thead>
-                    <tr>
-                        <th>Чек</th>
-                        <th>Дата</th>
-                        <th>Оплата</th>
-                        <th>Статус</th>
-                        <th>Сумма</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-
-                    {% for sale in recent_sales %}
-
-                        <tr>
-                            <td>№ {{ sale.sale_number or sale.id }}</td>
-
-                            <td>
-                                {{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '—' }}
-                            </td>
-
-                            <td>
-                                {% if sale.sale_type == 'cash' %}
-                                    Наличные
-                                {% elif sale.sale_type == 'card' %}
-                                    Карта
-                                {% elif sale.sale_type == 'kaspi' %}
-                                    Kaspi POS
-                                {% elif sale.sale_type == 'invoice' %}
-                                    Счёт
-                                {% else %}
-                                    {{ sale.sale_type or '—' }}
-                                {% endif %}
-                            </td>
-
-                            <td>{{ sale.status or '—' }}</td>
-
-                            <td>
-                                <b>
-                                    {{ "{:,.0f}".format(sale.total_amount or 0).replace(",", " ") }} ₸
-                                </b>
-                            </td>
-                        </tr>
-
-                    {% else %}
-
-                        <tr>
-                            <td colspan="5" class="empty-row">
-                                У сотрудника пока нет сохранённых продаж
-                            </td>
-                        </tr>
-
+                        <select
+                            class="employee-task-row__status status-{{ task.status }}"
+                            data-previous="{{ task.status }}"
+                            onchange="changeProfileTaskStatus({{ task.id }}, this)">
+                            {% for key, label in task_statuses.items() %}
+                            <option value="{{ key }}" {% if task.status == key %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </article>
                     {% endfor %}
+                </div>
+                {% else %}
+                <div class="employee-empty-state">
+                    <div>✓</div>
+                    <b>Задач пока нет</b>
+                    <span>Новые задачи руководителя появятся здесь.</span>
+                </div>
+                {% endif %}
+            </section>
 
-                </tbody>
+            <section class="employee-card employee-chart-card">
+                <div class="employee-card__head">
+                    <div class="employee-card__title">
+                        <div class="employee-card__icon">↗</div>
+                        <div>
+                            <span>Динамика</span>
+                            <h2>Продажи за месяц</h2>
+                        </div>
+                    </div>
+                    <strong class="employee-chart-total">
+                        {{ "{:,.0f}".format(chart_total or 0).replace(",", " ") }} ₸
+                    </strong>
+                </div>
 
-            </table>
+                <div class="employee-chart-wrap">
+                    {% if chart_total and chart_total > 0 %}
+                    <canvas id="employeeSalesChart"></canvas>
+                    {% else %}
+                    <div class="employee-empty-state employee-empty-state--chart">
+                        <div>↗</div>
+                        <b>Пока нет продаж</b>
+                        <span>Когда появятся продажи, здесь будет график.</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="employee-card employee-sales-card">
+                <div class="employee-card__head">
+                    <div class="employee-card__title">
+                        <div class="employee-card__icon">🛒</div>
+                        <div>
+                            <span>История</span>
+                            <h2>Последние продажи</h2>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="employee-sales-table">
+                    {% for sale in recent_sales %}
+                    <article class="employee-sale-row">
+                        <div class="employee-sale-row__icon">🧾</div>
+                        <div class="employee-sale-row__main">
+                            <b>Чек № {{ sale.sale_number or sale.id }}</b>
+                            <span>{{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '—' }}</span>
+                        </div>
+                        <div class="employee-sale-row__method">
+                            {% if sale.sale_type == 'cash' %}Наличные
+                            {% elif sale.sale_type == 'card' %}Карта
+                            {% elif sale.sale_type == 'kaspi' %}Kaspi POS
+                            {% elif sale.sale_type == 'invoice' %}Счёт
+                            {% else %}{{ sale.sale_type or '—' }}{% endif %}
+                        </div>
+                        <strong>{{ "{:,.0f}".format(sale.total_amount or 0).replace(",", " ") }} ₸</strong>
+                        <span class="employee-sale-row__status {{ 'paid' if sale.status == 'Оплачено' else 'refund' }}">
+                            {{ sale.status or '—' }}
+                        </span>
+                    </article>
+                    {% else %}
+                    <div class="employee-empty-state">
+                        <div>🧾</div>
+                        <b>Продаж пока нет</b>
+                        <span>Последние чеки появятся здесь.</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
 
         </div>
 
-        <div class="recent-sales-mobile">
+        <aside class="employee-dashboard__side">
 
-            {% for sale in recent_sales %}
-
-                <div class="sale-mobile-card">
-
-                    <div class="sale-mobile-top">
-                        <b>Чек № {{ sale.sale_number or sale.id }}</b>
-                        <strong>
-                            {{ "{:,.0f}".format(sale.total_amount or 0).replace(",", " ") }} ₸
-                        </strong>
+            <section class="employee-card employee-stats-card">
+                <div class="employee-card__head">
+                    <div class="employee-card__title">
+                        <div class="employee-card__icon">↗</div>
+                        <div>
+                            <span>Месяц</span>
+                            <h2>Моя статистика</h2>
+                        </div>
                     </div>
-
-                    <div class="sale-mobile-row">
-                        <span>Дата</span>
-                        <b>
-                            {{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '—' }}
-                        </b>
-                    </div>
-
-                    <div class="sale-mobile-row">
-                        <span>Статус</span>
-                        <b>{{ sale.status or '—' }}</b>
-                    </div>
-
                 </div>
 
-            {% else %}
+                <div class="employee-stat-list">
+                    <div>
+                        <span>Выручка</span>
+                        <b>{{ "{:,.0f}".format(month_stats.revenue or 0).replace(",", " ") }} ₸</b>
+                    </div>
+                    <div>
+                        <span>Средний чек</span>
+                        <b>{{ "{:,.0f}".format(month_stats.average_check or 0).replace(",", " ") }} ₸</b>
+                    </div>
+                    <div>
+                        <span>Продаж</span>
+                        <b>{{ month_stats.sales_count or 0 }}</b>
+                    </div>
+                    <div>
+                        <span>Возвраты</span>
+                        <b>{{ refund_stats.refund_count or 0 }}</b>
+                    </div>
+                    <div>
+                        <span>Лучший день</span>
+                        <b>{{ "{:,.0f}".format(best_day_total or 0).replace(",", " ") }} ₸</b>
+                    </div>
+                    <div>
+                        <span>Дней с продажами</span>
+                        <b>{{ active_days or 0 }}</b>
+                    </div>
+                </div>
+            </section>
 
-                <div class="empty-mobile">
-                    У сотрудника пока нет сохранённых продаж
+            <section class="employee-card employee-salary-card">
+                <div class="employee-card__head">
+                    <div class="employee-card__title">
+                        <div class="employee-card__icon employee-card__icon--green">₸</div>
+                        <div>
+                            <span>Финансы</span>
+                            <h2>Моя зарплата</h2>
+                        </div>
+                    </div>
                 </div>
 
-            {% endfor %}
+                <div class="employee-salary-total">
+                    <span>К выплате за месяц</span>
+                    <b>{{ "{:,.0f}".format(salary_payable or 0).replace(",", " ") }} ₸</b>
+                    <i style="--value: {{ bonus_progress or 0 }}%"></i>
+                </div>
 
-        </div>
+                <div class="employee-salary-breakdown">
+                    <div><span>Оклад</span><b>{{ "{:,.0f}".format(base_salary or 0).replace(",", " ") }} ₸</b></div>
+                    <div><span>Процент от продаж</span><b>{{ user.percent_rate or 0 }}%</b></div>
+                    <div><span>Начислено</span><b>{{ "{:,.0f}".format(month_reward or 0).replace(",", " ") }} ₸</b></div>
+                    <div><span>Удержания</span><b>- {{ "{:,.0f}".format(salary_deductions or 0).replace(",", " ") }} ₸</b></div>
+                </div>
+            </section>
 
-    </div>
+            <details class="employee-card employee-profile-card">
+                <summary>
+                    <div class="employee-card__title">
+                        <div class="employee-card__icon">👤</div>
+                        <div>
+                            <span>Профиль</span>
+                            <h2>О сотруднике</h2>
+                        </div>
+                    </div>
+                    <b>⌄</b>
+                </summary>
+
+                <div class="employee-profile-details">
+                    <div><span>Телефон</span><b>{{ user.phone or 'Не заполнено' }}</b></div>
+                    <div><span>Логин</span><b>{{ user.username or '—' }}</b></div>
+                    <div><span>Должность</span><b>{{ position_name }}</b></div>
+                    <div><span>Последний вход</span><b>{{ user.last_login_at.strftime('%d.%m.%Y %H:%M') if user.last_login_at else 'Ещё не входил' }}</b></div>
+                    <div><span>В компании с</span><b>{{ user.created_at.strftime('%d.%m.%Y') if user.created_at else '—' }}</b></div>
+                    <div><span>Руководитель</span><b>{{ user.company_director or '—' }}</b></div>
+                </div>
+            </details>
+
+        </aside>
+    </section>
 
 </div>
+<script>
+window.employeeChartLabels = {{ chart_labels|tojson }};
+window.employeeChartValues = {{ chart_values|tojson }};
+
+(function () {
+    function drawChart() {
+        var canvas = document.getElementById('employeeSalesChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: window.employeeChartLabels,
+                datasets: [{
+                    data: window.employeeChartValues,
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    fill: true,
+                    tension: 0.38,
+                    borderColor: '#6d5dfc',
+                    backgroundColor: 'rgba(109,93,252,.10)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(15,23,42,.06)' },
+                        ticks: {
+                            callback: function(value) {
+                                return Number(value).toLocaleString('ru-RU');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    if (typeof Chart !== 'undefined') {
+        drawChart();
+    } else {
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+        script.onload = drawChart;
+        document.head.appendChild(script);
+    }
+})();
+
+async function changeProfileTaskStatus(taskId, select) {
+    const previous = select.dataset.previous || 'new';
+    select.disabled = true;
+
+    try {
+        const body = new URLSearchParams({ status: select.value });
+        const response = await fetch('/tasks/' + taskId + '/status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: body.toString()
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Не удалось изменить статус');
+        }
+
+        select.dataset.previous = select.value;
+        select.className = 'profile-task-status status-' + select.value;
+
+        const card = select.closest('.profile-task-card');
+        if (card) {
+            card.classList.toggle('is-done', select.value === 'done');
+            if (select.value === 'done' || select.value === 'cancelled') {
+                card.classList.remove('is-overdue');
+                const overdue = card.querySelector('.profile-task-overdue');
+                if (overdue) overdue.remove();
+            }
+        }
+
+        window.setTimeout(function () {
+            window.location.reload();
+        }, 350);
+
+    } catch (error) {
+        select.value = previous;
+        alert(error.message);
+    } finally {
+        select.disabled = false;
+    }
+}
+</script>
+
 
 <style>
-
-.profile-page{
+.employee-dashboard{
     display:flex;
     flex-direction:column;
     gap:18px;
+    color:#172033;
+}
+.employee-topbar{
+    display:grid;
+    grid-template-columns:370px minmax(0,1fr);
+    gap:18px;
+    align-items:stretch;
+    padding:22px;
+    border-radius:28px;
+    background:
+        radial-gradient(circle at 18% 12%,rgba(111,92,255,.34),transparent 24%),
+        linear-gradient(135deg,#101938 0%,#18265b 38%,#4837d3 72%,#b5c4ff 135%);
+    box-shadow:0 24px 54px rgba(38,44,112,.22);
+}
+.employee-topbar__identity{
+    display:flex;
+    align-items:center;
+    gap:18px;
+    min-width:0;
+    padding:10px 4px;
+    color:#fff;
+}
+.employee-topbar__avatar{
+    position:relative;
+    width:104px;
+    height:104px;
+    flex:0 0 104px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    font-size:38px;
+    font-weight:900;
+    background:linear-gradient(145deg,#7e73ff,#a996ff);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 16px 34px rgba(28,20,110,.3);
+}
+.employee-topbar__presence-dot{
+    position:absolute;
+    right:4px;
+    bottom:8px;
+    width:18px;
+    height:18px;
+    border:4px solid #fff;
+    border-radius:50%;
+    background:#94a3b8;
+}
+.employee-topbar__presence-dot.online{background:#22c55e}
+.employee-topbar__identity-copy{min-width:0}
+.employee-topbar__eyebrow{
+    display:block;
+    color:rgba(255,255,255,.62);
+    font-size:10px;
+    font-weight:850;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+}
+.employee-topbar h1{
+    margin:7px 0 10px;
+    font-size:31px;
+    line-height:1.05;
+}
+.employee-topbar__meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:7px;
+}
+.employee-topbar__meta span{
+    display:inline-flex;
+    align-items:center;
+    min-height:28px;
+    padding:0 10px;
+    border:1px solid rgba(255,255,255,.17);
+    border-radius:999px;
+    background:rgba(255,255,255,.09);
+    color:#fff;
+    font-size:10px;
+    font-weight:800;
+}
+.employee-topbar__meta span.online::before,
+.employee-topbar__meta span.offline::before{
+    content:"";
+    width:7px;
+    height:7px;
+    margin-right:6px;
+    border-radius:50%;
+    background:#94a3b8;
+}
+.employee-topbar__meta span.online::before{background:#22c55e}
+
+.employee-topbar__metrics{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:1px;
+    overflow:hidden;
+    border-radius:22px;
+    background:rgba(255,255,255,.88);
+    border:1px solid rgba(255,255,255,.62);
+    box-shadow:0 12px 28px rgba(27,34,84,.15);
+    backdrop-filter:blur(18px);
+}
+.employee-topbar__metric{
+    position:relative;
+    min-width:0;
+    padding:16px 15px 18px;
+    background:rgba(255,255,255,.72);
+}
+.employee-topbar__metric:not(:last-child){
+    border-right:1px solid rgba(185,193,216,.58);
+}
+.metric-icon{
+    width:34px;
+    height:34px;
+    display:grid;
+    place-items:center;
+    margin-bottom:13px;
+    border-radius:11px;
+    font-size:15px;
+    font-weight:900;
+}
+.metric-icon--purple{color:#6554f6;background:#eeeaff}
+.metric-icon--blue{color:#3978e8;background:#e9f1ff}
+.metric-icon--green{color:#1e9a5d;background:#e7f7ee}
+.metric-icon--orange{color:#df8a2a;background:#fff0df}
+.metric-icon--cyan{color:#1599a7;background:#e4f8fa}
+.employee-topbar__metric span,
+.employee-topbar__metric small{
+    display:block;
+}
+.employee-topbar__metric span{
+    color:#68738a;
+    font-size:10px;
+}
+.employee-topbar__metric b{
+    display:block;
+    margin:7px 0 5px;
+    color:#141a2c;
+    font-size:19px;
+    white-space:nowrap;
+}
+.employee-topbar__metric small{
+    color:#7d8798;
+    font-size:9px;
+}
+.employee-topbar__metric>i{
+    position:absolute;
+    left:15px;
+    right:15px;
+    bottom:10px;
+    height:4px;
+    overflow:hidden;
+    border-radius:999px;
+    background:#e9edf4;
+}
+.employee-topbar__metric>i::after{
+    content:"";
+    display:block;
+    width:var(--value);
+    height:100%;
+    border-radius:inherit;
+    background:linear-gradient(90deg,#6554f6,#53a0ff);
 }
 
-.profile-hero{
+.employee-dashboard__grid{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 360px;
+    gap:18px;
+    align-items:start;
+}
+.employee-dashboard__main,
+.employee-dashboard__side{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    min-width:0;
+}
+.employee-card{
+    padding:20px;
+    border:1px solid #e6ebf2;
+    border-radius:22px;
+    background:rgba(255,255,255,.95);
+    box-shadow:0 12px 32px rgba(15,23,42,.055);
+}
+.employee-card__head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:17px;
+}
+.employee-card__title{
+    display:flex;
+    align-items:center;
+    gap:11px;
+}
+.employee-card__icon{
+    width:36px;
+    height:36px;
+    flex:0 0 36px;
+    display:grid;
+    place-items:center;
+    border-radius:12px;
+    color:#6554f6;
+    background:#eeeaff;
+    font-size:15px;
+    font-weight:900;
+}
+.employee-card__icon--green{
+    color:#1e9a5d;
+    background:#e7f7ee;
+}
+.employee-card__title span{
+    display:block;
+    margin-bottom:3px;
+    color:#8a94a6;
+    font-size:9px;
+    font-weight:850;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+}
+.employee-card__title h2{
+    margin:0;
+    font-size:18px;
+}
+.employee-task-tabs{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    gap:7px;
+}
+.employee-task-tabs span{
+    display:inline-flex;
+    align-items:center;
+    min-height:27px;
+    padding:0 9px;
+    border-radius:999px;
+    color:#6554f6;
+    background:#f0edff;
+    font-size:9px;
+    font-weight:850;
+}
+.employee-task-tabs span.danger{
+    color:#d44747;
+    background:#fdecec;
+}
+
+.employee-task-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+.employee-task-row{
+    display:grid;
+    grid-template-columns:38px minmax(0,1fr) 100px 90px 126px;
+    align-items:center;
+    gap:12px;
+    padding:12px 13px;
+    border:1px solid #e9edf3;
+    border-radius:15px;
+    background:#fafbfc;
+}
+.employee-task-row.is-overdue{
+    border-color:#f0c3c3;
+    background:#fff7f7;
+}
+.employee-task-row.is-done{
+    opacity:.58;
+}
+.employee-task-row.is-done h3{text-decoration:line-through}
+.employee-task-row__badge{
+    width:38px;
+    height:38px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    color:#fff;
+    font-size:15px;
+    font-weight:900;
+}
+.employee-task-row__badge.priority-low{background:#2eaa7d}
+.employee-task-row__badge.priority-medium{background:#4f7eea}
+.employee-task-row__badge.priority-high{background:#e5922c}
+.employee-task-row__badge.priority-urgent{background:#df4a4a}
+.employee-task-row__content{min-width:0}
+.employee-task-row__content h3{
+    margin:0;
+    font-size:13px;
+    line-height:1.35;
+    overflow-wrap:anywhere;
+}
+.employee-task-row__content p{
+    margin:4px 0 0;
+    color:#7d8798;
+    font-size:10px;
+    line-height:1.4;
+    overflow-wrap:anywhere;
+}
+.employee-task-row__date{
+    color:#6f7a8f;
+    font-size:9px;
+    font-weight:750;
+}
+.employee-task-row__date.danger{color:#d44747}
+.employee-task-row__priority{
+    font-size:9px;
+    font-weight:850;
+}
+.employee-task-row__priority.priority-low{color:#20805e}
+.employee-task-row__priority.priority-medium{color:#3b6fd5}
+.employee-task-row__priority.priority-high{color:#c4761e}
+.employee-task-row__priority.priority-urgent{color:#cf3f3f}
+.employee-task-row__status{
+    min-height:34px;
+    padding:0 28px 0 10px;
+    border:1px solid #e1e6ed;
+    border-radius:10px;
+    background:#fff;
+    color:#172033;
+    font:inherit;
+    font-size:9px;
+    font-weight:850;
+}
+.employee-task-row__status.status-in_progress{
+    color:#3978e8;
+    background:#eaf1ff;
+}
+.employee-task-row__status.status-done{
+    color:#17845d;
+    background:#e8f7ef;
+}
+
+.employee-chart-wrap{height:300px}
+.employee-chart-total{color:#6554f6;font-size:15px}
+.employee-empty-state{
+    min-height:145px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    text-align:center;
+    border-radius:16px;
+    background:#f7f9fc;
+    color:#8a94a6;
+}
+.employee-empty-state>div{
+    width:44px;
+    height:44px;
+    display:grid;
+    place-items:center;
+    border-radius:14px;
+    background:#fff;
+    box-shadow:0 6px 16px rgba(15,23,42,.05);
+}
+.employee-empty-state b{color:#172033;font-size:14px}
+.employee-empty-state span{font-size:10px}
+.employee-empty-state--chart{height:100%}
+
+.employee-sales-table{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+.employee-sale-row{
+    display:grid;
+    grid-template-columns:42px minmax(0,1fr) auto auto auto;
+    align-items:center;
+    gap:12px;
+    padding:12px 13px;
+    border:1px solid #ecf0f4;
+    border-radius:14px;
+    background:#f9fafc;
+}
+.employee-sale-row__icon{
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:12px;
+    background:#fff;
+}
+.employee-sale-row__main b,
+.employee-sale-row__main span{display:block}
+.employee-sale-row__main b{font-size:12px}
+.employee-sale-row__main span{margin-top:3px;color:#8a94a6;font-size:9px}
+.employee-sale-row__method{color:#7d8798;font-size:10px}
+.employee-sale-row>strong{font-size:13px;white-space:nowrap}
+.employee-sale-row__status{
+    min-height:24px;
+    display:inline-flex;
+    align-items:center;
+    padding:0 8px;
+    border-radius:999px;
+    font-size:8px;
+    font-weight:850;
+}
+.employee-sale-row__status.paid{color:#087553;background:#dff7ee}
+.employee-sale-row__status.refund{color:#b63d4e;background:#fde8ec}
+
+.employee-stat-list{
+    display:flex;
+    flex-direction:column;
+}
+.employee-stat-list>div,
+.employee-salary-breakdown>div,
+.employee-profile-details>div{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    padding:12px 0;
+    border-bottom:1px solid #edf1f5;
+}
+.employee-stat-list>div:last-child,
+.employee-salary-breakdown>div:last-child,
+.employee-profile-details>div:last-child{
+    border-bottom:0;
+}
+.employee-stat-list span,
+.employee-salary-breakdown span,
+.employee-profile-details span{
+    color:#7d8798;
+    font-size:10px;
+}
+.employee-stat-list b,
+.employee-salary-breakdown b,
+.employee-profile-details b{
+    max-width:58%;
+    text-align:right;
+    font-size:11px;
+    overflow-wrap:anywhere;
+}
+.employee-salary-total{
+    padding:18px;
+    border-radius:17px;
+    background:linear-gradient(135deg,#f2fff7,#e8faef);
+    border:1px solid #d9f0e2;
+}
+.employee-salary-total span{display:block;color:#748176;font-size:10px}
+.employee-salary-total b{
+    display:block;
+    margin:7px 0 13px;
+    color:#15924f;
+    font-size:25px;
+}
+.employee-salary-total i{
+    display:block;
+    height:7px;
+    overflow:hidden;
+    border-radius:999px;
+    background:#d8ebdf;
+}
+.employee-salary-total i::after{
+    content:"";
+    display:block;
+    width:var(--value);
+    height:100%;
+    border-radius:inherit;
+    background:linear-gradient(90deg,#20a45a,#55c87c);
+}
+.employee-salary-breakdown{margin-top:8px}
+.employee-profile-card{padding:0;overflow:hidden}
+.employee-profile-card summary{
     display:flex;
     align-items:center;
     justify-content:space-between;
-    gap:20px;
-    padding:26px;
-    border-radius:22px;
-    color:#fff;
-    background:linear-gradient(135deg,#2563eb,#4f46e5);
-    box-shadow:0 16px 40px rgba(37,99,235,.22);
-}
-
-.hero-kicker{
-    font-size:13px;
-    font-weight:700;
-    opacity:.8;
-    text-transform:uppercase;
-    letter-spacing:.08em;
-}
-
-.profile-hero h1{
-    margin:7px 0;
-    font-size:28px;
-}
-
-.hero-meta{
-    opacity:.86;
-}
-
-.hero-earning{
-    min-width:220px;
-    padding:16px 18px;
-    border-radius:17px;
-    background:rgba(255,255,255,.14);
-    backdrop-filter:blur(8px);
-}
-
-.hero-earning span{
-    display:block;
-    font-size:12px;
-    opacity:.8;
-}
-
-.hero-earning b{
-    display:block;
-    margin-top:7px;
-    font-size:25px;
-}
-
-.profile-stats{
-    display:grid;
-    grid-template-columns:repeat(4,minmax(0,1fr));
     gap:14px;
+    padding:18px 20px;
+    list-style:none;
+    cursor:pointer;
 }
-
-.profile-stat-card,
-.profile-card{
-    background:#fff;
-    border:1px solid #e8edf3;
-    box-shadow:0 8px 24px rgba(15,23,42,.05);
-}
-
-.profile-stat-card{
-    padding:18px;
-    border-radius:17px;
-}
-
-.profile-stat-card span{
-    display:block;
-    color:#64748b;
-    font-size:12px;
-}
-
-.profile-stat-card b{
-    display:block;
-    margin-top:9px;
-    color:#0f172a;
-    font-size:21px;
-}
-
-.profile-columns{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:18px;
-}
-
-.profile-card{
-    padding:20px;
-    border-radius:19px;
-}
-
-.profile-card-title{
-    margin-bottom:16px;
-    color:#0f172a;
+.employee-profile-card summary::-webkit-details-marker{display:none}
+.employee-profile-card summary>b{
+    color:#778196;
     font-size:18px;
-    font-weight:800;
+    transition:.18s ease;
 }
+.employee-profile-card[open] summary>b{transform:rotate(180deg)}
+.employee-profile-details{padding:0 20px 16px}
 
-.info-grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:12px;
+@media(max-width:1280px){
+    .employee-topbar{grid-template-columns:320px minmax(0,1fr)}
+    .employee-topbar__metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .employee-topbar__metric:nth-child(3){border-right:0}
+    .employee-dashboard__grid{grid-template-columns:minmax(0,1fr) 320px}
 }
-
-.info-item{
-    padding:13px;
-    border-radius:13px;
-    background:#f8fafc;
-}
-
-.info-item-wide{
-    grid-column:1 / -1;
-}
-
-.info-item span,
-.salary-grid span{
-    display:block;
-    color:#64748b;
-    font-size:11px;
-    margin-bottom:6px;
-}
-
-.info-item b{
-    color:#0f172a;
-    font-size:14px;
-    overflow-wrap:anywhere;
-}
-
-.salary-grid{
-    display:grid;
-    grid-template-columns:repeat(3,minmax(0,1fr));
-    gap:12px;
-}
-
-.salary-grid > div{
-    padding:15px;
-    border-radius:14px;
-    background:#f8fafc;
-}
-
-.salary-grid b{
-    color:#0f172a;
-    font-size:18px;
-}
-
-.salary-grid .salary-total{
-    color:#fff;
-    background:linear-gradient(135deg,#16a34a,#059669);
-}
-
-.salary-total span,
-.salary-total b{
-    color:#fff;
-}
-
-.salary-note{
-    margin-top:13px;
-    color:#64748b;
-    font-size:12px;
-    line-height:1.5;
-}
-
-.recent-sales-table{
-    overflow-x:auto;
-}
-
-.recent-sales-table table{
-    width:100%;
-    border-collapse:collapse;
-}
-
-.recent-sales-table th,
-.recent-sales-table td{
-    padding:12px;
-    border-bottom:1px solid #edf1f5;
-    text-align:left;
-    font-size:13px;
-}
-
-.recent-sales-table th{
-    color:#64748b;
-    background:#f8fafc;
-}
-
-.empty-row{
-    padding:25px !important;
-    color:#64748b;
-    text-align:center !important;
-}
-
-.recent-sales-mobile{
-    display:none;
-}
-
-@media (max-width:1000px){
-
-    .profile-stats{
+@media(max-width:980px){
+    .employee-topbar{grid-template-columns:1fr}
+    .employee-dashboard__grid{grid-template-columns:1fr}
+    .employee-dashboard__side{
+        display:grid;
         grid-template-columns:repeat(2,minmax(0,1fr));
     }
-
-    .profile-columns{
-        grid-template-columns:1fr;
+    .employee-profile-card{grid-column:1/-1}
+}
+@media(max-width:760px){
+    .employee-topbar{padding:17px;border-radius:22px}
+    .employee-topbar__identity{align-items:flex-start}
+    .employee-topbar__avatar{
+        width:70px;height:70px;flex-basis:70px;
+        font-size:25px;
     }
+    .employee-topbar h1{font-size:24px}
+    .employee-topbar__metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .employee-topbar__metric:nth-child(3){border-right:1px solid rgba(185,193,216,.58)}
+    .employee-topbar__metric:nth-child(even){border-right:0}
+    .employee-card{padding:15px;border-radius:18px}
+    .employee-card__head{align-items:flex-start}
+    .employee-task-tabs{justify-content:flex-start}
+    .employee-task-row{
+        grid-template-columns:38px minmax(0,1fr);
+    }
+    .employee-task-row__date,
+    .employee-task-row__priority,
+    .employee-task-row__status{
+        grid-column:2;
+    }
+    .employee-task-row__status{
+        width:100%;
+    }
+    .employee-sale-row{
+        grid-template-columns:42px minmax(0,1fr) auto;
+    }
+    .employee-sale-row__method{display:none}
+    .employee-sale-row__status{grid-column:2}
+    .employee-dashboard__side{grid-template-columns:1fr}
+    .employee-profile-card{grid-column:auto}
+    .employee-chart-wrap{height:250px}
+}
+@media(max-width:460px){
+    .employee-topbar__identity{flex-direction:column}
+    .employee-topbar__metrics{grid-template-columns:1fr}
+    .employee-topbar__metric{border-right:0!important;border-bottom:1px solid rgba(185,193,216,.58)}
+    .employee-topbar__metric:last-child{border-bottom:0}
+    .employee-card__head{flex-direction:column}
+    .employee-sale-row{grid-template-columns:42px minmax(0,1fr)}
+    .employee-sale-row>strong{grid-column:2;justify-self:start}
+}
+</style>
+
+
+
+<style>
+/* ==== Увеличение мелких шрифтов без изменения компоновки ==== */
+
+.employee-topbar__eyebrow{font-size:12px!important;}
+.employee-topbar__meta span{font-size:12px!important;}
+
+.employee-topbar__metric span{font-size:12px!important;}
+.employee-topbar__metric small{font-size:11px!important;}
+
+.employee-card__title span{font-size:11px!important;}
+
+.employee-task-tabs span{font-size:11px!important;}
+
+.employee-task-row__content p{font-size:12px!important;line-height:1.5;}
+.employee-task-row__date{font-size:11px!important;}
+.employee-task-row__priority{font-size:11px!important;}
+.employee-task-row__status{font-size:11px!important;}
+
+.employee-sale-row__main span{font-size:11px!important;}
+.employee-sale-row__method{font-size:11px!important;}
+.employee-sale-row__status{font-size:10px!important;}
+
+.employee-stat-list span,
+.employee-salary-breakdown span,
+.employee-profile-details span{
+    font-size:12px!important;
 }
 
-@media (max-width:768px){
-
-    .profile-page{
-        gap:12px;
-    }
-
-    .profile-hero{
-        align-items:stretch;
-        flex-direction:column;
-        padding:18px;
-        border-radius:18px;
-    }
-
-    .profile-hero h1{
-        font-size:22px;
-    }
-
-    .hero-earning{
-        min-width:0;
-    }
-
-    .profile-stats{
-        grid-template-columns:1fr 1fr;
-        gap:10px;
-    }
-
-    .profile-stat-card{
-        padding:14px;
-    }
-
-    .profile-stat-card b{
-        font-size:17px;
-    }
-
-    .profile-card{
-        padding:14px;
-        border-radius:17px;
-    }
-
-    .info-grid,
-    .salary-grid{
-        grid-template-columns:1fr;
-    }
-
-    .recent-sales-table{
-        display:none;
-    }
-
-    .recent-sales-mobile{
-        display:flex;
-        flex-direction:column;
-        gap:10px;
-    }
-
-    .sale-mobile-card{
-        padding:13px;
-        border-radius:14px;
-        background:#f8fafc;
-    }
-
-    .sale-mobile-top,
-    .sale-mobile-row{
-        display:flex;
-        justify-content:space-between;
-        gap:12px;
-    }
-
-    .sale-mobile-top{
-        margin-bottom:10px;
-    }
-
-    .sale-mobile-top strong{
-        color:#16a34a;
-    }
-
-    .sale-mobile-row{
-        margin-top:6px;
-        font-size:12px;
-    }
-
-    .sale-mobile-row span{
-        color:#64748b;
-    }
-
-    .empty-mobile{
-        padding:20px;
-        color:#64748b;
-        text-align:center;
-        background:#f8fafc;
-        border-radius:14px;
-    }
+.employee-stat-list b,
+.employee-salary-breakdown b,
+.employee-profile-details b{
+    font-size:13px!important;
 }
 
+.employee-salary-total span{
+    font-size:12px!important;
+}
+
+@media(max-width:760px){
+    .employee-topbar__meta span{font-size:11px!important;}
+    .employee-topbar__metric span{font-size:11px!important;}
+    .employee-task-row__content p{font-size:11px!important;}
+}
 </style>
 
 {% endblock %}

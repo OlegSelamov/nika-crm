@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.subscription-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px}.module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.module-card{display:block;padding:18px;border-radius:18px;background:rgba(255,255,255,.82);border:1px solid rgba(148,163,184,.18);cursor:pointer;transition:.2s}.module-card:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(15,23,42,.1)}.module-card.required{outline:3px solid rgba(245,158,11,.35)}.module-top{display:flex;justify-content:space-between;gap:12px}.module-name{font-weight:800;font-size:16px}.module-desc{color:#64748b;font-size:13px;margin:8px 0 14px}.module-price{font-weight:800}.summary{position:sticky;top:20px;padding:22px;border-radius:22px;background:linear-gradient(160deg,#0f172a,#312e81);color:#fff;box-shadow:0 22px 45px rgba(15,23,42,.25)}.summary-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.1)}.summary-total{font-size:25px;font-weight:900;padding-top:18px}.period-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.period-switch label{padding:11px;border-radius:12px;background:rgba(255,255,255,.1);text-align:center;cursor:pointer}.save-btn{width:100%;margin-top:16px}.trial-note{padding:14px;border-radius:14px;background:rgba(99,102,241,.1);margin-bottom:18px}@media(max-width:900px){.subscription-layout{grid-template-columns:1fr}.module-grid{grid-template-columns:1fr}.summary{position:static}}
+</style>
+<div class="page-header"><div><h1 class="page-title">Подписка Nika Business</h1><div class="page-note">Подключайте только необходимые вашему бизнесу возможности.</div></div></div>
+{% if required_module %}<div class="trial-note">Для открытия раздела подключите модуль <b>{{ required_module }}</b>.</div>{% endif %}
+<form method="post" action="{{ url_for('subscriptions.subscription_update') }}" class="subscription-layout" id="subscriptionForm">
+  <div class="module-grid">
+    {% for module in modules %}
+    <label class="module-card {% if required_module == module.code %}required{% endif %}">
+      <div class="module-top"><div class="module-name">{{ module.name }}</div><input type="checkbox" name="modules" value="{{ module.code }}" data-price="{{ module.monthly_price }}" {% if module.selected or module.is_core %}checked{% endif %} {% if module.is_core %}disabled{% endif %}></div>
+      {% if module.is_core %}<input type="hidden" name="modules" value="{{ module.code }}">{% endif %}
+      <div class="module-desc">{{ module.description }}</div>
+      <div class="module-price">{{ '{:,.0f}'.format(module.monthly_price|float).replace(',', ' ') }} ₸ / месяц</div>
+    </label>
+    {% endfor %}
+  </div>
+  <aside class="summary">
+    <h2 style="margin-top:0">Ваш тариф</h2>
+    <div class="summary-row"><span>Базовая платформа</span><b>{{ '{:,.0f}'.format(base_price|float).replace(',', ' ') }} ₸</b></div>
+    <div class="summary-row"><span>Сотрудники ({{ employee_count }})</span><b>{{ '{:,.0f}'.format(employee_total|float).replace(',', ' ') }} ₸</b></div>
+    <div class="summary-row"><span>Выбранные модули</span><b id="modulesTotal">0 ₸</b></div>
+    <div class="period-switch">
+      <label><input type="radio" name="billing_period" value="month" checked> Ежемесячно</label>
+      <label><input type="radio" name="billing_period" value="year"> За год</label>
+    </div>
+    <div class="summary-total"><span id="grandTotal">0 ₸</span></div>
+    <div id="annualHint" style="font-size:12px;color:#cbd5e1;margin-top:7px"></div>
+    <button class="btn save-btn" type="submit">Сохранить и перейти к оплате</button>
+  </aside>
+</form>
+<script>
+(function(){const base={{ base_price|float }};const employees={{ employee_total|float }};const checks=[...document.querySelectorAll('input[name="modules"][data-price]')];const periods=[...document.querySelectorAll('input[name="billing_period"]')];const fmt=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(n)+' ₸';function recalc(){const modules=checks.filter(c=>c.checked).reduce((s,c)=>s+Number(c.dataset.price||0),0);const yearly=document.querySelector('input[name="billing_period"]:checked').value==='year';const monthly=base+employees+modules;document.getElementById('modulesTotal').textContent=fmt(modules);document.getElementById('grandTotal').textContent=fmt(yearly?monthly*10:monthly)+(yearly?' / год':' / месяц');document.getElementById('annualHint').textContent=yearly?'2 месяца в подарок. Обычная цена: '+fmt(monthly*12):'';}checks.forEach(c=>c.addEventListener('change',recalc));periods.forEach(c=>c.addEventListener('change',recalc));recalc();})();
+</script>
+{% endblock %}

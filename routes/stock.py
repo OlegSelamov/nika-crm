@@ -55,10 +55,38 @@ def stock_income():
         return redirect("/stock/income")
 
     cur.execute("""
-        SELECT *
+        SELECT
+            items.*,
+
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN stock_movements.movement_type = 'income'
+                            THEN stock_movements.quantity
+
+                        WHEN stock_movements.movement_type = 'refund'
+                            THEN stock_movements.quantity
+
+                        WHEN stock_movements.movement_type = 'sale'
+                            THEN -stock_movements.quantity
+
+                        WHEN stock_movements.movement_type = 'writeoff'
+                            THEN -stock_movements.quantity
+                    END
+                ),
+                0
+            ) AS stock
+
         FROM items
-        WHERE company_id = %s
-        ORDER BY name
+
+        LEFT JOIN stock_movements
+            ON items.id = stock_movements.item_id
+
+        WHERE items.company_id = %s
+
+        GROUP BY items.id
+
+        ORDER BY items.name
     """, (
         session.get("company_id"),
     ))
@@ -228,9 +256,38 @@ def stock_writeoff():
         return redirect("/stock/writeoff")
 
     cur.execute("""
-        SELECT *
+        SELECT
+            items.*,
+
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN stock_movements.movement_type = 'income'
+                            THEN stock_movements.quantity
+
+                        WHEN stock_movements.movement_type = 'refund'
+                            THEN stock_movements.quantity
+
+                        WHEN stock_movements.movement_type = 'sale'
+                            THEN -stock_movements.quantity
+
+                        WHEN stock_movements.movement_type = 'writeoff'
+                            THEN -stock_movements.quantity
+                    END
+                ),
+                0
+            ) AS stock
+
         FROM items
-        WHERE company_id = %s
+
+        LEFT JOIN stock_movements
+            ON items.id = stock_movements.item_id
+
+        WHERE items.company_id = %s
+
+        GROUP BY items.id
+
+        ORDER BY items.name
     """, (
         session.get("company_id"),
     ))

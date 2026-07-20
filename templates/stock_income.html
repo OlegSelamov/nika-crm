@@ -2,216 +2,1450 @@
 
 {% block content %}
 
-<div class="page">
+{% set ns = namespace(count=0, total_sum=0, total_quantity=0) %}
+{% for row in income_rows %}
+    {% set ns.count = ns.count + 1 %}
+    {% set ns.total_sum = ns.total_sum + (row.total or 0) %}
+    {% set ns.total_quantity = ns.total_quantity + (row.quantity or 0) %}
+{% endfor %}
 
-    <h2>Приход товара</h2>
+<div class="income-page">
 
-    <form method="POST" class="income-form">
+    <header class="income-header">
+        <div>
+            <h1>Приход товара</h1>
+            <p>Быстро добавляйте поступления и контролируйте последние операции</p>
+        </div>
 
-        <div class="product-picker">
+        <div class="income-header-actions">
+            <a href="/stock" class="income-btn income-btn--light">
+                Остатки
+            </a>
 
-            <div class="product-search-row">
+            <a href="/stock/movements" class="income-btn income-btn--light">
+                Движение товара
+            </a>
+        </div>
+    </header>
 
-                <div class="product-search-box">
+    <section class="income-stats">
+        <article class="income-stat income-stat--purple">
+            <div class="income-stat-icon">↓</div>
+            <div>
+                <span>Последних приходов</span>
+                <strong>{{ ns.count }}</strong>
+                <small>операций в журнале</small>
+            </div>
+        </article>
 
-                    <input
-                        type="text"
-                        id="incomeProductSearch"
-                        class="product-search-input"
-                        placeholder="Выберите или найдите товар"
-                        autocomplete="off"
-                    >
+        <article class="income-stat income-stat--green">
+            <div class="income-stat-icon">▦</div>
+            <div>
+                <span>Принято товаров</span>
+                <strong>{{ "{:,.3f}".format(ns.total_quantity).rstrip("0").rstrip(".").replace(",", " ") }}</strong>
+                <small>общее количество</small>
+            </div>
+        </article>
 
-                    <input
-                        type="hidden"
-                        id="incomeItemId"
-                        name="item_id"
-                        required
-                    >
+        <article class="income-stat income-stat--blue">
+            <div class="income-stat-icon">₸</div>
+            <div>
+                <span>Сумма приходов</span>
+                <strong>{{ "{:,.0f}".format(ns.total_sum).replace(",", " ") }} ₸</strong>
+                <small>по текущему журналу</small>
+            </div>
+        </article>
+    </section>
 
-                    <div
-                        id="incomeProductList"
-                        class="product-dropdown"
-                    >
+    <section class="income-workspace">
 
-                        {% for item in items %}
+        <form method="POST" class="income-form" id="incomeForm">
 
-                            <button
-                                type="button"
-                                class="product-option"
-                                data-id="{{ item.id }}"
-                                data-name="{{ item.name }}"
-                                data-search="{{ (item.name or '')|lower }} {{ item.barcode or '' }} {{ item.gtin or '' }} {{ item.ntin or '' }}"
-                                data-name-search="{{ (item.name or '')|lower }}"
-                                data-barcode="{{ item.barcode or '' }}"
-                                data-gtin="{{ item.gtin or '' }}"
-                                data-ntin="{{ item.ntin or '' }}"
-                            >
-                                <span class="product-option-name">
-                                    {{ item.name }}
-                                </span>
-
-                                {% if item.barcode or item.gtin or item.ntin %}
-                                    <span class="product-option-code">
-                                        {{ item.barcode or item.gtin or item.ntin }}
-                                    </span>
-                                {% endif %}
-                            </button>
-
-                        {% endfor %}
-
-                        <div
-                            id="incomeNoProducts"
-                            class="product-empty"
-                        >
-                            Товар не найден
-                        </div>
-
-                    </div>
-
+            <div class="income-form-head">
+                <div>
+                    <h2>Новое поступление</h2>
+                    <p>Выберите товар, укажите количество и закупочную цену</p>
                 </div>
 
-                <a
-                    href="/scanner"
-                    class="income-scan-link"
-                    aria-label="Открыть сканер"
-                >
-                    📷
-                </a>
+                <button type="button" class="income-reset" id="incomeReset">
+                    Очистить
+                </button>
+            </div>
+
+            <div class="income-form-grid">
+
+                <div class="income-field income-field--product">
+                    <label for="incomeProductSearch">Товар</label>
+
+                    <div class="product-picker">
+                        <div class="product-search-row">
+                            <div class="product-search-box">
+                                <span class="product-search-icon">⌕</span>
+
+                                <input
+                                    type="text"
+                                    id="incomeProductSearch"
+                                    class="product-search-input"
+                                    placeholder="Название, штрихкод, GTIN или NTIN"
+                                    autocomplete="off"
+                                >
+
+                                <input
+                                    type="hidden"
+                                    id="incomeItemId"
+                                    name="item_id"
+                                    required
+                                >
+
+                                <div id="incomeProductList" class="product-dropdown">
+                                    {% for item in items %}
+                                    <button
+                                        type="button"
+                                        class="product-option"
+                                        data-id="{{ item.id }}"
+                                        data-name="{{ item.name }}"
+                                        data-search="{{ (item.name or '')|lower }} {{ item.barcode or '' }} {{ item.gtin or '' }} {{ item.ntin or '' }}"
+                                        data-name-search="{{ (item.name or '')|lower }}"
+                                        data-barcode="{{ item.barcode or '' }}"
+                                        data-gtin="{{ item.gtin or '' }}"
+                                        data-ntin="{{ item.ntin or '' }}"
+                                        data-unit="{{ item.unit or '' }}"
+                                        data-stock="{{ item.stock or 0 }}"
+                                        data-price="{{ item.purchase_price or 0 }}"
+                                    >
+                                        <span class="product-option-avatar">
+                                            {{ (item.name or "Т")[:1]|upper }}
+                                        </span>
+
+                                        <span class="product-option-main">
+                                            <strong>{{ item.name }}</strong>
+
+                                            <small>
+                                                {% if item.barcode or item.gtin or item.ntin %}
+                                                    Код: {{ item.barcode or item.gtin or item.ntin }}
+                                                {% else %}
+                                                    Без штрихкода
+                                                {% endif %}
+                                            </small>
+                                        </span>
+
+                                        <span class="product-option-stock">
+                                            {{ item.stock or 0 }} {{ item.unit or "" }}
+                                        </span>
+                                    </button>
+                                    {% endfor %}
+
+                                    <div id="incomeNoProducts" class="product-empty">
+                                        <strong>Товар не найден</strong>
+                                        <span>Проверьте название или код</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <a href="/scanner" class="income-scan-link" aria-label="Открыть сканер">
+                                📷
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="selected-product" id="selectedProduct" hidden>
+                    <div class="selected-product-avatar" id="selectedProductAvatar">Т</div>
+
+                    <div class="selected-product-main">
+                        <strong id="selectedProductName">Товар</strong>
+                        <span id="selectedProductMeta">Текущий остаток: 0</span>
+                    </div>
+
+                    <button type="button" id="clearSelectedProduct" aria-label="Убрать товар">×</button>
+                </div>
+
+                <div class="income-field">
+                    <label for="incomeQuantity">Количество</label>
+
+                    <div class="number-control">
+                        <button type="button" class="number-step" data-target="incomeQuantity" data-step="-1">−</button>
+
+                        <input
+                            type="number"
+                            id="incomeQuantity"
+                            step="0.001"
+                            min="0.001"
+                            name="quantity"
+                            placeholder="0"
+                            inputmode="decimal"
+                            required
+                        >
+
+                        <button type="button" class="number-step" data-target="incomeQuantity" data-step="1">＋</button>
+                    </div>
+
+                    <div class="quick-values">
+                        <button type="button" data-value="1">1</button>
+                        <button type="button" data-value="5">5</button>
+                        <button type="button" data-value="10">10</button>
+                        <button type="button" data-value="50">50</button>
+                    </div>
+                </div>
+
+                <div class="income-field">
+                    <label for="incomePrice">Закупочная цена за единицу</label>
+
+                    <div class="money-input">
+                        <input
+                            type="number"
+                            id="incomePrice"
+                            step="0.01"
+                            min="0"
+                            name="price"
+                            placeholder="0"
+                            inputmode="decimal"
+                            required
+                        >
+                        <span>₸</span>
+                    </div>
+
+                    <small id="previousPriceHint">После выбора товара подставится последняя закупочная цена</small>
+                </div>
+
+                <div class="income-field income-field--comment">
+                    <label for="incomeComment">Комментарий</label>
+
+                    <textarea
+                        id="incomeComment"
+                        name="comment"
+                        rows="3"
+                        placeholder="Например: поставщик, номер накладной или примечание"
+                    ></textarea>
+                </div>
 
             </div>
 
+            <div class="income-summary">
+                <div>
+                    <span>Количество</span>
+                    <strong id="summaryQuantity">0</strong>
+                </div>
+
+                <div>
+                    <span>Цена за единицу</span>
+                    <strong id="summaryPrice">0 ₸</strong>
+                </div>
+
+                <div class="income-summary-total">
+                    <span>Итого приход</span>
+                    <strong id="summaryTotal">0 ₸</strong>
+                </div>
+            </div>
+
+            <button class="income-submit" type="submit">
+                <span>✓</span>
+                Сохранить приход
+            </button>
+
+        </form>
+
+        <aside class="income-help">
+            <div class="income-help-icon">i</div>
+            <h3>Как оформить приход</h3>
+
+            <ol>
+                <li>Найдите товар по названию или отсканируйте код.</li>
+                <li>Укажите фактически принятое количество.</li>
+                <li>Введите закупочную цену за одну единицу.</li>
+                <li>Проверьте итог и сохраните операцию.</li>
+            </ol>
+
+            <div class="income-help-note">
+                После сохранения остаток товара увеличится, а операция появится в движении товара.
+            </div>
+        </aside>
+
+    </section>
+
+    <section class="income-history">
+
+        <div class="income-history-head">
+            <div>
+                <h2>Последние приходы</h2>
+                <p>Журнал недавно оформленных поступлений</p>
+            </div>
+
+            <div class="income-history-search">
+                <span>⌕</span>
+                <input
+                    type="search"
+                    id="incomeHistorySearch"
+                    placeholder="Найти в истории"
+                    autocomplete="off"
+                >
+            </div>
         </div>
 
-        <input
-            type="number"
-            step="0.001"
-            name="quantity"
-            placeholder="Количество"
-            required
-        >
+        {% if income_rows %}
 
-        <input
-            type="number"
-            step="0.01"
-            name="price"
-            placeholder="Закупочная цена"
-            required
-        >
+        <div class="income-history-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Количество</th>
+                        <th>Цена</th>
+                        <th>Сумма</th>
+                        <th>Комментарий</th>
+                        <th>Дата</th>
+                    </tr>
+                </thead>
 
-        <input
-            type="text"
-            name="comment"
-            placeholder="Комментарий"
-        >
+                <tbody id="incomeHistoryBody">
+                    {% for row in income_rows %}
+                    <tr class="income-history-record"
+                        data-search="{{ (row.item_name or '')|lower }} {{ (row.comment or '')|lower }}">
+                        <td>
+                            <div class="history-product">
+                                <span>{{ (row.item_name or "Т")[:1]|upper }}</span>
+                                <strong>{{ row.item_name }}</strong>
+                            </div>
+                        </td>
 
-        <button class="btn">
-            Сохранить
-        </button>
+                        <td>
+                            <strong>{{ row.quantity }}</strong>
+                        </td>
 
-    </form>
-	
-	<div class="income-history">
+                        <td>
+                            {{ "{:,.0f}".format(row.price or 0).replace(",", " ") }} ₸
+                        </td>
 
-		<h3>Последние приходы</h3>
+                        <td>
+                            <strong class="history-total">
+                                {{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸
+                            </strong>
+                        </td>
 
-		<div class="income-history-table">
+                        <td>
+                            <span class="history-comment">{{ row.comment or "—" }}</span>
+                        </td>
 
-			<table class="client-table">
+                        <td>
+                            <div class="history-date">
+                                <strong>{{ row.created_at.strftime('%d.%m.%Y') if row.created_at else "—" }}</strong>
+                                <small>{{ row.created_at.strftime('%H:%M') if row.created_at else "" }}</small>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-				<thead>
-					<tr>
-						<th>Товар</th>
-						<th>Количество</th>
-						<th>Цена</th>
-						<th>Сумма</th>
-						<th>Комментарий</th>
-						<th>Дата</th>
-					</tr>
-				</thead>
+        <div class="income-mobile-history" id="incomeMobileHistory">
+            {% for row in income_rows %}
+            <article class="income-history-card income-history-record"
+                     data-search="{{ (row.item_name or '')|lower }} {{ (row.comment or '')|lower }}">
 
-				<tbody>
+                <div class="income-history-card-top">
+                    <div class="history-product">
+                        <span>{{ (row.item_name or "Т")[:1]|upper }}</span>
+                        <div>
+                            <strong>{{ row.item_name }}</strong>
+                            <small>{{ row.created_at.strftime('%d.%m.%Y в %H:%M') if row.created_at else "Дата не указана" }}</small>
+                        </div>
+                    </div>
 
-					{% for row in income_rows %}
+                    <strong class="history-total">
+                        {{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸
+                    </strong>
+                </div>
 
-						<tr>
+                <div class="income-history-card-grid">
+                    <div>
+                        <span>Количество</span>
+                        <strong>{{ row.quantity }}</strong>
+                    </div>
 
-							<td>
-								{{ row.item_name }}
-							</td>
+                    <div>
+                        <span>Цена</span>
+                        <strong>{{ "{:,.0f}".format(row.price or 0).replace(",", " ") }} ₸</strong>
+                    </div>
+                </div>
 
-							<td>
-								{{ row.quantity }}
-							</td>
+                {% if row.comment %}
+                <div class="income-history-card-comment">
+                    {{ row.comment }}
+                </div>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
 
-							<td>
-								{{ "{:,.0f}".format(row.price or 0).replace(",", " ") }} ₸
-							</td>
+        <div class="income-history-empty" id="incomeHistoryEmpty" hidden>
+            <div>⌕</div>
+            <strong>Ничего не найдено</strong>
+            <span>Измените поисковый запрос</span>
+        </div>
 
-							<td>
-								{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸
-							</td>
+        {% else %}
 
-							<td>
-								{{ row.comment or '—' }}
-							</td>
+        <div class="income-history-empty">
+            <div>↓</div>
+            <strong>Приходов пока нет</strong>
+            <span>Первая сохранённая операция появится здесь</span>
+        </div>
 
-							<td>
-								{{ row.created_at.strftime('%d.%m.%Y %H:%M') if row.created_at else '—' }}
-							</td>
+        {% endif %}
 
-						</tr>
-
-					{% else %}
-
-						<tr>
-							<td colspan="6" class="income-empty">
-								Приходов пока нет
-							</td>
-						</tr>
-
-					{% endfor %}
-
-				</tbody>
-
-			</table>
-
-		</div>
-
-	</div>
+    </section>
 
 </div>
 
+<style>
+.income-page{
+    --in-card:#fff;
+    --in-soft:#f8f9fd;
+    --in-border:#e5e8f0;
+    --in-text:#202536;
+    --in-muted:#747c8f;
+    --in-purple:#7357ff;
+    --in-purple-soft:#efecff;
+    --in-green:#169873;
+    --in-green-soft:#e7f7f1;
+    --in-blue:#3976d8;
+    --in-blue-soft:#e9f1ff;
+    --in-shadow:0 12px 34px rgba(42,46,74,.08);
+    width:100%;
+    min-width:0;
+    color:var(--in-text);
+}
+
+.income-header{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:16px;
+}
+
+.income-header h1{
+    margin:0;
+    color:var(--in-text)!important;
+    font-size:30px!important;
+    line-height:1.1;
+    text-shadow:none!important;
+}
+
+.income-header p{
+    margin:6px 0 0;
+    color:var(--in-muted);
+    font-size:13px;
+}
+
+.income-header-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.income-btn{
+    min-height:42px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    padding:0 15px;
+    border:1px solid transparent;
+    border-radius:11px;
+    font-size:11px;
+    font-weight:800;
+    text-decoration:none;
+    white-space:nowrap;
+}
+
+.income-btn--light{
+    color:#5f6678!important;
+    border-color:var(--in-border);
+    background:#fff;
+}
+
+.income-stats{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:11px;
+    margin-bottom:12px;
+}
+
+.income-stat{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:16px;
+    border:1px solid var(--in-border);
+    border-radius:15px;
+    background:var(--in-card);
+    box-shadow:var(--in-shadow);
+}
+
+.income-stat-icon{
+    flex:0 0 42px;
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:12px;
+    font-size:17px;
+    font-weight:900;
+}
+
+.income-stat>div:last-child{
+    min-width:0;
+    display:grid;
+}
+
+.income-stat span{
+    color:var(--in-muted);
+    font-size:9px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+}
+
+.income-stat strong{
+    margin-top:3px;
+    overflow:hidden;
+    font-size:21px;
+    line-height:1.05;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.income-stat small{
+    margin-top:5px;
+    color:#939aac;
+    font-size:9px;
+}
+
+.income-stat--purple .income-stat-icon{color:var(--in-purple);background:var(--in-purple-soft)}
+.income-stat--green .income-stat-icon{color:var(--in-green);background:var(--in-green-soft)}
+.income-stat--blue .income-stat-icon{color:var(--in-blue);background:var(--in-blue-soft)}
+
+.income-workspace{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 280px;
+    gap:12px;
+    margin-bottom:12px;
+}
+
+.income-form,
+.income-help,
+.income-history{
+    border:1px solid var(--in-border);
+    border-radius:16px;
+    background:var(--in-card);
+    box-shadow:var(--in-shadow);
+}
+
+.income-form{
+    min-width:0;
+    padding:18px;
+}
+
+.income-form-head,
+.income-history-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    margin-bottom:16px;
+}
+
+.income-form-head h2,
+.income-history-head h2{
+    margin:0;
+    font-size:17px;
+}
+
+.income-form-head p,
+.income-history-head p{
+    margin:4px 0 0;
+    color:var(--in-muted);
+    font-size:10px;
+}
+
+.income-reset{
+    padding:0;
+    border:0;
+    color:var(--in-purple);
+    background:transparent;
+    font:inherit;
+    font-size:10px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.income-form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:13px;
+}
+
+.income-field{
+    min-width:0;
+}
+
+.income-field--product,
+.income-field--comment,
+.selected-product{
+    grid-column:1/-1;
+}
+
+.income-field>label{
+    display:block;
+    margin-bottom:6px;
+    color:#555e71;
+    font-size:10px;
+    font-weight:800;
+}
+
+.income-field>small{
+    display:block;
+    margin-top:6px;
+    color:#9299aa;
+    font-size:8px;
+}
+
+.product-picker,
+.product-search-box{
+    position:relative;
+    min-width:0;
+}
+
+.product-search-row{
+    display:flex;
+    gap:8px;
+}
+
+.product-search-box{
+    flex:1;
+}
+
+.product-search-icon{
+    position:absolute;
+    top:50%;
+    left:13px;
+    z-index:2;
+    transform:translateY(-50%);
+    color:#9aa2b3;
+    font-size:16px;
+    pointer-events:none;
+}
+
+.product-search-input{
+    width:100%;
+    height:48px;
+    padding:0 14px 0 38px;
+    border:1px solid var(--in-border);
+    border-radius:11px;
+    background:#fff;
+    font-size:12px;
+    outline:none;
+}
+
+.product-search-input:focus{
+    border-color:#b9afff;
+    box-shadow:0 0 0 3px rgba(115,87,255,.08);
+}
+
+.product-dropdown{
+    display:none;
+    position:absolute;
+    top:calc(100% + 7px);
+    left:0;
+    right:0;
+    z-index:1000;
+    max-height:330px;
+    overflow-y:auto;
+    padding:6px;
+    border:1px solid var(--in-border);
+    border-radius:13px;
+    background:#fff;
+    box-shadow:0 18px 42px rgba(31,36,61,.16);
+}
+
+.product-dropdown.open{
+    display:block;
+}
+
+.product-option{
+    width:100%;
+    display:grid;
+    grid-template-columns:36px minmax(0,1fr) auto;
+    align-items:center;
+    gap:9px;
+    padding:9px;
+    border:0;
+    border-radius:10px;
+    background:transparent;
+    text-align:left;
+    cursor:pointer;
+}
+
+.product-option:hover,
+.product-option.is-highlighted{
+    background:var(--in-purple-soft);
+}
+
+.product-option-avatar{
+    width:36px;
+    height:36px;
+    display:grid;
+    place-items:center;
+    border-radius:10px;
+    color:var(--in-purple);
+    background:#f2efff;
+    font-size:13px;
+    font-weight:900;
+}
+
+.product-option-main{
+    min-width:0;
+    display:grid;
+    gap:3px;
+}
+
+.product-option-main strong,
+.product-option-main small{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.product-option-main strong{
+    color:#252b3b;
+    font-size:11px;
+}
+
+.product-option-main small{
+    color:#9098a9;
+    font-size:8px;
+}
+
+.product-option-stock{
+    color:#737b8e;
+    font-size:9px;
+    font-weight:800;
+    white-space:nowrap;
+}
+
+.product-empty{
+    display:none;
+    padding:20px 12px;
+    text-align:center;
+}
+
+.product-empty strong,
+.product-empty span{
+    display:block;
+}
+
+.product-empty strong{
+    font-size:11px;
+}
+
+.product-empty span{
+    margin-top:4px;
+    color:var(--in-muted);
+    font-size:9px;
+}
+
+.income-scan-link{
+    flex:0 0 48px;
+    width:48px;
+    height:48px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    color:#fff!important;
+    background:linear-gradient(135deg,#7357ff,#9658e8);
+    text-decoration:none;
+    box-shadow:0 8px 18px rgba(115,87,255,.2);
+}
+
+.selected-product{
+    display:grid;
+    grid-template-columns:42px minmax(0,1fr) 32px;
+    align-items:center;
+    gap:10px;
+    padding:10px;
+    border:1px solid #d8d1ff;
+    border-radius:12px;
+    background:var(--in-purple-soft);
+}
+
+.selected-product[hidden]{
+    display:none!important;
+}
+
+.selected-product-avatar{
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    color:#fff;
+    background:linear-gradient(135deg,#7357ff,#9658e8);
+    font-weight:900;
+}
+
+.selected-product-main{
+    min-width:0;
+    display:grid;
+    gap:3px;
+}
+
+.selected-product-main strong,
+.selected-product-main span{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.selected-product-main strong{
+    font-size:12px;
+}
+
+.selected-product-main span{
+    color:#746a9b;
+    font-size:9px;
+}
+
+.selected-product button{
+    width:30px;
+    height:30px;
+    border:0;
+    border-radius:9px;
+    color:#7669a8;
+    background:rgba(255,255,255,.65);
+    font-size:16px;
+    cursor:pointer;
+}
+
+.number-control{
+    height:48px;
+    display:grid;
+    grid-template-columns:42px 1fr 42px;
+    border:1px solid var(--in-border);
+    border-radius:11px;
+    overflow:hidden;
+}
+
+.number-control input{
+    min-width:0;
+    height:100%;
+    padding:0 8px;
+    border:0;
+    border-left:1px solid var(--in-border);
+    border-right:1px solid var(--in-border);
+    border-radius:0;
+    background:#fff;
+    text-align:center;
+    box-shadow:none;
+    font-size:13px;
+    font-weight:800;
+}
+
+.number-step{
+    border:0;
+    color:#596174;
+    background:#f7f8fb;
+    font-size:16px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.quick-values{
+    display:flex;
+    gap:5px;
+    margin-top:6px;
+}
+
+.quick-values button{
+    min-width:38px;
+    height:25px;
+    padding:0 8px;
+    border:1px solid var(--in-border);
+    border-radius:7px;
+    color:#727a8d;
+    background:#fff;
+    font-size:9px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.money-input{
+    position:relative;
+}
+
+.money-input input{
+    width:100%;
+    height:48px;
+    padding:0 38px 0 13px;
+    border:1px solid var(--in-border);
+    border-radius:11px;
+    background:#fff;
+    font-size:13px;
+    font-weight:800;
+}
+
+.money-input span{
+    position:absolute;
+    top:50%;
+    right:13px;
+    transform:translateY(-50%);
+    color:#81899b;
+    font-size:11px;
+    font-weight:800;
+}
+
+.income-field textarea{
+    width:100%;
+    min-height:82px;
+    resize:vertical;
+    padding:11px 13px;
+    border:1px solid var(--in-border);
+    border-radius:11px;
+    background:#fff;
+    font-size:11px;
+}
+
+.income-summary{
+    display:grid;
+    grid-template-columns:1fr 1fr 1.2fr;
+    gap:1px;
+    margin-top:15px;
+    overflow:hidden;
+    border:1px solid var(--in-border);
+    border-radius:12px;
+    background:var(--in-border);
+}
+
+.income-summary>div{
+    display:grid;
+    gap:4px;
+    padding:12px;
+    background:#fafafe;
+}
+
+.income-summary span{
+    color:var(--in-muted);
+    font-size:8px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.income-summary strong{
+    font-size:13px;
+}
+
+.income-summary-total{
+    background:var(--in-purple-soft)!important;
+}
+
+.income-summary-total strong{
+    color:var(--in-purple);
+    font-size:16px;
+}
+
+.income-submit{
+    width:100%;
+    min-height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    margin-top:12px;
+    border:0;
+    border-radius:11px;
+    color:#fff;
+    background:linear-gradient(135deg,#7357ff,#9658e8);
+    box-shadow:0 9px 20px rgba(115,87,255,.22);
+    font:inherit;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.income-help{
+    align-self:start;
+    padding:18px;
+}
+
+.income-help-icon{
+    width:40px;
+    height:40px;
+    display:grid;
+    place-items:center;
+    border-radius:12px;
+    color:var(--in-blue);
+    background:var(--in-blue-soft);
+    font-size:16px;
+    font-weight:900;
+}
+
+.income-help h3{
+    margin:13px 0 10px;
+    font-size:14px;
+}
+
+.income-help ol{
+    margin:0;
+    padding-left:18px;
+    color:#616a7c;
+    font-size:10px;
+    line-height:1.65;
+}
+
+.income-help-note{
+    margin-top:14px;
+    padding:11px;
+    border-radius:10px;
+    color:#6d6590;
+    background:var(--in-purple-soft);
+    font-size:9px;
+    line-height:1.5;
+}
+
+.income-history{
+    padding:17px;
+}
+
+.income-history-search{
+    width:min(290px,100%);
+    height:42px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:0 11px;
+    border:1px solid var(--in-border);
+    border-radius:10px;
+    background:#fff;
+}
+
+.income-history-search input{
+    width:100%;
+    min-width:0;
+    height:auto;
+    padding:0;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    box-shadow:none;
+    font-size:10px;
+}
+
+.income-history-table{
+    width:100%;
+    overflow-x:auto;
+}
+
+.income-history-table table{
+    width:100%;
+    min-width:900px;
+    border-collapse:collapse;
+    table-layout:fixed;
+    background:#fff;
+    box-shadow:none;
+}
+
+.income-history-table th,
+.income-history-table td{
+    padding:12px 10px;
+    border-bottom:1px solid var(--in-border);
+    text-align:left;
+    vertical-align:middle;
+}
+
+.income-history-table th{
+    color:#8790a3;
+    background:#fafafe;
+    font-size:9px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.income-history-table td{
+    color:#303648;
+    font-size:11px;
+}
+
+.income-history-table th:nth-child(1),
+.income-history-table td:nth-child(1){width:25%}
+.income-history-table th:nth-child(2),
+.income-history-table td:nth-child(2){width:12%}
+.income-history-table th:nth-child(3),
+.income-history-table td:nth-child(3){width:13%}
+.income-history-table th:nth-child(4),
+.income-history-table td:nth-child(4){width:14%}
+.income-history-table th:nth-child(5),
+.income-history-table td:nth-child(5){width:22%}
+.income-history-table th:nth-child(6),
+.income-history-table td:nth-child(6){width:14%}
+
+.history-product{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.history-product>span{
+    flex:0 0 34px;
+    width:34px;
+    height:34px;
+    display:grid;
+    place-items:center;
+    border-radius:9px;
+    color:var(--in-purple);
+    background:var(--in-purple-soft);
+    font-size:12px;
+    font-weight:900;
+}
+
+.history-product>div{
+    min-width:0;
+    display:grid;
+    gap:3px;
+}
+
+.history-product strong,
+.history-product small{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.history-product strong{
+    font-size:11px;
+}
+
+.history-product small{
+    color:var(--in-muted);
+    font-size:8px;
+}
+
+.history-total{
+    color:var(--in-green);
+}
+
+.history-comment{
+    display:block;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.history-date{
+    display:grid;
+    gap:2px;
+}
+
+.history-date small{
+    color:var(--in-muted);
+    font-size:8px;
+}
+
+.income-mobile-history{
+    display:none;
+}
+
+.income-history-empty{
+    min-height:190px;
+    display:grid;
+    place-content:center;
+    justify-items:center;
+    text-align:center;
+}
+
+.income-history-empty[hidden]{
+    display:none!important;
+}
+
+.income-history-empty>div{
+    width:50px;
+    height:50px;
+    display:grid;
+    place-items:center;
+    margin-bottom:9px;
+    border-radius:14px;
+    color:var(--in-purple);
+    background:var(--in-purple-soft);
+    font-size:19px;
+}
+
+.income-history-empty strong{
+    font-size:12px;
+}
+
+.income-history-empty span{
+    margin-top:4px;
+    color:var(--in-muted);
+    font-size:9px;
+}
+
+@media(max-width:1050px){
+    .income-workspace{
+        grid-template-columns:1fr;
+    }
+
+    .income-help{
+        display:none;
+    }
+}
+
+@media(max-width:768px){
+    .income-header{
+        flex-direction:column;
+    }
+
+    .income-header-actions{
+        width:100%;
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .income-stats{
+        grid-template-columns:1fr;
+    }
+
+    .income-form-grid{
+        grid-template-columns:1fr;
+    }
+
+    .income-field,
+    .income-field--product,
+    .income-field--comment,
+    .selected-product{
+        grid-column:auto;
+    }
+
+    .income-summary{
+        grid-template-columns:1fr;
+    }
+
+    .income-history-head{
+        flex-direction:column;
+    }
+
+    .income-history-search{
+        width:100%;
+    }
+
+    .income-history-table{
+        display:none;
+    }
+
+    .income-mobile-history{
+        display:grid;
+        gap:9px;
+    }
+
+    .income-history-card{
+        padding:13px;
+        border:1px solid var(--in-border);
+        border-radius:12px;
+        background:var(--in-soft);
+    }
+
+    .income-history-card-top{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:8px;
+    }
+
+    .income-history-card-grid{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:7px;
+        margin-top:10px;
+    }
+
+    .income-history-card-grid>div{
+        display:grid;
+        gap:3px;
+        padding:9px;
+        border:1px solid var(--in-border);
+        border-radius:9px;
+        background:#fff;
+    }
+
+    .income-history-card-grid span{
+        color:var(--in-muted);
+        font-size:8px;
+        font-weight:800;
+        text-transform:uppercase;
+    }
+
+    .income-history-card-grid strong{
+        font-size:11px;
+    }
+
+    .income-history-card-comment{
+        margin-top:8px;
+        padding:9px;
+        border-radius:9px;
+        color:#646d7f;
+        background:#fff;
+        font-size:9px;
+    }
+}
+
+@media(max-width:560px){
+    .income-header h1{
+        font-size:26px!important;
+    }
+
+    .income-header-actions{
+        grid-template-columns:1fr;
+    }
+
+    .income-form,
+    .income-history{
+        padding:14px;
+    }
+
+    .income-stat{
+        padding:13px;
+    }
+
+    .product-option{
+        grid-template-columns:34px minmax(0,1fr);
+    }
+
+    .product-option-stock{
+        display:none;
+    }
+
+    .income-history-card-top{
+        flex-direction:column;
+    }
+}
+</style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-
     const searchInput = document.getElementById("incomeProductSearch");
     const itemIdInput = document.getElementById("incomeItemId");
     const dropdown = document.getElementById("incomeProductList");
-    const options = Array.from(
-        document.querySelectorAll(".product-option")
-    );
+    const options = Array.from(document.querySelectorAll(".product-option"));
     const noProducts = document.getElementById("incomeNoProducts");
-    const form = document.querySelector(".income-form");
+    const form = document.getElementById("incomeForm");
 
-    if (!searchInput || !itemIdInput || !dropdown) {
-        return;
+    const selectedBox = document.getElementById("selectedProduct");
+    const selectedAvatar = document.getElementById("selectedProductAvatar");
+    const selectedName = document.getElementById("selectedProductName");
+    const selectedMeta = document.getElementById("selectedProductMeta");
+    const clearSelected = document.getElementById("clearSelectedProduct");
+
+    const quantityInput = document.getElementById("incomeQuantity");
+    const priceInput = document.getElementById("incomePrice");
+    const previousPriceHint = document.getElementById("previousPriceHint");
+
+    const summaryQuantity = document.getElementById("summaryQuantity");
+    const summaryPrice = document.getElementById("summaryPrice");
+    const summaryTotal = document.getElementById("summaryTotal");
+
+    let highlightedIndex = -1;
+
+    function formatNumber(value, maximumFractionDigits = 3) {
+        return new Intl.NumberFormat("ru-RU", {
+            maximumFractionDigits
+        }).format(Number(value || 0));
+    }
+
+    function formatMoney(value) {
+        return new Intl.NumberFormat("ru-RU", {
+            maximumFractionDigits: 2
+        }).format(Number(value || 0)) + " ₸";
+    }
+
+    function updateSummary() {
+        const quantity = Number(quantityInput?.value || 0);
+        const price = Number(priceInput?.value || 0);
+
+        if (summaryQuantity) summaryQuantity.textContent = formatNumber(quantity);
+        if (summaryPrice) summaryPrice.textContent = formatMoney(price);
+        if (summaryTotal) summaryTotal.textContent = formatMoney(quantity * price);
     }
 
     function openDropdown() {
-        dropdown.classList.add("open");
+        dropdown?.classList.add("open");
     }
 
     function closeDropdown() {
-        dropdown.classList.remove("open");
+        dropdown?.classList.remove("open");
+        highlightedIndex = -1;
+        options.forEach(option => option.classList.remove("is-highlighted"));
+    }
+
+    function clearProduct() {
+        if (itemIdInput) itemIdInput.value = "";
+        if (searchInput) {
+            searchInput.value = "";
+            searchInput.setCustomValidity("");
+        }
+
+        if (selectedBox) selectedBox.hidden = true;
+        if (previousPriceHint) {
+            previousPriceHint.textContent = "После выбора товара подставится последняя закупочная цена";
+        }
     }
 
     function selectProduct(option) {
+        if (!option) return;
+
+        const name = option.dataset.name || "";
+        const unit = option.dataset.unit || "";
+        const stock = option.dataset.stock || "0";
+        const previousPrice = Number(option.dataset.price || 0);
+
         itemIdInput.value = option.dataset.id || "";
-        searchInput.value = option.dataset.name || "";
+        searchInput.value = name;
         searchInput.setCustomValidity("");
+
+        if (selectedAvatar) selectedAvatar.textContent = (name || "Т").slice(0, 1).toUpperCase();
+        if (selectedName) selectedName.textContent = name;
+        if (selectedMeta) {
+            selectedMeta.textContent = `Текущий остаток: ${formatNumber(stock)} ${unit}`.trim();
+        }
+
+        if (selectedBox) selectedBox.hidden = false;
+
+        if (previousPrice > 0) {
+            priceInput.value = previousPrice;
+            if (previousPriceHint) {
+                previousPriceHint.textContent = `Подставлена предыдущая закупочная цена: ${formatMoney(previousPrice)}`;
+            }
+        }
+
         closeDropdown();
+        updateSummary();
+
+        setTimeout(() => quantityInput?.focus(), 50);
+    }
+
+    function getVisibleOptions() {
+        return options.filter(option => option.style.display !== "none");
+    }
+
+    function highlightOption(index) {
+        const visible = getVisibleOptions();
+        if (!visible.length) return;
+
+        highlightedIndex = Math.max(0, Math.min(index, visible.length - 1));
+
+        options.forEach(option => option.classList.remove("is-highlighted"));
+        visible[highlightedIndex].classList.add("is-highlighted");
+        visible[highlightedIndex].scrollIntoView({block:"nearest"});
     }
 
     function filterProducts() {
@@ -221,6 +1455,7 @@ document.addEventListener("DOMContentLoaded", function () {
         let exactNameOption = null;
 
         itemIdInput.value = "";
+        if (selectedBox) selectedBox.hidden = true;
 
         options.forEach(function (option) {
             const haystack = (option.dataset.search || "").toLowerCase();
@@ -230,21 +1465,11 @@ document.addEventListener("DOMContentLoaded", function () {
             const ntin = (option.dataset.ntin || "").trim().toLowerCase();
 
             const visible = !query || haystack.includes(query);
+            option.style.display = visible ? "grid" : "none";
 
-            option.style.display = visible ? "flex" : "none";
+            if (visible) visibleCount++;
 
-            if (visible) {
-                visibleCount++;
-            }
-
-            if (
-                query &&
-                (
-                    query === barcode ||
-                    query === gtin ||
-                    query === ntin
-                )
-            ) {
+            if (query && (query === barcode || query === gtin || query === ntin)) {
                 exactCodeOption = option;
             }
 
@@ -254,26 +1479,17 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         if (noProducts) {
-            noProducts.style.display =
-                visibleCount === 0 ? "block" : "none";
+            noProducts.style.display = visibleCount === 0 ? "block" : "none";
         }
 
+        highlightedIndex = -1;
         openDropdown();
 
-        /*
-         * Аппаратный сканер вводит штрихкод как клавиатура.
-         * Как только код полностью совпал, товар выбирается сразу,
-         * без ожидания Enter.
-         */
         if (exactCodeOption) {
             selectProduct(exactCodeOption);
             return exactCodeOption;
         }
 
-        /*
-         * При полном ручном вводе названия выбираем товар только тогда,
-         * когда совпадение одно и название введено целиком.
-         */
         if (exactNameOption && visibleCount === 1) {
             selectProduct(exactNameOption);
             return exactNameOption;
@@ -282,34 +1498,38 @@ document.addEventListener("DOMContentLoaded", function () {
         return null;
     }
 
-    searchInput.addEventListener("focus", function () {
-        filterProducts();
-    });
+    searchInput?.addEventListener("focus", filterProducts);
+    searchInput?.addEventListener("click", filterProducts);
+    searchInput?.addEventListener("input", filterProducts);
 
-    searchInput.addEventListener("click", function () {
-        filterProducts();
-    });
-
-    searchInput.addEventListener("input", function () {
-        /*
-         * Фильтрация происходит после каждого введённого символа:
-         * список обновляется сразу, без Enter и без отдельной кнопки.
-         */
-        filterProducts();
-    });
-
-    searchInput.addEventListener("keydown", function (event) {
+    searchInput?.addEventListener("keydown", function (event) {
+        const visible = getVisibleOptions();
 
         if (event.key === "Escape") {
             closeDropdown();
             return;
         }
 
-        if (event.key !== "Enter") {
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            highlightOption(highlightedIndex + 1);
             return;
         }
 
+        if (event.key === "ArrowUp") {
+            event.preventDefault();
+            highlightOption(highlightedIndex <= 0 ? visible.length - 1 : highlightedIndex - 1);
+            return;
+        }
+
+        if (event.key !== "Enter") return;
+
         event.preventDefault();
+
+        if (highlightedIndex >= 0 && visible[highlightedIndex]) {
+            selectProduct(visible[highlightedIndex]);
+            return;
+        }
 
         const exactOption = filterProducts();
 
@@ -318,19 +1538,13 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        const firstVisible = options.find(function (option) {
-            return option.style.display !== "none";
-        });
-
-        if (firstVisible) {
-            selectProduct(firstVisible);
+        if (visible[0]) {
+            selectProduct(visible[0]);
         }
     });
 
-    options.forEach(function (option) {
-        option.addEventListener("click", function () {
-            selectProduct(option);
-        });
+    options.forEach(option => {
+        option.addEventListener("click", () => selectProduct(option));
     });
 
     document.addEventListener("click", function (event) {
@@ -339,272 +1553,138 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-    if (form) {
-        form.addEventListener("submit", function (event) {
-            if (!itemIdInput.value) {
-                event.preventDefault();
-                searchInput.setCustomValidity("Выберите товар из списка");
-                searchInput.reportValidity();
-                openDropdown();
+    clearSelected?.addEventListener("click", () => {
+        clearProduct();
+        searchInput?.focus();
+        filterProducts();
+    });
+
+    document.querySelectorAll(".number-step").forEach(button => {
+        button.addEventListener("click", () => {
+            const target = document.getElementById(button.dataset.target);
+            if (!target) return;
+
+            const step = Number(button.dataset.step || 0);
+            const current = Number(target.value || 0);
+            const next = Math.max(0.001, current + step);
+
+            target.value = Number(next.toFixed(3));
+            updateSummary();
+        });
+    });
+
+    document.querySelectorAll(".quick-values button").forEach(button => {
+        button.addEventListener("click", () => {
+            quantityInput.value = button.dataset.value || "";
+            updateSummary();
+        });
+    });
+
+    quantityInput?.addEventListener("input", updateSummary);
+    priceInput?.addEventListener("input", updateSummary);
+
+    document.getElementById("incomeReset")?.addEventListener("click", () => {
+        form?.reset();
+        clearProduct();
+        updateSummary();
+        searchInput?.focus();
+    });
+
+    form?.addEventListener("submit", function (event) {
+        if (!itemIdInput.value) {
+            event.preventDefault();
+            searchInput.setCustomValidity("Выберите товар из списка");
+            searchInput.reportValidity();
+            openDropdown();
+            return;
+        }
+
+        const quantity = Number(quantityInput?.value || 0);
+        const price = Number(priceInput?.value || 0);
+
+        if (quantity <= 0) {
+            event.preventDefault();
+            quantityInput.setCustomValidity("Количество должно быть больше нуля");
+            quantityInput.reportValidity();
+            return;
+        }
+
+        quantityInput.setCustomValidity("");
+
+        if (price < 0) {
+            event.preventDefault();
+            priceInput.setCustomValidity("Цена не может быть отрицательной");
+            priceInput.reportValidity();
+            return;
+        }
+
+        priceInput.setCustomValidity("");
+    });
+
+    const historySearch = document.getElementById("incomeHistorySearch");
+    const historyEmpty = document.getElementById("incomeHistoryEmpty");
+
+    function filterHistory() {
+        const query = (historySearch?.value || "").trim().toLowerCase();
+        const records = document.querySelectorAll(".income-history-record");
+        const visibleKeys = new Set();
+
+        records.forEach(record => {
+            const visible = !query || (record.dataset.search || "").includes(query);
+            record.style.display = visible ? "" : "none";
+
+            if (visible) {
+                visibleKeys.add(record.dataset.search + "|" + record.textContent.trim());
             }
         });
+
+        if (historyEmpty) {
+            historyEmpty.hidden = visibleKeys.size !== 0;
+        }
     }
+
+    historySearch?.addEventListener("input", filterHistory);
+
+    updateSummary();
 });
 </script>
 
+
 <style>
-
-.product-picker{
-    position:relative;
-    min-width:0;
-}
-
-.product-search-row{
-    display:flex;
-    align-items:flex-start;
-    gap:10px;
-}
-
-.product-search-box{
-    position:relative;
-    flex:1;
-    min-width:0;
-}
-
-.product-search-input{
-    width:100%;
-    height:46px;
-    box-sizing:border-box;
-    padding:0 14px;
-    border:1px solid #ddd;
-    border-radius:10px;
-    background:#fff;
-    font-size:14px;
-    outline:none;
-}
-
-.product-search-input:focus{
-    border-color:#2563eb;
-    box-shadow:0 0 0 3px rgba(37,99,235,.12);
-}
-
-.product-dropdown{
-    display:none;
-    position:absolute;
-    top:calc(100% + 6px);
-    left:0;
-    right:0;
-    z-index:50;
-    max-height:300px;
-    overflow-y:auto;
-    padding:6px;
-    border:1px solid #dbe2ea;
-    border-radius:12px;
-    background:#fff;
-    box-shadow:0 14px 35px rgba(15,23,42,.14);
-}
-
-.product-dropdown.open{
-    display:block;
-}
-
-.product-option{
-    display:flex;
-    flex-direction:column;
-    align-items:flex-start;
-    width:100%;
-    padding:10px 12px;
-    border:0;
-    border-radius:9px;
-    background:transparent;
-    text-align:left;
-    cursor:pointer;
-}
-
-.product-option:hover{
-    background:#eff6ff;
-}
-
-.product-option[hidden]{
-    display:none !important;
-}
-
-.product-option-name{
-    font-size:14px;
-    font-weight:600;
-    color:#0f172a;
-}
-
-.product-option-code{
-    margin-top:3px;
-    font-size:12px;
-    color:#64748b;
-}
-
-.product-empty{
-    display:none;
-    padding:14px 12px;
-    text-align:center;
-    font-size:13px;
-    color:#64748b;
-}
-
-.income-scan-link{
-    display:none;
-}
-
-
-.page{
-    padding:20px;
-}
-
-.income-form{
-
-    display:grid;
-
-    grid-template-columns:1fr 1fr;
-
-    gap:15px;
-
-    max-width:800px;
-}
-
-.income-form input,
-.income-form select{
-
-    padding:12px;
-
-    border-radius:10px;
-
-    border:1px solid #ddd;
-}
-
-.btn{
-
-    padding:12px;
-
-    border:none;
-
-    border-radius:10px;
-
-    background:#2563eb;
-
-    color:white;
-
-    cursor:pointer;
-}
-
-.income-history {
-    margin-top: 35px;
-}
-
-.income-history h3 {
-    margin-bottom: 15px;
-    font-size: 20px;
-}
-
-.income-history-table {
-    overflow-x: auto;
-}
-
-.income-history-table table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 14px;
-    overflow: hidden;
-}
-
-.income-history-table th,
-.income-history-table td {
-    padding: 12px;
-    border-bottom: 1px solid #e5e7eb;
-    text-align: left;
-}
-
-.income-history-table th {
-    background: #f8fafc;
-    font-size: 13px;
-    color: #475569;
-}
-
-.income-history-table td {
-    font-size: 14px;
-}
-
-.income-empty {
-    padding: 25px !important;
-    text-align: center !important;
-    color: #64748b;
-}
-
-@media (max-width:768px){
-
-    .product-search-input{
-        height:48px;
-        font-size:14px;
-        border-radius:14px;
-    }
-
-    .income-scan-link{
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        width:48px;
-        height:48px;
-        flex:0 0 48px;
-        border-radius:14px;
-        background:#2563eb;
-        color:#fff;
-        text-decoration:none;
-        font-size:20px;
-    }
-
-    .product-dropdown{
-        max-height:260px;
-    }
-
-
-	.page{
-		padding:12px;
-	}
-
-	h2{
-		font-size:24px;
-		margin-bottom:14px;
-	}
-
-	.income-form{
-
-		grid-template-columns:1fr !important;
-
-		gap:12px;
-
-		max-width:none;
-	}
-
-	.income-form input,
-	.income-form select{
-
-		height:48px;
-
-		font-size:14px;
-
-		border-radius:14px;
-	}
-
-	.btn{
-
-		height:50px;
-
-		font-size:15px;
-
-		font-weight:700;
-
-		border-radius:14px;
-	}
-}
-
+.income-header p{font-size:14px!important;}
+.income-btn{font-size:13px!important;}
+.income-stat span{font-size:12px!important;}
+.income-stat small{font-size:11px!important;}
+.income-form-head p,.income-history-head p{font-size:12px!important;}
+.income-reset{font-size:12px!important;}
+.income-field>label{font-size:12px!important;}
+.income-field>small{font-size:10px!important;}
+.product-search-input{font-size:13px!important;}
+.product-option-main strong{font-size:13px!important;}
+.product-option-main small{font-size:10px!important;}
+.product-option-stock{font-size:11px!important;}
+.product-empty strong{font-size:12px!important;}
+.product-empty span{font-size:11px!important;}
+.selected-product-main strong{font-size:13px!important;}
+.selected-product-main span{font-size:11px!important;}
+.quick-values button{font-size:11px!important;}
+.money-input span{font-size:12px!important;}
+.income-field textarea{font-size:12px!important;}
+.income-summary span{font-size:10px!important;}
+.income-summary strong{font-size:15px!important;}
+.income-summary-total strong{font-size:18px!important;}
+.income-submit{font-size:13px!important;}
+.income-help ol{font-size:12px!important;}
+.income-help-note{font-size:11px!important;}
+.income-history-search input{font-size:12px!important;}
+.income-history-table th{font-size:11px!important;}
+.income-history-table td{font-size:12px!important;}
+.history-product strong{font-size:12px!important;}
+.history-product small,.history-date small{font-size:10px!important;}
+.income-history-empty span{font-size:11px!important;}
+.income-history-card-grid span{font-size:10px!important;}
+.income-history-card-grid strong{font-size:12px!important;}
+.income-history-card-comment{font-size:11px!important;}
 </style>
 
 {% endblock %}

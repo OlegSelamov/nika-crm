@@ -1,590 +1,349 @@
 {% extends "base.html" %}
-
 {% block content %}
 
-<h1>Клиенты</h1>
-
-<a class="btn" href="/clients/add">+ Добавить клиента</a>
-
-<br><br>
-
-<input 
-    id="clientSearchMain" 
-    placeholder="Поиск клиента..." 
-    class="search-input"
->
-
-<div class="table-wrap desktop-table">
-    <table class="client-table" id="clientsTable">
-      <tr>
-          <th>Компания / Клиент</th>
-          <th>Телефон</th>
-          <th>Статус</th>
-		  <th>Действия</th>
-      </tr>
-
-	  {% for c in clients %}
-	  <tr class="client-row"
-		  data-id="{{ c.id }}"
-		  data-name="{{ c.full_name }}"
-		  data-phone="{{ c.phone }}"
-		  data-status="{{ c.status }}"
-		  data-address="{{ c.address }}"
-		  data-category="{{ c.category }}"
-		  data-comment="{{ c.comment }}"
-		  data-date="{{ c.created_at }}"
-		  data-iin="{{ c.iin or '' }}"
-		  data-company="{{ c.company_name or '' }}"
-		  data-photo="{{ c.photo or '' }}"
-		  data-comment-photos="{{ c.comment_photos or '' }}">
-
-		  <td>
-			  <div style="font-weight:600;">
-				  {{ c.company_name or "Без компании" }}
-			  </div>
-
-			  <div style="font-size:13px; color:#64748b;">
-			   	  {{ c.full_name }}
-			  </div>
-		  </td>
-
-		  <td>
-			  {{ c.phone }}
-		  </td>
-
-		  <td>
-			  {{ c.status }}
-		  </td>
-
-		  <td>
-			  <a href="/clients/{{ c.id }}/edit" class="btn btn-edit" onclick="event.stopPropagation()">✏️</a>
-			  <a href="/clients/{{ c.id }}/delete" class="btn btn-close" onclick="event.stopPropagation()">🗑</a>
-		  </td>
-
-	  </tr>
-	  {% endfor %}
-      </table>
-</div>
-
-<div class="mobile-clients-list">
-
-{% for c in clients %}
-
-	<div class="mobile-client-card"
-		 onclick="window.location.href='/clients/{{ c.id }}'">
-
-		<div class="mobile-client-top">
-
-			<div class="mobile-client-info">
-
-				<div class="mobile-company">
-					{{ c.company_name or "Без компании" }}
-				</div>
-
-				<div class="mobile-name">
-					{{ c.full_name }}
-				</div>
-
-			</div>
-
-			<div class="mobile-status
-				{% if c.status == 'Новый' %}
-					red
-				{% elif c.status == 'В работе' %}
-					orange
-				{% else %}
-					green
-				{% endif %}
-			">
-
-				{{ c.status }}
-
-			</div>
-
-		</div>
-
-		<div class="mobile-phone">
-			{{ c.phone }}
-		</div>
-
-		<div class="mobile-client-actions">
-
-			<a href="/clients/{{ c.id }}/edit"
-			   class="btn btn-edit"
-			   onclick="event.stopPropagation()">
-
-				Изменить
-
-			</a>
-
-			<a href="/clients/{{ c.id }}/delete"
-			   class="btn btn-close"
-			   onclick="event.stopPropagation()">
-
-				Удалить
-
-			</a>
-
-		</div>
-
-	</div>
-
-{% endfor %}
-
-</div>
-
-<script>
-let currentClientId = null;
-
-function openClient(id, name, phone, status, address, category, comment, created_at, iin, company, photo, commentPhotos) {
-
-    console.log("CLICK OK");
-
-    currentClientId = id;
-
-    document.getElementById("sheetName").innerText = name;
-    document.getElementById("sheetPhone").innerText = phone;
-    document.getElementById("sheetAddress").innerText = address;
-    document.getElementById("sheetCategory").innerText = category;
-    document.getElementById("sheetComment").innerText = comment;
-	document.getElementById("sheetDeals").style.display = "none";
-	document.getElementById("dealsArrow").innerText = "▼";
-    
-	let statusEl = document.getElementById("sheetStatus");
-
-	statusEl.innerText = status;
-
-	if (status === "Новый") {
-		statusEl.style.background = "#ff4d4d";
-		statusEl.style.color = "white";
-	} else if (status === "В работе") {
-		statusEl.style.background = "#ffa500";
-		statusEl.style.color = "white";
-	} else if (status === "Завершен") {
-		statusEl.style.background = "#28a745";
-		statusEl.style.color = "white";
-	} else {
-		statusEl.style.background = "#ccc";
-	}
-	
-	document.getElementById("sheetIin").innerText = iin || "-";
-	document.getElementById("sheetCompany").innerText = company || "-";
-
-	const photoEl = document.getElementById("sheetPhoto");
-
-	if (photo) {
-		photoEl.src = photo;
-	} else {
-		photoEl.src = "/static/img/no-photo.png";
-	}
-
-	const commentPhotosWrap = document.getElementById("sheetCommentPhotos");
-	commentPhotosWrap.innerHTML = "";
-
-	if (commentPhotos) {
-		commentPhotos.split("|").forEach(src => {
-			if (src.trim()) {
-				commentPhotosWrap.innerHTML += `
-					<img src="${src}" style="width:90px;height:90px;object-fit:cover;border-radius:10px;margin:4px;">
-				`;
-			}
-		});
-	}
-
-    document.getElementById("editBtn").href = "/clients/" + id + "/edit";
-
-	// 👉 ЗАГРУЖАЕМ ПРОДАЖИ (НОВАЯ ЧИСТАЯ ЛОГИКА)
-	fetch("/api/client/" + id + "/sales")
-		.then(res => {
-			if (!res.ok) throw new Error("API error");
-			return res.json();
-		})
-		.then(sales => {
-
-			let dealsHtml = "";
-			let total = 0;
-			let paid = 0;
-
-			sales.forEach(s => {
-
-				const amount = Number(s.total_amount) || 0;
-				const paidAmount = Number(s.paid_amount) || 0;
-
-				total += amount;
-				paid += paidAmount;
-
-				// дата
-				let date = "Без даты";
-
-				if (s.created_at) {
-					try {
-						date = new Date(s.created_at.replace(" ", "T"))
-							.toLocaleString("ru-RU");
-					} catch(e) {
-						date = s.created_at;
-					}
-				}
-
-				dealsHtml += `
-					<div class="deal-card" data-id="${s.id}" style="cursor:pointer;">
-
-						<div class="deal-top">
-							<span>Продажа #${s.id}</span>
-
-							<span class="${s.status === 'Оплачено' ? 'ok' : 'bad'}">
-								${s.status}
-							</span>
-						</div>
-
-						<div class="deal-date">${date}</div>
-
-						<div class="deal-price">${amount} ₸</div>
-
-					</div>
-				`;
-			});
-
-			if (!dealsHtml) {
-				dealsHtml = "<div class='empty'>Нет продаж</div>";
-			}
-
-			document.getElementById("sheetDeals").innerHTML = dealsHtml;
-			document.getElementById("sheetDeals").style.display = "block";
-
-			// 💰 ФИНАНСЫ
-			document.getElementById("sheetFinance").innerHTML = `
-				<div class="finance-cards">
-					<div class="finance-card total">
-						<div class="f-title">Всего</div>
-						<div class="f-value">${total} ₸</div>
-					</div>
-
-					<div class="finance-card paid">
-						<div class="f-title">Оплачено</div>
-						<div class="f-value">${paid} ₸</div>
-					</div>
-
-					<div class="finance-card debt">
-						<div class="f-title">Долг</div>
-						<div class="f-value">${total - paid} ₸</div>
-					</div>
-				</div>
-			`;
-
-			// 👉 клики по продажам
-			document.querySelectorAll(".deal-card").forEach(el => {
-				el.addEventListener("click", function() {
-					openSale(this.dataset.id);
-				});
-			});
-
-		})
-		.catch(err => {
-			console.error("FETCH SALES ERROR:", err);
-		});
-
-
-	// 👉 ВЫБОР ТОВАРОВ (ОСТАВЛЯЕМ ОТДЕЛЬНО)
-	fetch("/api/items")
-		.then(res => res.json())
-		.then(items => {
-
-			let select = document.getElementById("itemSelect");
-
-			if (select) {
-				select.innerHTML = "<option value=''>Выбери позицию</option>";
-
-				items.forEach(i => {
-					select.innerHTML += `
-						<option value="${i.id}">
-							${i.name} (${i.retail_price || i.price || 0} ₸)
-						</option>
-					`;
-				});
-			}
-
-		})
-		.catch(err => {
-			console.error("ITEMS ERROR:", err);
-		});
-
-	document.getElementById("clientSheet").classList.add("active");
-
-	// 🔥 ДОБАВЛЯЕМ ПРОКРУТКУ
-	setTimeout(() => {
-		window.scrollTo({
-			top: document.body.scrollHeight,
-			behavior: "smooth"
-		});
-	}, 100);
-
-}
-
-function showServiceForm() {
-    document.getElementById("serviceForm").style.display = "block";
-}
-
-function closeSheet() {
-    document.getElementById("clientSheet").classList.remove("active");
-}
-
-function openSale(id) {
-
-    fetch("/api/sale/" + id)
-        .then(res => res.json())
-        .then(data => {
-
-            let html = "";
-
-            data.items.forEach(i => {
-                html += `
-                    <div style="margin-bottom:10px;">
-                        <b>${i.name}</b><br>
-                        ${i.qty} шт × ${i.price} ₸
+<div class="clients-page">
+    <div class="clients-header">
+        <div>
+            <h1 class="clients-title">Клиенты</h1>
+            <div class="clients-note">Управление клиентской базой, статусами и контактами</div>
+        </div>
+
+        <button class="clients-btn clients-btn--primary" type="button" onclick="openClientModal()">
+            ＋ Добавить клиента
+        </button>
+    </div>
+
+    <section class="clients-toolbar">
+        <div class="clients-tabs" role="tablist">
+            <button class="clients-tab is-active" type="button" data-tab="active" onclick="switchClientsTab('active')">
+                Активные
+                <span>{{ clients|length }}</span>
+            </button>
+            <button class="clients-tab" type="button" data-tab="deleted" onclick="switchClientsTab('deleted')">
+                Удалённые
+                <span>{{ deleted_clients|default([])|length }}</span>
+            </button>
+        </div>
+
+        <div class="clients-toolbar-row">
+            <label class="clients-search">
+                <span>⌕</span>
+                <input id="clientSearch" type="search"
+                       placeholder="Поиск по имени, компании, ИИН, телефону или адресу"
+                       oninput="filterClients()">
+            </label>
+
+            <div class="clients-count">
+                Показано: <strong id="clientsVisibleCount">{{ clients|length }}</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="clients-section">
+        <div class="clients-section-head">
+            <div>
+                <h2 id="clientsSectionTitle">Активные клиенты</h2>
+                <p id="clientsSectionNote">Откройте карточку клиента или измените данные прямо из списка</p>
+            </div>
+        </div>
+
+        <div class="clients-panel is-active" id="activeClientsPanel" data-panel="active">
+            {% if clients %}
+            <div class="clients-table-wrap">
+                <table class="clients-table">
+                    <thead>
+                    <tr>
+                        <th>Клиент</th>
+                        <th>ИИН</th>
+                        <th>Телефон</th>
+                        <th>Категория</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in clients %}
+                    <tr class="client-record active-client-record"
+                        data-id="{{ c.id }}"
+                        data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}"
+                        data-company-name="{{ c.company_name or '' }}"
+                        data-full-name="{{ c.full_name or '' }}"
+                        data-iin="{{ c.iin or '' }}"
+                        data-contract-number="{{ c.contract_number or '' }}"
+                        data-contract-date="{{ c.contract_date or '' }}"
+                        data-phone="{{ c.phone or '' }}"
+                        data-address="{{ c.address or '' }}"
+                        data-status="{{ c.status or 'Новый' }}"
+                        data-category="{{ c.category or 'Клиент' }}"
+                        data-payment="{{ c.payment or 'Не оплачено' }}"
+                        data-comment="{{ c.comment or '' }}">
+                        <td>
+                            <a class="client-main" href="/clients/{{ c.id }}">
+                                <div class="client-avatar-mini">
+                                    {% if c.photo %}
+                                    <img src="{{ c.photo }}" alt="">
+                                    {% else %}
+                                    {{ (c.full_name or c.company_name or 'К')[:1]|upper }}
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <strong>{{ c.full_name or "Без имени" }}</strong>
+                                    <small>{{ c.company_name or "Без компании" }}</small>
+                                </div>
+                            </a>
+                        </td>
+                        <td>{{ c.iin or "—" }}</td>
+                        <td>{{ c.phone or "—" }}</td>
+                        <td>{{ c.category or "—" }}</td>
+                        <td>
+                            <span class="client-status client-status--{{ (c.status or 'Новый')|lower|replace(' ', '-') }}">
+                                {{ c.status or "Новый" }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="client-actions">
+                                <button class="client-action client-action--edit" type="button"
+                                        onclick="openClientModal(this.closest('.client-record'))">
+                                    Изменить
+                                </button>
+                                <a class="client-action client-action--delete"
+                                   href="/clients/{{ c.id }}/delete"
+                                   onclick="return confirm('Переместить клиента в удалённые?')">
+                                    Удалить
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mobile-clients-list">
+                {% for c in clients %}
+                <article class="mobile-client-card client-record active-client-record"
+                         data-id="{{ c.id }}"
+                         data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}"
+                         data-company-name="{{ c.company_name or '' }}"
+                         data-full-name="{{ c.full_name or '' }}"
+                         data-iin="{{ c.iin or '' }}"
+                         data-contract-number="{{ c.contract_number or '' }}"
+                         data-contract-date="{{ c.contract_date or '' }}"
+                         data-phone="{{ c.phone or '' }}"
+                         data-address="{{ c.address or '' }}"
+                         data-status="{{ c.status or 'Новый' }}"
+                         data-category="{{ c.category or 'Клиент' }}"
+                         data-payment="{{ c.payment or 'Не оплачено' }}"
+                         data-comment="{{ c.comment or '' }}">
+                    <div class="mobile-client-top">
+                        <a class="client-main" href="/clients/{{ c.id }}">
+                            <div class="client-avatar-mini">
+                                {% if c.photo %}<img src="{{ c.photo }}" alt="">{% else %}{{ (c.full_name or c.company_name or 'К')[:1]|upper }}{% endif %}
+                            </div>
+                            <div>
+                                <strong>{{ c.full_name or "Без имени" }}</strong>
+                                <small>{{ c.company_name or "Без компании" }}</small>
+                            </div>
+                        </a>
+                        <span class="client-status client-status--{{ (c.status or 'Новый')|lower|replace(' ', '-') }}">{{ c.status or "Новый" }}</span>
                     </div>
-                `;
-            });
+                    <div class="mobile-client-info">
+                        <span><small>Телефон</small>{{ c.phone or "—" }}</span>
+                        <span><small>ИИН</small>{{ c.iin or "—" }}</span>
+                        <span><small>Категория</small>{{ c.category or "—" }}</span>
+                        <span><small>Адрес</small>{{ c.address or "—" }}</span>
+                    </div>
+                    <div class="mobile-client-actions">
+                        <button class="client-action client-action--edit" type="button" onclick="openClientModal(this.closest('.client-record'))">Изменить</button>
+                        <a class="client-action client-action--delete" href="/clients/{{ c.id }}/delete" onclick="return confirm('Переместить клиента в удалённые?')">Удалить</a>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="clients-empty"><span>👥</span><strong>Активных клиентов пока нет</strong><p>Добавьте первого клиента, чтобы начать работу.</p></div>
+            {% endif %}
+        </div>
 
-            html += `
-                <hr>
-                <div><b>Оплата:</b> ${data.payment_type}</div>
-                <div><b>Сумма:</b> ${data.total_amount} ₸</div>
-            `;
+        <div class="clients-panel" id="deletedClientsPanel" data-panel="deleted">
+            {% set deleted = deleted_clients|default([]) %}
+            {% if deleted %}
+            <div class="clients-table-wrap">
+                <table class="clients-table">
+                    <thead><tr><th>Клиент</th><th>ИИН</th><th>Телефон</th><th>Категория</th><th>Статус</th><th>Действия</th></tr></thead>
+                    <tbody>
+                    {% for c in deleted %}
+                    <tr class="client-record deleted-client-record"
+                        data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}">
+                        <td><div class="client-main"><div class="client-avatar-mini client-avatar-mini--deleted">{{ (c.full_name or c.company_name or 'К')[:1]|upper }}</div><div><strong>{{ c.full_name or "Без имени" }}</strong><small>{{ c.company_name or "Без компании" }}</small></div></div></td>
+                        <td>{{ c.iin or "—" }}</td><td>{{ c.phone or "—" }}</td><td>{{ c.category or "—" }}</td>
+                        <td><span class="client-status client-status--deleted">Удалён</span></td>
+                        <td><div class="client-actions"><a class="client-action client-action--restore" href="/clients/{{ c.id }}/restore">Восстановить</a><a class="client-action client-action--delete" href="/clients/{{ c.id }}/delete_permanently" onclick="return confirm('Удалить клиента навсегда? Это действие нельзя отменить.')">Удалить навсегда</a></div></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mobile-clients-list">
+                {% for c in deleted %}
+                <article class="mobile-client-card client-record deleted-client-record" data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}">
+                    <div class="mobile-client-top"><div class="client-main"><div class="client-avatar-mini client-avatar-mini--deleted">{{ (c.full_name or c.company_name or 'К')[:1]|upper }}</div><div><strong>{{ c.full_name or "Без имени" }}</strong><small>{{ c.company_name or "Без компании" }}</small></div></div><span class="client-status client-status--deleted">Удалён</span></div>
+                    <div class="mobile-client-info"><span><small>Телефон</small>{{ c.phone or "—" }}</span><span><small>ИИН</small>{{ c.iin or "—" }}</span><span><small>Категория</small>{{ c.category or "—" }}</span><span><small>Адрес</small>{{ c.address or "—" }}</span></div>
+                    <div class="mobile-client-actions"><a class="client-action client-action--restore" href="/clients/{{ c.id }}/restore">Восстановить</a><a class="client-action client-action--delete" href="/clients/{{ c.id }}/delete_permanently" onclick="return confirm('Удалить клиента навсегда? Это действие нельзя отменить.')">Удалить навсегда</a></div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="clients-empty"><span>🗑</span><strong>Удалённых клиентов нет</strong><p>Удалённые клиенты будут отображаться здесь.</p></div>
+            {% endif %}
+        </div>
 
-            document.getElementById("saleDetails").innerHTML = html;
-            document.getElementById("saleModal").classList.add("active");
-        });
-}
+        <div class="clients-empty clients-empty--search" id="clientsSearchEmpty" hidden><span>⌕</span><strong>Клиенты не найдены</strong><p>Попробуйте изменить поисковый запрос.</p></div>
+    </section>
+</div>
 
-function closeSale() {
-    document.getElementById("saleModal").classList.remove("active");
-}
+<div class="client-modal" id="clientModal" aria-hidden="true">
+    <div class="client-modal-backdrop" onclick="closeClientModal()"></div>
+    <div class="client-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle">
+        <div class="client-modal-head">
+            <div><h2 id="clientModalTitle">Новый клиент</h2><p id="clientModalNote">Заполните основные данные клиента</p></div>
+            <button type="button" class="client-modal-close" onclick="closeClientModal()">×</button>
+        </div>
 
-function toggleDeals() {
-
-    const block = document.getElementById("sheetDeals");
-    const arrow = document.getElementById("dealsArrow");
-
-    if (block.style.display === "none") {
-        block.style.display = "block";
-        arrow.innerText = "▲";
-    } else {
-        block.style.display = "none";
-        arrow.innerText = "▼";
-    }
-}
-
-const mainSearch = document.getElementById("clientSearchMain");
-
-if (mainSearch) {
-    mainSearch.addEventListener("input", function () {
-
-        const query = this.value.toLowerCase().trim();
-
-        const rows = document.querySelectorAll("#clientsTable tr.client-row");
-
-        rows.forEach(row => {
-
-            // 🔥 БЕРЕМ РЕАЛЬНЫЙ ТЕКСТ СТРОКИ
-            const text = row.innerText.toLowerCase();
-
-            if (text.includes(query)) {
-                row.style.display = "";
-            } else {
-                row.style.display = "none";
-            }
-
-        });
-
-    });
-}
-</script>
-
-<script>
-document.querySelectorAll(".client-row").forEach(row => {
-	row.addEventListener("click", function(e) {
-
-		if (e.target.closest("a")) return;
-
-		const id = this.dataset.id;
-		window.location.href = "/clients/" + id;
-	});
-});
-</script>
+        <form id="clientForm" method="POST" action="/clients/add" enctype="multipart/form-data" class="client-form-grid">
+            <label><span>Наименование ИП / Организации</span><input name="company_name" placeholder="Название компании"></label>
+            <label><span>ФИО *</span><input name="full_name" placeholder="ФИО клиента" required></label>
+            <label><span>ИИН</span><input name="iin" placeholder="12 цифр" inputmode="numeric"></label>
+            <label><span>Телефон</span><input name="phone" placeholder="+7 ..."></label>
+            <label><span>Номер договора</span><input name="contract_number" placeholder="Например, 15/2026"></label>
+            <label><span>Дата договора</span><input type="date" name="contract_date"></label>
+            <label class="client-field-wide"><span>Адрес</span><input name="address" placeholder="Адрес клиента"></label>
+            <label><span>Статус</span><select name="status"><option>Новый</option><option>В работе</option><option>Ожидание</option><option>Завершен</option></select></label>
+            <label><span>Категория</span><select name="category"><option>Клиент</option><option>Предприниматель</option><option>Партнер</option><option>Другое</option></select></label>
+            <label><span>Оплата</span><select name="payment"><option>Наличные</option><option>Безнал</option><option>Kaspi QR</option><option selected>Не оплачено</option></select></label>
+            <label><span>Основное фото</span><input type="file" name="photo" accept="image/*"></label>
+            <label class="client-field-wide"><span>Фото к комментарию</span><input type="file" name="comment_photos" accept="image/*" multiple></label>
+            <label class="client-field-full"><span>Комментарий</span><textarea name="comment" placeholder="Комментарий о клиенте"></textarea></label>
+            <div class="client-modal-actions client-field-full"><button class="clients-btn clients-btn--light" type="button" onclick="closeClientModal()">Отмена</button><button class="clients-btn clients-btn--primary" type="submit" id="clientSubmitBtn">Сохранить клиента</button></div>
+        </form>
+    </div>
+</div>
 
 <style>
-
-/* ================= MOBILE CLIENTS ================= */
-
-.mobile-clients-list{
-	display:none;
-}
-
-@media (max-width:768px){
-
-	/* desktop */
-
-	.desktop-table{
-		display:none;
-	}
-
-	/* title */
-
-	h1{
-		font-size:26px;
-		margin-bottom:14px;
-	}
-
-	/* button */
-
-	.btn{
-		height:44px;
-		border-radius:12px;
-		font-size:14px;
-	}
-
-	/* search */
-
-	.search-input{
-
-		height:46px;
-
-		font-size:14px;
-
-		border-radius:14px;
-
-		margin-top:12px;
-	}
-
-	/* list */
-
-	.mobile-clients-list{
-
-		display:flex;
-		flex-direction:column;
-
-		gap:12px;
-
-		margin-top:14px;
-	}
-
-	/* card */
-
-	.mobile-client-card{
-
-		background:white;
-
-		padding:14px;
-
-		border-radius:18px;
-
-		box-shadow:
-		0 4px 14px rgba(0,0,0,.06);
-
-		cursor:pointer;
-	}
-
-	/* top */
-
-	.mobile-client-top{
-
-		display:flex;
-
-		justify-content:space-between;
-
-		gap:10px;
-	}
-
-	.mobile-company{
-
-		font-size:12px;
-
-		color:#64748b;
-	}
-
-	.mobile-name{
-
-		font-size:15px;
-		font-weight:700;
-
-		margin-top:3px;
-	}
-
-	/* phone */
-
-	.mobile-phone{
-
-		margin-top:10px;
-
-		font-size:13px;
-
-		color:#475569;
-	}
-
-	/* status */
-
-	.mobile-status{
-
-		padding:4px 10px;
-
-		border-radius:999px;
-
-		font-size:11px;
-		font-weight:700;
-
-		height:fit-content;
-
-		white-space:nowrap;
-	}
-
-	.red{
-		background:#fee2e2;
-		color:#ef4444;
-	}
-
-	.orange{
-		background:#fef3c7;
-		color:#f59e0b;
-	}
-
-	.green{
-		background:#dcfce7;
-		color:#16a34a;
-	}
-
-	/* buttons */
-
-	.mobile-client-actions{
-
-		display:flex;
-
-		gap:8px;
-
-		margin-top:12px;
-	}
-
-	.mobile-client-actions .btn{
-
-		flex:1;
-
-		display:flex;
-		align-items:center;
-		justify-content:center;
-
-		height:42px;
-
-		border-radius:12px;
-
-		font-size:14px;
-	}
-
-	/* page */
-
-	.page-shell{
-		padding:12px !important;
-	}
-}
-
+.clients-page{--cl-card:#fff;--cl-soft:#fafafe;--cl-border:#e5e7ef;--cl-text:#202434;--cl-muted:#747a8d;--cl-purple:#7257ff;--cl-purple-soft:#efecff;--cl-shadow:0 10px 28px rgba(52,48,89,.08);width:100%;min-width:0;color:var(--cl-text)}
+.clients-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.clients-title{margin:0;color:var(--cl-text)!important;font-size:30px!important;text-shadow:none!important}.clients-note{margin-top:4px;color:var(--cl-muted)!important;font-size:14px!important}.clients-btn{min-height:46px;display:inline-flex;align-items:center;justify-content:center;padding:0 18px;border:0;border-radius:11px;font:inherit;font-size:13px;font-weight:800;text-decoration:none;cursor:pointer}.clients-btn--primary{color:#fff!important;background:linear-gradient(135deg,#7257ff,#9958e7);box-shadow:0 8px 18px rgba(114,87,255,.2)}.clients-btn--light{color:var(--cl-purple)!important;background:var(--cl-purple-soft);border:1px solid #d9d2ff}
+.clients-toolbar,.clients-section{margin-bottom:15px;padding:18px;border:1px solid var(--cl-border);border-radius:16px;background:var(--cl-card);box-shadow:var(--cl-shadow)}.clients-tabs{display:flex;gap:7px;margin-bottom:14px}.clients-tab{min-height:40px;display:flex;align-items:center;gap:7px;padding:0 13px;border:1px solid var(--cl-border);border-radius:10px;color:#747a8d;background:#f6f7fa;font:inherit;font-size:12px;font-weight:800;cursor:pointer}.clients-tab span{min-width:24px;height:22px;display:grid;place-items:center;padding:0 5px;border-radius:999px;background:#fff;font-size:10px}.clients-tab.is-active{color:var(--cl-purple);border-color:#d9d2ff;background:var(--cl-purple-soft)}.clients-toolbar-row{display:flex;align-items:center;gap:12px}.clients-search{flex:1;min-width:0;height:46px;display:flex;align-items:center;gap:7px;padding:0 11px;border:1px solid var(--cl-border);border-radius:10px;background:#fff}.clients-search:focus-within{border-color:#b8adff;box-shadow:0 0 0 3px rgba(114,87,255,.09)}.clients-search input{width:100%;min-width:0;border:0;outline:0;color:var(--cl-text);background:transparent;font:inherit;font-size:13px}.clients-count{color:var(--cl-muted);font-size:13px;white-space:nowrap}.clients-count strong{color:var(--cl-text)}
+.clients-section-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:13px}.clients-section-head h2{margin:0 0 3px;font-size:18px}.clients-section-head p{margin:0;color:var(--cl-muted);font-size:12px}.clients-panel{display:none}.clients-panel.is-active{display:block}.clients-table-wrap{width:100%;overflow-x:auto}.clients-table{width:100%;min-width:900px;table-layout:fixed;border-collapse:collapse}.clients-table th,.clients-table td{padding:13px 10px;border-bottom:1px solid var(--cl-border);text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.clients-table th{color:#858b9e;background:#fafafe;font-size:11px;font-weight:800;text-transform:uppercase}.clients-table td{font-size:13px}.clients-table th:nth-child(1),.clients-table td:nth-child(1){width:22%}.clients-table th:nth-child(2),.clients-table td:nth-child(2){width:12%}.clients-table th:nth-child(3),.clients-table td:nth-child(3){width:13%}.clients-table th:nth-child(4),.clients-table td:nth-child(4){width:12%}.clients-table th:nth-child(5),.clients-table td:nth-child(5){width:11%}.clients-table th:nth-child(6),.clients-table td:nth-child(6){width:280px;min-width:280px;overflow:visible;text-overflow:clip}
+.client-main{min-width:0;display:flex;align-items:center;gap:9px;color:inherit;text-decoration:none}.client-avatar-mini{flex:0 0 42px;width:42px;height:42px;display:grid;place-items:center;overflow:hidden;border-radius:10px;color:var(--cl-purple);background:var(--cl-purple-soft);font-size:16px;font-weight:900}.client-avatar-mini img{width:100%;height:100%;object-fit:cover}.client-avatar-mini--deleted{color:#7d8496;background:#eceef3}.client-main>div:last-child{min-width:0;display:grid;gap:2px}.client-main strong,.client-main small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.client-main strong{font-size:14px}.client-main small{color:var(--cl-muted);font-size:11px}.client-status{min-height:28px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;font-size:11px;font-weight:800}.client-status--новый{color:#2b6cb0;background:#e8f2ff}.client-status--в-работе{color:#b36a00;background:#fff1d6}.client-status--ожидание{color:#6b7280;background:#eef0f4}.client-status--завершен{color:#16815e;background:#e7f7f1}.client-status--deleted{color:#7d8496;background:#eceef3}.client-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:nowrap;white-space:nowrap}.client-action{min-height:36px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;white-space:nowrap;padding:0 14px;border:0;border-radius:8px;font:inherit;font-size:12px;font-weight:800;text-decoration:none;cursor:pointer}.client-action--edit,.client-action--restore{color:var(--cl-purple);background:var(--cl-purple-soft)}.client-action--delete{color:#c94646;background:#fdecec}.mobile-clients-list{display:none}
+.clients-empty{min-height:220px;display:grid;place-content:center;justify-items:center;text-align:center}.clients-empty[hidden]{display:none!important}.clients-empty>span{width:52px;height:52px;display:grid;place-items:center;margin-bottom:10px;border-radius:15px;color:var(--cl-purple);background:var(--cl-purple-soft);font-size:20px}.clients-empty strong{font-size:13px}.clients-empty p{margin:5px 0;color:var(--cl-muted);font-size:12px}.clients-empty--search{min-height:180px}
+.client-modal{position:fixed!important;inset:0!important;z-index:2147483000!important;display:none;align-items:center;justify-content:center;width:100vw!important;height:100dvh!important;margin:0!important;padding:20px;transform:none!important;isolation:isolate}.client-modal.is-open{display:flex}.client-modal-backdrop{position:fixed!important;inset:0!important;z-index:0;background:rgba(20,22,34,.46);backdrop-filter:blur(4px)}.client-modal-dialog{position:relative!important;z-index:1;width:min(920px,100%);max-height:calc(100dvh - 40px);overflow-y:auto;margin:auto!important;border:1px solid rgba(255,255,255,.65);border-radius:18px;background:#fff;box-shadow:0 24px 70px rgba(20,22,34,.26);transform:none!important}.client-modal-head{position:sticky;top:0;z-index:2;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--cl-border);background:rgba(255,255,255,.96);backdrop-filter:blur(12px)}.client-modal-head h2{margin:0 0 3px;font-size:20px}.client-modal-head p{margin:0;color:var(--cl-muted);font-size:12px}.client-modal-close{width:34px;height:34px;border:1px solid var(--cl-border);border-radius:9px;color:#676d7f;background:#f3f4f7;font-size:21px;cursor:pointer}.client-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;padding:20px}.client-form-grid label{min-width:0;display:grid;gap:5px}.client-form-grid label>span{color:#5b6174;font-size:11px;font-weight:750}.client-form-grid input,.client-form-grid select,.client-form-grid textarea{width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--cl-border);border-radius:9px;color:var(--cl-text);background:#fff;outline:0;font:inherit;font-size:13px}.client-form-grid input,.client-form-grid select{height:46px;padding:0 12px}.client-form-grid textarea{min-height:110px;padding:12px;resize:vertical}.client-form-grid input:focus,.client-form-grid select:focus,.client-form-grid textarea:focus{border-color:#b8adff;box-shadow:0 0 0 3px rgba(114,87,255,.08)}.client-field-wide{grid-column:span 2}.client-field-full{grid-column:1/-1}.client-modal-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:5px}
+body.client-modal-open{overflow:hidden}
+@media(max-width:800px){.clients-header{align-items:stretch;flex-direction:column}.clients-header .clients-btn{width:100%}.clients-toolbar-row{align-items:stretch;flex-direction:column}.clients-search{width:100%;box-sizing:border-box}.clients-count{align-self:flex-end}.clients-table-wrap{display:none}.mobile-clients-list{display:grid;gap:9px}.mobile-client-card{padding:15px;border:1px solid var(--cl-border);border-radius:13px;background:var(--cl-soft)}.mobile-client-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.mobile-client-info{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.mobile-client-info>span{min-width:0;display:grid;gap:2px;padding:10px;border:1px solid var(--cl-border);border-radius:8px;color:var(--cl-text);background:#fff;font-size:11px;overflow-wrap:anywhere}.mobile-client-info small{color:var(--cl-muted);font-size:9px}.mobile-client-actions{display:flex;gap:7px;margin-top:10px}.mobile-client-actions .client-action{flex:1;min-height:36px}.client-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.clients-title{font-size:26px!important}.clients-note{font-size:13px!important}.clients-toolbar,.clients-section{padding:15px}.clients-tabs{display:grid;grid-template-columns:1fr 1fr}.clients-tab{justify-content:center}.client-form-grid{grid-template-columns:1fr;padding:15px}.client-field-wide{grid-column:auto}.client-modal{padding:8px}.client-modal-dialog{max-height:96vh;border-radius:16px}.client-modal-head{padding:15px}.client-modal-actions{display:grid;grid-template-columns:1fr 1fr}.mobile-client-top{align-items:flex-start}.client-status{flex-shrink:0}.mobile-client-actions{display:grid;grid-template-columns:1fr 1fr}}
 </style>
+
+<script>
+let currentClientsTab = 'active';
+
+function switchClientsTab(tab) {
+    currentClientsTab = tab;
+    document.querySelectorAll('.clients-tab').forEach(btn => btn.classList.toggle('is-active', btn.dataset.tab === tab));
+    document.querySelectorAll('.clients-panel').forEach(panel => panel.classList.toggle('is-active', panel.dataset.panel === tab));
+
+    const deleted = tab === 'deleted';
+    document.getElementById('clientsSectionTitle').textContent = deleted ? 'Удалённые клиенты' : 'Активные клиенты';
+    document.getElementById('clientsSectionNote').textContent = deleted
+        ? 'Восстановите клиента или удалите его безвозвратно'
+        : 'Откройте карточку клиента или измените данные прямо из списка';
+
+    filterClients();
+}
+
+function filterClients() {
+    const query = (document.getElementById('clientSearch').value || '').trim().toLowerCase();
+    const panel = document.querySelector(`.clients-panel[data-panel="${currentClientsTab}"]`);
+    const records = panel ? panel.querySelectorAll('.client-record') : [];
+    const unique = new Set();
+    let visibleCount = 0;
+
+    records.forEach(record => {
+        const visible = !query || (record.dataset.search || '').includes(query);
+        record.style.display = visible ? '' : 'none';
+        if (visible) {
+            const key = record.dataset.id || record.querySelector('.client-main strong')?.textContent.trim() + '|' + record.querySelector('.client-main small')?.textContent.trim();
+            if (!unique.has(key)) { unique.add(key); visibleCount++; }
+        }
+    });
+
+    document.getElementById('clientsVisibleCount').textContent = visibleCount;
+    const empty = document.getElementById('clientsSearchEmpty');
+    empty.hidden = !(query && visibleCount === 0);
+}
+
+function openClientModal(record = null) {
+    const modal = document.getElementById('clientModal');
+    const form = document.getElementById('clientForm');
+    form.reset();
+
+    if (record) {
+        const d = record.dataset;
+        form.action = `/clients/${d.id}/edit`;
+        document.getElementById('clientModalTitle').textContent = 'Редактировать клиента';
+        document.getElementById('clientModalNote').textContent = 'Измените данные и сохраните клиента';
+        document.getElementById('clientSubmitBtn').textContent = 'Сохранить изменения';
+
+        form.elements.company_name.value = d.companyName || '';
+        form.elements.full_name.value = d.fullName || '';
+        form.elements.iin.value = d.iin || '';
+        form.elements.contract_number.value = d.contractNumber || '';
+        form.elements.contract_date.value = normalizeDateValue(d.contractDate || '');
+        form.elements.phone.value = d.phone || '';
+        form.elements.address.value = d.address || '';
+        form.elements.status.value = d.status || 'Новый';
+        form.elements.category.value = d.category || 'Клиент';
+        form.elements.payment.value = d.payment || 'Не оплачено';
+        form.elements.comment.value = d.comment || '';
+    } else {
+        form.action = '/clients/add';
+        document.getElementById('clientModalTitle').textContent = 'Новый клиент';
+        document.getElementById('clientModalNote').textContent = 'Заполните основные данные клиента';
+        document.getElementById('clientSubmitBtn').textContent = 'Сохранить клиента';
+        form.elements.status.value = 'Новый';
+        form.elements.category.value = 'Клиент';
+        form.elements.payment.value = 'Не оплачено';
+    }
+
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('client-modal-open');
+    setTimeout(() => form.elements.full_name.focus(), 80);
+}
+
+function normalizeDateValue(value) {
+    if (!value) return '';
+    const match = String(value).match(/^\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : '';
+}
+
+function closeClientModal() {
+    const modal = document.getElementById('clientModal');
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('client-modal-open');
+}
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('clientModal');
+    if (modal && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeClientModal();
+});
+</script>
 
 {% endblock %}

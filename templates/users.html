@@ -3,12 +3,15 @@
 
 {% set users = users|default([]) %}
 {% set companies = companies|default([]) %}
+{% set available_modules = available_modules|default([]) %}
+{% set can_choose_company = can_choose_company|default(false) %}
+{% set can_create_super_admin = can_create_super_admin|default(false) %}
 
 <div class="users-page">
     <div class="page-header users-header">
         <div>
             <h1 class="page-title">Пользователи</h1>
-            <div class="page-note">Сотрудники, роли и доступ к организациям</div>
+            <div class="page-note">Сотрудники, должности, активность и доступ</div>
         </div>
 
         <button class="users-btn users-btn--primary"
@@ -34,19 +37,19 @@
         </article>
 
         <article>
-            <span>Кассиры</span>
-            <strong>
-                {{ users|selectattr("role", "equalto", "cashier")|list|length }}
+            <span>Сейчас в сети</span>
+            <strong id="onlineUsersCount">
+                {{ users|selectattr("is_online")|list|length }}
             </strong>
-            <small>Работа с продажами</small>
+            <small>Активны за последние 3 минуты</small>
         </article>
 
         <article>
-            <span>Супер-админы</span>
-            <strong>
-                {{ users|selectattr("is_super_admin")|list|length }}
+            <span>Не в сети</span>
+            <strong id="offlineUsersCount">
+                {{ (users|length) - (users|selectattr("is_online")|list|length) }}
             </strong>
-            <small>Полный доступ</small>
+            <small>Нет текущей активности</small>
         </article>
     </div>
 
@@ -55,7 +58,7 @@
             <span>⌕</span>
             <input id="userSearch"
                    type="search"
-                   placeholder="Поиск по логину, ФИО, телефону, роли или компании"
+                   placeholder="Поиск по ФИО, логину, телефону, должности или компании"
                    oninput="filterUsers()">
         </label>
 
@@ -63,10 +66,20 @@
             <option value="all">Все роли</option>
             <option value="owner">Владелец</option>
             <option value="admin">Администратор</option>
-            <option value="accountant">Бухгалтер</option>
-            <option value="manager">Менеджер</option>
-            <option value="cto">Специалист ЦТО</option>
-            <option value="cashier">Кассир</option>
+            <option value="employee">Сотрудник</option>
+        </select>
+
+        <select id="userPositionFilter" onchange="filterUsers()">
+            <option value="all">Все должности</option>
+            {% for group in users|selectattr("position")|sort(attribute="position")|groupby("position") %}
+                <option value="{{ group.grouper|lower }}">{{ group.grouper }}</option>
+            {% endfor %}
+        </select>
+
+        <select id="userStatusFilter" onchange="filterUsers()">
+            <option value="all">Любой статус</option>
+            <option value="online">В сети</option>
+            <option value="offline">Не в сети</option>
         </select>
 
         <select id="userCompanyFilter" onchange="filterUsers()">
@@ -96,11 +109,10 @@
                 <thead>
                     <tr>
                         <th>Пользователь</th>
-                        <th>Телефон</th>
-                        <th>Процент</th>
-                        <th>Роль</th>
+                        <th>Должность</th>
+                        <th>Активность</th>
+                        <th>Роль и доступ</th>
                         <th>Компания</th>
-                        <th>Доступ</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -108,12 +120,16 @@
                 <tbody>
                     {% for u in users %}
                     <tr class="user-row"
+                        data-user-id="{{ u.id }}"
                         data-role="{{ u.role or '' }}"
+                        data-position="{{ (u.position or '')|lower }}"
+                        data-status="{{ 'online' if u.is_online else 'offline' }}"
                         data-company="{{ u.company_id or 'none' }}"
                         data-search="{{ (
                             (u.username or '') ~ ' ' ~
                             (u.full_name or '') ~ ' ' ~
                             (u.phone or '') ~ ' ' ~
+                            (u.position or '') ~ ' ' ~
                             (u.role or '') ~ ' ' ~
                             (u.company_name or '')
                         )|lower }}">
@@ -126,40 +142,51 @@
 
                                 <div>
                                     <strong>{{ u.full_name or u.username }}</strong>
-                                    <small>@{{ u.username }}</small>
+                                    <small>@{{ u.username }}{% if u.phone %} · {{ u.phone }}{% endif %}</small>
                                 </div>
                             </div>
                         </td>
 
-                        <td>{{ u.phone or "—" }}</td>
-
                         <td>
-                            {{ u.percent_rate or 0 }}%
+                            <div class="position-cell">
+                            <span class="position-badge
+                                {% if u.position in ['Директор','Управляющий','Заместитель директора'] %} position-badge--lead
+                                {% elif u.position in ['Кассир','Старший кассир','Продавец','Продавец-консультант','Менеджер по продажам'] %} position-badge--sales
+                                {% elif u.position in ['Бухгалтер','Главный бухгалтер','Экономист','Финансовый менеджер'] %} position-badge--finance
+                                {% elif u.position in ['Кладовщик','Старший кладовщик','Комплектовщик','Приёмщик товара'] %} position-badge--warehouse
+                                {% elif u.position in ['Повар','Су-шеф','Шеф-повар','Официант','Старший официант','Бармен','Бариста','Администратор зала','Хостес','Кухонный работник'] %} position-badge--food
+                                {% elif u.position in ['Врач','Стоматолог','Дантист','Ассистент врача','Медсестра','Регистратор'] %} position-badge--medical
+                                {% elif u.position in ['Курьер','Водитель','Логист'] %} position-badge--logistics
+                                {% elif u.position in ['Специалист ЦТО','Технолог','Оператор','Мастер смены','Рабочий'] %} position-badge--technical
+                                {% else %} position-badge--other{% endif %}">
+                                {{ u.position or "Не указана" }}
+                            </span>
+                            <small class="position-rate">{{ u.percent_rate or 0 }}% от продаж</small>
+                            </div>
                         </td>
 
                         <td>
+                            <div class="activity-cell">
+                                <span class="presence-badge {{ 'presence-badge--online' if u.is_online else 'presence-badge--offline' }}" data-presence-badge>
+                                    <i></i><span data-presence-text>{{ 'В сети' if u.is_online else 'Не в сети' }}</span>
+                                </span>
+                                <span class="last-login" data-last-login data-empty="Ещё не входил">
+                                    {% if u.last_login_at %}{{ u.last_login_at.strftime('%d.%m.%Y %H:%M') }}{% else %}Ещё не входил{% endif %}
+                                </span>
+                            </div>
+                        </td>
+
+                        <td>
+                            <div class="role-access-cell">
                             <span class="user-role user-role--{{ u.role }}">
                                 {% if u.role == "owner" %}
                                     Владелец
                                 {% elif u.role == "admin" %}
                                     Администратор
-                                {% elif u.role == "accountant" %}
-                                    Бухгалтер
-                                {% elif u.role == "manager" %}
-                                    Менеджер
-                                {% elif u.role == "cto" %}
-                                    Специалист ЦТО
-                                {% elif u.role == "cashier" %}
-                                    Кассир
                                 {% else %}
-                                    {{ u.role or "Не указана" }}
+                                    Сотрудник
                                 {% endif %}
                             </span>
-                        </td>
-
-                        <td>{{ u.company_name or "Без компании" }}</td>
-
-                        <td>
                             {% if u.is_super_admin %}
                                 <span class="user-access user-access--super">SUPER</span>
                             {% elif u.is_creator %}
@@ -167,15 +194,29 @@
                             {% else %}
                                 <span class="user-access">Обычный</span>
                             {% endif %}
+                            </div>
                         </td>
+
+                        <td><span class="company-cell">{{ u.company_name or "Без компании" }}</span></td>
 
                         <td>
                             {% if not u.is_creator %}
-                                <a href="/users/delete/{{ u.id }}"
-                                   class="user-delete"
-                                   onclick="return confirm('Удалить пользователя?')">
-                                    Удалить
-                                </a>
+                                <div class="user-actions">
+                                    <button type="button"
+                                            class="user-edit"
+                                            title="Редактировать"
+                                            aria-label="Редактировать пользователя"
+                                            onclick="openEditUserModal('{{ u.id }}')">
+                                        <span class="action-icon">✎</span>
+                                    </button>
+                                    <a href="/users/delete/{{ u.id }}"
+                                       class="user-delete"
+                                       title="Удалить"
+                                       aria-label="Удалить пользователя"
+                                       onclick="return confirm('Удалить пользователя?')">
+                                        <span class="action-icon">×</span>
+                                    </a>
+                                </div>
                             {% else %}
                                 <span class="user-protected">Защищён</span>
                             {% endif %}
@@ -189,12 +230,16 @@
         <div class="mobile-users-list">
             {% for u in users %}
             <article class="mobile-user-card user-row"
+                     data-user-id="{{ u.id }}"
                      data-role="{{ u.role or '' }}"
+                     data-position="{{ (u.position or '')|lower }}"
+                     data-status="{{ 'online' if u.is_online else 'offline' }}"
                      data-company="{{ u.company_id or 'none' }}"
                      data-search="{{ (
                         (u.username or '') ~ ' ' ~
                         (u.full_name or '') ~ ' ' ~
                         (u.phone or '') ~ ' ' ~
+                        (u.position or '') ~ ' ' ~
                         (u.role or '') ~ ' ' ~
                         (u.company_name or '')
                      )|lower }}">
@@ -230,21 +275,32 @@
                     </span>
 
                     <span>
+                        <small>Должность</small>
+                        <span class="position-badge position-badge--other">{{ u.position or "Не указана" }}</span>
+                    </span>
+
+                    <span>
+                        <small>Статус</small>
+                        <span class="presence-badge {{ 'presence-badge--online' if u.is_online else 'presence-badge--offline' }}" data-presence-badge>
+                            <i></i><span data-presence-text>{{ 'В сети' if u.is_online else 'Не в сети' }}</span>
+                        </span>
+                    </span>
+
+                    <span>
+                        <small>Последний вход</small>
+                        <span class="last-login" data-last-login data-empty="Ещё не входил">
+                            {% if u.last_login_at %}{{ u.last_login_at.strftime('%d.%m.%Y %H:%M') }}{% else %}Ещё не входил{% endif %}
+                        </span>
+                    </span>
+
+                    <span>
                         <small>Роль</small>
                         {% if u.role == "owner" %}
                             Владелец
                         {% elif u.role == "admin" %}
                             Администратор
-                        {% elif u.role == "accountant" %}
-                            Бухгалтер
-                        {% elif u.role == "manager" %}
-                            Менеджер
-                        {% elif u.role == "cto" %}
-                            Специалист ЦТО
-                        {% elif u.role == "cashier" %}
-                            Кассир
                         {% else %}
-                            {{ u.role or "—" }}
+                            Сотрудник
                         {% endif %}
                     </span>
 
@@ -256,10 +312,15 @@
 
                 {% if not u.is_creator %}
                 <div class="mobile-user-actions">
+                    <button type="button"
+                            class="user-edit"
+                            onclick="openEditUserModal('{{ u.id }}')">
+                        Редактировать
+                    </button>
                     <a href="/users/delete/{{ u.id }}"
                        class="user-delete"
                        onclick="return confirm('Удалить пользователя?')">
-                        Удалить пользователя
+                        Удалить
                     </a>
                 </div>
                 {% endif %}
@@ -294,14 +355,15 @@
     <div class="user-modal__dialog" role="dialog" aria-modal="true">
         <div class="user-modal__head">
             <div>
-                <h3>Новый пользователь</h3>
-                <p>Создайте учётную запись и назначьте права</p>
+                <h3 id="userModalTitle">Новый пользователь</h3>
+                <p id="userModalSubtitle">Создайте учётную запись и назначьте права</p>
             </div>
 
             <button type="button" onclick="closeUserModal()">×</button>
         </div>
 
-        <form method="POST" class="user-modal__body">
+        <form method="POST" class="user-modal__body" id="userForm">
+            <input type="hidden" name="user_id" id="editingUserId" value="">
             <div class="user-form-grid">
                 <label class="user-field">
                     <span>Логин *</span>
@@ -312,12 +374,25 @@
                 </label>
 
                 <label class="user-field">
-                    <span>Пароль *</span>
-                    <input name="password"
-                           type="password"
-                           placeholder="Пароль"
-                           autocomplete="new-password"
-                           required>
+                    <span id="passwordLabel">Пароль *</span>
+                    <div class="password-field">
+                        <input name="password"
+                               id="userPassword"
+                               type="password"
+                               placeholder="Пароль"
+                               autocomplete="new-password"
+                               required>
+                        <button type="button"
+                                class="password-toggle"
+                                id="passwordToggle"
+                                onclick="toggleUserPassword()"
+                                aria-label="Показать пароль">
+                            Показать
+                        </button>
+                    </div>
+                    <small class="password-note" id="passwordNote">
+                        Придумайте пароль для входа сотрудника
+                    </small>
                 </label>
 
                 <label class="user-field user-field--wide">
@@ -340,17 +415,54 @@
                 </label>
 
                 <label class="user-field">
-                    <span>Роль *</span>
+                    <span>Роль в системе *</span>
                     <select name="role" required>
-                        <option value="owner">Владелец</option>
+                        <option value="employee">Сотрудник</option>
                         <option value="admin">Администратор</option>
-                        <option value="accountant">Бухгалтер</option>
-                        <option value="manager">Менеджер</option>
-                        <option value="cto">Специалист ЦТО</option>
-                        <option value="cashier">Кассир</option>
+                        {% if can_choose_company %}
+                        <option value="owner">Владелец</option>
+                        {% endif %}
                     </select>
                 </label>
 
+                <label class="user-field">
+                    <span>Должность</span>
+                    <select name="position">
+                        <option value="">Не указана</option>
+                        <optgroup label="Руководство">
+                            <option>Директор</option><option>Управляющий</option><option>Заместитель директора</option><option>Администратор</option>
+                        </optgroup>
+                        <optgroup label="Продажи">
+                            <option>Старший кассир</option><option>Кассир</option><option>Продавец</option><option>Продавец-консультант</option><option>Менеджер по продажам</option>
+                        </optgroup>
+                        <optgroup label="Склад">
+                            <option>Старший кладовщик</option><option>Кладовщик</option><option>Комплектовщик</option><option>Приёмщик товара</option>
+                        </optgroup>
+                        <optgroup label="Бухгалтерия и финансы">
+                            <option>Главный бухгалтер</option><option>Бухгалтер</option><option>Экономист</option><option>Финансовый менеджер</option>
+                        </optgroup>
+                        <optgroup label="Кафе и ресторан">
+                            <option>Администратор зала</option><option>Старший официант</option><option>Официант</option><option>Бармен</option><option>Бариста</option><option>Шеф-повар</option><option>Су-шеф</option><option>Повар</option><option>Кухонный работник</option><option>Хостес</option>
+                        </optgroup>
+                        <optgroup label="Медицина">
+                            <option>Врач</option><option>Стоматолог</option><option>Дантист</option><option>Ассистент врача</option><option>Медсестра</option><option>Регистратор</option>
+                        </optgroup>
+                        <optgroup label="Сфера услуг">
+                            <option>Мастер</option><option>Парикмахер</option><option>Стилист</option><option>Косметолог</option><option>Мастер маникюра</option><option>Массажист</option>
+                        </optgroup>
+                        <optgroup label="Логистика">
+                            <option>Логист</option><option>Водитель</option><option>Курьер</option>
+                        </optgroup>
+                        <optgroup label="Производство">
+                            <option>Технолог</option><option>Мастер смены</option><option>Оператор</option><option>Рабочий</option>
+                        </optgroup>
+                        <optgroup label="Прочее">
+                            <option>Специалист ЦТО</option><option>Охранник</option><option>Уборщик</option><option>Стажёр</option><option>Другое</option>
+                        </optgroup>
+                    </select>
+                </label>
+
+                {% if can_choose_company %}
                 <label class="user-field">
                     <span>Компания</span>
                     <select name="company_id">
@@ -360,16 +472,73 @@
                         {% endfor %}
                     </select>
                 </label>
+                {% else %}
+                    {% if companies %}
+                        <input type="hidden" name="company_id" value="{{ companies[0].id }}">
+                    {% endif %}
+                {% endif %}
 
+                {% if can_create_super_admin %}
                 <label class="user-checkbox user-field--wide">
                     <input type="checkbox"
                            name="is_super_admin"
-                           value="1">
+                           value="1"
+                           id="isSuperAdminCheckbox"
+                           onchange="toggleModulePermissions()">
                     <span>
                         <strong>Супер-администратор</strong>
                         <small>Полный доступ ко всем компаниям и разделам</small>
                     </span>
                 </label>
+                {% endif %}
+
+                <section class="module-permissions user-field--wide"
+                         id="modulePermissions">
+                    <div class="module-permissions__head">
+                        <div>
+                            <strong>Доступ к разделам</strong>
+                            <small>Отметьте модули, которыми сможет пользоваться сотрудник</small>
+                        </div>
+
+                        {% if available_modules %}
+                        <button type="button" onclick="toggleAllModules(this)">
+                            Выбрать все
+                        </button>
+                        {% endif %}
+                    </div>
+
+                    {% if available_modules %}
+                    <div class="module-permissions__grid">
+                        {% for module in available_modules %}
+                        <label class="module-permission">
+                            <input type="checkbox"
+                                   name="module_ids"
+                                   value="{{ module.id }}"
+                                   data-module-code="{{ module.code }}"
+                                   {% if module.code == "profile" %}checked{% endif %}>
+                            <span class="module-permission__icon">
+                                {% if module.icon %}
+                                    <img src="{{ module.icon }}" alt="">
+                                {% else %}
+                                    ◫
+                                {% endif %}
+                            </span>
+                            <span class="module-permission__text">
+                                <strong>{{ module.name }}</strong>
+                                <small>{{ module.description or module.category }}</small>
+                            </span>
+                            {% if module.is_core %}
+                                <em>Базовый</em>
+                            {% endif %}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="module-permissions__empty">
+                        Для выбранной компании пока нет подключённых модулей.
+                    </div>
+                    {% endif %}
+                </section>
             </div>
 
             <div class="user-modal__footer">
@@ -379,7 +548,9 @@
                     Отмена
                 </button>
 
-                <button class="users-btn users-btn--primary" type="submit">
+                <button class="users-btn users-btn--primary"
+                        type="submit"
+                        id="userSubmitButton">
                     Добавить пользователя
                 </button>
             </div>
@@ -497,7 +668,7 @@
 
 .users-toolbar {
     display:grid;
-    grid-template-columns:minmax(280px,1fr) auto auto auto;
+    grid-template-columns:minmax(240px,1fr) repeat(4, minmax(130px, auto)) auto;
     align-items:center;
     gap:10px;
 }
@@ -573,23 +744,34 @@
 
 .users-table-wrap {
     width:100%;
-    overflow:hidden;
+    overflow-x:auto;
+    overflow-y:hidden;
+    scrollbar-width:thin;
+    scrollbar-color:#d9d5ee transparent;
+}
+
+.users-table-wrap::-webkit-scrollbar {
+    height:6px;
+}
+
+.users-table-wrap::-webkit-scrollbar-thumb {
+    border-radius:999px;
+    background:#d9d5ee;
 }
 
 .users-table {
     width:100%;
+    min-width:860px;
     table-layout:fixed;
     border-collapse:collapse;
 }
 
 .users-table th,
 .users-table td {
-    padding:13px 10px;
+    padding:14px 12px;
     border-bottom:1px solid var(--u-border);
     text-align:left;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
+    vertical-align:middle;
 }
 
 .users-table th {
@@ -598,6 +780,7 @@
     font-size:11px;
     font-weight:800;
     text-transform:uppercase;
+    white-space:nowrap;
 }
 
 .users-table td {
@@ -605,26 +788,12 @@
     font-size:13px;
 }
 
-.users-table th:nth-child(1),
-.users-table td:nth-child(1) { width:24%; }
-
-.users-table th:nth-child(2),
-.users-table td:nth-child(2) { width:13%; }
-
-.users-table th:nth-child(3),
-.users-table td:nth-child(3) { width:9%; }
-
-.users-table th:nth-child(4),
-.users-table td:nth-child(4) { width:16%; }
-
-.users-table th:nth-child(5),
-.users-table td:nth-child(5) { width:16%; }
-
-.users-table th:nth-child(6),
-.users-table td:nth-child(6) { width:11%; }
-
-.users-table th:nth-child(7),
-.users-table td:nth-child(7) { width:11%; }
+.users-table th:nth-child(1), .users-table td:nth-child(1) { width:25%; }
+.users-table th:nth-child(2), .users-table td:nth-child(2) { width:18%; }
+.users-table th:nth-child(3), .users-table td:nth-child(3) { width:16%; }
+.users-table th:nth-child(4), .users-table td:nth-child(4) { width:17%; }
+.users-table th:nth-child(5), .users-table td:nth-child(5) { width:16%; }
+.users-table th:nth-child(6), .users-table td:nth-child(6) { width:8%; overflow:visible; }
 
 .user-main {
     min-width:0;
@@ -669,6 +838,35 @@
     font-size:11px;
 }
 
+
+.position-cell, .activity-cell, .role-access-cell { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-width:0; }
+.position-rate { color:var(--u-muted); font-size:11px; white-space:nowrap; }
+.company-cell { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+
+.position-badge {
+    display:inline-flex; align-items:center; min-height:28px; max-width:100%;
+    padding:0 10px; border-radius:999px; font-size:10px; font-weight:850;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.position-badge--lead { color:#7b4e00; background:#fff1c7; }
+.position-badge--sales { color:#166448; background:#e3f7ef; }
+.position-badge--finance { color:#087276; background:#def7f7; }
+.position-badge--warehouse { color:#9a5113; background:#fff0df; }
+.position-badge--food { color:#b04467; background:#ffe8f0; }
+.position-badge--medical { color:#2e63bf; background:#e7efff; }
+.position-badge--logistics { color:#5f4bc5; background:#eeeaff; }
+.position-badge--technical { color:#4f5d6f; background:#e9edf2; }
+.position-badge--other { color:#686f82; background:#f0f1f5; }
+
+.presence-badge {
+    display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:0 9px;
+    border-radius:999px; font-size:10px; font-weight:850; white-space:nowrap;
+}
+.presence-badge i { width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 0 3px rgba(128,128,128,.10); }
+.presence-badge--online { color:#16815e; background:#e7f7f1; }
+.presence-badge--offline { color:#818797; background:#f0f1f5; }
+.last-login { color:var(--u-muted); font-size:11px; white-space:nowrap; }
+
 .user-role,
 .user-access {
     min-height:28px;
@@ -710,7 +908,7 @@
     background:#fff0df;
 }
 
-.user-role--cashier {
+.user-role--employee {
     color:#16815e;
     background:#e7f7f1;
 }
@@ -728,6 +926,54 @@
 .user-access--creator {
     color:#16815e;
     background:#e7f7f1;
+}
+
+.user-actions {
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:5px;
+    white-space:nowrap;
+}
+
+.user-edit,
+.user-delete,
+.user-protected {
+    min-height:34px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 9px;
+    border:0;
+    border-radius:9px;
+    font:inherit;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.user-actions .user-edit,
+.user-actions .user-delete {
+    flex:0 0 34px;
+    width:34px;
+    height:34px;
+    min-height:34px;
+    padding:0;
+}
+
+.user-actions .action-icon {
+    display:block;
+    font-size:18px;
+    line-height:1;
+}
+
+.user-actions .action-text {
+    display:none;
+}
+
+.user-edit {
+    color:#5d49c8;
+    background:#efecff;
 }
 
 .user-delete,
@@ -906,6 +1152,35 @@
     font-size:13px;
 }
 
+.password-field {
+    position:relative;
+}
+
+.password-field input {
+    padding-right:92px;
+}
+
+.password-toggle {
+    position:absolute;
+    top:5px;
+    right:5px;
+    height:36px;
+    padding:0 11px;
+    border:0;
+    border-radius:8px;
+    color:#5d49c8;
+    background:#efecff;
+    font:inherit;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.password-note {
+    color:var(--u-muted);
+    font-size:10px;
+}
+
 .user-field input:focus,
 .user-field select:focus {
     border-color:#b9adff;
@@ -942,6 +1217,154 @@
 .user-checkbox small {
     color:var(--u-muted);
     font-size:10px;
+}
+
+.module-permissions {
+    display:grid;
+    gap:12px;
+    padding:14px;
+    border:1px solid var(--u-border);
+    border-radius:14px;
+    background:#fafafe;
+}
+
+.module-permissions__head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+}
+
+.module-permissions__head > div {
+    display:grid;
+    gap:3px;
+}
+
+.module-permissions__head strong {
+    color:var(--u-text);
+    font-size:13px;
+}
+
+.module-permissions__head small {
+    color:var(--u-muted);
+    font-size:10px;
+}
+
+.module-permissions__head button {
+    flex:0 0 auto;
+    min-height:32px;
+    padding:0 11px;
+    border:1px solid #d9d2ff;
+    border-radius:9px;
+    color:var(--u-purple);
+    background:var(--u-purple-soft);
+    font:inherit;
+    font-size:10px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.module-permissions__grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:9px;
+}
+
+.module-permission {
+    position:relative;
+    min-width:0;
+    display:grid;
+    grid-template-columns:auto auto minmax(0,1fr) auto;
+    align-items:center;
+    gap:9px;
+    padding:11px;
+    border:1px solid var(--u-border);
+    border-radius:11px;
+    background:#fff;
+    cursor:pointer;
+    transition:.16s ease;
+}
+
+.module-permission:hover {
+    border-color:#c8bfff;
+    box-shadow:0 5px 15px rgba(80,67,163,.08);
+}
+
+.module-permission:has(input:checked) {
+    border-color:#bfb3ff;
+    background:#f7f5ff;
+}
+
+.module-permission input {
+    width:17px;
+    height:17px;
+    margin:0;
+    accent-color:var(--u-purple);
+}
+
+.module-permission__icon {
+    width:34px;
+    height:34px;
+    display:grid;
+    place-items:center;
+    border-radius:9px;
+    color:var(--u-purple);
+    background:var(--u-purple-soft);
+    overflow:hidden;
+}
+
+.module-permission__icon img {
+    width:20px;
+    height:20px;
+    object-fit:contain;
+}
+
+.module-permission__text {
+    min-width:0;
+    display:grid;
+    gap:2px;
+}
+
+.module-permission__text strong,
+.module-permission__text small {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.module-permission__text strong {
+    color:var(--u-text);
+    font-size:11px;
+}
+
+.module-permission__text small {
+    color:var(--u-muted);
+    font-size:9px;
+}
+
+.module-permission em {
+    padding:4px 6px;
+    border-radius:999px;
+    color:#16815e;
+    background:#e7f7f1;
+    font-size:8px;
+    font-style:normal;
+    font-weight:900;
+}
+
+.module-permissions__empty {
+    padding:18px;
+    border:1px dashed var(--u-border);
+    border-radius:10px;
+    color:var(--u-muted);
+    background:#fff;
+    text-align:center;
+    font-size:11px;
+}
+
+.module-permissions.is-disabled {
+    opacity:.5;
+    pointer-events:none;
 }
 
 .user-modal__footer {
@@ -1075,9 +1498,25 @@ body.user-modal-open {
         margin-top:10px;
     }
 
+    .mobile-user-actions {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+    }
+
+    .mobile-user-actions .user-edit,
     .mobile-user-actions .user-delete {
         width:100%;
+        min-height:40px;
         box-sizing:border-box;
+    }
+
+    .mobile-user-actions .action-icon {
+        display:none;
+    }
+
+    .mobile-user-actions .action-text {
+        display:inline;
     }
 
     .user-modal {
@@ -1105,6 +1544,19 @@ body.user-modal-open {
         grid-column:auto;
     }
 
+    .module-permissions__grid {
+        grid-template-columns:1fr;
+    }
+
+    .module-permissions__head {
+        align-items:stretch;
+        flex-direction:column;
+    }
+
+    .module-permissions__head button {
+        width:100%;
+    }
+
     .user-modal__footer {
         bottom:-15px;
         margin:18px -15px -15px;
@@ -1118,6 +1570,8 @@ body.user-modal-open {
 </style>
 
 <script>
+const usersEditData = {{ users_edit_data|default({})|tojson }};
+
 (function () {
     const modal = document.getElementById('userModal');
 
@@ -1130,7 +1584,43 @@ body.user-modal-open {
     });
 })();
 
-function openUserModal() {
+function resetUserForm() {
+    const form = document.getElementById('userForm');
+    if (!form) return;
+
+    form.reset();
+    document.getElementById('editingUserId').value = '';
+    document.getElementById('userModalTitle').textContent = 'Новый пользователь';
+    document.getElementById('userModalSubtitle').textContent =
+        'Создайте учётную запись и назначьте права';
+    document.getElementById('userSubmitButton').textContent =
+        'Добавить пользователя';
+
+    const password = document.getElementById('userPassword');
+    password.type = 'password';
+    password.required = true;
+    password.value = '';
+
+    document.getElementById('passwordLabel').textContent = 'Пароль *';
+    document.getElementById('passwordNote').textContent =
+        'Придумайте пароль для входа сотрудника';
+    document.getElementById('passwordToggle').textContent = 'Показать';
+
+    document.querySelectorAll('input[name="module_ids"]').forEach(function (input) {
+        input.checked = input.dataset.moduleCode === 'profile';
+        input.disabled = false;
+    });
+
+    const superAdmin = document.getElementById('isSuperAdminCheckbox');
+    if (superAdmin) superAdmin.checked = false;
+
+    const allButton = document.querySelector('.module-permissions__head button');
+    if (allButton) allButton.textContent = 'Выбрать все';
+
+    toggleModulePermissions();
+}
+
+function showUserModal() {
     const modal = document.getElementById('userModal');
     if (!modal) return;
 
@@ -1143,6 +1633,64 @@ function openUserModal() {
     }, 50);
 }
 
+function openUserModal() {
+    resetUserForm();
+    showUserModal();
+}
+
+function openEditUserModal(userId) {
+    const user = usersEditData[String(userId)];
+    if (!user) return;
+
+    resetUserForm();
+
+    const form = document.getElementById('userForm');
+    document.getElementById('editingUserId').value = user.id;
+    document.getElementById('userModalTitle').textContent =
+        'Редактирование сотрудника';
+    document.getElementById('userModalSubtitle').textContent =
+        'Измените данные, пароль и доступ к разделам';
+    document.getElementById('userSubmitButton').textContent =
+        'Сохранить изменения';
+
+    form.elements.username.value = user.username || '';
+    form.elements.password.value = user.password || '';
+    form.elements.full_name.value = user.full_name || '';
+    form.elements.phone.value = user.phone || '';
+    form.elements.percent_rate.value = user.percent_rate || 0;
+    form.elements.role.value = user.role || 'employee';
+    form.elements.position.value = user.position || '';
+
+    if (form.elements.company_id) {
+        form.elements.company_id.value = user.company_id || '';
+    }
+
+    const superAdmin = document.getElementById('isSuperAdminCheckbox');
+    if (superAdmin) {
+        superAdmin.checked = Boolean(user.is_super_admin);
+    }
+
+    const allowedModules = new Set(
+        (user.module_ids || []).map(String)
+    );
+
+    document.querySelectorAll('input[name="module_ids"]').forEach(function (input) {
+        input.checked = allowedModules.has(String(input.value));
+    });
+
+    const password = document.getElementById('userPassword');
+    password.required = false;
+    password.type = 'password';
+
+    document.getElementById('passwordLabel').textContent = 'Сохранённый пароль';
+    document.getElementById('passwordNote').textContent =
+        'Нажмите «Показать» для просмотра или введите новый пароль';
+    document.getElementById('passwordToggle').textContent = 'Показать';
+
+    toggleModulePermissions();
+    showUserModal();
+}
+
 function closeUserModal() {
     const modal = document.getElementById('userModal');
     if (!modal) return;
@@ -1152,12 +1700,61 @@ function closeUserModal() {
     document.body.classList.remove('user-modal-open');
 }
 
+function toggleUserPassword() {
+    const input = document.getElementById('userPassword');
+    const button = document.getElementById('passwordToggle');
+    if (!input || !button) return;
+
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    button.textContent = show ? 'Скрыть' : 'Показать';
+    button.setAttribute(
+        'aria-label',
+        show ? 'Скрыть пароль' : 'Показать пароль'
+    );
+}
+
+function toggleModulePermissions() {
+    const superAdmin = document.getElementById('isSuperAdminCheckbox');
+    const permissions = document.getElementById('modulePermissions');
+
+    if (!permissions) return;
+
+    const disabled = Boolean(superAdmin && superAdmin.checked);
+    permissions.classList.toggle('is-disabled', disabled);
+
+    permissions.querySelectorAll('input[name="module_ids"]').forEach(function (input) {
+        input.disabled = disabled;
+    });
+}
+
+function toggleAllModules(button) {
+    const permissions = document.getElementById('modulePermissions');
+    if (!permissions) return;
+
+    const inputs = Array.from(
+        permissions.querySelectorAll('input[name="module_ids"]:not(:disabled)')
+    );
+
+    const shouldCheck = inputs.some(function (input) {
+        return !input.checked;
+    });
+
+    inputs.forEach(function (input) {
+        input.checked = shouldCheck;
+    });
+
+    button.textContent = shouldCheck ? 'Снять все' : 'Выбрать все';
+}
+
 function filterUsers() {
     const query = document.getElementById('userSearch').value
         .trim()
         .toLowerCase();
 
     const role = document.getElementById('userRoleFilter').value;
+    const position = document.getElementById('userPositionFilter').value;
+    const status = document.getElementById('userStatusFilter').value;
     const company = document.getElementById('userCompanyFilter').value;
 
     const rows = document.querySelectorAll('.user-row');
@@ -1167,12 +1764,16 @@ function filterUsers() {
     rows.forEach(function (row) {
         const searchText = (row.dataset.search || '').toLowerCase();
         const rowRole = row.dataset.role || '';
+        const rowPosition = row.dataset.position || '';
+        const rowStatus = row.dataset.status || 'offline';
         const rowCompany = row.dataset.company || 'none';
 
         const matchesSearch = !query || searchText.includes(query);
         const matchesRole = role === 'all' || rowRole === role;
+        const matchesPosition = position === 'all' || rowPosition === position;
+        const matchesStatus = status === 'all' || rowStatus === status;
         const matchesCompany = company === 'all' || rowCompany === company;
-        const visible = matchesSearch && matchesRole && matchesCompany;
+        const visible = matchesSearch && matchesRole && matchesPosition && matchesStatus && matchesCompany;
 
         row.style.display = visible ? '' : 'none';
 
@@ -1193,6 +1794,57 @@ function filterUsers() {
         empty.style.display = visibleCount === 0 ? 'grid' : 'none';
     }
 }
+
+function formatPresenceDate(value) {
+    if (!value) return 'Ещё не входил';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Ещё не входил';
+    return new Intl.DateTimeFormat('ru-RU', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    }).format(date).replace(',', '');
+}
+
+async function refreshUsersPresence() {
+    try {
+        const response = await fetch('/api/users/presence', {
+            headers: {'Accept': 'application/json'},
+            credentials: 'same-origin',
+            cache: 'no-store'
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (!payload.success) return;
+
+        let onlineCount = 0;
+        payload.users.forEach(function (user) {
+            if (user.is_online) onlineCount++;
+            document.querySelectorAll('[data-user-id="' + user.id + '"]').forEach(function (row) {
+                row.dataset.status = user.is_online ? 'online' : 'offline';
+                row.querySelectorAll('[data-presence-badge]').forEach(function (badge) {
+                    badge.classList.toggle('presence-badge--online', user.is_online);
+                    badge.classList.toggle('presence-badge--offline', !user.is_online);
+                    const text = badge.querySelector('[data-presence-text]');
+                    if (text) text.textContent = user.is_online ? 'В сети' : 'Не в сети';
+                });
+                row.querySelectorAll('[data-last-login]').forEach(function (element) {
+                    element.textContent = formatPresenceDate(user.last_login_at);
+                });
+            });
+        });
+
+        const onlineElement = document.getElementById('onlineUsersCount');
+        const offlineElement = document.getElementById('offlineUsersCount');
+        if (onlineElement) onlineElement.textContent = onlineCount;
+        if (offlineElement) offlineElement.textContent = Math.max(0, payload.users.length - onlineCount);
+        filterUsers();
+    } catch (error) {
+        console.debug('Presence refresh skipped:', error);
+    }
+}
+
+window.setInterval(refreshUsersPresence, 30000);
+window.setTimeout(refreshUsersPresence, 1000);
 </script>
 
 {% endblock %}

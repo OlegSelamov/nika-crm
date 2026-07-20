@@ -2,235 +2,1111 @@
 
 {% block content %}
 
-<div class="page-header">
-    <div>
-        <h1 class="page-title">Движение товара</h1>
-        <div class="page-note">
-            История движения склада
+{% set ns = namespace(total=0, income=0, sale=0, refund=0, writeoff=0, income_sum=0, sale_sum=0, refund_sum=0, writeoff_sum=0) %}
+{% for row in rows %}
+    {% set amount = row.total or 0 %}
+    {% set ns.total = ns.total + 1 %}
+
+    {% if row.movement_type == "income" %}
+        {% set ns.income = ns.income + 1 %}
+        {% set ns.income_sum = ns.income_sum + amount %}
+    {% elif row.movement_type == "sale" %}
+        {% set ns.sale = ns.sale + 1 %}
+        {% set ns.sale_sum = ns.sale_sum + amount %}
+    {% elif row.movement_type == "refund" %}
+        {% set ns.refund = ns.refund + 1 %}
+        {% set ns.refund_sum = ns.refund_sum + amount %}
+    {% elif row.movement_type == "writeoff" %}
+        {% set ns.writeoff = ns.writeoff + 1 %}
+        {% set ns.writeoff_sum = ns.writeoff_sum + amount %}
+    {% endif %}
+{% endfor %}
+
+<div class="movements-page">
+
+    <header class="movements-header">
+        <div>
+            <h1>Движение товара</h1>
+            <p>История приходов, продаж, возвратов и списаний по складу</p>
         </div>
-    </div>
-</div>
 
-<div class="card">
+        <div class="movements-header-actions">
+            <a href="/stock" class="movements-btn movements-btn--light">
+                Остатки
+            </a>
 
-    <table>
+            <a href="/stock/income" class="movements-btn movements-btn--primary">
+                <span>＋</span>
+                Приход товара
+            </a>
+        </div>
+    </header>
 
-        <thead>
-            <tr>
-                <th>Товар</th>
-                <th>Тип</th>
-                <th>Кол-во</th>
-                <th>Сумма</th>
-                <th>Дата</th>
-            </tr>
-        </thead>
+    <section class="movements-stats">
+        <article class="movement-stat movement-stat--purple">
+            <div class="movement-stat-icon">↕</div>
+            <div>
+                <span>Всего операций</span>
+                <strong>{{ ns.total }}</strong>
+                <small>движений по складу</small>
+            </div>
+        </article>
 
-        <tbody>
+        <article class="movement-stat movement-stat--green">
+            <div class="movement-stat-icon">＋</div>
+            <div>
+                <span>Приходы</span>
+                <strong>{{ ns.income }}</strong>
+                <small>{{ "{:,.0f}".format(ns.income_sum).replace(",", " ") }} ₸</small>
+            </div>
+        </article>
 
-        {% for row in rows %}
+        <article class="movement-stat movement-stat--blue">
+            <div class="movement-stat-icon">−</div>
+            <div>
+                <span>Продажи</span>
+                <strong>{{ ns.sale }}</strong>
+                <small>{{ "{:,.0f}".format(ns.sale_sum).replace(",", " ") }} ₸</small>
+            </div>
+        </article>
 
-            <tr>
+        <article class="movement-stat movement-stat--orange">
+            <div class="movement-stat-icon">↩</div>
+            <div>
+                <span>Возвраты</span>
+                <strong>{{ ns.refund }}</strong>
+                <small>{{ "{:,.0f}".format(ns.refund_sum).replace(",", " ") }} ₸</small>
+            </div>
+        </article>
 
-                <td>{{ row.item_name }}</td>
+        <article class="movement-stat movement-stat--red">
+            <div class="movement-stat-icon">×</div>
+            <div>
+                <span>Списания</span>
+                <strong>{{ ns.writeoff }}</strong>
+                <small>{{ "{:,.0f}".format(ns.writeoff_sum).replace(",", " ") }} ₸</small>
+            </div>
+        </article>
+    </section>
 
-                <td>
+    <section class="movements-toolbar">
+        <div class="movements-tabs">
+            <button class="movements-tab is-active" type="button" data-filter="all">
+                Все
+                <span>{{ ns.total }}</span>
+            </button>
 
+            <button class="movements-tab" type="button" data-filter="income">
+                Приход
+                <span>{{ ns.income }}</span>
+            </button>
+
+            <button class="movements-tab" type="button" data-filter="sale">
+                Продажа
+                <span>{{ ns.sale }}</span>
+            </button>
+
+            <button class="movements-tab" type="button" data-filter="refund">
+                Возврат
+                <span>{{ ns.refund }}</span>
+            </button>
+
+            <button class="movements-tab" type="button" data-filter="writeoff">
+                Списание
+                <span>{{ ns.writeoff }}</span>
+            </button>
+        </div>
+
+        <div class="movements-toolbar-row">
+            <label class="movements-search">
+                <span>⌕</span>
+                <input
+                    id="movementSearch"
+                    type="search"
+                    placeholder="Поиск по товару или типу операции"
+                    autocomplete="off"
+                >
+            </label>
+
+            <label class="movements-field">
+                <span>Дата от</span>
+                <input id="movementDateFrom" type="date">
+            </label>
+
+            <label class="movements-field">
+                <span>Дата до</span>
+                <input id="movementDateTo" type="date">
+            </label>
+
+            <label class="movements-field">
+                <span>Сортировка</span>
+                <select id="movementSort">
+                    <option value="date-desc">Сначала новые</option>
+                    <option value="date-asc">Сначала старые</option>
+                    <option value="sum-desc">Сумма: сначала больше</option>
+                    <option value="sum-asc">Сумма: сначала меньше</option>
+                    <option value="name">По названию товара</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="movements-toolbar-footer">
+            <button type="button" class="movements-reset" onclick="resetMovementFilters()">
+                Сбросить фильтры
+            </button>
+
+            <div>
+                Показано: <strong id="movementsVisibleCount">{{ ns.total }}</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="movements-content">
+        {% if rows %}
+
+        <div class="movements-table-wrap">
+            <table class="movements-table">
+                <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Операция</th>
+                        <th>Количество</th>
+                        <th>Сумма</th>
+                        <th>Дата и время</th>
+                    </tr>
+                </thead>
+
+                <tbody id="movementsTableBody">
+                    {% for row in rows %}
                     {% if row.movement_type == "income" %}
-                        <span style="color:#16a34a;font-weight:bold;">
-                            Приход
-                        </span>
-
+                        {% set type_text = "Приход" %}
+                        {% set type_sign = "+" %}
                     {% elif row.movement_type == "sale" %}
-                        <span style="color:#3b82f6;font-weight:bold;">
-                            Продажа
-                        </span>
-						
-					{% elif row.movement_type == "refund" %}
-						<span style="color:#f59e0b;font-weight:bold;">
-							Возврат
-						</span>
-
-                    {% elif row.movement_type == "writeoff" %}
-                        <span style="color:#ef4444;font-weight:bold;">
-                            Списание
-                        </span>
+                        {% set type_text = "Продажа" %}
+                        {% set type_sign = "−" %}
+                    {% elif row.movement_type == "refund" %}
+                        {% set type_text = "Возврат" %}
+                        {% set type_sign = "+" %}
+                    {% else %}
+                        {% set type_text = "Списание" %}
+                        {% set type_sign = "−" %}
                     {% endif %}
 
-                </td>
+                    <tr class="movement-record"
+                        data-name="{{ (row.item_name or '')|lower }}"
+                        data-type="{{ row.movement_type or '' }}"
+                        data-type-text="{{ type_text|lower }}"
+                        data-quantity="{{ row.quantity or 0 }}"
+                        data-total="{{ row.total or 0 }}"
+                        data-date="{{ row.created_at.strftime('%Y-%m-%dT%H:%M:%S') if row.created_at else '' }}">
 
-                <td>
-                    {{ row.quantity }}
-                </td>
+                        <td>
+                            <div class="movement-product">
+                                <div class="movement-product-icon movement-product-icon--{{ row.movement_type }}">
+                                    {{ (row.item_name or "Т")[:1]|upper }}
+                                </div>
 
-                <td>
-                    {{ "{:,.0f}".format(row.total or 0).replace(",", " ") }}
-                </td>
+                                <div>
+                                    <strong>{{ row.item_name or "Без названия" }}</strong>
+                                    <small>Складская операция</small>
+                                </div>
+                            </div>
+                        </td>
 
-                <td>
-                    {{ row.created_at.strftime('%d.%m.%Y %H:%M') if row.created_at }}
-                </td>
+                        <td>
+                            <span class="movement-status movement-status--{{ row.movement_type }}">
+                                {{ type_text }}
+                            </span>
+                        </td>
 
-            </tr>
+                        <td>
+                            <strong class="movement-quantity movement-quantity--{{ row.movement_type }}">
+                                {{ type_sign }}{{ row.quantity }}
+                            </strong>
+                        </td>
 
-        {% endfor %}
+                        <td>
+                            <strong class="movement-sum">
+                                {{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸
+                            </strong>
+                        </td>
 
-        </tbody>
+                        <td>
+                            <div class="movement-date">
+                                <strong>{{ row.created_at.strftime('%d.%m.%Y') if row.created_at else "—" }}</strong>
+                                <small>{{ row.created_at.strftime('%H:%M') if row.created_at else "" }}</small>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-    </table>
+        <div class="movements-mobile-list" id="movementsMobileList">
+            {% for row in rows %}
+            {% if row.movement_type == "income" %}
+                {% set type_text = "Приход" %}
+                {% set type_sign = "+" %}
+            {% elif row.movement_type == "sale" %}
+                {% set type_text = "Продажа" %}
+                {% set type_sign = "−" %}
+            {% elif row.movement_type == "refund" %}
+                {% set type_text = "Возврат" %}
+                {% set type_sign = "+" %}
+            {% else %}
+                {% set type_text = "Списание" %}
+                {% set type_sign = "−" %}
+            {% endif %}
 
-</div>
+            <article class="movement-mobile-card movement-record"
+                     data-name="{{ (row.item_name or '')|lower }}"
+                     data-type="{{ row.movement_type or '' }}"
+                     data-type-text="{{ type_text|lower }}"
+                     data-quantity="{{ row.quantity or 0 }}"
+                     data-total="{{ row.total or 0 }}"
+                     data-date="{{ row.created_at.strftime('%Y-%m-%dT%H:%M:%S') if row.created_at else '' }}">
 
-<div class="mobile-movement-list">
+                <div class="movement-mobile-top">
+                    <div class="movement-product">
+                        <div class="movement-product-icon movement-product-icon--{{ row.movement_type }}">
+                            {{ (row.item_name or "Т")[:1]|upper }}
+                        </div>
 
-{% for row in rows %}
+                        <div>
+                            <strong>{{ row.item_name or "Без названия" }}</strong>
+                            <small>
+                                {{ row.created_at.strftime('%d.%m.%Y в %H:%M') if row.created_at else "Дата не указана" }}
+                            </small>
+                        </div>
+                    </div>
 
-	<div class="mobile-movement-card">
+                    <span class="movement-status movement-status--{{ row.movement_type }}">
+                        {{ type_text }}
+                    </span>
+                </div>
 
-		<div class="movement-top">
+                <div class="movement-mobile-grid">
+                    <div>
+                        <span>Количество</span>
+                        <strong class="movement-quantity movement-quantity--{{ row.movement_type }}">
+                            {{ type_sign }}{{ row.quantity }}
+                        </strong>
+                    </div>
 
-			<div class="movement-name">
-				{{ row.item_name }}
-			</div>
+                    <div>
+                        <span>Сумма операции</span>
+                        <strong>{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸</strong>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
 
-			<div class="movement-type
-				{{ row.movement_type }}">
+        <div class="movements-empty movements-empty--search" id="movementsSearchEmpty" hidden>
+            <div>⌕</div>
+            <strong>Операции не найдены</strong>
+            <p>Измените поисковый запрос или выбранные фильтры.</p>
+        </div>
 
-				{% if row.movement_type == "income" %}
-					Приход
-				{% elif row.movement_type == "sale" %}
-					Продажа
-				{% elif row.movement_type == "refund" %}
-					Возврат
-				{% else %}
-					Списание
-				{% endif %}
-
-			</div>
-
-		</div>
-
-		<div class="movement-row">
-			<span>Кол-во</span>
-			<b>{{ row.quantity }}</b>
-		</div>
-
-		<div class="movement-row">
-			<span>Сумма</span>
-			<b>
-				{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸
-			</b>
-		</div>
-
-		<div class="movement-date">
-			{{ row.created_at.strftime('%d.%m.%Y %H:%M') if row.created_at }}
-		</div>
-
-	</div>
-
-{% endfor %}
+        {% else %}
+        <div class="movements-empty">
+            <div>↕</div>
+            <strong>Движений товара пока нет</strong>
+            <p>Операции появятся после прихода, продажи, возврата или списания.</p>
+            <a href="/stock/income" class="movements-btn movements-btn--primary">
+                Оформить приход
+            </a>
+        </div>
+        {% endif %}
+    </section>
 
 </div>
 
 <style>
-
-.mobile-movement-list{
-	display:none;
+.movements-page{
+    --mv-card:#fff;
+    --mv-soft:#f8f9fd;
+    --mv-border:#e5e8f0;
+    --mv-text:#202536;
+    --mv-muted:#747c8f;
+    --mv-purple:#7357ff;
+    --mv-purple-soft:#efecff;
+    --mv-green:#169873;
+    --mv-green-soft:#e7f7f1;
+    --mv-blue:#3976d8;
+    --mv-blue-soft:#e9f1ff;
+    --mv-orange:#c87a10;
+    --mv-orange-soft:#fff1d9;
+    --mv-red:#d45151;
+    --mv-red-soft:#fdecec;
+    --mv-shadow:0 12px 34px rgba(42,46,74,.08);
+    width:100%;
+    min-width:0;
+    color:var(--mv-text);
 }
 
-@media (max-width:768px){
-
-	.card table{
-		display:none;
-	}
-
-	.mobile-movement-list{
-
-		display:flex;
-		flex-direction:column;
-
-		gap:10px;
-	}
-
-	.mobile-movement-card{
-
-		background:white;
-
-		padding:12px;
-
-		border-radius:16px;
-
-		box-shadow:
-		0 4px 14px rgba(0,0,0,.06);
-	}
-
-	.movement-top{
-
-		display:flex;
-
-		justify-content:space-between;
-
-		gap:10px;
-	}
-
-	.movement-name{
-
-		font-size:14px;
-		font-weight:700;
-
-		flex:1;
-	}
-
-	.movement-type{
-
-		padding:4px 8px;
-
-		border-radius:999px;
-
-		font-size:11px;
-		font-weight:700;
-	}
-
-	.income{
-		background:#dcfce7;
-		color:#16a34a;
-	}
-
-	.sale{
-		background:#dbeafe;
-		color:#2563eb;
-	}
-
-	.writeoff{
-		background:#fee2e2;
-		color:#ef4444;
-	}
-	
-	.refund{
-		background:#fef3c7;
-		color:#d97706;
-	}
-
-	.movement-row{
-
-		display:flex;
-
-		justify-content:space-between;
-
-		margin-top:8px;
-
-		font-size:13px;
-	}
-
-	.movement-date{
-
-		margin-top:10px;
-
-		font-size:12px;
-
-		color:#64748b;
-	}
+.movements-header{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:16px;
 }
 
+.movements-header h1{
+    margin:0;
+    color:var(--mv-text)!important;
+    font-size:30px!important;
+    line-height:1.1;
+    text-shadow:none!important;
+}
+
+.movements-header p{
+    margin:6px 0 0;
+    color:var(--mv-muted);
+    font-size:13px;
+}
+
+.movements-header-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.movements-btn{
+    min-height:44px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    padding:0 16px;
+    border:1px solid transparent;
+    border-radius:11px;
+    font:inherit;
+    font-size:12px;
+    font-weight:800;
+    text-decoration:none;
+    white-space:nowrap;
+    cursor:pointer;
+}
+
+.movements-btn--primary{
+    color:#fff!important;
+    background:linear-gradient(135deg,#7357ff,#9658e8);
+    box-shadow:0 9px 20px rgba(115,87,255,.22);
+}
+
+.movements-btn--light{
+    color:#5f6678!important;
+    border-color:var(--mv-border);
+    background:#fff;
+}
+
+.movements-stats{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:10px;
+    margin-bottom:12px;
+}
+
+.movement-stat{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:11px;
+    padding:15px;
+    border:1px solid var(--mv-border);
+    border-radius:15px;
+    background:var(--mv-card);
+    box-shadow:var(--mv-shadow);
+}
+
+.movement-stat-icon{
+    flex:0 0 40px;
+    width:40px;
+    height:40px;
+    display:grid;
+    place-items:center;
+    border-radius:12px;
+    font-size:16px;
+    font-weight:900;
+}
+
+.movement-stat>div:last-child{
+    min-width:0;
+    display:grid;
+}
+
+.movement-stat span{
+    color:var(--mv-muted);
+    font-size:9px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+}
+
+.movement-stat strong{
+    margin-top:3px;
+    font-size:22px;
+    line-height:1;
+}
+
+.movement-stat small{
+    margin-top:5px;
+    overflow:hidden;
+    color:#939aac;
+    font-size:9px;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.movement-stat--purple .movement-stat-icon{color:var(--mv-purple);background:var(--mv-purple-soft)}
+.movement-stat--green .movement-stat-icon{color:var(--mv-green);background:var(--mv-green-soft)}
+.movement-stat--blue .movement-stat-icon{color:var(--mv-blue);background:var(--mv-blue-soft)}
+.movement-stat--orange .movement-stat-icon{color:var(--mv-orange);background:var(--mv-orange-soft)}
+.movement-stat--red .movement-stat-icon{color:var(--mv-red);background:var(--mv-red-soft)}
+
+.movements-toolbar,
+.movements-content{
+    margin-bottom:12px;
+    padding:16px;
+    border:1px solid var(--mv-border);
+    border-radius:16px;
+    background:var(--mv-card);
+    box-shadow:var(--mv-shadow);
+}
+
+.movements-tabs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:7px;
+    margin-bottom:13px;
+}
+
+.movements-tab{
+    min-height:38px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:0 12px;
+    border:1px solid var(--mv-border);
+    border-radius:10px;
+    color:#737b8e;
+    background:#f6f7fa;
+    font:inherit;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.movements-tab span{
+    min-width:22px;
+    height:20px;
+    display:grid;
+    place-items:center;
+    padding:0 5px;
+    border-radius:999px;
+    background:#fff;
+    font-size:9px;
+}
+
+.movements-tab.is-active{
+    color:var(--mv-purple);
+    border-color:#d8d1ff;
+    background:var(--mv-purple-soft);
+}
+
+.movements-toolbar-row{
+    display:grid;
+    grid-template-columns:minmax(260px,1fr) 155px 155px 230px;
+    gap:10px;
+}
+
+.movements-search{
+    min-width:0;
+    height:46px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:0 12px;
+    border:1px solid var(--mv-border);
+    border-radius:10px;
+    background:#fff;
+}
+
+.movements-search:focus-within,
+.movements-field:focus-within{
+    border-color:#b9afff;
+    box-shadow:0 0 0 3px rgba(115,87,255,.08);
+}
+
+.movements-search input{
+    width:100%;
+    min-width:0;
+    height:auto;
+    padding:0;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    box-shadow:none;
+    font-size:12px;
+}
+
+.movements-field{
+    min-width:0;
+    height:46px;
+    display:grid;
+    grid-template-rows:auto 1fr;
+    padding:5px 10px 4px;
+    border:1px solid var(--mv-border);
+    border-radius:10px;
+    background:#fff;
+}
+
+.movements-field>span{
+    color:#9299aa;
+    font-size:8px;
+    font-weight:800;
+    text-transform:uppercase;
+}
+
+.movements-field input,
+.movements-field select{
+    width:100%;
+    min-width:0;
+    height:auto;
+    padding:0;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    box-shadow:none;
+    font-size:11px;
+    font-weight:700;
+}
+
+.movements-toolbar-footer{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-top:10px;
+    color:var(--mv-muted);
+    font-size:11px;
+}
+
+.movements-toolbar-footer strong{
+    color:var(--mv-text);
+}
+
+.movements-reset{
+    padding:0;
+    border:0;
+    color:var(--mv-purple);
+    background:transparent;
+    font:inherit;
+    font-size:10px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.movements-table-wrap{
+    width:100%;
+    overflow-x:auto;
+}
+
+.movements-table{
+    width:100%;
+    min-width:850px;
+    border-collapse:collapse;
+    table-layout:fixed;
+    background:#fff;
+    box-shadow:none;
+}
+
+.movements-table th,
+.movements-table td{
+    padding:13px 10px;
+    border-bottom:1px solid var(--mv-border);
+    text-align:left;
+    vertical-align:middle;
+}
+
+.movements-table th{
+    color:#8790a3;
+    background:#fafafe;
+    font-size:10px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.025em;
+}
+
+.movements-table td{
+    color:#303648;
+    font-size:12px;
+}
+
+.movements-table th:nth-child(1),
+.movements-table td:nth-child(1){width:32%}
+
+.movements-table th:nth-child(2),
+.movements-table td:nth-child(2){width:17%}
+
+.movements-table th:nth-child(3),
+.movements-table td:nth-child(3){width:16%}
+
+.movements-table th:nth-child(4),
+.movements-table td:nth-child(4){width:17%}
+
+.movements-table th:nth-child(5),
+.movements-table td:nth-child(5){width:18%}
+
+.movement-product{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:9px;
+}
+
+.movement-product-icon{
+    flex:0 0 40px;
+    width:40px;
+    height:40px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    font-size:15px;
+    font-weight:900;
+}
+
+.movement-product-icon--income{color:var(--mv-green);background:var(--mv-green-soft)}
+.movement-product-icon--sale{color:var(--mv-blue);background:var(--mv-blue-soft)}
+.movement-product-icon--refund{color:var(--mv-orange);background:var(--mv-orange-soft)}
+.movement-product-icon--writeoff{color:var(--mv-red);background:var(--mv-red-soft)}
+
+.movement-product>div:last-child{
+    min-width:0;
+    display:grid;
+    gap:3px;
+}
+
+.movement-product strong,
+.movement-product small{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.movement-product strong{
+    font-size:13px;
+}
+
+.movement-product small{
+    color:var(--mv-muted);
+    font-size:9px;
+}
+
+.movement-status{
+    min-height:27px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 9px;
+    border-radius:999px;
+    font-size:9px;
+    font-weight:800;
+    white-space:nowrap;
+}
+
+.movement-status--income{color:var(--mv-green);background:var(--mv-green-soft)}
+.movement-status--sale{color:var(--mv-blue);background:var(--mv-blue-soft)}
+.movement-status--refund{color:var(--mv-orange);background:var(--mv-orange-soft)}
+.movement-status--writeoff{color:var(--mv-red);background:var(--mv-red-soft)}
+
+.movement-quantity{
+    font-size:14px;
+}
+
+.movement-quantity--income,
+.movement-quantity--refund{
+    color:var(--mv-green);
+}
+
+.movement-quantity--sale{
+    color:var(--mv-blue);
+}
+
+.movement-quantity--writeoff{
+    color:var(--mv-red);
+}
+
+.movement-sum{
+    color:#252b3c;
+}
+
+.movement-date{
+    display:grid;
+    gap:2px;
+}
+
+.movement-date strong{
+    font-size:11px;
+}
+
+.movement-date small{
+    color:var(--mv-muted);
+    font-size:9px;
+}
+
+.movements-mobile-list{
+    display:none;
+}
+
+.movements-empty{
+    min-height:270px;
+    display:grid;
+    place-content:center;
+    justify-items:center;
+    text-align:center;
+}
+
+.movements-empty[hidden]{
+    display:none!important;
+}
+
+.movements-empty>div{
+    width:54px;
+    height:54px;
+    display:grid;
+    place-items:center;
+    margin-bottom:10px;
+    border-radius:16px;
+    color:var(--mv-purple);
+    background:var(--mv-purple-soft);
+    font-size:21px;
+}
+
+.movements-empty strong{
+    font-size:14px;
+}
+
+.movements-empty p{
+    margin:5px 0 13px;
+    color:var(--mv-muted);
+    font-size:11px;
+}
+
+.movements-empty--search{
+    min-height:190px;
+}
+
+@media(max-width:1200px){
+    .movements-stats{
+        grid-template-columns:repeat(3,minmax(0,1fr));
+    }
+
+    .movements-toolbar-row{
+        grid-template-columns:minmax(240px,1fr) 150px 150px;
+    }
+
+    .movements-toolbar-row .movements-field:last-child{
+        grid-column:1/-1;
+    }
+}
+
+@media(max-width:768px){
+    .movements-header{
+        flex-direction:column;
+    }
+
+    .movements-header-actions{
+        width:100%;
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .movements-stats{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+
+    .movements-toolbar-row{
+        grid-template-columns:1fr 1fr;
+    }
+
+    .movements-search{
+        grid-column:1/-1;
+    }
+
+    .movements-toolbar-row .movements-field:last-child{
+        grid-column:1/-1;
+    }
+
+    .movements-table-wrap{
+        display:none;
+    }
+
+    .movements-mobile-list{
+        display:grid;
+        gap:9px;
+    }
+
+    .movement-mobile-card{
+        padding:14px;
+        border:1px solid var(--mv-border);
+        border-radius:13px;
+        background:var(--mv-soft);
+    }
+
+    .movement-mobile-top{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:8px;
+    }
+
+    .movement-mobile-grid{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:7px;
+        margin-top:11px;
+    }
+
+    .movement-mobile-grid>div{
+        min-width:0;
+        display:grid;
+        gap:3px;
+        padding:10px;
+        border:1px solid var(--mv-border);
+        border-radius:9px;
+        background:#fff;
+    }
+
+    .movement-mobile-grid span{
+        color:var(--mv-muted);
+        font-size:8px;
+        font-weight:700;
+        text-transform:uppercase;
+    }
+
+    .movement-mobile-grid strong{
+        overflow-wrap:anywhere;
+        font-size:11px;
+    }
+}
+
+@media(max-width:560px){
+    .movements-header h1{
+        font-size:26px!important;
+    }
+
+    .movements-header-actions{
+        grid-template-columns:1fr;
+    }
+
+    .movement-stat{
+        align-items:flex-start;
+        gap:8px;
+        padding:12px;
+    }
+
+    .movement-stat-icon{
+        flex-basis:34px;
+        width:34px;
+        height:34px;
+        border-radius:10px;
+        font-size:14px;
+    }
+
+    .movement-stat strong{
+        font-size:20px;
+    }
+
+    .movement-stat small{
+        display:none;
+    }
+
+    .movements-toolbar,
+    .movements-content{
+        padding:13px;
+    }
+
+    .movements-tabs{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .movements-tab{
+        justify-content:center;
+    }
+
+    .movements-toolbar-row{
+        grid-template-columns:1fr;
+    }
+
+    .movements-search,
+    .movements-toolbar-row .movements-field:last-child{
+        grid-column:auto;
+    }
+
+    .movement-mobile-top{
+        flex-direction:column;
+    }
+}
+</style>
+
+<script>
+let activeMovementFilter = "all";
+
+function applyMovementFilters() {
+    const query = (document.getElementById("movementSearch")?.value || "").trim().toLowerCase();
+    const dateFrom = document.getElementById("movementDateFrom")?.value || "";
+    const dateTo = document.getElementById("movementDateTo")?.value || "";
+    const records = document.querySelectorAll(".movement-record");
+    const visibleKeys = new Set();
+
+    records.forEach(record => {
+        const searchText = [
+            record.dataset.name || "",
+            record.dataset.typeText || ""
+        ].join(" ");
+
+        const recordDate = (record.dataset.date || "").slice(0, 10);
+        const matchesSearch = !query || searchText.includes(query);
+        const matchesType = activeMovementFilter === "all" || record.dataset.type === activeMovementFilter;
+        const matchesFrom = !dateFrom || (recordDate && recordDate >= dateFrom);
+        const matchesTo = !dateTo || (recordDate && recordDate <= dateTo);
+        const visible = matchesSearch && matchesType && matchesFrom && matchesTo;
+
+        record.style.display = visible ? "" : "none";
+
+        if (visible) {
+            const key = [
+                record.dataset.name,
+                record.dataset.type,
+                record.dataset.quantity,
+                record.dataset.total,
+                record.dataset.date
+            ].join("|");
+            visibleKeys.add(key);
+        }
+    });
+
+    const count = visibleKeys.size;
+    const countNode = document.getElementById("movementsVisibleCount");
+    const emptyNode = document.getElementById("movementsSearchEmpty");
+
+    if (countNode) countNode.textContent = count;
+    if (emptyNode) emptyNode.hidden = count !== 0;
+}
+
+function sortMovementRecords() {
+    const sortValue = document.getElementById("movementSort")?.value || "date-desc";
+    const containers = [
+        document.getElementById("movementsTableBody"),
+        document.getElementById("movementsMobileList")
+    ].filter(Boolean);
+
+    containers.forEach(container => {
+        const records = Array.from(container.querySelectorAll(".movement-record"));
+
+        records.sort((a, b) => {
+            if (sortValue === "date-asc") {
+                return (a.dataset.date || "").localeCompare(b.dataset.date || "");
+            }
+
+            if (sortValue === "date-desc") {
+                return (b.dataset.date || "").localeCompare(a.dataset.date || "");
+            }
+
+            if (sortValue === "sum-desc") {
+                return Number(b.dataset.total || 0) - Number(a.dataset.total || 0);
+            }
+
+            if (sortValue === "sum-asc") {
+                return Number(a.dataset.total || 0) - Number(b.dataset.total || 0);
+            }
+
+            return (a.dataset.name || "").localeCompare(
+                b.dataset.name || "",
+                "ru",
+                {sensitivity:"base"}
+            );
+        });
+
+        records.forEach(record => container.appendChild(record));
+    });
+
+    applyMovementFilters();
+}
+
+function resetMovementFilters() {
+    activeMovementFilter = "all";
+
+    document.querySelectorAll(".movements-tab").forEach(tab => {
+        tab.classList.toggle("is-active", tab.dataset.filter === "all");
+    });
+
+    const search = document.getElementById("movementSearch");
+    const dateFrom = document.getElementById("movementDateFrom");
+    const dateTo = document.getElementById("movementDateTo");
+    const sort = document.getElementById("movementSort");
+
+    if (search) search.value = "";
+    if (dateFrom) dateFrom.value = "";
+    if (dateTo) dateTo.value = "";
+    if (sort) sort.value = "date-desc";
+
+    sortMovementRecords();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".movements-tab").forEach(button => {
+        button.addEventListener("click", () => {
+            activeMovementFilter = button.dataset.filter || "all";
+
+            document.querySelectorAll(".movements-tab").forEach(tab => {
+                tab.classList.toggle("is-active", tab === button);
+            });
+
+            applyMovementFilters();
+        });
+    });
+
+    document.getElementById("movementSearch")?.addEventListener("input", applyMovementFilters);
+    document.getElementById("movementDateFrom")?.addEventListener("change", applyMovementFilters);
+    document.getElementById("movementDateTo")?.addEventListener("change", applyMovementFilters);
+    document.getElementById("movementSort")?.addEventListener("change", sortMovementRecords);
+
+    window.addEventListener("resize", applyMovementFilters);
+
+    sortMovementRecords();
+});
+</script>
+
+
+<style>
+.movements-header p{font-size:14px!important;}
+.movements-btn{font-size:13px!important;}
+.movement-stat span{font-size:12px!important;}
+.movement-stat small{font-size:11px!important;}
+.movements-tab{font-size:12px!important;}
+.movements-tab span{font-size:10px!important;}
+.movements-search input{font-size:13px!important;}
+.movements-field>span{font-size:10px!important;}
+.movements-field input,
+.movements-field select{font-size:12px!important;}
+.movements-toolbar-footer{font-size:12px!important;}
+.movements-reset{font-size:12px!important;}
+.movements-table th{font-size:11px!important;}
+.movements-table td{font-size:13px!important;}
+.movement-product strong{font-size:14px!important;}
+.movement-product small{font-size:11px!important;}
+.movement-status{font-size:10px!important;}
+.movement-date strong{font-size:12px!important;}
+.movement-date small{font-size:10px!important;}
+.movements-empty p{font-size:12px!important;}
+.movement-mobile-grid span{font-size:10px!important;}
+.movement-mobile-grid strong{font-size:12px!important;}
 </style>
 
 {% endblock %}
