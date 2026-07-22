@@ -694,7 +694,7 @@ def process_sale(conn, sale_id):
 
     if not sale:
         return
-        
+
     if sale["is_processed"]:
         return
 
@@ -705,19 +705,22 @@ def process_sale(conn, sale_id):
     """, (
         sale_id,
     ))
-    
+
     items = cur.fetchall()
 
     for item in items:
 
         cur.execute("""
-            SELECT unit, purchase_price
+            SELECT
+                unit,
+                purchase_price,
+                COALESCE(item_type, 'product') AS item_type
             FROM items
             WHERE id = %s
         """, (
             item["item_id"],
         ))
-        
+
         db_item = cur.fetchone()
 
         unit = (
@@ -732,11 +735,16 @@ def process_sale(conn, sale_id):
             else 0
         )
 
+        item_type = (
+            db_item["item_type"]
+            if db_item
+            else "product"
+        )
+
         profit = (
             item["price"] - purchase_price
         ) * item["quantity"]
 
-        # 🔥 обновляем profit
         cur.execute("""
             UPDATE sale_items
             SET
@@ -749,49 +757,46 @@ def process_sale(conn, sale_id):
             item["id"]
         ))
 
-        # 🔥 списываем остатки
+        if item_type == "product":
 
-        cur.execute("""
-            UPDATE items
-            SET quantity = COALESCE(quantity, 0) - %s
-            WHERE id = %s
-        """, (
-            item["quantity"],
-            item["item_id"]
-        ))
-        
-        # 🔥 движение склада
-        cur.execute("""
-            INSERT INTO stock_movements (
-                company_id,
-                item_id,
-                movement_type,
-                quantity,
-                price,
-                total,
-                created_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            sale["company_id"],
-            item["item_id"],
-            "sale",
-            item["quantity"],
-            item["price"],
-            item["total"],
-            now_kz().isoformat()
-        ))
-    
-        # 🔥 помечаем как проведённую
+            cur.execute("""
+                UPDATE items
+                SET quantity = COALESCE(quantity, 0) - %s
+                WHERE id = %s
+            """, (
+                item["quantity"],
+                item["item_id"]
+            ))
 
-        cur.execute("""
-            UPDATE sales
-            SET is_processed = TRUE
-            WHERE id = %s
-        """, (
-            sale_id,
-        ))
-        
+            cur.execute("""
+                INSERT INTO stock_movements (
+                    company_id,
+                    item_id,
+                    movement_type,
+                    quantity,
+                    price,
+                    total,
+                    created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                sale["company_id"],
+                item["item_id"],
+                "sale",
+                item["quantity"],
+                item["price"],
+                item["total"],
+                now_kz().isoformat()
+            ))
+
+    cur.execute("""
+        UPDATE sales
+        SET is_processed = TRUE
+        WHERE id = %s
+    """, (
+        sale_id,
+    ))
+
 def number_to_words_kz(n):
 
     try:
@@ -2123,35 +2128,47 @@ def refund_sale(sale_id):
         for item in items:
 
             cur.execute("""
-                UPDATE items
-                SET quantity =
-                    COALESCE(quantity,0) + %s
+                SELECT COALESCE(item_type, 'product') AS item_type
+                FROM items
                 WHERE id = %s
             """, (
-                item["quantity"],
-                item["item_id"]
+                item["item_id"],
             ))
 
-            cur.execute("""
-                INSERT INTO stock_movements (
-                    company_id,
-                    item_id,
-                    movement_type,
-                    quantity,
-                    price,
-                    total,
-                    created_at
-                )
-                VALUES (%s,%s,%s,%s,%s,%s,%s)
-            """, (
-                sale["company_id"],
-                item["item_id"],
-                "refund",
-                item["quantity"],
-                item["price"],
-                item["total"],
-                now_kz().isoformat()
-            ))
+            db_item = cur.fetchone()
+            item_type = db_item["item_type"] if db_item else "product"
+
+            if item_type == "product":
+
+                cur.execute("""
+                    UPDATE items
+                    SET quantity = COALESCE(quantity, 0) + %s
+                    WHERE id = %s
+                """, (
+                    item["quantity"],
+                    item["item_id"]
+                ))
+
+                cur.execute("""
+                    INSERT INTO stock_movements (
+                        company_id,
+                        item_id,
+                        movement_type,
+                        quantity,
+                        price,
+                        total,
+                        created_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    sale["company_id"],
+                    item["item_id"],
+                    "refund",
+                    item["quantity"],
+                    item["price"],
+                    item["total"],
+                    now_kz().isoformat()
+                ))
 
         # обновляем продажу
 
@@ -2241,7 +2258,7 @@ def search_items():
             retail_price,
             gtin,
             ntin,
-            type
+            COALESCE(item_type, 'product') AS item_type
         FROM items
         WHERE company_id = %s
         AND LOWER(name)

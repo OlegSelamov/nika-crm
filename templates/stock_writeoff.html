@@ -1173,10 +1173,13 @@ document.addEventListener("DOMContentLoaded", function () {
             commentInput.value = this.value;
             commentInput.dataset.autoReason = "1";
         }
+
+        commentInput.setCustomValidity("");
     });
 
     commentInput.addEventListener("input", function () {
         this.dataset.autoReason = "0";
+        this.setCustomValidity("");
     });
 
     document.getElementById("writeoffReset").addEventListener("click", () => {
