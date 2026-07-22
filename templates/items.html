@@ -32,12 +32,29 @@
 .catalog-primary-btn:hover { transform:translateY(-1px); box-shadow:0 12px 24px rgba(114,87,255,.28); }
 .catalog-secondary-btn { display:inline-flex; align-items:center; justify-content:center; padding:0 16px; color:var(--cat-purple)!important; background:var(--cat-purple-soft); border:1px solid #d9d2ff; }
 .catalog-section { min-width:0; padding:20px; border:1px solid var(--cat-border); border-radius:19px; background:var(--cat-card); box-shadow:var(--cat-shadow); }
-.catalog-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:17px; }
-.catalog-search { flex:1; min-width:220px; height:42px; display:flex; align-items:center; gap:8px; padding:0 12px; border:1px solid var(--cat-border); border-radius:12px; background:#fff; }
+.catalog-toolbar{
+    display:grid;
+    grid-template-columns:1fr 260px;
+    gap:12px;
+    align-items:center;
+    margin-bottom:17px;
+}
+.catalog-search{
+    width:100%;
+    min-width:0;
+    height:42px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:0 12px;
+    border:1px solid var(--cat-border);
+    border-radius:12px;
+    background:#fff;
+}
 .catalog-search:focus-within { border-color:#baaefe; box-shadow:0 0 0 3px rgba(114,87,255,.09); }
 .catalog-search input { width:100%; min-width:0; border:0; outline:0; color:var(--cat-text); background:transparent; font:inherit; font-size:12px; }
 .catalog-search input::placeholder { color:#9ca2b1; }
-.catalog-filter { height:42px; min-width:170px; padding:0 34px 0 12px; border:1px solid var(--cat-border); border-radius:12px; color:var(--cat-text); background:#fff; outline:0; font:inherit; font-size:11px; }
+.catalog-filter { width:100%; min-width:260px; height:42px; padding:0 34px 0 12px; border:1px solid var(--cat-border); border-radius:12px; color:var(--cat-text); background:#fff; outline:0; font:inherit; font-size:11px; }
 .catalog-scan-link { display:none; }
 .catalog-table-wrap { width:100%; overflow-x:auto; }
 .catalog-table { width:100%; min-width:930px; border-collapse:collapse; }
@@ -114,6 +131,10 @@ body.catalog-modal-open { overflow:hidden; }
 .category-manager__form { display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:9px; padding:12px; border:1px solid var(--cat-border); border-radius:14px; background:#faf9ff; }
 .category-manager__form input { width:100%; min-height:42px; padding:0 12px; border:1px solid var(--cat-border); border-radius:10px; font:inherit; box-sizing:border-box; }
 .category-manager__save { min-height:42px; padding:0 15px; border:0; border-radius:10px; color:#fff; background:var(--cat-purple); font:inherit; font-size:10px; font-weight:850; cursor:pointer; }
+.category-manager__type-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;padding:4px;border:1px solid var(--cat-border);border-radius:12px;background:#f7f7fb;}
+.category-manager__type-tab{min-height:40px;border:1px solid transparent;border-radius:9px;color:var(--cat-muted);background:transparent;font:inherit;font-size:11px;font-weight:850;cursor:pointer;}
+.category-manager__type-tab.is-active{color:var(--cat-purple);border-color:#d5ccff;background:#fff;box-shadow:0 5px 14px rgba(114,87,255,.12);}
+.category-manager__item[hidden]{display:none!important;}
 .category-manager__list { display:grid; gap:8px; margin-top:12px; }
 .category-manager__item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 12px; border:1px solid var(--cat-border); border-radius:12px; background:#fff; }
 .category-manager__meta { min-width:0; display:grid; gap:3px; }
@@ -157,6 +178,28 @@ body.catalog-modal-open { overflow:hidden; }
     .catalog-barcode-row { display:grid; grid-template-columns:1fr; }
     .catalog-barcode-search { width:100%; }
 }
+
+.catalog-type-switch{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px;border:1px solid var(--cat-border);border-radius:15px;background:#f7f7fb;}
+.catalog-type-option{position:relative;min-width:0;cursor:pointer;}
+.catalog-type-option input{position:absolute;opacity:0;pointer-events:none;}
+.catalog-type-card{min-height:76px;display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid transparent;border-radius:12px;background:transparent;transition:.18s ease;}
+.catalog-type-card__icon{flex:0 0 39px;width:39px;height:39px;display:grid;place-items:center;border-radius:11px;background:#fff;font-size:20px;}
+.catalog-type-card__text{min-width:0;display:grid;gap:3px;}
+.catalog-type-card__text strong{font-size:13px;}
+.catalog-type-card__text small{color:var(--cat-muted);font-size:10px;}
+.catalog-type-option input:checked + .catalog-type-card{border-color:#cfc6ff;background:#fff;box-shadow:0 7px 18px rgba(114,87,255,.12);}
+.catalog-type-option input:checked + .catalog-type-card .catalog-type-card__icon{color:#fff;background:linear-gradient(135deg,var(--cat-purple),#9a59e8);}
+.catalog-item-type{display:inline-flex;align-items:center;min-height:22px;margin-left:6px;padding:0 7px;border-radius:999px;font-size:9px;font-weight:850;vertical-align:middle;}
+.catalog-item-type--product{color:#3976d8;background:#e9f1ff;}
+.catalog-item-type--service{color:#8a55c7;background:#f2eaff;}
+.catalog-type-tabs{display:flex;gap:7px;margin-bottom:12px;}
+.catalog-type-tab{min-height:35px;padding:0 12px;border:1px solid var(--cat-border);border-radius:10px;color:var(--cat-muted);background:#f7f7fa;font:inherit;font-size:11px;font-weight:800;cursor:pointer;}
+.catalog-type-tab.is-active{color:var(--cat-purple);border-color:#d9d2ff;background:var(--cat-purple-soft);}
+.catalog-service-cost-note{display:none;}
+.catalog-modal.is-service .catalog-product-only{display:none!important;}
+.catalog-modal.is-service .catalog-service-cost-note{display:block;}
+@media(max-width:600px){.catalog-type-switch{grid-template-columns:1fr;}}
+
 </style>
 
 {% set categories = categories|default([]) %}
@@ -175,13 +218,19 @@ body.catalog-modal-open { overflow:hidden; }
 <div class="catalog-page">
     <div class="catalog-header">
         <div>
-            <h1 class="catalog-title">Каталог товаров</h1>
-            <div class="catalog-note">Товары, цены, категории, штрихкоды и единицы измерения</div>
+            <h1 class="catalog-title">Каталог</h1>
+            <div class="catalog-note">Товары и услуги, цены, категории, штрихкоды и единицы измерения</div>
         </div>
-        <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()">＋ Добавить товар</button>
+        <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()">＋ Добавить позицию</button>
     </div>
 
     <section class="catalog-section">
+        <div class="catalog-type-tabs">
+            <button type="button" class="catalog-type-tab is-active" onclick="setCatalogTypeFilter('all', this)">Все</button>
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('product', this)">Товары</button>
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>
+        </div>
+
         <div class="catalog-toolbar">
             <label class="catalog-search">
                 <span>⌕</span>
@@ -215,14 +264,16 @@ body.catalog-modal-open { overflow:hidden; }
                 <tbody>
                 {% for i in items %}
                     {% set category_name = i.category_name|default(i.category|default('Без категории'), true) %}
+                    {% set item_type = i.item_type|default('product', true) %}
                     <tr class="catalog-item"
+                        data-item-type="{{ item_type }}"
                         data-category="{{ category_name|lower }}"
                         data-search="{{ ((i.name or '') ~ ' ' ~ (i.barcode or '') ~ ' ' ~ (i.gtin or '') ~ ' ' ~ (i.ntin or '') ~ ' ' ~ category_name)|lower }}">
                         <td>
                             <div class="catalog-product">
                                 <img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">
                                 <div class="catalog-product__info">
-                                    <strong>{{ i.name }}</strong>
+                                    <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else "Товар" }}</span></strong>
                                     <small>
                                         {% if i.gtin %}GTIN: {{ i.gtin }}{% elif i.ntin %}NTIN: {{ i.ntin }}{% else %}ID: {{ i.id }}{% endif %}
                                     </small>
@@ -253,9 +304,10 @@ body.catalog-modal-open { overflow:hidden; }
                                         "purchase_price": i.purchase_price|default(0),
                                         "unit": i.unit or "шт",
                                         "is_marked": i.is_marked|default(false),
-                                        "image": i.image or ""
+                                        "image": i.image or "",
+                                        "item_type": item_type
                                     }|tojson }})'>✎</button>
-                                <a class="catalog-danger-btn" href="/items/{{ i.id }}/delete" title="Удалить" onclick="return confirm('Удалить товар «{{ i.name|e }}»?')">×</a>
+                                <a class="catalog-danger-btn" href="/items/{{ i.id }}/delete" title="Удалить" onclick="return confirm('Удалить {{ 'услугу' if i.item_type|default('product', true) == 'service' else 'товар' }} «{{ i.name|e }}»?')">×</a>
                             </div>
                         </td>
                     </tr>
@@ -267,14 +319,16 @@ body.catalog-modal-open { overflow:hidden; }
         <div class="catalog-mobile-list">
         {% for i in items %}
             {% set category_name = i.category_name|default(i.category|default('Без категории'), true) %}
+            {% set item_type = i.item_type|default('product', true) %}
             <article class="catalog-mobile-card catalog-item"
+                     data-item-type="{{ item_type }}"
                      data-category="{{ category_name|lower }}"
                      data-search="{{ ((i.name or '') ~ ' ' ~ (i.barcode or '') ~ ' ' ~ (i.gtin or '') ~ ' ' ~ (i.ntin or '') ~ ' ' ~ category_name)|lower }}">
                 <div class="catalog-mobile-card__top">
                     <div class="catalog-product">
                         <img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">
                         <div class="catalog-product__info">
-                            <strong>{{ i.name }}</strong>
+                            <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else "Товар" }}</span></strong>
                             <small>{{ category_name }}</small>
                         </div>
                     </div>
@@ -299,9 +353,10 @@ body.catalog-modal-open { overflow:hidden; }
                         "purchase_price": i.purchase_price|default(0),
                         "unit": i.unit or "шт",
                         "is_marked": i.is_marked|default(false),
-                        "image": i.image or ""
+                        "image": i.image or "",
+                        "item_type": item_type
                     }|tojson }})'>Изменить</button>
-                    <a href="/items/{{ i.id }}/delete" onclick="return confirm('Удалить товар «{{ i.name|e }}»?')">Удалить</a>
+                    <a href="/items/{{ i.id }}/delete" onclick="return confirm('Удалить {{ 'услугу' if i.item_type|default('product', true) == 'service' else 'товар' }} «{{ i.name|e }}»?')">Удалить</a>
                 </div>
             </article>
         {% endfor %}
@@ -321,7 +376,7 @@ body.catalog-modal-open { overflow:hidden; }
         <div class="catalog-modal__head">
             <div>
                 <h3 id="itemModalTitle">Новый товар</h3>
-                <p>Основные данные товара и идентификаторы маркировки</p>
+                <p id="itemModalSubtitle">Основные данные товара и идентификаторы маркировки</p>
             </div>
             <button class="catalog-modal__close" type="button" onclick="closeItemModal()">×</button>
         </div>
@@ -329,6 +384,17 @@ body.catalog-modal-open { overflow:hidden; }
         <form class="catalog-modal__form" id="itemForm" method="post" action="/items/add" enctype="multipart/form-data">
             <div class="catalog-modal__body">
             <div class="catalog-form-grid">
+                <div class="catalog-type-switch">
+                    <label class="catalog-type-option">
+                        <input type="radio" name="item_type" value="product" id="itemTypeProduct" checked onchange="applyItemType('product')">
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon">📦</span><span class="catalog-type-card__text"><strong>Товар</strong><small>Учитывается на складе</small></span></span>
+                    </label>
+                    <label class="catalog-type-option">
+                        <input type="radio" name="item_type" value="service" id="itemTypeService" onchange="applyItemType('service')">
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon">🛠</span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
+                    </label>
+                </div>
+
                 <div class="catalog-field catalog-field--wide">
                     <span>Штрихкод</span>
                     <div class="catalog-barcode-row">
@@ -340,7 +406,7 @@ body.catalog-modal-open { overflow:hidden; }
                 </div>
 
                 <label class="catalog-field catalog-field--wide">
-                    <span>Название товара *</span>
+                    <span id="itemNameLabel">Название товара *</span>
                     <input type="text" name="name" id="itemName" required placeholder="Например: Молоко 3,2%">
                 </label>
 
@@ -352,8 +418,13 @@ body.catalog-modal-open { overflow:hidden; }
                             {% for category in category_source %}
                                 {% set category_name = category.name if category.name is defined else category %}
                                 {% set category_value = category.id if category.id is defined else category_name %}
-                                {% set category_markup = category.markup_percent if category.markup_percent is defined else 0 %}
-                                <option value="{{ category_value }}" data-id="{{ category.id if category.id is defined else '' }}" data-markup="{{ category_markup }}">{{ category_name }}</option>
+                                {% set category_type = category.category_type|default('product', true) %}
+                                <option value="{{ category_value }}"
+                                        data-id="{{ category.id if category.id is defined else '' }}"
+                                        data-category-type="{{ category_type }}"
+                                        data-markup="{{ category.markup_percent|default(0) }}">
+                                    {{ category_name }}
+                                </option>
                             {% endfor %}
                         </select>
                         <button type="button" class="catalog-category-manage-btn" onclick="openCategoryManager()" title="Добавить или изменить категорию"><span class="catalog-category-manage-btn__icon">＋</span><span>Добавить категорию</span></button>
@@ -375,17 +446,17 @@ body.catalog-modal-open { overflow:hidden; }
                     </select>
                 </label>
 
-                <label class="catalog-field">
+                <label class="catalog-field catalog-product-only">
                     <span>GTIN</span>
                     <input type="text" name="gtin" id="itemGtin" placeholder="Код из Национального каталога">
                 </label>
 
-                <label class="catalog-field">
+                <label class="catalog-field catalog-product-only">
                     <span>NTIN</span>
                     <input type="text" name="ntin" id="itemNtin" placeholder="NTIN товара">
                 </label>
 
-                <label class="catalog-field">
+                <label class="catalog-field catalog-product-only">
                     <span>Маркировка</span>
                     <span class="catalog-marked-row">
                         <input type="checkbox" name="is_marked" id="itemIsMarked" value="1" onchange="updateMarkedBadge()">
@@ -394,12 +465,13 @@ body.catalog-modal-open { overflow:hidden; }
                 </label>
 
                 <label class="catalog-field">
-                    <span>Закупочная цена, ₸</span>
+                    <span id="itemPurchasePriceLabel">Закупочная цена, ₸</span>
                     <input type="number" name="purchase_price" id="itemPurchasePrice" min="0" step="1" placeholder="0">
+                    <small class="catalog-service-cost-note">Оставьте 0, если услуга оказывается самостоятельно. Укажите стоимость при перепродаже или работе подрядчика.</small>
                 </label>
 
                 <label class="catalog-field">
-                    <span>Розничная цена, ₸ *</span>
+                    <span id="itemRetailPriceLabel">Розничная цена, ₸ *</span>
                     <input type="number" name="retail_price" id="itemRetailPrice" min="0" step="1" required placeholder="0">
                 </label>
 
@@ -413,7 +485,7 @@ body.catalog-modal-open { overflow:hidden; }
 
             <div class="catalog-modal__footer">
                 <button class="catalog-secondary-btn" type="button" onclick="closeItemModal()">Отмена</button>
-                <button class="catalog-primary-btn" type="submit">Сохранить товар</button>
+                <button class="catalog-primary-btn" id="itemSubmitButton" type="submit">Сохранить товар</button>
             </div>
         </form>
     </div>
@@ -427,17 +499,42 @@ body.catalog-modal-open { overflow:hidden; }
             <button type="button" class="category-manager__close" onclick="closeCategoryManager()">×</button>
         </div>
         <div class="category-manager__body">
+            <div class="category-manager__type-tabs">
+                <button type="button" class="category-manager__type-tab is-active" data-category-type="product" onclick="setCategoryManagerType('product', this)">📦 Товары</button>
+                <button type="button" class="category-manager__type-tab" data-category-type="service" onclick="setCategoryManagerType('service', this)">🛠 Услуги</button>
+            </div>
+
             <div class="category-manager__form">
                 <input type="hidden" id="editingCategoryId">
-                <input type="text" id="categoryNameInput" placeholder="Название категории">
-                <input type="number" id="categoryMarkupInput" min="0" step="0.01" placeholder="Наценка %">
+                <input type="text" id="categoryNameInput" placeholder="Название категории товара">
+                <input type="number"
+                       id="categoryMarkupInput"
+                       min="0"
+                       step="0.01"
+                       value="0"
+                       placeholder="Наценка %">
                 <button type="button" class="category-manager__save" id="saveCategoryButton" onclick="saveCategory()">Добавить</button>
             </div>
+
             <div class="category-manager__list" id="categoryManagerList">
                 {% for category in category_source %}
                     {% if category.id is defined %}
-                    <div class="category-manager__item" data-id="{{ category.id }}" data-name="{{ category.name }}" data-markup="{{ category.markup_percent|default(0) }}">
-                        <div class="category-manager__meta"><b>{{ category.name }}</b><small>Наценка: {{ category.markup_percent|default(0) }}%</small></div>
+                    {% set category_type = category.category_type|default('product', true) %}
+                    <div class="category-manager__item"
+                         data-id="{{ category.id }}"
+                         data-name="{{ category.name }}"
+                         data-category-type="{{ category_type }}"
+                         data-markup="{{ category.markup_percent|default(0) }}">
+                        <div class="category-manager__meta">
+                            <b>{{ category.name }}</b>
+                            <small>
+                                {% if category_type == "service" %}
+                                    Категория услуг
+                                {% else %}
+                                    Наценка: {{ category.markup_percent|default(0) }}%
+                                {% endif %}
+                            </small>
+                        </div>
                         <div class="category-manager__actions">
                             <button type="button" onclick="startEditCategory(this.closest('.category-manager__item'))" title="Редактировать">✎</button>
                             <button type="button" class="delete" onclick="removeCategory(this.closest('.category-manager__item'))" title="Удалить">🗑</button>
@@ -486,11 +583,23 @@ body.catalog-modal-open { overflow:hidden; }
 
 document.addEventListener('DOMContentLoaded', function () {
     mountItemModalToBody();
+    mountCategoryManagerToBody();
+    filterItemCategoryOptions('product');
 
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') closeItemModal();
     });
 });
+
+var activeCatalogTypeFilter = "all";
+
+function setCatalogTypeFilter(type, button) {
+    activeCatalogTypeFilter = type || "all";
+    document.querySelectorAll(".catalog-type-tab").forEach(function(tab) {
+        tab.classList.toggle("is-active", tab === button);
+    });
+    filterCatalogItems();
+}
 
 function filterCatalogItems() {
     var search = document.getElementById('catalogSearch');
@@ -503,7 +612,8 @@ function filterCatalogItems() {
     rows.forEach(function (row) {
         var matchesSearch = !query || (row.dataset.search || '').includes(query);
         var matchesCategory = selectedCategory === 'all' || (row.dataset.category || '') === selectedCategory;
-        var show = matchesSearch && matchesCategory;
+        var matchesType = activeCatalogTypeFilter === 'all' || (row.dataset.itemType || 'product') === activeCatalogTypeFilter;
+        var show = matchesSearch && matchesCategory && matchesType;
         row.style.display = show ? '' : 'none';
         if (show) visible += 1;
     });
@@ -531,6 +641,9 @@ function roundPrice(value) {
 function calculatePurchasePrice() {
     if (suppressPriceCalculation) return;
 
+    var selectedType = document.querySelector('input[name="item_type"]:checked');
+    if (selectedType && selectedType.value === 'service') return;
+
     var retailField = document.getElementById('itemRetailPrice');
     var purchaseField = document.getElementById('itemPurchasePrice');
     if (!retailField || !purchaseField) return;
@@ -550,6 +663,9 @@ function calculatePurchasePrice() {
 
 function calculateRetailPrice() {
     if (suppressPriceCalculation) return;
+
+    var selectedType = document.querySelector('input[name="item_type"]:checked');
+    if (selectedType && selectedType.value === 'service') return;
 
     var retailField = document.getElementById('itemRetailPrice');
     var purchaseField = document.getElementById('itemPurchasePrice');
@@ -616,12 +732,83 @@ function closeItemModal() {
     document.body.classList.remove('catalog-modal-open');
 }
 
+function filterItemCategoryOptions(type) {
+    type = type === "service" ? "service" : "product";
+    var select = document.getElementById("itemCategoryId");
+    if (!select) return;
+
+    var currentValue = select.value;
+    var currentVisible = false;
+
+    Array.from(select.options).forEach(function(option, index) {
+        if (index === 0 || !option.dataset.categoryType) {
+            option.hidden = false;
+            option.disabled = false;
+            return;
+        }
+
+        var visible = option.dataset.categoryType === type;
+        option.hidden = !visible;
+        option.disabled = !visible;
+
+        if (visible && option.value === currentValue) {
+            currentVisible = true;
+        }
+    });
+
+    if (!currentVisible) {
+        select.value = "";
+    }
+
+    syncCategoryName(true);
+}
+
+function applyItemType(type) {
+    type = type === "service" ? "service" : "product";
+    var modal = document.getElementById("itemModal");
+    var productRadio = document.getElementById("itemTypeProduct");
+    var serviceRadio = document.getElementById("itemTypeService");
+    var subtitle = document.getElementById("itemModalSubtitle");
+    var nameLabel = document.getElementById("itemNameLabel");
+    var nameInput = document.getElementById("itemName");
+    var purchaseLabel = document.getElementById("itemPurchasePriceLabel");
+    var retailLabel = document.getElementById("itemRetailPriceLabel");
+    var submitButton = document.getElementById("itemSubmitButton");
+    if (productRadio) productRadio.checked = type === "product";
+    if (serviceRadio) serviceRadio.checked = type === "service";
+    if (modal) modal.classList.toggle("is-service", type === "service");
+    filterItemCategoryOptions(type);
+    if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : "Название товара *";
+    if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : "Например: Молоко 3,2%";
+    if (purchaseLabel) purchaseLabel.textContent = type === "service" ? "Закупочная стоимость, ₸" : "Закупочная цена, ₸";
+    if (retailLabel) retailLabel.textContent = type === "service" ? "Цена услуги, ₸ *" : "Розничная цена, ₸ *";
+    if (subtitle) subtitle.textContent = type === "service" ? "Основные данные услуги, цена и штрихкод" : "Основные данные товара и идентификаторы маркировки";
+    if (submitButton) submitButton.textContent = type === "service" ? "Сохранить услугу" : "Сохранить товар";
+
+    var barcodeButton = document.getElementById("barcodeSearchButton");
+    if (barcodeButton) {
+        barcodeButton.textContent = type === "service" ? "Найти услугу" : "Найти товар";
+    }
+
+    if (type === "service") {
+        var marked = document.getElementById("itemIsMarked");
+        if (marked) marked.checked = false;
+
+        var purchaseField = document.getElementById("itemPurchasePrice");
+        if (purchaseField && !purchaseField.value) purchaseField.value = "0";
+
+        updateMarkedBadge();
+        clearBarcodeStatus();
+    }
+}
+
 function openAddItemModal() {
     var form = document.getElementById('itemForm');
     form.reset();
     form.action = '/items/add';
-    document.getElementById('itemModalTitle').textContent = 'Новый товар';
+    document.getElementById('itemModalTitle').textContent = 'Новая позиция';
     document.getElementById('itemUnit').value = 'шт';
+    applyItemType('product');
     document.getElementById('itemIsMarked').checked = false;
     updateMarkedBadge();
     clearBarcodeStatus();
@@ -717,19 +904,37 @@ async function lookupBarcode(force) {
     if (barcodeLookupController) barcodeLookupController.abort();
     barcodeLookupController = new AbortController();
 
-    showBarcodeStatus('loading', 'Ищем товар в базе и Национальном каталоге…');
+    var selectedType = document.querySelector('input[name="item_type"]:checked');
+    var itemType = selectedType ? selectedType.value : 'product';
+
+    showBarcodeStatus(
+        'loading',
+        itemType === 'service'
+            ? 'Ищем услугу в локальной базе…'
+            : 'Ищем товар в базе и Национальном каталоге…'
+    );
+
     if (button) { button.disabled = true; button.textContent = 'Поиск…'; }
 
     try {
-        var response = await fetch('/api/barcode-info/' + encodeURIComponent(barcode), {
-            headers: { 'Accept': 'application/json' },
-            signal: barcodeLookupController.signal
-        });
+        var response = await fetch(
+            '/api/barcode-info/' + encodeURIComponent(barcode) +
+            '?item_type=' + encodeURIComponent(itemType),
+            {
+                headers: { 'Accept': 'application/json' },
+                signal: barcodeLookupController.signal
+            }
+        );
         if (!response.ok) throw new Error('HTTP ' + response.status);
         var data = await response.json();
 
         if (!data.found) {
-            showBarcodeStatus('warning', 'Товар не найден. Заполните данные вручную.');
+            showBarcodeStatus(
+                'warning',
+                itemType === 'service'
+                    ? 'Услуга не найдена. Заполните данные вручную.'
+                    : 'Товар не найден. Заполните данные вручную.'
+            );
             document.getElementById('itemName').focus();
             return;
         }
@@ -746,7 +951,11 @@ async function lookupBarcode(force) {
         syncCategoryName();
 
         var source = data.local ? 'локальной базе' : 'Национальном каталоге';
-        showBarcodeStatus('success', 'Товар найден в ' + source + '. Данные заполнены автоматически.');
+        showBarcodeStatus(
+            'success',
+            (itemType === 'service' ? 'Услуга' : 'Товар') +
+            ' найдена в ' + source + '. Данные заполнены автоматически.'
+        );
 
         if (data.local && data.price && !document.getElementById('itemRetailPrice').value) {
             setValue('itemRetailPrice', data.price);
@@ -757,7 +966,10 @@ async function lookupBarcode(force) {
             showBarcodeStatus('error', 'Не удалось выполнить поиск. Проверьте соединение и попробуйте снова.');
         }
     } finally {
-        if (button) { button.disabled = false; button.textContent = 'Найти товар'; }
+        if (button) {
+            button.disabled = false;
+            button.textContent = itemType === 'service' ? 'Найти услугу' : 'Найти товар';
+        }
     }
 }
 
@@ -781,7 +993,8 @@ function openEditItemModal(item) {
     var form = document.getElementById('itemForm');
     form.reset();
     form.action = '/items/' + encodeURIComponent(item.id) + '/edit';
-    document.getElementById('itemModalTitle').textContent = 'Редактировать товар';
+    document.getElementById('itemModalTitle').textContent = item.item_type === 'service' ? 'Редактировать услугу' : 'Редактировать товар';
+    applyItemType(item.item_type || 'product');
 
     setValue('itemName', item.name);
     setValue('itemBarcode', item.barcode);
@@ -805,74 +1018,295 @@ function mountCategoryManagerToBody(){
     if(modal && modal.parentElement!==document.body) document.body.appendChild(modal);
     return modal;
 }
-function openCategoryManager(){
-    var modal=mountCategoryManagerToBody();
-    resetCategoryEditor();
-    modal.classList.add('is-open');
-    modal.setAttribute('aria-hidden','false');
-    setTimeout(function(){document.getElementById('categoryNameInput').focus();},30);
+var activeCategoryManagerType = "product";
+
+function mountCategoryManagerToBody(){
+    var modal=document.getElementById('categoryManager');
+    if(modal && modal.parentElement!==document.body) document.body.appendChild(modal);
+    return modal;
 }
+
+function setCategoryManagerType(type, button){
+    activeCategoryManagerType = type === "service" ? "service" : "product";
+
+    document.querySelectorAll('.category-manager__type-tab').forEach(function(tab){
+        tab.classList.toggle('is-active', tab.dataset.categoryType === activeCategoryManagerType);
+    });
+
+    document.querySelectorAll('#categoryManagerList .category-manager__item').forEach(function(row){
+        row.hidden = (row.dataset.categoryType || 'product') !== activeCategoryManagerType;
+    });
+
+    var input=document.getElementById('categoryNameInput');
+    if(input){
+        input.placeholder = activeCategoryManagerType === 'service'
+            ? 'Название категории услуги'
+            : 'Название категории товара';
+    }
+
+    var markupInput=document.getElementById('categoryMarkupInput');
+    if(markupInput){
+        markupInput.style.display = activeCategoryManagerType === 'service' ? 'none' : '';
+        markupInput.disabled = activeCategoryManagerType === 'service';
+        if(activeCategoryManagerType === 'service') markupInput.value = '0';
+    }
+
+    resetCategoryEditor(false);
+}
+
+function openCategoryManager(){
+    var selectedType=document.querySelector('input[name="item_type"]:checked');
+    var type=selectedType ? selectedType.value : 'product';
+    var button=document.querySelector('.category-manager__type-tab[data-category-type="'+type+'"]');
+
+    setCategoryManagerType(type, button);
+
+    var modal=mountCategoryManagerToBody();
+    if(modal){
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden','false');
+        document.body.classList.add('catalog-modal-open');
+        setTimeout(function(){document.getElementById('categoryNameInput').focus();},50);
+    }
+}
+
 function closeCategoryManager(){
     var modal=mountCategoryManagerToBody();
-    if(!modal) return;
-    modal.classList.remove('is-open');
-    modal.setAttribute('aria-hidden','true');
+    if(modal){
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden','true');
+        document.body.classList.remove('catalog-modal-open');
+    }
     resetCategoryEditor();
 }
-function resetCategoryEditor(){
-    setValue('editingCategoryId','');setValue('categoryNameInput','');setValue('categoryMarkupInput','');
-    var b=document.getElementById('saveCategoryButton'); if(b) b.textContent='Добавить';
-    var t=document.getElementById('categoryManagerTitle'); if(t) t.textContent='Категории';
+
+function resetCategoryEditor(resetTitle){
+    setValue('editingCategoryId','');
+    setValue('categoryNameInput','');
+    setValue('categoryMarkupInput','0');
+
+    var markupInput=document.getElementById('categoryMarkupInput');
+    if(markupInput){
+        markupInput.style.display = activeCategoryManagerType === 'service' ? 'none' : '';
+        markupInput.disabled = activeCategoryManagerType === 'service';
+    }
+
+    var button=document.getElementById('saveCategoryButton');
+    if(button) button.textContent='Добавить';
+
+    if(resetTitle !== false){
+        var title=document.getElementById('categoryManagerTitle');
+        if(title) title.textContent='Категории';
+    }
 }
+
 function startEditCategory(row){
-    setValue('editingCategoryId',row.dataset.id);setValue('categoryNameInput',row.dataset.name);setValue('categoryMarkupInput',row.dataset.markup||0);
+    activeCategoryManagerType = row.dataset.categoryType || 'product';
+    setCategoryManagerType(
+        activeCategoryManagerType,
+        document.querySelector('.category-manager__type-tab[data-category-type="'+activeCategoryManagerType+'"]')
+    );
+
+    setValue('editingCategoryId',row.dataset.id);
+    setValue('categoryNameInput',row.dataset.name);
+    setValue(
+        'categoryMarkupInput',
+        activeCategoryManagerType === 'product' ? (row.dataset.markup || '0') : '0'
+    );
+
     document.getElementById('saveCategoryButton').textContent='Сохранить';
-    document.getElementById('categoryManagerTitle').textContent='Редактирование категории';
+    document.getElementById('categoryManagerTitle').textContent=
+        activeCategoryManagerType === 'service'
+            ? 'Редактирование категории услуг'
+            : 'Редактирование категории товаров';
+
     document.getElementById('categoryNameInput').focus();
 }
-function escapeHtml(value){var d=document.createElement('div');d.textContent=value;return d.innerHTML;}
+
+function escapeHtml(value){
+    var d=document.createElement('div');
+    d.textContent=value;
+    return d.innerHTML;
+}
+
 function upsertCategoryOption(category, oldName){
     var select=document.getElementById('itemCategoryId');
-    var option=Array.from(select.options).find(function(o){return String(o.dataset.id||'')===String(category.id);});
-    if(!option){option=document.createElement('option');select.appendChild(option);}
-    option.value=category.id;option.dataset.id=category.id;option.dataset.markup=category.markup_percent||0;option.textContent=category.name;
-    if(!oldName || select.value===String(category.id) || document.getElementById('itemCategory').value===oldName){select.value=String(category.id);syncCategoryName();}
+    var option=Array.from(select.options).find(function(o){
+        return String(o.dataset.id||'')===String(category.id);
+    });
+
+    if(!option){
+        option=document.createElement('option');
+        select.appendChild(option);
+    }
+
+    option.value=category.id;
+    option.dataset.id=category.id;
+    option.dataset.categoryType=category.category_type || activeCategoryManagerType;
+    option.dataset.markup=category.markup_percent || 0;
+    option.textContent=category.name;
+
+    filterItemCategoryOptions(
+        document.querySelector('input[name="item_type"]:checked')?.value || 'product'
+    );
+
+    if(
+        option.dataset.categoryType ===
+        (document.querySelector('input[name="item_type"]:checked')?.value || 'product')
+    ){
+        if(!oldName || document.getElementById('itemCategory').value===oldName){
+            select.value=String(category.id);
+            syncCategoryName(true);
+        }
+    }
 }
+
 function upsertCategoryRow(category){
     var list=document.getElementById('categoryManagerList');
     var row=list.querySelector('[data-id="'+CSS.escape(String(category.id))+'"]');
-    if(!row){row=document.createElement('div');row.className='category-manager__item';list.appendChild(row);}
-    row.dataset.id=category.id;row.dataset.name=category.name;row.dataset.markup=category.markup_percent||0;
-    row.innerHTML='<div class="category-manager__meta"><b>'+escapeHtml(category.name)+'</b><small>Наценка: '+escapeHtml(String(category.markup_percent||0))+'%</small></div><div class="category-manager__actions"><button type="button" onclick="startEditCategory(this.closest(\'.category-manager__item\'))" title="Редактировать">✎</button><button type="button" class="delete" onclick="removeCategory(this.closest(\'.category-manager__item\'))" title="Удалить">🗑</button></div>';
+
+    if(!row){
+        row=document.createElement('div');
+        row.className='category-manager__item';
+        list.appendChild(row);
+    }
+
+    var type=category.category_type || activeCategoryManagerType;
+
+    row.dataset.id=category.id;
+    row.dataset.name=category.name;
+    row.dataset.categoryType=type;
+    row.dataset.markup=category.markup_percent || 0;
+    row.hidden=type!==activeCategoryManagerType;
+
+    row.innerHTML=
+        '<div class="category-manager__meta">'+
+            '<b>'+escapeHtml(category.name)+'</b>'+
+            '<small>'+(type==='service'
+                ? 'Категория услуг'
+                : 'Наценка: '+escapeHtml(String(category.markup_percent || 0))+'%')+'</small>'+
+        '</div>'+
+        '<div class="category-manager__actions">'+
+            `<button type="button" onclick="startEditCategory(this.closest('.category-manager__item'))" title="Редактировать">✎</button>`+
+            `<button type="button" class="delete" onclick="removeCategory(this.closest('.category-manager__item'))" title="Удалить">🗑</button>`+
+        '</div>';
 }
+
 async function saveCategory(){
     var id=document.getElementById('editingCategoryId').value;
     var name=document.getElementById('categoryNameInput').value.trim();
-    var markup=document.getElementById('categoryMarkupInput').value||0;
-    if(!name){alert('Введите название категории');return;}
-    var button=document.getElementById('saveCategoryButton');button.disabled=true;
+    var markupInput=document.getElementById('categoryMarkupInput');
+    var markup=activeCategoryManagerType === 'product'
+        ? parseFloat(markupInput ? markupInput.value : 0) || 0
+        : 0;
+
+    if(!name){
+        alert('Введите название категории');
+        return;
+    }
+
+    var button=document.getElementById('saveCategoryButton');
+    button.disabled=true;
+
     try{
         var url=id?'/edit_category/'+encodeURIComponent(id):'/add_category';
-        var response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,markup:markup})});
-        var data=await response.json(); if(!response.ok) throw new Error(data.error||'Ошибка сохранения');
-        var category={id:data.id||id,name:data.name||name,markup_percent:data.markup_percent!==undefined?data.markup_percent:markup};
-        var oldRow=id?document.querySelector('#categoryManagerList [data-id="'+CSS.escape(String(id))+'"]'):null;
+        var response=await fetch(url,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+                name:name,
+                markup:markup,
+                category_type:activeCategoryManagerType
+            })
+        });
+
+        var data=await response.json();
+        if(!response.ok) throw new Error(data.error||'Ошибка сохранения');
+
+        var category={
+            id:data.id||id,
+            name:data.name||name,
+            markup_percent:data.markup_percent ?? markup,
+            category_type:data.category_type||activeCategoryManagerType
+        };
+
+        var oldRow=id
+            ? document.querySelector('#categoryManagerList [data-id="'+CSS.escape(String(id))+'"]')
+            : null;
         var oldName=oldRow?oldRow.dataset.name:'';
-        upsertCategoryOption(category,oldName);upsertCategoryRow(category);resetCategoryEditor();
-    }catch(e){alert(e.message||'Не удалось сохранить категорию');}finally{button.disabled=false;}
+
+        upsertCategoryOption(category,oldName);
+        upsertCategoryRow(category);
+        resetCategoryEditor();
+    }catch(e){
+        alert(e.message||'Не удалось сохранить категорию');
+    }finally{
+        button.disabled=false;
+    }
 }
+
 async function removeCategory(row){
     if(!confirm('Удалить категорию «'+row.dataset.name+'»?')) return;
+
     var id=row.dataset.id;
+
     try{
-        var response=await fetch('/delete_category/'+encodeURIComponent(id),{method:'POST'});var data=await response.json();
-        if(!response.ok || data.success===false) throw new Error('Не удалось удалить категорию');
-        var select=document.getElementById('itemCategoryId');var option=Array.from(select.options).find(function(o){return String(o.dataset.id||'')===String(id);});
-        if(option){var wasSelected=select.value===option.value;option.remove();if(wasSelected){select.value='';syncCategoryName();}}
-        row.remove();resetCategoryEditor();
-    }catch(e){alert(e.message||'Не удалось удалить категорию');}
+        var response=await fetch('/delete_category/'+encodeURIComponent(id),{method:'POST'});
+        var data=await response.json();
+
+        if(!response.ok || data.success===false){
+            throw new Error('Не удалось удалить категорию');
+        }
+
+        var select=document.getElementById('itemCategoryId');
+        var option=Array.from(select.options).find(function(o){
+            return String(o.dataset.id||'')===String(id);
+        });
+
+        if(option){
+            var wasSelected=select.value===option.value;
+            option.remove();
+
+            if(wasSelected){
+                select.value='';
+                syncCategoryName(true);
+            }
+        }
+
+        row.remove();
+        resetCategoryEditor();
+    }catch(e){
+        alert(e.message||'Не удалось удалить категорию');
+    }
 }
 
 </script>
+
+
+<style>
+.catalog-note{font-size:14px!important;}
+.catalog-primary-btn,.catalog-secondary-btn,.catalog-icon-btn,.catalog-danger-btn{font-size:13px!important;}
+.catalog-search input{font-size:13px!important;}
+.catalog-filter{font-size:12px!important;}
+.catalog-table th{font-size:11px!important;}
+.catalog-table td{font-size:13px!important;}
+.catalog-product__info strong{font-size:14px!important;}
+.catalog-product__info small{font-size:11px!important;}
+.catalog-code strong{font-size:11px!important;}
+.catalog-code small{font-size:10px!important;}
+.catalog-category{font-size:11px!important;}
+.catalog-price{font-size:13px!important;}
+.catalog-unit{font-size:12px!important;}
+.catalog-modal__head p{font-size:12px!important;}
+.catalog-field>span{font-size:12px!important;}
+.catalog-field input,.catalog-field select,.catalog-field textarea{font-size:13px!important;}
+.catalog-field small{font-size:11px!important;}
+.catalog-barcode-search{font-size:12px!important;}
+.catalog-barcode-status{font-size:11px!important;}
+.catalog-marked-badge{font-size:11px!important;}
+.catalog-category-manage-btn{font-size:11px!important;}
+.category-manager__meta b{font-size:13px!important;}
+.category-manager__meta small{font-size:11px!important;}
+</style>
 
 {% endblock %}

@@ -35,8 +35,17 @@ def items():
     WHERE items.company_id = %s
     """, (session.get("company_id"),))
     items = cur.fetchall()
+
+    cur.execute("""
+        SELECT *
+        FROM categories
+        WHERE company_id = %s
+        ORDER BY name
+    """, (session.get("company_id"),))
+    categories = cur.fetchall()
+
     pool.putconn(conn)
-    return render_template("items.html", items=items)
+    return render_template("items.html", items=items, categories=categories)
 
 @items_bp.route("/items/add", methods=["GET", "POST"])
 def add_item():
@@ -63,9 +72,10 @@ def add_item():
                 gtin,
                 ntin,
                 is_marked,
+                item_type,
                 company_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             request.form["name"],
@@ -79,7 +89,8 @@ def add_item():
             request.form.get("barcode"),
             request.form.get("gtin"),
             request.form.get("ntin"),
-            request.form.get("is_marked") == "1",
+            request.form.get("is_marked") == "1" if request.form.get("item_type", "product") == "product" else False,
+            request.form.get("item_type", "product"),
             company_id
         ))
 
@@ -168,7 +179,8 @@ def edit_item(item_id):
                 barcode = %s,
                 gtin = %s,
                 ntin = %s,
-                is_marked = %s
+                is_marked = %s,
+                item_type = %s
             WHERE id = %s AND company_id = %s
         """, (
             request.form["name"],
@@ -181,8 +193,9 @@ def edit_item(item_id):
             int(request.form.get("discount_percent") or 0),
             request.form.get("barcode"),
             request.form.get("gtin"),
-            request.form.get("ntin"),
-            request.form.get("is_marked") == "1",
+            request.form.get("ntin") if request.form.get("item_type", "product") == "product" else "",
+            request.form.get("is_marked") == "1" if request.form.get("item_type", "product") == "product" else False,
+            request.form.get("item_type", "product"),
             item_id,
             session.get("company_id")
         ))
@@ -267,27 +280,30 @@ def add_category():
     
     cur = conn.cursor()
 
+    category_type = data.get("category_type", "product")
+    if category_type not in ("product", "service"):
+        category_type = "product"
+
+    markup_percent = data.get("markup", 0) if category_type == "product" else 0
+
     cur.execute("""
         INSERT INTO categories
-        (company_id, name, markup_percent)
-        VALUES (%s, %s, %s)
-        RETURNING id
+        (company_id, name, markup_percent, category_type)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id, name, markup_percent, category_type
     """, (
         session.get("company_id"),
         data["name"],
-        data.get("markup", 0)
+        markup_percent,
+        category_type
     ))
 
-    category_id = cur.fetchone()["id"]
+    category = cur.fetchone()
 
     conn.commit()
     pool.putconn(conn)
 
-    return jsonify({
-        "id": category_id,
-        "name": data["name"],
-        "markup_percent": data.get("markup", 0)
-    })
+    return jsonify(dict(category))
     
 @items_bp.route("/delete_category/<int:id>", methods=["POST"])
 def delete_category(id):
@@ -318,16 +334,24 @@ def edit_category(id):
     conn = get_db()
     cur = conn.cursor()
 
+    category_type = data.get("category_type", "product")
+    if category_type not in ("product", "service"):
+        category_type = "product"
+
+    markup_percent = data.get("markup", 0) if category_type == "product" else 0
+
     cur.execute("""
         UPDATE categories
         SET name = %s,
-            markup_percent = %s
+            markup_percent = %s,
+            category_type = %s
         WHERE id = %s
           AND company_id = %s
-        RETURNING id, name, markup_percent
+        RETURNING id, name, markup_percent, category_type
     """, (
         data["name"],
-        data.get("markup", 0),
+        markup_percent,
+        category_type,
         id,
         session.get("company_id")
     ))
@@ -347,11 +371,30 @@ def barcode_info(barcode):
     db = get_db()
     cur = db.cursor()
 
-    cur.execute("""
-        SELECT *
-        FROM items
-        WHERE barcode = %s
-    """, (barcode,))
+    item_type = request.args.get("item_type", "product")
+
+    if item_type == "service":
+        cur.execute("""
+            SELECT *
+            FROM items
+            WHERE barcode = %s
+              AND company_id = %s
+              AND item_type = 'service'
+        """, (
+            barcode,
+            session.get("company_id")
+        ))
+    else:
+        cur.execute("""
+            SELECT *
+            FROM items
+            WHERE barcode = %s
+              AND company_id = %s
+              AND COALESCE(item_type, 'product') = 'product'
+        """, (
+            barcode,
+            session.get("company_id")
+        ))
 
     item = cur.fetchone()
 
@@ -375,8 +418,17 @@ def barcode_info(barcode):
             "ntin": item.get("ntin"),
             
             "is_marked": item.get("is_marked"),
+            "item_type": item.get("item_type") or "product",
 
         })
+
+    if item_type == "service":
+        pool.putconn(db)
+        return jsonify({
+            "found": False
+        })
+
+    pool.putconn(db)
 
     # 🌍 NATIONAL CATALOG
     try:
@@ -490,10 +542,11 @@ def api_create_item():
             gtin,
             ntin,
             is_marked,
+            item_type,
             quantity,
             company_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """, (
         data.get("name", ""),
@@ -508,8 +561,9 @@ def api_create_item():
         data.get("barcode", ""),
         data.get("gtin", ""),
         data.get("ntin", ""),
-        bool(data.get("is_marked", False)),
-        float(data.get("quantity") or 0),
+        bool(data.get("is_marked", False)) if data.get("item_type", "product") == "product" else False,
+        data.get("item_type", "product"),
+        float(data.get("quantity") or 0) if data.get("item_type", "product") == "product" else 0,
         session.get("company_id")
     ))
 
@@ -519,7 +573,9 @@ def api_create_item():
     quantity = float(data.get("quantity") or 0)
     purchase_price = float(data.get("purchase_price") or 0)
 
-    if quantity > 0:
+    item_type = data.get("item_type", "product")
+
+    if quantity > 0 and item_type == "product":
         cur.execute("""
             INSERT INTO stock_movements (
                 company_id,
@@ -544,17 +600,16 @@ def api_create_item():
         ))
 
     conn.commit()
-    pool.putconn(conn)
-
-    cur = conn.cursor()
 
     cur.execute("""
         SELECT *
         FROM items
         WHERE id = %s
-    """, (item_id,))
+          AND company_id = %s
+    """, (item_id, session.get("company_id")))
 
     item = cur.fetchone()
+    pool.putconn(conn)
 
     return jsonify({
         "success": True,

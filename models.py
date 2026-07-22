@@ -538,6 +538,44 @@ def init_db():
         conn.commit()
     except:
         conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE items
+            ADD COLUMN item_type TEXT NOT NULL DEFAULT 'product'
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            UPDATE items
+            SET item_type = 'product'
+            WHERE item_type IS NULL OR item_type = ''
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            ALTER TABLE categories
+            ADD COLUMN category_type TEXT NOT NULL DEFAULT 'product'
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            UPDATE categories
+            SET category_type = 'product'
+            WHERE category_type IS NULL OR category_type = ''
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
         
     try:
         cur.execute("ALTER TABLE sale_items ADD COLUMN gtin TEXT;")
