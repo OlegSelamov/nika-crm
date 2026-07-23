@@ -2,20 +2,20 @@
 
 {% block content %}
 
-{% set revenue = total|default(0) %}
-{% set net_profit = profit|default(0) %}
-{% set expenses_total = expenses_total|default(0) %}
-{% set gross_profit = gross_profit|default(net_profit + expenses_total) %}
-{% set sales_qty = sales_count|default(0) %}
-{% set average_receipt = average_check|default((revenue / sales_qty) if sales_qty else 0) %}
-{% set returns_total = returns_total|default(0) %}
-{% set returns_count_value = returns_count|default(0) %}
-{% set margin_value = margin_percent|default((net_profit / revenue * 100) if revenue else 0) %}
-{% set client_count_value = clients_count|default(top_clients|default([])|length) %}
-{% set new_clients_value = new_clients|default(0) %}
-{% set purchase_total = purchase_total|default(0) %}
-{% set salary_total = salary_total|default(0) %}
-{% set taxes_total = taxes_total|default(0) %}
+{% set revenue = total or 0 %}
+{% set net_profit = profit or 0 %}
+{% set expenses_total = expenses_total or 0 %}
+{% set gross_profit = gross_profit if gross_profit is not none else (net_profit + expenses_total) %}
+{% set sales_qty = sales_count or 0 %}
+{% set average_receipt = average_check if average_check is not none else ((revenue / sales_qty) if sales_qty else 0) %}
+{% set returns_total = returns_total or 0 %}
+{% set returns_count_value = returns_count or 0 %}
+{% set margin_value = margin_percent if margin_percent is not none else ((net_profit / revenue * 100) if revenue else 0) %}
+{% set client_count_value = clients_count if clients_count is not none else (top_clients|default([])|length) %}
+{% set new_clients_value = new_clients or 0 %}
+{% set purchase_total = purchase_total or 0 %}
+{% set salary_total = salary_total or 0 %}
+{% set taxes_total = taxes_total or 0 %}
 
 <div class="analytics-page">
 
@@ -145,9 +145,9 @@
             </div>
 
             <div class="analytics-payment-list">
-                <div><span><i class="pay-cash"></i>Наличные</span><b>{{ "{:,.0f}".format(payments.cash|default(0)).replace(",", " ") }} ₸</b></div>
-                <div><span><i class="pay-card"></i>Карта</span><b>{{ "{:,.0f}".format(payments.card|default(0)).replace(",", " ") }} ₸</b></div>
-                <div><span><i class="pay-kaspi"></i>Kaspi</span><b>{{ "{:,.0f}".format(payments.kaspi|default(0)).replace(",", " ") }} ₸</b></div>
+                <div><span><i class="pay-cash"></i>Наличные</span><b>{{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }} ₸</b></div>
+                <div><span><i class="pay-card"></i>Карта</span><b>{{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }} ₸</b></div>
+                <div><span><i class="pay-kaspi"></i>Kaspi</span><b>{{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }} ₸</b></div>
             </div>
         </article>
 
@@ -173,7 +173,7 @@
                     <div><span>👥 Зарплата</span><b>{{ "{:,.0f}".format(salary_total).replace(",", " ") }} ₸</b></div>
                     <div><span>🏛 Налоги</span><b>{{ "{:,.0f}".format(taxes_total).replace(",", " ") }} ₸</b></div>
                     {% for row in (expense_categories|default([]))[:4] %}
-                    <div><span>{{ row.category }}</span><b>{{ "{:,.0f}".format(row.total|default(0)).replace(",", " ") }} ₸</b></div>
+                    <div><span>{{ row.category }}</span><b>{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸</b></div>
                     {% endfor %}
                 </div>
             </div>
@@ -331,7 +331,7 @@
                         <strong>{{ item.name }}</strong>
                         <small>{{ item.quantity|default(0) }} продано</small>
                     </div>
-                    <b>{{ "{:,.0f}".format(item.total|default(0)).replace(",", " ") }} ₸</b>
+                    <b>{{ "{:,.0f}".format(item.total or 0).replace(",", " ") }} ₸</b>
                 </div>
                 {% else %}
                 <div class="analytics-empty">Нет данных по товарам</div>
@@ -356,7 +356,7 @@
                         <strong>{{ client.full_name }}</strong>
                         <small>{{ client.sales_count|default(0) }} покупок</small>
                     </div>
-                    <b>{{ "{:,.0f}".format(client.total|default(0)).replace(",", " ") }} ₸</b>
+                    <b>{{ "{:,.0f}".format(client.total or 0).replace(",", " ") }} ₸</b>
                 </div>
                 {% else %}
                 <div class="analytics-empty">Нет данных по клиентам</div>
@@ -469,11 +469,11 @@ new Chart(document.getElementById("paymentsChart"), {
     data: {
         labels: ["Наличные", "Карта", "Kaspi"],
         datasets: [{
-            data: [
-                {{ payments.cash|default(0) }},
-                {{ payments.card|default(0) }},
-                {{ payments.kaspi|default(0) }}
-            ],
+			data: [
+				{{ payments.cash or 0 }},
+				{{ payments.card or 0 }},
+				{{ payments.kaspi or 0 }}
+			],
             backgroundColor: ["#6f57ff", "#20a7d8", "#e9578f"],
             borderColor: "#ffffff",
             borderWidth: 4,

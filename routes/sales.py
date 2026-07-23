@@ -1148,206 +1148,500 @@ def schet_factura(sale_id):
     
 @sales_bp.route("/analytics")
 def analytics():
-    conn = get_db()
-    
-    cur = conn.cursor()
-
     company_id = session.get("company_id")
 
-    # 📅 ФИЛЬТР ДАТ
+    if not company_id:
+        return redirect("/login")
+
     date_from = request.args.get("from")
     date_to = request.args.get("to")
 
     if not date_from or not date_to:
         date_to = now_kz().strftime("%Y-%m-%d")
-        date_from = (now_kz() - timedelta(days=7)).strftime("%Y-%m-%d")
+        date_from = (
+            now_kz() - timedelta(days=7)
+        ).strftime("%Y-%m-%d")
 
-    # 📈 ГРАФИК
-    cur.execute("""
-        SELECT DATE(created_at) as date, SUM(total_amount) as total
-        FROM sales
-        WHERE company_id = %s
-        AND sales.status = 'Оплачено'
-        AND DATE(created_at) BETWEEN %s AND %s
-        GROUP BY DATE(created_at)
-        ORDER BY date
-    """, (company_id, date_from, date_to))
-    
-    chart_data = cur.fetchall()
+    conn = get_db()
+    cur = conn.cursor()
 
-    chart_labels = [
-        row["date"].strftime("%d.%m")
-        for row in chart_data
-    ]
+    try:
+        # =========================================================
+        # ОСНОВНЫЕ ПОКАЗАТЕЛИ
+        # =========================================================
 
-    chart_values = [
-        row["total"] or 0
-        for row in chart_data
-    ]
-
-    # 💰 СУММЫ
-    total = sum(chart_values)
-    
-    cur.execute("""
-        SELECT SUM(profit) as profit
-        FROM sale_items
-        WHERE sale_id IN (
-            SELECT id
+        cur.execute("""
+            SELECT
+                COALESCE(SUM(total_amount), 0) AS revenue,
+                COUNT(*) AS sales_count,
+                COALESCE(AVG(total_amount), 0) AS average_check
             FROM sales
             WHERE company_id = %s
-            AND sales.status = 'Оплачено'
-            AND DATE(created_at) BETWEEN %s AND %s
+              AND status = 'Оплачено'
+              AND DATE(created_at) BETWEEN %s AND %s
+        """, (
+            company_id,
+            date_from,
+            date_to
+        ))
+
+        main_stats = cur.fetchone() or {}
+
+        total = float(main_stats.get("revenue") or 0)
+        sales_count = int(main_stats.get("sales_count") or 0)
+        average_check = float(main_stats.get("average_check") or 0)
+
+        # =========================================================
+        # ПРИБЫЛЬ
+        # =========================================================
+
+        cur.execute("""
+            SELECT
+                COALESCE(SUM(si.profit), 0) AS profit
+            FROM sale_items si
+            JOIN sales s
+                ON s.id = si.sale_id
+            WHERE s.company_id = %s
+              AND s.status = 'Оплачено'
+              AND DATE(s.created_at) BETWEEN %s AND %s
+        """, (
+            company_id,
+            date_from,
+            date_to
+        ))
+
+        profit_row = cur.fetchone() or {}
+        profit = float(profit_row.get("profit") or 0)
+
+        # Пока отдельные расходы в этом роуте не подключены
+        purchase_total = 0
+        salary_total = 0
+        taxes_total = 0
+        expenses_total = 0
+        expense_categories = []
+
+        gross_profit = profit + expenses_total
+        margin_percent = (
+            profit / total * 100
+            if total > 0
+            else 0
         )
-    """, (
-        company_id,
-        date_from,
-        date_to
-    ))
-    
-    profit_row = cur.fetchone()
 
-    profit = profit_row["profit"] or 0
+        # =========================================================
+        # ВОЗВРАТЫ
+        # =========================================================
 
-    # 🏆 ТОП КЛИЕНТЫ
-    cur.execute("""
-        SELECT clients.full_name, SUM(sales.total_amount) as total
-        FROM sales
-        JOIN clients ON sales.client_id = clients.id
-        WHERE sales.company_id = %s
-        AND sales.status = 'Оплачено'
-        AND DATE(sales.created_at) BETWEEN %s AND %s
-        GROUP BY clients.id
-        ORDER BY total DESC
-        LIMIT 5
-    """, (company_id, date_from, date_to))
-    
-    top_clients = cur.fetchall()
-
-    # 📦 ТОП ТОВАРЫ
-    cur.execute("""
-        SELECT name, SUM(total) as total
-        FROM sale_items
-        WHERE sale_id IN (
-            SELECT id FROM sales 
+        cur.execute("""
+            SELECT
+                COUNT(*) AS returns_count,
+                COALESCE(SUM(total_amount), 0) AS returns_total
+            FROM sales
             WHERE company_id = %s
-            AND sales.status = 'Оплачено'
-            AND DATE(created_at) BETWEEN %s AND %s
+              AND (
+                    status = 'Возврат'
+                    OR COALESCE(is_refunded, FALSE) = TRUE
+                  )
+              AND DATE(created_at) BETWEEN %s AND %s
+        """, (
+            company_id,
+            date_from,
+            date_to
+        ))
+
+        returns_row = cur.fetchone() or {}
+
+        returns_count = int(
+            returns_row.get("returns_count") or 0
         )
-        GROUP BY name
-        ORDER BY total DESC
-        LIMIT 5
-    """, (company_id, date_from, date_to))
-    
-    top_items = cur.fetchall()
 
-    # 💳 ОПЛАТЫ
-    cur.execute("""
-        SELECT 
-            SUM(cash_amount) as cash,
-            SUM(card_amount) as card,
-            SUM(kaspi_amount) as kaspi
-        FROM sales
-        WHERE company_id = %s
-        AND sales.status = 'Оплачено'
-        AND DATE(created_at) BETWEEN %s AND %s
-    """, (company_id, date_from, date_to))
-    
-    payments = cur.fetchone()
-    
-    today_str = now_kz().strftime("%Y-%m-%d")
-
-    cur.execute("""
-        SELECT SUM(total_amount) as total
-        FROM sales
-        WHERE company_id = %s
-        AND sales.status = 'Оплачено'
-        AND DATE(created_at) = %s
-    """, (company_id, today_str))
-
-    today = cur.fetchone()["total"] or 0
-    
-    # 👥 Аналитика по сотрудникам
-    cur.execute("""
-        SELECT
-            u.id,
-            u.full_name,
-            u.username,
-            COALESCE(u.percent_rate,0) AS percent_rate,
-
-            COUNT(s.id) FILTER (
-                WHERE s.status='Оплачено'
-            ) AS sales_count,
-
-            COALESCE(
-                SUM(s.total_amount) FILTER (
-                    WHERE s.status='Оплачено'
-                ),
-                0
-            ) AS revenue,
-
-            COALESCE(
-                AVG(s.total_amount) FILTER (
-                    WHERE s.status='Оплачено'
-                ),
-                0
-            ) AS average_check,
-
-            COUNT(s.id) FILTER (
-                WHERE s.status='Возврат'
-                   OR COALESCE(s.is_refunded,FALSE)=TRUE
-            ) AS refunds
-
-        FROM users u
-
-        LEFT JOIN sales s
-            ON s.user_id=u.id
-           AND s.company_id=%s
-           AND DATE(s.created_at)
-               BETWEEN %s AND %s
-
-        WHERE u.company_id=%s
-
-        GROUP BY
-            u.id,
-            u.full_name,
-            u.username,
-            u.percent_rate
-
-        ORDER BY revenue DESC
-    """,(
-        company_id,
-        date_from,
-        date_to,
-        company_id
-    ))
-
-    employee_stats = cur.fetchall()
-
-    for employee in employee_stats:
-
-        employee["reward"] = (
-            float(employee["revenue"] or 0)
-            *
-            float(employee["percent_rate"] or 0)
-            / 100
+        returns_total = float(
+            returns_row.get("returns_total") or 0
         )
-    
-    pool.putconn(conn)
 
-    return render_template(
-        "analytics.html",
-        chart_labels=chart_labels,
-        chart_values=chart_values,
-        total=total,
-        top_clients=top_clients,
-        top_items=top_items,
-        payments=payments,
-        date_from=date_from,
-        date_to=date_to,
-        today=today,
-        profit=profit,
-        employee_stats=employee_stats
-    )
+        # =========================================================
+        # СПОСОБЫ ОПЛАТЫ
+        # =========================================================
+
+        cur.execute("""
+            SELECT
+                COALESCE(SUM(cash_amount), 0) AS cash,
+                COALESCE(SUM(card_amount), 0) AS card,
+                COALESCE(SUM(kaspi_amount), 0) AS kaspi
+            FROM sales
+            WHERE company_id = %s
+              AND status = 'Оплачено'
+              AND DATE(created_at) BETWEEN %s AND %s
+        """, (
+            company_id,
+            date_from,
+            date_to
+        ))
+
+        payments_row = cur.fetchone() or {}
+
+        payments = {
+            "cash": float(payments_row.get("cash") or 0),
+            "card": float(payments_row.get("card") or 0),
+            "kaspi": float(payments_row.get("kaspi") or 0)
+        }
+
+        # =========================================================
+        # ГРАФИК ВЫРУЧКИ
+        # =========================================================
+
+        cur.execute("""
+            SELECT
+                DATE(created_at) AS date,
+                COALESCE(SUM(total_amount), 0) AS total
+            FROM sales
+            WHERE company_id = %s
+              AND status = 'Оплачено'
+              AND DATE(created_at) BETWEEN %s AND %s
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+        """, (
+            company_id,
+            date_from,
+            date_to
+        ))
+
+        chart_rows = cur.fetchall() or []
+
+        chart_labels = [
+            row["date"].strftime("%d.%m")
+            for row in chart_rows
+        ]
+
+        chart_values = [
+            float(row["total"] or 0)
+            for row in chart_rows
+        ]
+
+        # =========================================================
+        # ГРАФИК ПРИБЫЛИ
+        # =========================================================
+
+        cur.execute("""
+            SELECT
+                DATE(s.created_at) AS date,
+                COALESCE(SUM(si.profit), 0) AS total
+            FROM sales s
+            LEFT JOIN sale_items si
+                ON si.sale_id = s.id
+            WHERE s.company_id = %s
+              AND s.status = 'Оплачено'
+              AND DATE(s.created_at) BETWEEN %s AND %s
+            GROUP BY DATE(s.created_at)
+            ORDER BY DATE(s.created_at)
+        """, (
+            company_id,
+            date_from,
+            date_to
+        ))
+
+        profit_rows = cur.fetchall() or []
+
+        profit_by_date = {
+            row["date"]: float(row["total"] or 0)
+            for row in profit_rows
+        }
+
+        revenue_dates = [
+            row["date"]
+            for row in chart_rows
+        ]
+
+        profit_chart_values = [
+            profit_by_date.get(date, 0)
+            for date in revenue_dates
+        ]
+
+        # Пока расходы по дням не подключены
+        expense_chart_values = [
+            0 for _ in revenue_dates
+        ]
+
+        # =========================================================
+        # ТОП ТОВАРОВ
+        # =========================================================
+
+        cur.execute("""
+            SELECT
+                si.name,
+                COALESCE(SUM(si.quantity), 0) AS quantity,
+                COALESCE(SUM(si.total), 0) AS total
+            FROM sale_items si
+            JOIN sales s
+                ON s.id = si.sale_id
+            WHERE s.company_id = %s
+              AND s.status = 'Оплачено'
+              AND DATE(s.created_at) BETWEEN %s AND %s
+            GROUP BY si.name
+            ORDER BY total DESC
+            LIMIT 5
+        """, (
+            company_id,
+            date_from,
+            date_to
+        ))
+
+        top_items_rows = cur.fetchall() or []
+
+        top_items = [
+            {
+                "name": row.get("name") or "Без названия",
+                "quantity": float(row.get("quantity") or 0),
+                "total": float(row.get("total") or 0)
+            }
+            for row in top_items_rows
+        ]
+
+        # =========================================================
+        # ТОП КЛИЕНТОВ
+        # =========================================================
+
+        cur.execute("""
+            SELECT
+                COALESCE(c.full_name, 'Частное лицо') AS full_name,
+                COUNT(s.id) AS sales_count,
+                COALESCE(SUM(s.total_amount), 0) AS total
+            FROM sales s
+            LEFT JOIN clients c
+                ON c.id = s.client_id
+            WHERE s.company_id = %s
+              AND s.status = 'Оплачено'
+              AND DATE(s.created_at) BETWEEN %s AND %s
+            GROUP BY
+                c.id,
+                c.full_name
+            ORDER BY total DESC
+            LIMIT 5
+        """, (
+            company_id,
+            date_from,
+            date_to
+        ))
+
+        top_clients_rows = cur.fetchall() or []
+
+        top_clients = [
+            {
+                "full_name": row.get("full_name") or "Частное лицо",
+                "sales_count": int(row.get("sales_count") or 0),
+                "total": float(row.get("total") or 0)
+            }
+            for row in top_clients_rows
+        ]
+
+        # =========================================================
+        # КОЛИЧЕСТВО КЛИЕНТОВ
+        # =========================================================
+
+        cur.execute("""
+            SELECT COUNT(*) AS clients_count
+            FROM clients
+            WHERE company_id = %s
+        """, (company_id,))
+
+        clients_row = cur.fetchone() or {}
+
+        clients_count = int(
+            clients_row.get("clients_count") or 0
+        )
+
+        # Временно, пока дата регистрации клиента отдельно не считается
+        new_clients = 0
+
+        # =========================================================
+        # АНАЛИТИКА СОТРУДНИКОВ
+        # =========================================================
+
+        cur.execute("""
+            SELECT
+                u.id,
+                u.full_name,
+                u.username,
+                u.role,
+                COALESCE(u.percent_rate, 0) AS percent_rate,
+
+                COUNT(s.id) FILTER (
+                    WHERE s.status = 'Оплачено'
+                ) AS sales_count,
+
+                COALESCE(
+                    SUM(s.total_amount) FILTER (
+                        WHERE s.status = 'Оплачено'
+                    ),
+                    0
+                ) AS revenue,
+
+                COALESCE(
+                    AVG(s.total_amount) FILTER (
+                        WHERE s.status = 'Оплачено'
+                    ),
+                    0
+                ) AS average_check,
+
+                COUNT(s.id) FILTER (
+                    WHERE s.status = 'Возврат'
+                       OR COALESCE(s.is_refunded, FALSE) = TRUE
+                ) AS refund_count
+
+            FROM users u
+
+            LEFT JOIN sales s
+                ON s.user_id = u.id
+               AND s.company_id = %s
+               AND DATE(s.created_at) BETWEEN %s AND %s
+
+            WHERE u.company_id = %s
+
+            GROUP BY
+                u.id,
+                u.full_name,
+                u.username,
+                u.role,
+                u.percent_rate
+
+            ORDER BY revenue DESC, u.id
+        """, (
+            company_id,
+            date_from,
+            date_to,
+            company_id
+        ))
+
+        employee_rows = cur.fetchall() or []
+
+        employee_stats = []
+
+        max_employee_revenue = max(
+            [
+                float(row.get("revenue") or 0)
+                for row in employee_rows
+            ],
+            default=0
+        )
+
+        for row in employee_rows:
+            employee_revenue = float(
+                row.get("revenue") or 0
+            )
+
+            percent_rate = float(
+                row.get("percent_rate") or 0
+            )
+
+            reward = (
+                employee_revenue
+                * percent_rate
+                / 100
+            )
+
+            progress_percent = (
+                employee_revenue
+                / max_employee_revenue
+                * 100
+                if max_employee_revenue > 0
+                else 0
+            )
+
+            employee_stats.append({
+                "id": row.get("id"),
+                "full_name": row.get("full_name"),
+                "username": row.get("username"),
+                "role": row.get("role") or "employee",
+                "percent_rate": percent_rate,
+                "sales_count": int(
+                    row.get("sales_count") or 0
+                ),
+                "revenue": employee_revenue,
+                "average_check": float(
+                    row.get("average_check") or 0
+                ),
+                "refund_count": int(
+                    row.get("refund_count") or 0
+                ),
+                "reward": reward,
+                "progress_percent": round(
+                    progress_percent,
+                    1
+                )
+            })
+
+        # =========================================================
+        # ВЫРУЧКА ЗА СЕГОДНЯ
+        # =========================================================
+
+        today_str = now_kz().strftime("%Y-%m-%d")
+
+        cur.execute("""
+            SELECT
+                COALESCE(SUM(total_amount), 0) AS total
+            FROM sales
+            WHERE company_id = %s
+              AND status = 'Оплачено'
+              AND DATE(created_at) = %s
+        """, (
+            company_id,
+            today_str
+        ))
+
+        today_row = cur.fetchone() or {}
+        today = float(today_row.get("total") or 0)
+
+        return render_template(
+            "analytics.html",
+
+            date_from=date_from,
+            date_to=date_to,
+
+            total=total,
+            profit=profit,
+            gross_profit=gross_profit,
+
+            sales_count=sales_count,
+            average_check=average_check,
+
+            payments=payments,
+
+            returns_count=returns_count,
+            returns_total=returns_total,
+
+            expenses_total=expenses_total,
+            purchase_total=purchase_total,
+            salary_total=salary_total,
+            taxes_total=taxes_total,
+            expense_categories=expense_categories,
+
+            margin_percent=margin_percent,
+
+            clients_count=clients_count,
+            new_clients=new_clients,
+
+            chart_labels=chart_labels,
+            chart_values=chart_values,
+            profit_chart_values=profit_chart_values,
+            expense_chart_values=expense_chart_values,
+
+            top_items=top_items,
+            top_clients=top_clients,
+            employee_stats=employee_stats,
+
+            today=today
+        )
+
+    except Exception:
+        conn.rollback()
+
+        import traceback
+        traceback.print_exc()
+
+        return "Не удалось загрузить аналитику", 500
+
+    finally:
+        cur.close()
+        pool.putconn(conn)
     
 @sales_bp.route("/analytics/employee/<int:user_id>")
 def employee_analytics(user_id):
