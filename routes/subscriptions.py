@@ -81,7 +81,13 @@ def subscription_update():
     if not session.get("user_id"):
         return redirect(url_for("auth.login"))
 
-    if session.get("role") != "admin" and not session.get("is_super_admin") and not session.get("is_creator"):
+    is_owner = (
+        session.get("role") == "owner"
+        or session.get("is_creator")
+        or session.get("is_super_admin")
+    )
+
+    if not is_owner:
         return "Только владелец компании может менять подписку", 403
 
     company_id = session.get("company_id")

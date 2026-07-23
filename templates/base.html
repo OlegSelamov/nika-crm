@@ -2610,9 +2610,9 @@
 			</a>
 			{% endif %}
 			
-			{% if session.get("role") == "admin" or session.get("is_super_admin") or session.get("is_creator") %}
+			{% if session.get("is_super_admin") or session.get("role") == "owner" %}
 			<a href="/subscription">
-				<span class="icon">💳</span>
+				<img src="/static/icons/subscription.png" class="menu-icon">
 				<span class="text">Подписка и модули</span>
 			</a>
 			{% endif %}

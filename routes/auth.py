@@ -52,7 +52,7 @@ def load_user_module_codes(user):
 
     try:
         # Супер-админ видит все активные модули.
-        if bool(user.get("is_super_admin")) or bool(user.get("is_creator")):
+        if bool(user.get("is_super_admin")):
             cur.execute("""
                 SELECT code
                 FROM modules
@@ -129,6 +129,30 @@ def current_user():
         cur.close()
         pool.putconn(conn)
 
+
+@auth_bp.before_app_request
+def refresh_current_user_access():
+    """
+    Синхронизирует роль, компанию и доступные модули с базой данных.
+
+    Благодаря этому включённые/отключённые в подписке модули появляются
+    в меню сразу после следующего запроса, без выхода из аккаунта.
+    """
+    if not session.get("user_id"):
+        return
+
+    user = current_user()
+    if not user:
+        session.clear()
+        return redirect("/login")
+
+    user = dict(user)
+
+    session["role"] = user.get("role") or "employee"
+    session["company_id"] = user.get("company_id")
+    session["is_super_admin"] = bool(user.get("is_super_admin"))
+    session["employee_modules"] = load_user_module_codes(user)
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -175,7 +199,7 @@ def login():
         session["phone"] = user["phone"]
         session["percent_rate"] = user["percent_rate"]
         session["is_super_admin"] = bool(user["is_super_admin"])
-        session["is_creator"] = bool(user["is_creator"]) if "is_creator" in user.keys() else False
+        session["is_creator"] = False  # устаревшее поле: права определяются через role
         session["employee_modules"] = load_user_module_codes(user)
         session["presence_heartbeat_at"] = now_kz().isoformat()
 
@@ -243,7 +267,7 @@ def api_login():
     session["phone"] = user["phone"]
     session["percent_rate"] = user["percent_rate"]
     session["is_super_admin"] = bool(user["is_super_admin"])
-    session["is_creator"] = bool(user["is_creator"]) if "is_creator" in user.keys() else False
+    session["is_creator"] = False  # устаревшее поле: права определяются через role
     session["employee_modules"] = load_user_module_codes(user)
     session["presence_heartbeat_at"] = now_kz().isoformat()
 
@@ -284,6 +308,7 @@ def users():
         return redirect("/login")
 
     is_super_admin = bool(session.get("is_super_admin"))
+    is_root_admin = is_super_admin and session.get("username") == "admin"
     current_company_id = session.get("company_id")
     current_role = session.get("role")
 
@@ -325,22 +350,54 @@ def users():
                 if not editing_user:
                     return "Пользователь не найден", 404
 
-                if editing_user.get("is_creator"):
-                    return "Создателя системы нельзя редактировать", 403
+                is_editing_self = editing_user.get("id") == session.get("user_id")
+                target_is_super_admin = bool(editing_user.get("is_super_admin"))
 
-                if not is_super_admin and editing_user.get("company_id") != current_company_id:
-                    return "Нельзя редактировать сотрудника другой компании", 403
+                # Главная системная учётная запись admin может управлять всеми.
+                # Обычный супер-администратор может редактировать себя,
+                # владельцев компаний и обычных пользователей, но не других SUPER.
+                if (
+                    target_is_super_admin
+                    and not is_editing_self
+                    and not is_root_admin
+                ):
+                    return "Только главная учётная запись admin может редактировать других супер-администраторов", 403
 
-                if editing_user.get("is_super_admin") and not session.get("is_creator"):
-                    return "Недостаточно прав для редактирования супер-администратора", 403
+                # Владелец/администратор компании не может редактировать владельца.
+                if (
+                    editing_user.get("role") == "owner"
+                    and not is_super_admin
+                    and not is_editing_self
+                ):
+                    return "Владельца компании нельзя редактировать администратору", 403
+
+                if (
+                    not is_super_admin
+                    and editing_user.get("company_id") != current_company_id
+                ):
+                    return "Нельзя редактировать пользователя другой компании", 403
 
             if is_super_admin:
                 company_id = request.form.get("company_id") or None
-                new_is_super_admin = request.form.get("is_super_admin") == "1"
+                requested_super_admin = request.form.get("is_super_admin") == "1"
+
+                if is_root_admin:
+                    new_is_super_admin = requested_super_admin
+                elif editing_user_id == session.get("user_id"):
+                    # Обычный SUPER может редактировать себя, но не снять с себя
+                    # системные полномочия через форму.
+                    new_is_super_admin = True
+                else:
+                    # Только корневая учётная запись admin назначает SUPER.
+                    new_is_super_admin = bool(
+                        editing_user and editing_user.get("is_super_admin")
+                    )
             else:
                 company_id = current_company_id
                 new_is_super_admin = False
 
+                # В компании может быть только один владелец.
+                # Обычный владелец/администратор не может назначить второго owner.
                 if role == "owner":
                     role = "admin"
 
@@ -365,6 +422,14 @@ def users():
 
             if cur.fetchone():
                 return "Пользователь с таким логином уже существует", 400
+
+            if (
+                editing_user_id == session.get("user_id")
+                and is_root_admin
+            ):
+                username = "admin"
+                new_is_super_admin = True
+                company_id = None
 
             if editing_user_id:
                 if password:
@@ -614,6 +679,7 @@ def users_presence():
         return jsonify({"success": False}), 401
 
     is_super_admin = bool(session.get("is_super_admin"))
+    is_root_admin = is_super_admin and session.get("username") == "admin"
     current_company_id = session.get("company_id")
     current_role = session.get("role")
 
@@ -1064,6 +1130,7 @@ def delete_user(user_id):
         return redirect("/login")
 
     is_super_admin = bool(session.get("is_super_admin"))
+    is_root_admin = is_super_admin and session.get("username") == "admin"
     current_company_id = session.get("company_id")
     current_role = session.get("role")
 
@@ -1083,23 +1150,27 @@ def delete_user(user_id):
         if not user:
             return "Пользователь не найден", 404
 
-        if user["is_creator"]:
-            return "Создатель системы не может быть удален", 403
-
+        # Любой пользователь защищён от удаления самого себя.
         if user_id == session.get("user_id"):
             return "Нельзя удалить самого себя", 403
 
-        # Администратор компании управляет только сотрудниками своей компании.
+        target_is_super_admin = bool(user.get("is_super_admin"))
+
+        # Других SUPER может удалять только главная учётная запись admin.
+        if target_is_super_admin and not is_root_admin:
+            return "Только главная учётная запись admin может удалять супер-администраторов", 403
+
+        # Владелец компании доступен для удаления только системному SUPER.
+        if user.get("role") == "owner" and not is_super_admin:
+            return "Владельца компании может удалить только супер-администратор", 403
+
+        # Владелец/администратор компании управляет только своей компанией.
         if not is_super_admin:
-            if user["company_id"] != current_company_id:
+            if user.get("company_id") != current_company_id:
                 return "Доступ запрещен", 403
 
-            if user["is_super_admin"]:
+            if target_is_super_admin:
                 return "Нельзя удалить супер-администратора", 403
-
-        # Обычный супер-админ не может удалить создателя или другого владельца системы.
-        if user["is_super_admin"] and not session.get("is_creator"):
-            return "Нельзя удалить владельца системы", 403
 
         cur.execute(
             "DELETE FROM employee_module_permissions WHERE employee_id = %s",
@@ -1177,10 +1248,27 @@ def register():
 
         # 2. создаём владельца
         cur.execute("""
-            INSERT INTO users (username, password, role, company_id, created_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO users (
+                username,
+                password,
+                role,
+                position,
+                company_id,
+                full_name,
+                phone,
+                is_super_admin,
+                created_at
+            )
+            VALUES (%s, %s, 'owner', 'Владелец', %s, %s, %s, FALSE, %s)
             RETURNING id
-        """, (username, password, "owner", company_id, now_kz()))
+        """, (
+            username,
+            password,
+            company_id,
+            director or username,
+            phone,
+            now_kz()
+        ))
 
         owner_id = cur.fetchone()["id"]
 

@@ -119,6 +119,17 @@
 
                 <tbody>
                     {% for u in users %}
+                    {% set root_admin = session.get("is_super_admin") and session.get("username") == "admin" %}
+                    {% set editing_self = u.id == session.get("user_id") %}
+                    {% set can_edit_user = root_admin
+                        or editing_self
+                        or (session.get("is_super_admin") and not u.is_super_admin)
+                        or (not session.get("is_super_admin") and u.role != "owner" and not u.is_super_admin) %}
+                    {% set can_delete_user = not editing_self and (
+                        root_admin
+                        or (session.get("is_super_admin") and not u.is_super_admin)
+                        or (not session.get("is_super_admin") and u.role != "owner" and not u.is_super_admin)
+                    ) %}
                     <tr class="user-row"
                         data-user-id="{{ u.id }}"
                         data-role="{{ u.role or '' }}"
@@ -189,10 +200,12 @@
                             </span>
                             {% if u.is_super_admin %}
                                 <span class="user-access user-access--super">SUPER</span>
-                            {% elif u.is_creator %}
-                                <span class="user-access user-access--creator">Создатель</span>
+                            {% elif u.role == "owner" %}
+                                <span class="user-access user-access--creator">Полный доступ</span>
+                            {% elif u.role == "admin" %}
+                                <span class="user-access user-access--creator">Управление</span>
                             {% else %}
-                                <span class="user-access">Обычный</span>
+                                <span class="user-access">По модулям</span>
                             {% endif %}
                             </div>
                         </td>
@@ -200,8 +213,8 @@
                         <td><span class="company-cell">{{ u.company_name or "Без компании" }}</span></td>
 
                         <td>
-                            {% if not u.is_creator %}
-                                <div class="user-actions">
+                            <div class="user-actions">
+                                {% if can_edit_user %}
                                     <button type="button"
                                             class="user-edit"
                                             title="Редактировать"
@@ -209,6 +222,9 @@
                                             onclick="openEditUserModal('{{ u.id }}')">
                                         <span class="action-icon">✎</span>
                                     </button>
+                                {% endif %}
+
+                                {% if can_delete_user %}
                                     <a href="/users/delete/{{ u.id }}"
                                        class="user-delete"
                                        title="Удалить"
@@ -216,10 +232,14 @@
                                        onclick="return confirm('Удалить пользователя?')">
                                         <span class="action-icon">×</span>
                                     </a>
-                                </div>
-                            {% else %}
-                                <span class="user-protected">Защищён</span>
-                            {% endif %}
+                                {% endif %}
+
+                                {% if not can_edit_user and not can_delete_user %}
+                                    <span class="user-protected"
+                                          title="Учётная запись защищена"
+                                          aria-label="Учётная запись защищена">🔒</span>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -229,6 +249,17 @@
 
         <div class="mobile-users-list">
             {% for u in users %}
+            {% set root_admin = session.get("is_super_admin") and session.get("username") == "admin" %}
+            {% set editing_self = u.id == session.get("user_id") %}
+            {% set can_edit_user = root_admin
+                or editing_self
+                or (session.get("is_super_admin") and not u.is_super_admin)
+                or (not session.get("is_super_admin") and u.role != "owner" and not u.is_super_admin) %}
+            {% set can_delete_user = not editing_self and (
+                root_admin
+                or (session.get("is_super_admin") and not u.is_super_admin)
+                or (not session.get("is_super_admin") and u.role != "owner" and not u.is_super_admin)
+            ) %}
             <article class="mobile-user-card user-row"
                      data-user-id="{{ u.id }}"
                      data-role="{{ u.role or '' }}"
@@ -258,8 +289,10 @@
 
                     {% if u.is_super_admin %}
                         <span class="user-access user-access--super">SUPER</span>
-                    {% elif u.is_creator %}
-                        <span class="user-access user-access--creator">Создатель</span>
+                    {% elif u.role == "owner" %}
+                        <span class="user-access user-access--creator">Полный доступ</span>
+                    {% elif u.role == "admin" %}
+                        <span class="user-access user-access--creator">Управление</span>
                     {% endif %}
                 </div>
 
@@ -310,18 +343,28 @@
                     </span>
                 </div>
 
-                {% if not u.is_creator %}
+                {% if can_edit_user or can_delete_user %}
                 <div class="mobile-user-actions">
+                    {% if can_edit_user %}
                     <button type="button"
                             class="user-edit"
                             onclick="openEditUserModal('{{ u.id }}')">
                         Редактировать
                     </button>
+                    {% endif %}
+
+                    {% if can_delete_user %}
                     <a href="/users/delete/{{ u.id }}"
                        class="user-delete"
                        onclick="return confirm('Удалить пользователя?')">
                         Удалить
                     </a>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="mobile-user-actions">
+                    <span class="user-protected"
+                          title="Учётная запись защищена">🔒</span>
                 </div>
                 {% endif %}
             </article>
@@ -788,12 +831,12 @@
     font-size:13px;
 }
 
-.users-table th:nth-child(1), .users-table td:nth-child(1) { width:25%; }
-.users-table th:nth-child(2), .users-table td:nth-child(2) { width:18%; }
+.users-table th:nth-child(1), .users-table td:nth-child(1) { width:24%; }
+.users-table th:nth-child(2), .users-table td:nth-child(2) { width:17%; }
 .users-table th:nth-child(3), .users-table td:nth-child(3) { width:16%; }
 .users-table th:nth-child(4), .users-table td:nth-child(4) { width:17%; }
 .users-table th:nth-child(5), .users-table td:nth-child(5) { width:16%; }
-.users-table th:nth-child(6), .users-table td:nth-child(6) { width:8%; overflow:visible; }
+.users-table th:nth-child(6), .users-table td:nth-child(6) { width:10%; overflow:visible; text-align:right; }
 
 .user-main {
     min-width:0;
@@ -1848,3 +1891,24 @@ window.setTimeout(refreshUsersPresence, 1000);
 </script>
 
 {% endblock %}
+
+<style>
+.users-table td:last-child {
+    white-space: nowrap;
+}
+
+.users-table td:last-child .user-protected {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+    cursor: default;
+}
+
+.users-table td:last-child .user-actions {
+    width: 100%;
+}
+</style>
