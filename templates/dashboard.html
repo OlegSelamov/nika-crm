@@ -16,7 +16,7 @@
 
     <section class="director-kpis">
         <article class="director-kpi">
-            <div class="director-kpi__icon director-kpi__icon--blue">₸</div>
+            <div class="director-kpi__icon director-kpi__icon--blue"><img src="{{ url_for('static', filename='icons/revenue-today.png') }}" alt="Выручка сегодня"></div>
             <div>
                 <span>Выручка сегодня</span>
                 <strong>{{ "{:,.0f}".format(today or 0).replace(",", " ") }} ₸</strong>
@@ -25,7 +25,7 @@
         </article>
 
         <article class="director-kpi">
-            <div class="director-kpi__icon director-kpi__icon--green">↗</div>
+            <div class="director-kpi__icon director-kpi__icon--green"><img src="{{ url_for('static', filename='icons/profit-today.png') }}" alt="Прибыль сегодня"></div>
             <div>
                 <span>Прибыль сегодня</span>
                 <strong>{{ "{:,.0f}".format(today_profit or 0).replace(",", " ") }} ₸</strong>
@@ -34,7 +34,7 @@
         </article>
 
         <article class="director-kpi">
-            <div class="director-kpi__icon director-kpi__icon--purple">🧾</div>
+            <div class="director-kpi__icon director-kpi__icon--purple"><img src="{{ url_for('static', filename='icons/checks-today.png') }}" alt="Чеков сегодня"></div>
             <div>
                 <span>Чеков сегодня</span>
                 <strong>{{ sales_today or 0 }}</strong>
@@ -43,7 +43,7 @@
         </article>
 
         <article class="director-kpi">
-            <div class="director-kpi__icon director-kpi__icon--orange">🛒</div>
+            <div class="director-kpi__icon director-kpi__icon--orange"><img src="{{ url_for('static', filename='icons/average-check.png') }}" alt="Средний чек"></div>
             <div>
                 <span>Средний чек</span>
                 <strong>{{ "{:,.0f}".format(average_check or 0).replace(",", " ") }} ₸</strong>
@@ -52,7 +52,7 @@
         </article>
 
         <article class="director-kpi">
-            <div class="director-kpi__icon director-kpi__icon--red">↩</div>
+            <div class="director-kpi__icon director-kpi__icon--red"><img src="{{ url_for('static', filename='icons/refunds-today.png') }}" alt="Возвраты сегодня"></div>
             <div>
                 <span>Возвратов сегодня</span>
                 <strong>{{ refunds_today or 0 }}</strong>
@@ -61,7 +61,7 @@
         </article>
 
         <article class="director-kpi">
-            <div class="director-kpi__icon director-kpi__icon--yellow">★</div>
+            <div class="director-kpi__icon director-kpi__icon--yellow"><img src="{{ url_for('static', filename='icons/best-employee.png') }}" alt="Лучший сотрудник"></div>
             <div>
                 <span>Лучший сотрудник</span>
                 <strong class="director-kpi__text">
@@ -82,7 +82,7 @@
         </article>
 
         <article class="director-kpi">
-            <div class="director-kpi__icon director-kpi__icon--cyan">📦</div>
+            <div class="director-kpi__icon director-kpi__icon--cyan"><img src="{{ url_for('static', filename='icons/best-product.png') }}" alt="Лучший товар"></div>
             <div>
                 <span>Лучший товар</span>
                 <strong class="director-kpi__text">
@@ -103,7 +103,7 @@
         </article>
 
         <article class="director-kpi">
-            <div class="director-kpi__icon director-kpi__icon--violet">🏦</div>
+            <div class="director-kpi__icon director-kpi__icon--violet"><img src="{{ url_for('static', filename='icons/total-revenue.png') }}" alt="Общая выручка"></div>
             <div>
                 <span>Общая выручка</span>
                 <strong>{{ "{:,.0f}".format(total or 0).replace(",", " ") }} ₸</strong>
@@ -145,12 +145,12 @@
         </div>
 
         <div class="director-actions">
-            <a href="/sales"><span>🧾</span><strong>Продажи</strong></a>
-            <a href="/analytics"><span>📊</span><strong>Аналитика</strong></a>
-            <a href="/stock"><span>📦</span><strong>Остатки</strong></a>
-            <a href="/stock/income"><span>➕</span><strong>Приход</strong></a>
-            <a href="/items"><span>🏷️</span><strong>Каталог</strong></a>
-            <a href="/users"><span>👥</span><strong>Сотрудники</strong></a>
+            <a href="/sales"><span><img src="{{ url_for('static', filename='icons/sales.png') }}" alt="Продажи"></span><strong>Продажи</strong></a>
+            <a href="/analytics"><span><img src="{{ url_for('static', filename='icons/analytics.png') }}" alt="Аналитика"></span><strong>Аналитика</strong></a>
+            <a href="/stock"><span><img src="{{ url_for('static', filename='icons/stock.png') }}" alt="Остатки"></span><strong>Остатки</strong></a>
+            <a href="/stock/income"><span><img src="{{ url_for('static', filename='icons/income.png') }}" alt="Приход"></span><strong>Приход</strong></a>
+            <a href="/items"><span><img src="{{ url_for('static', filename='icons/items.png') }}" alt="Каталог"></span><strong>Каталог</strong></a>
+            <a href="/users"><span><img src="{{ url_for('static', filename='icons/user.png') }}" alt="Сотрудники"></span><strong>Сотрудники</strong></a>
         </div>
     </section>
 
@@ -323,13 +323,13 @@
                 {% if notifications %}
                     {% for n in notifications %}
                     <div class="director-notification">
-                        <span>🔔</span>
+                        <span class="director-notification__icon"><img src="{{ url_for('static', filename='icons/notification.png') }}" alt="Уведомление"></span>
                         <p>{{ n }}</p>
                     </div>
                     {% endfor %}
                 {% else %}
                     <div class="director-empty">
-                        <span>✓</span>
+                        <span class="director-empty__icon"><img src="{{ url_for('static', filename='icons/notifications-empty.png') }}" alt="Уведомлений нет"></span>
                         <strong>Уведомлений нет</strong>
                         <p>Все важные события появятся здесь.</p>
                     </div>
@@ -458,13 +458,14 @@ if (chartCanvas) {
 }
 
 .director-kpi__icon {
-    flex: 0 0 43px;
-    width: 43px;
-    height: 43px;
-    display: grid;
-    place-items: center;
-    border-radius: 13px;
-    font-size: 17px;
+    flex: 0 0 54px;
+    width: 54px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    font-size: 0;
     font-weight: 900;
 }
 
@@ -476,6 +477,53 @@ if (chartCanvas) {
 .director-kpi__icon--yellow { color:#b98a12; background:#fff7d9; }
 .director-kpi__icon--cyan { color:#1e9ead; background:#e8f8fa; }
 .director-kpi__icon--violet { color:#8657d8; background:#f2ebff; }
+
+.director-kpi__icon img {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    display: block;
+}
+
+.director-actions span {
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    background: rgba(114,87,255,.08);
+}
+
+.director-actions span img {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    display: block;
+}
+
+.director-notification__icon {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: #fff6dd;
+}
+
+.director-notification__icon img {
+    width: 25px;
+    height: 25px;
+    object-fit: contain;
+}
+
+.director-empty__icon img {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+}
 
 .director-kpi > div:last-child {
     min-width: 0;
@@ -593,9 +641,6 @@ if (chartCanvas) {
     background: #f5f2ff;
 }
 
-.director-actions span {
-    font-size: 21px;
-}
 
 .director-actions strong {
     font-size: 11px;
@@ -784,11 +829,27 @@ if (chartCanvas) {
     }
 
     .director-kpi__icon {
-        flex-basis: 34px;
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
-        font-size: 14px;
+        flex-basis: 48px;
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        font-size: 0;
+    }
+
+    .director-kpi__icon img {
+        width: 27px;
+        height: 27px;
+    }
+
+    .director-actions span {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+    }
+
+    .director-actions span img {
+        width: 27px;
+        height: 27px;
     }
 
     .director-kpi strong {

@@ -205,7 +205,7 @@
 
         <div class="client-picker">
 
-            <!-- 🔍 ЛЕВАЯ ЧАСТЬ -->
+            <!-- ЛЕВАЯ ЧАСТЬ -->
             <div class="picker-left">
 
                 <h3>Выбор клиента</h3>
@@ -216,7 +216,7 @@
 
             </div>
 
-            <!-- 👤 ПРАВАЯ ЧАСТЬ -->
+            <!-- ПРАВАЯ ЧАСТЬ -->
             <div class="picker-right">
 
                 <div class="selected-title">Данные клиента</div>
@@ -245,21 +245,21 @@
 
     <div class="modal-box">
 
-        <!-- 🔝 HEADER -->
+        <!-- HEADER -->
         <div class="modal-header">
             <b id="saleTitle">Чек</b>
-            <button onclick="closeSaleModal()">✕</button>
+            <button onclick="closeSaleModal()" class="icon-only-btn" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button>
         </div>
 
-        <!-- 📄 BODY -->
+        <!-- BODY -->
         <div id="saleBody" class="modal-body">
             Загрузка...
         </div>
 
-        <!-- 🔻 FOOTER -->
+        <!-- FOOTER -->
         <div class="modal-footer">
-            <button onclick="printCurrentDocument()" class="btn">🖨 Печать</button>
-			<button id="saveDocumentBtn" onclick="downloadPDF()" class="btn">▣ Сохранить</button>
+            <button onclick="printCurrentDocument()" class="btn document-action-btn"><img src="/static/icons/print.png" alt="">Печать</button>
+			<button id="saveDocumentBtn" onclick="downloadPDF()" class="btn document-action-btn"><img src="/static/icons/download.png" alt="">Сохранить</button>
             <button onclick="closeSaleModal()" class="btn modal-close-action">Закрыть</button>
         </div>
 
@@ -269,7 +269,7 @@
 
 <div id="quantityModal" class="quantity-modal" style="display:none;">
     <div class="quantity-modal-box">
-        <button type="button" class="quantity-modal-close" onclick="closeQuantityModal()">✕</button>
+        <button type="button" class="quantity-modal-close icon-only-btn" onclick="closeQuantityModal()" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button>
 
         <div class="quantity-modal-kicker">Количество товара</div>
         <div id="quantityProductName" class="quantity-product-name">Товар</div>
@@ -327,17 +327,10 @@
 
 <button
     onclick="closeAddItemModal()"
-    style="
-        position:absolute;
-        top:10px;
-        right:10px;
-        border:none;
-        background:none;
-        font-size:20px;
-        cursor:pointer;
-    "
+    class="add-item-close icon-only-btn"
+    aria-label="Закрыть"
 >
-    ✕
+    <img src="/static/icons/close.png" alt="">
 </button>
 
     <input id="newName" placeholder="Название">
@@ -606,7 +599,7 @@ function renderCart() {
                 </td>
                 <td><strong>${sum.toLocaleString("ru-RU")} ₸</strong></td>
                 <td>
-                    <button type="button" class="remove-cart-btn" onclick="removeItem(${index})" aria-label="Удалить">⌫</button>
+                    <button type="button" class="remove-cart-btn" onclick="removeItem(${index})" aria-label="Удалить"><img src="/static/icons/delete-item.png" alt=""></button>
                 </td>
             </tr>
         `;
@@ -650,8 +643,8 @@ function renderMobileCart() {
 						<button onclick="changeQty(${index}, 1)">+</button>
 					</div>
 
-					<button onclick="removeItem(${index})">
-						❌
+					<button onclick="removeItem(${index})" class="mobile-remove-btn" aria-label="Удалить">
+						<img src="/static/icons/delete-item.png" alt="">
 					</button>
 
 				</div>
@@ -927,9 +920,9 @@ function selectClient(client) {
     document.getElementById("selectedClient").innerHTML = `
         <b>${client.company_name || ""}</b><br>
         ${client.full_name || ""}<br>
-        📞 ${client.phone || ""}<br>
-        🆔 ${client.iin || ""}<br>
-        📍 ${client.address || ""}
+        <span class="client-detail-line"><img src="/static/icons/phone.png" alt="">${client.phone || ""}</span>
+        <span class="client-detail-line"><img src="/static/icons/iin.png" alt="">${client.iin || ""}</span>
+        <span class="client-detail-line"><img src="/static/icons/location.png" alt="">${client.address || ""}</span>
     `;
 }
 
@@ -1912,37 +1905,37 @@ function loadSalesHistory() {
                             <button
                                 onclick="openSaleModal(${sale.id})"
                                 class="mini-doc-btn"
-                            >
-                                🧾
+                            aria-label="Чек">
+                                <img src="/static/icons/receipt.png" alt="">
                             </button>
 
                             <button
                                 onclick="window.open('/docs/nakladnaya/${sale.id}', '_blank')"
                                 class="mini-doc-btn"
-                            >
-                                📦
+                            aria-label="Накладная">
+                                <img src="/static/icons/invoice-waybill.png" alt="">
                             </button>
 
                             <button
                                 onclick="window.open('/docs/schet-factura/${sale.id}', '_blank')"
                                 class="mini-doc-btn"
-                            >
-                                📄
+                            aria-label="Счёт-фактура">
+                                <img src="/static/icons/invoice.png" alt="">
                             </button>
 
                             <button
                                 onclick="window.open('/docs/act/${sale.id}', '_blank')"
                                 class="mini-doc-btn"
-                            >
-                                📋
+                            aria-label="Акт">
+                                <img src="/static/icons/act.png" alt="">
                             </button>
 							
 							<button
 								onclick="refundSale(${sale.id})"
 								class="mini-doc-btn"
-							>
-								↩️
-							</button>
+                            aria-label="Возврат">
+                                <img src="/static/icons/refund (1).png" alt="">
+                            </button>
 
                         </div>
 
@@ -1976,36 +1969,36 @@ function loadSalesHistory() {
 					<button
 						onclick="openSaleModal(${sale.id})"
 						class="mini-doc-btn"
-					>
-						🧾
+					aria-label="Чек">
+						<img src="/static/icons/receipt.png" alt="">
 					</button>
 
 					<button
 						onclick="window.open('/docs/nakladnaya/${sale.id}', '_blank')"
 						class="mini-doc-btn"
-					>
-						📦
+					aria-label="Накладная">
+						<img src="/static/icons/invoice-waybill.png" alt="">
 					</button>
 
 					<button
 						onclick="window.open('/docs/schet-factura/${sale.id}', '_blank')"
 						class="mini-doc-btn"
-					>
-						📄
+					aria-label="Счёт-фактура">
+						<img src="/static/icons/invoice.png" alt="">
 					</button>
 
 					<button
 						onclick="window.open('/docs/act/${sale.id}', '_blank')"
 						class="mini-doc-btn"
-					>
-						📋
+					aria-label="Акт">
+						<img src="/static/icons/act.png" alt="">
 					</button>
 					
 					<button
 						onclick="refundSale(${sale.id})"
 						class="mini-doc-btn"
-					>
-						↩️
+					aria-label="Возврат">
+						<img src="/static/icons/refund.png" alt="">
 					</button>
 
 				</div>
@@ -4174,6 +4167,173 @@ function refundSale(id){
 
     .quantity-quick-buttons {
         grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+</style>
+
+
+<style id="sales-icon-system">
+/* Единая система PNG-иконок Nika Business */
+.icon-only-btn img,
+.document-action-btn img,
+.remove-cart-btn img,
+.mobile-remove-btn img,
+.mini-doc-btn img,
+.client-detail-line img {
+    display: block;
+    object-fit: contain;
+}
+
+.icon-only-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-only-btn img {
+    width: 20px;
+    height: 20px;
+}
+
+.document-action-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.document-action-btn img {
+    width: 22px;
+    height: 22px;
+}
+
+.modal-header > .icon-only-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: #f4f2ff;
+}
+
+.modal-header > .icon-only-btn img {
+    width: 21px;
+    height: 21px;
+}
+
+.quantity-modal-close.icon-only-btn img {
+    width: 18px;
+    height: 18px;
+}
+
+.add-item-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: #f4f2ff;
+    cursor: pointer;
+}
+
+.add-item-close img {
+    width: 19px;
+    height: 19px;
+}
+
+.remove-cart-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+    background: #fff1f2 !important;
+}
+
+.remove-cart-btn img {
+    width: 23px;
+    height: 23px;
+}
+
+.mobile-remove-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: #fff1f2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mobile-remove-btn img {
+    width: 23px;
+    height: 23px;
+}
+
+.history-actions,
+.mobile-sale-actions {
+    align-items: center;
+}
+
+.mini-doc-btn {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px !important;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e8e6f3 !important;
+    border-radius: 12px !important;
+    background: #f8f7ff !important;
+    transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.mini-doc-btn:hover {
+    transform: translateY(-1px);
+    background: #f1eeff !important;
+    box-shadow: 0 6px 16px rgba(72, 61, 139, .10);
+}
+
+.mini-doc-btn img {
+    width: 24px;
+    height: 24px;
+}
+
+.client-detail-line {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 32px;
+    color: #475569;
+}
+
+.client-detail-line img {
+    width: 21px;
+    height: 21px;
+    flex: 0 0 21px;
+}
+
+@media (max-width: 768px) {
+    .mini-doc-btn {
+        width: 42px !important;
+        height: 42px !important;
+        flex-basis: 42px !important;
+    }
+
+    .mini-doc-btn img {
+        width: 25px;
+        height: 25px;
+    }
+
+    .document-action-btn img {
+        width: 20px;
+        height: 20px;
     }
 }
 </style>

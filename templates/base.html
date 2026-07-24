@@ -2059,7 +2059,7 @@
 		/* ===== COMPACT FLOATING TOP ACTIONS ===== */
 		.app-topbar--compact {
 			position: fixed;
-			top: 14px;
+			top: 4px;
 			right: 18px;
 			left: auto;
 			z-index: 10010;
@@ -2085,27 +2085,63 @@
 		}
 
 		.top-action--compact {
-			width: 36px;
-			height: 36px;
-			border-radius: 11px;
-			font-size: 15px;
-			background: rgba(255,255,255,.92);
-			border: 1px solid rgba(226,232,240,.95);
-			box-shadow: 0 7px 18px rgba(15,23,42,.09);
+			width: 44px;
+			height: 44px;
+			border-radius: 13px;
+
+			background: linear-gradient(
+				145deg,
+				rgba(30,41,59,.96),
+				rgba(49,46,129,.93)
+			);
+
+			border: 1px solid rgba(255,255,255,.10);
+
+			box-shadow:
+				0 7px 18px rgba(15,23,42,.16),
+				inset 0 1px 0 rgba(255,255,255,.07);
+
 			backdrop-filter: blur(12px);
 			-webkit-backdrop-filter: blur(12px);
 		}
 
+		.top-action__icon {
+			width: 28px;
+			height: 28px;
+			display: block;
+			object-fit: contain;
+		}
+
 		.top-action--compact:hover {
-			transform: translateY(-1px);
+			transform: translateY(-2px);
+			border-color: rgba(139,92,246,.55);
+
+			box-shadow:
+				0 9px 22px rgba(15,23,42,.22),
+				0 0 14px rgba(139,92,246,.16);
+		}
+
+		@media (max-width: 768px) {
+			.top-action__icon {
+				width: 24px;
+				height: 24px;
+			}
 		}
 
 		.topbar-user--profile {
-			min-height: 36px;
-			padding: 3px 8px 3px 4px;
-			border-radius: 12px;
-			background: rgba(255,255,255,.94);
-			box-shadow: 0 7px 18px rgba(15,23,42,.09);
+			min-height: 44px;
+			padding: 4px 11px 4px 5px;
+			border-radius: 13px;
+			background: linear-gradient(
+				145deg,
+				rgba(30,41,59,.96),
+				rgba(49,46,129,.93)
+			);
+			border: 1px solid rgba(255,255,255,.10);
+			box-shadow:
+				0 7px 18px rgba(15,23,42,.16),
+				inset 0 1px 0 rgba(255,255,255,.07);
+			color: #fff;
 			backdrop-filter: blur(12px);
 			-webkit-backdrop-filter: blur(12px);
 		}
@@ -2122,11 +2158,14 @@
 		}
 
 		.topbar-user--profile .topbar-user__copy b {
-			font-size: 10px;
+			font-size: 11px;
+			color: #f8fafc;
+			font-weight: 700;
 		}
 
 		.topbar-user--profile .topbar-user__copy span {
-			font-size: 8px;
+			font-size: 9px;
+			color: #cbd5e1;
 		}
 
 		@media (max-width: 768px) {
@@ -2142,14 +2181,15 @@
 			}
 
 			.top-action--compact {
-				width: 34px;
-				height: 34px;
-				border-radius: 10px;
+				width: 38px;
+				height: 38px;
+				border-radius: 11px;
 			}
 
 			.topbar-user--profile {
-				min-height: 34px;
-				padding: 2px 3px;
+				min-height: 38px;
+				padding: 3px 4px;
+				border-radius: 11px;
 			}
 
 			.topbar-user--profile .topbar-user__avatar {
@@ -2642,13 +2682,13 @@
             <div class="app-topbar__actions app-topbar__actions--only">
                 <button class="top-action top-action--compact" type="button"
                         onclick="openSystemDrawer('notifications')" title="Уведомления">
-                    🔔
+                    <img src="/static/icons/notification1.png" class="top-action__icon" alt="">
                     <span id="notificationBadge" class="top-action__badge">0</span>
                 </button>
 
                 <button class="top-action top-action--compact" type="button"
                         onclick="openSystemDrawer('chat')" title="Общий чат">
-                    💬
+                    <img src="/static/icons/chat.png" class="top-action__icon" alt="">
                     <span id="chatBadge" class="top-action__badge">0</span>
                 </button>
 

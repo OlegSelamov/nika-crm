@@ -54,7 +54,7 @@
         <article class="analytics-kpi analytics-kpi--revenue">
             <div class="analytics-kpi-head">
                 <span>Выручка</span>
-                <i>₸</i>
+                <i><img src="/static/icons/analytics-revenue.png" alt="Выручка"></i>
             </div>
             <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
             <small>За выбранный период</small>
@@ -63,7 +63,7 @@
         <article class="analytics-kpi analytics-kpi--profit">
             <div class="analytics-kpi-head">
                 <span>Чистая прибыль</span>
-                <i>↗</i>
+                <i><img src="/static/icons/analytics-profit.png" alt="Чистая прибыль"></i>
             </div>
             <strong>{{ "{:,.0f}".format(net_profit).replace(",", " ") }} ₸</strong>
             <small>Маржа {{ "{:,.1f}".format(margin_value) }}%</small>
@@ -72,7 +72,7 @@
         <article class="analytics-kpi analytics-kpi--expense">
             <div class="analytics-kpi-head">
                 <span>Расходы</span>
-                <i>↘</i>
+                <i><img src="/static/icons/analytics-expenses.png" alt="Расходы"></i>
             </div>
             <strong>{{ "{:,.0f}".format(expenses_total).replace(",", " ") }} ₸</strong>
             <small>Все расходы компании</small>
@@ -81,7 +81,7 @@
         <article class="analytics-kpi analytics-kpi--sales">
             <div class="analytics-kpi-head">
                 <span>Продаж</span>
-                <i>#</i>
+                <i><img src="/static/icons/analytics-sales.png" alt="Продажи"></i>
             </div>
             <strong>{{ sales_qty }}</strong>
             <small>Средний чек {{ "{:,.0f}".format(average_receipt).replace(",", " ") }} ₸</small>
@@ -90,7 +90,7 @@
         <article class="analytics-kpi analytics-kpi--returns">
             <div class="analytics-kpi-head">
                 <span>Возвраты</span>
-                <i>↶</i>
+                <i><img src="/static/icons/analytics-returns.png" alt="Возвраты"></i>
             </div>
             <strong>{{ "{:,.0f}".format(returns_total).replace(",", " ") }} ₸</strong>
             <small>{{ returns_count_value }} операций</small>
@@ -99,7 +99,7 @@
         <article class="analytics-kpi analytics-kpi--clients">
             <div class="analytics-kpi-head">
                 <span>Клиенты</span>
-                <i>◎</i>
+                <i><img src="/static/icons/analytics-clients.png" alt="Клиенты"></i>
             </div>
             <strong>{{ client_count_value }}</strong>
             <small>Новых за период: {{ new_clients_value }}</small>
@@ -169,9 +169,9 @@
                 </div>
 
                 <div class="analytics-expense-summary">
-                    <div><span>📦 Закупки</span><b>{{ "{:,.0f}".format(purchase_total).replace(",", " ") }} ₸</b></div>
-                    <div><span>👥 Зарплата</span><b>{{ "{:,.0f}".format(salary_total).replace(",", " ") }} ₸</b></div>
-                    <div><span>🏛 Налоги</span><b>{{ "{:,.0f}".format(taxes_total).replace(",", " ") }} ₸</b></div>
+                    <div><span class="analytics-label-icon"><img src="/static/icons/purchases.png" alt="">Закупки</span><b>{{ "{:,.0f}".format(purchase_total).replace(",", " ") }} ₸</b></div>
+                    <div><span class="analytics-label-icon"><img src="/static/icons/salary.png" alt="">Зарплата</span><b>{{ "{:,.0f}".format(salary_total).replace(",", " ") }} ₸</b></div>
+                    <div><span class="analytics-label-icon"><img src="/static/icons/taxes.png" alt="">Налоги</span><b>{{ "{:,.0f}".format(taxes_total).replace(",", " ") }} ₸</b></div>
                     {% for row in (expense_categories|default([]))[:4] %}
                     <div><span>{{ row.category }}</span><b>{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸</b></div>
                     {% endfor %}
@@ -228,7 +228,7 @@
 
             {% if employee_stats %}
             <div class="analytics-leader">
-                <span>🏆 Лидер периода</span>
+                <span class="analytics-leader-label"><img src="/static/icons/leader.png" alt="">Лидер периода</span>
                 <strong>{{ employee_stats[0].full_name or employee_stats[0].username }}</strong>
             </div>
             {% endif %}
@@ -252,9 +252,9 @@
                     {% for employee in employee_stats|default([]) %}
                     <tr onclick="window.location='/analytics/employee/{{ employee.id }}?from={{ date_from }}&to={{ date_to }}'">
                         <td class="analytics-rank">
-                            {% if loop.index == 1 %}🥇
-                            {% elif loop.index == 2 %}🥈
-                            {% elif loop.index == 3 %}🥉
+                            {% if loop.index == 1 %}<img src="/static/icons/rank-1.png" alt="1 место">
+                            {% elif loop.index == 2 %}<img src="/static/icons/rank-2.png" alt="2 место">
+                            {% elif loop.index == 3 %}<img src="/static/icons/rank-3.png" alt="3 место">
                             {% else %}{{ loop.index }}
                             {% endif %}
                         </td>
@@ -283,9 +283,9 @@
                 <div class="analytics-employee-card-top">
                     <div>
                         <span class="analytics-rank">
-                            {% if loop.index == 1 %}🥇
-                            {% elif loop.index == 2 %}🥈
-                            {% elif loop.index == 3 %}🥉
+                            {% if loop.index == 1 %}<img src="/static/icons/rank-1.png" alt="1 место">
+                            {% elif loop.index == 2 %}<img src="/static/icons/rank-2.png" alt="2 место">
+                            {% elif loop.index == 3 %}<img src="/static/icons/rank-3.png" alt="3 место">
                             {% else %}{{ loop.index }}
                             {% endif %}
                         </span>
@@ -320,7 +320,7 @@
                     <h2>Топ товаров</h2>
                     <p>По объёму выручки</p>
                 </div>
-                <span class="analytics-panel-icon">📦</span>
+                <span class="analytics-panel-icon"><img src="/static/icons/top-products.png" alt="Топ товаров"></span>
             </div>
 
             <div class="analytics-ranking-list">
@@ -345,7 +345,7 @@
                     <h2>Топ клиентов</h2>
                     <p>По сумме покупок</p>
                 </div>
-                <span class="analytics-panel-icon">👥</span>
+                <span class="analytics-panel-icon"><img src="/static/icons/top-clients.png" alt="Топ клиентов"></span>
             </div>
 
             <div class="analytics-ranking-list">
@@ -370,7 +370,7 @@
                     <h2>Ключевые показатели</h2>
                     <p>Быстрая оценка бизнеса</p>
                 </div>
-                <span class="analytics-panel-icon">◫</span>
+                <span class="analytics-panel-icon"><img src="/static/icons/key-metrics.png" alt="Ключевые показатели"></span>
             </div>
 
             <div class="analytics-metric-list">
@@ -1636,6 +1636,97 @@ document.querySelectorAll(".analytics-period-presets button").forEach(button => 
     .analytics-kpi strong{
         font-size:24px;
         letter-spacing:-0.02em;
+    }
+}
+</style>
+
+
+<style id="analytics-icon-system">
+/* Nika Business — единая система иконок аналитики */
+.analytics-kpi-head i{
+    width:52px !important;
+    height:52px !important;
+    flex:0 0 52px;
+    display:flex !important;
+    align-items:center;
+    justify-content:center;
+    border-radius:16px !important;
+    font-size:0 !important;
+}
+.analytics-kpi-head i img{
+    width:30px;
+    height:30px;
+    display:block;
+    object-fit:contain;
+}
+.analytics-label-icon{
+    display:inline-flex !important;
+    align-items:center;
+    gap:8px;
+}
+.analytics-label-icon img{
+    width:23px;
+    height:23px;
+    flex:0 0 23px;
+    object-fit:contain;
+}
+.analytics-leader-label{
+    display:flex;
+    align-items:center;
+    gap:7px;
+}
+.analytics-leader-label img{
+    width:22px;
+    height:22px;
+    object-fit:contain;
+}
+.analytics-rank img{
+    width:28px;
+    height:28px;
+    display:inline-block;
+    vertical-align:middle;
+    object-fit:contain;
+}
+.analytics-panel-icon{
+    width:52px !important;
+    height:52px !important;
+    flex:0 0 52px;
+    display:flex !important;
+    align-items:center;
+    justify-content:center;
+    border-radius:16px !important;
+    background:#f0edff;
+}
+.analytics-panel-icon img{
+    width:30px;
+    height:30px;
+    display:block;
+    object-fit:contain;
+}
+@media(max-width:720px){
+    .analytics-kpi-head i{
+        width:48px !important;
+        height:48px !important;
+        flex-basis:48px;
+        border-radius:14px !important;
+    }
+    .analytics-kpi-head i img{
+        width:27px;
+        height:27px;
+    }
+    .analytics-panel-icon{
+        width:48px !important;
+        height:48px !important;
+        flex-basis:48px;
+        border-radius:14px !important;
+    }
+    .analytics-panel-icon img{
+        width:27px;
+        height:27px;
+    }
+    .analytics-rank img{
+        width:26px;
+        height:26px;
     }
 }
 </style>
