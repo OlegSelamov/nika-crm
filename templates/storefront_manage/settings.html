@@ -4,6 +4,7 @@
 .storefront-page{--sf-purple:#6366f1;--sf-violet:#8b5cf6;--sf-ink:#182033;--sf-muted:#738096;--sf-border:rgba(148,163,184,.18)}
 .sf-module-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:20px;flex-wrap:wrap}.sf-module-header h1{margin:0;font-size:30px;font-weight:850;color:#101828}.sf-module-header p{margin:7px 0 0;color:var(--sf-muted);font-size:13px}
 .sf-module-actions{display:flex;gap:8px;flex-wrap:wrap}.sf-lite,.sf-dark{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border-radius:12px;text-decoration:none;font-size:12px;font-weight:800;border:1px solid var(--sf-border)}.sf-lite{background:rgba(255,255,255,.72);color:#4f5c73}.sf-dark{background:#151c2c;color:#fff}
+.sf-copy{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:0 14px;border-radius:12px;font-size:12px;font-weight:800;border:1px solid var(--sf-border);background:rgba(255,255,255,.72);color:#4f5c73;cursor:pointer;font-family:inherit}.sf-copy:hover,.sf-lite:hover{background:#fff}.sf-dark:hover{opacity:.92}
 .sf-status{display:flex;align-items:center;gap:7px;margin-top:8px;color:#6f7b90;font-size:11px}.sf-dot{width:8px;height:8px;border-radius:50%;background:#22c55e}.sf-dot.off{background:#94a3b8}
 .sf-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:16px}.sf-kpi{padding:16px;border-radius:18px;background:rgba(255,255,255,.77);border:1px solid rgba(255,255,255,.58);box-shadow:0 9px 24px rgba(15,23,42,.06)}.sf-kpi span{color:#7d899c;font-size:10px;font-weight:750}.sf-kpi strong{display:block;margin-top:6px;color:#172033;font-size:25px}
 .sf-layout{display:grid;grid-template-columns:205px minmax(0,1fr);gap:14px;align-items:start}.sf-tabs{position:sticky;top:65px;padding:9px;border-radius:18px;background:rgba(255,255,255,.68);border:1px solid rgba(255,255,255,.55);box-shadow:0 8px 22px rgba(15,23,42,.05)}.sf-tab{display:flex;align-items:center;gap:8px;min-height:42px;padding:0 11px;border-radius:11px;text-decoration:none;color:#68758a;font-size:12px;font-weight:750;margin-bottom:4px;cursor:pointer}.sf-tab.active{background:linear-gradient(90deg,rgba(99,102,241,.14),rgba(139,92,246,.10));color:#4f46e5}.sf-tab:before{content:"";width:7px;height:7px;border-radius:50%;background:#cbd5e1}.sf-tab.active:before{background:#6366f1}
@@ -147,7 +148,10 @@
     <div class="sf-module-actions">
         <a class="sf-lite" href="/storefront/orders">Заказы</a>
         <a class="sf-lite" href="/storefront/bookings">Записи</a>
-        {% if settings.slug %}<a class="sf-dark" href="/s/{{ settings.slug }}" target="_blank">Открыть сайт ↗</a>{% endif %}
+        {% if settings.slug %}
+        <button class="sf-copy" id="copyStorefrontLink" type="button" data-path="/s/{{ settings.slug }}">Скопировать ссылку</button>
+        <a class="sf-dark" id="openStorefrontLink" href="/s/{{ settings.slug }}" target="_blank" rel="noopener">Открыть сайт ↗</a>
+        {% endif %}
     </div>
 </div>
 
@@ -320,6 +324,22 @@
 const sfTabs = [...document.querySelectorAll('.sf-tab')];
 const sfPanels = [...document.querySelectorAll('.sf-card')];
 const sfToast = document.getElementById('sfToast');
+const copyStorefrontLink = document.getElementById('copyStorefrontLink');
+
+copyStorefrontLink?.addEventListener('click', async()=>{
+    const url = new URL(copyStorefrontLink.dataset.path || '', window.location.origin).href;
+    try{
+        await navigator.clipboard.writeText(url);
+    }catch(err){
+        const area=document.createElement('textarea');
+        area.value=url; area.style.position='fixed'; area.style.opacity='0';
+        document.body.appendChild(area); area.select(); document.execCommand('copy'); area.remove();
+    }
+    const old=copyStorefrontLink.textContent;
+    copyStorefrontLink.textContent='Скопировано ✓';
+    showToast('Ссылка на сайт скопирована');
+    setTimeout(()=>copyStorefrontLink.textContent=old,1800);
+});
 
 function showToast(message, error=false){
     if(!sfToast) return;
