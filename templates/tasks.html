@@ -13,7 +13,7 @@
         </div>
 
         <button class="tasks-btn tasks-btn--primary" type="button" onclick="openTaskModal()">
-            ＋ Новая задача
+            <img src="/static/icons/add.png" class="tasks-btn-icon" alt=""> Новая задача
         </button>
     </div>
 
@@ -43,7 +43,7 @@
     <section class="tasks-filter">
         <form method="get" action="/tasks">
             <label class="tasks-search">
-                <span>⌕</span>
+                <span class="tasks-search-icon"><img src="/static/icons/search.png" alt=""></span>
                 <input type="search" name="search" value="{{ search }}" placeholder="Поиск задач">
             </label>
 
@@ -83,7 +83,7 @@
                         {{ task.priority_label }}
                     </span>
 
-                    <button class="task-menu-btn" type="button" onclick="toggleTaskMenu(this)">•••</button>
+                    <button class="task-menu-btn" type="button" onclick="toggleTaskMenu(this)" aria-label="Меню задачи"><img src="/static/icons/more.png" alt=""></button>
                     <div class="task-menu">
                         <button type="button" onclick='editTask({{ task|tojson }})'>Редактировать</button>
                         <form method="post" action="/tasks/{{ task.id }}/delete"
@@ -100,8 +100,8 @@
                 {% endif %}
 
                 <div class="task-card__meta">
-                    <span><small>Исполнитель</small>{{ task.assignee_name }}</span>
-                    <span><small>Срок</small>{{ task.due_date_label }}</span>
+                    <span><small><img src="/static/icons/assignee.png" alt="">Исполнитель</small>{{ task.assignee_name }}</span>
+                    <span><small><img src="/static/icons/calendar-date.png" alt="">Срок</small>{{ task.due_date_label }}</span>
                 </div>
 
                 {% if task.overdue %}
@@ -124,7 +124,7 @@
         </div>
         {% else %}
         <div class="tasks-empty">
-            <span>✓</span>
+            <span class="tasks-empty-icon"><img src="/static/icons/tasks-empty.png" alt=""></span>
             <strong>Задач пока нет</strong>
             <p>Создайте первую задачу и назначьте ответственного сотрудника.</p>
             <button class="tasks-btn tasks-btn--primary" type="button" onclick="openTaskModal()">
@@ -144,7 +144,7 @@
                 <h3 id="taskModalTitle">Новая задача</h3>
                 <p>Заполните данные и назначьте исполнителя</p>
             </div>
-            <button type="button" onclick="closeTaskModal()">×</button>
+            <button type="button" onclick="closeTaskModal()" aria-label="Закрыть"><img src="/static/icons/close.png" class="task-close-icon" alt=""></button>
         </div>
 
         <form class="task-modal__body" id="taskForm" method="post" action="/tasks/add">
@@ -814,6 +814,79 @@ body.task-modal-open {
         flex:1;
     }
 }
+
+/* ===== NIKA BUSINESS ICON SYSTEM: TASKS ===== */
+.tasks-btn-icon{
+    width:22px;
+    height:22px;
+    object-fit:contain;
+    display:block;
+    margin-right:7px;
+}
+.tasks-search-icon{
+    width:28px;
+    height:28px;
+    flex:0 0 28px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:9px;
+    background:var(--t-purple-soft);
+}
+.tasks-search-icon img{
+    width:18px;
+    height:18px;
+    object-fit:contain;
+}
+.task-menu-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:0;
+}
+.task-menu-btn img{
+    width:20px;
+    height:20px;
+    object-fit:contain;
+}
+.task-card__meta small{
+    display:flex;
+    align-items:center;
+    gap:5px;
+}
+.task-card__meta small img{
+    width:16px;
+    height:16px;
+    object-fit:contain;
+}
+.tasks-empty > .tasks-empty-icon{
+    width:60px;
+    height:60px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:12px;
+    border-radius:18px;
+    background:#eef2ff;
+    font-size:0;
+}
+.tasks-empty-icon img{
+    width:34px;
+    height:34px;
+    object-fit:contain;
+}
+.task-modal__head > button{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:0;
+}
+.task-close-icon{
+    width:19px;
+    height:19px;
+    object-fit:contain;
+}
+
 </style>
 
 <script>

@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.storefront-page{--sf-purple:#6366f1;--sf-violet:#8b5cf6;--sf-ink:#182033;--sf-muted:#738096;--sf-border:rgba(148,163,184,.18)}
+.sf-module-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:20px;flex-wrap:wrap}.sf-module-header h1{margin:0;font-size:30px;font-weight:850;color:#101828}.sf-module-header p{margin:7px 0 0;color:var(--sf-muted);font-size:13px}
+.sf-module-actions{display:flex;gap:8px;flex-wrap:wrap}.sf-lite,.sf-dark{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border-radius:12px;text-decoration:none;font-size:12px;font-weight:800;border:1px solid var(--sf-border)}.sf-lite{background:rgba(255,255,255,.72);color:#4f5c73}.sf-dark{background:#151c2c;color:#fff}
+.sf-status{display:flex;align-items:center;gap:7px;margin-top:8px;color:#6f7b90;font-size:11px}.sf-dot{width:8px;height:8px;border-radius:50%;background:#22c55e}.sf-dot.off{background:#94a3b8}
+.sf-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:16px}.sf-kpi{padding:16px;border-radius:18px;background:rgba(255,255,255,.77);border:1px solid rgba(255,255,255,.58);box-shadow:0 9px 24px rgba(15,23,42,.06)}.sf-kpi span{color:#7d899c;font-size:10px;font-weight:750}.sf-kpi strong{display:block;margin-top:6px;color:#172033;font-size:25px}
+.sf-layout{display:grid;grid-template-columns:205px minmax(0,1fr);gap:14px;align-items:start}.sf-tabs{position:sticky;top:65px;padding:9px;border-radius:18px;background:rgba(255,255,255,.68);border:1px solid rgba(255,255,255,.55);box-shadow:0 8px 22px rgba(15,23,42,.05)}.sf-tab{display:flex;align-items:center;gap:8px;min-height:42px;padding:0 11px;border-radius:11px;text-decoration:none;color:#68758a;font-size:12px;font-weight:750;margin-bottom:4px;cursor:pointer}.sf-tab.active{background:linear-gradient(90deg,rgba(99,102,241,.14),rgba(139,92,246,.10));color:#4f46e5}.sf-tab:before{content:"";width:7px;height:7px;border-radius:50%;background:#cbd5e1}.sf-tab.active:before{background:#6366f1}
+.sf-card{display:none;padding:20px;border-radius:20px;background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.56);box-shadow:0 10px 28px rgba(15,23,42,.055)}.sf-card.active{display:block}.sf-head{margin-bottom:16px}.sf-head h2{margin:0;color:#172033;font-size:19px}.sf-head p{margin:5px 0 0;color:#7b8798;font-size:11px}
+.sf-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.sf-field.full{grid-column:1/-1}.sf-field label{display:block;margin-bottom:6px;color:#6d7a90;font-size:10px;font-weight:800}.sf-field small{display:block;margin-top:5px;color:#9aa4b4;font-size:9px}
+.sf-toggle-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.sf-toggle{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border-radius:13px;background:rgba(248,250,252,.85);border:1px solid rgba(148,163,184,.13)}.sf-toggle b{display:block;color:#29344a;font-size:11px}.sf-toggle span{display:block;margin-top:3px;color:#8e98a8;font-size:9px}.sf-toggle input{width:18px;height:18px}
+.sf-note{padding:12px 13px;border-radius:13px;background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.10);color:#69758b;font-size:10px;line-height:1.55;margin-bottom:14px}
+.sf-preview{display:grid;grid-template-columns:1fr 230px;gap:13px}.sf-phone{min-height:390px;border-radius:24px;padding:9px;background:#101521;box-shadow:0 12px 32px rgba(15,23,42,.16)}.sf-phone-screen{height:100%;border-radius:18px;background:#f5f7fb;overflow:hidden}.sf-phone-hero{height:120px;padding:14px;color:#fff;display:flex;align-items:end;background:linear-gradient(135deg,#151b29,var(--preview,#6366f1));background-size:cover;background-position:center}.sf-phone-logo{width:28px;height:28px;border-radius:9px;object-fit:cover;background:#fff;margin-bottom:6px}.sf-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:9px}.sf-mini-card{height:92px;border-radius:12px;background:#fff;border:1px solid #e9edf3;padding:7px}.sf-mini-img{height:50px;border-radius:8px;background:#eceff5}.sf-mini-line{height:6px;border-radius:4px;background:#d8dde7;margin-top:6px;width:70%}.sf-mini-price{height:7px;border-radius:4px;background:var(--preview,#6366f1);margin-top:5px;width:45%}
+.sf-upload{padding:12px;border:1px dashed #cfd5df;border-radius:13px;background:#fafbfc}.sf-upload img{max-width:100%;max-height:110px;border-radius:10px;display:block;margin-bottom:8px}.sf-check{display:flex;gap:7px;align-items:center;font-size:10px;color:#7c8799;margin-top:7px}.sf-check input{width:auto}
+.sf-recent{display:grid;grid-template-columns:1fr 1fr;gap:11px}.sf-recent-box{padding:14px;border-radius:15px;background:#f8fafc;border:1px solid rgba(148,163,184,.13)}.sf-recent-box h3{font-size:12px;margin:0 0 8px}.sf-recent-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #edf0f4;font-size:10px}.sf-recent-row:last-child{border-bottom:0}
+.sf-save{display:flex;justify-content:flex-end;margin-top:15px}
+@media(max-width:1000px){.sf-layout{grid-template-columns:1fr}.sf-tabs{position:static;display:flex;overflow:auto}.sf-tab{flex:0 0 auto;margin:0 4px 0 0}.sf-kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.sf-grid,.sf-toggle-grid,.sf-preview,.sf-recent{grid-template-columns:1fr}.sf-kpis{gap:8px}.sf-kpi{padding:13px}.sf-kpi strong{font-size:20px}.sf-module-header h1{font-size:24px}.sf-phone{display:none}}
+
+.sf-banner-add{padding:14px;border-radius:15px;background:#f8fafc;border:1px dashed #cfd6e2;margin-top:14px}
+.sf-banner-list{display:grid;gap:10px;margin-top:12px}.sf-banner-row{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:11px;border-radius:15px;background:#f8fafc;border:1px solid #e8ecf2}.sf-banner-row img{width:150px;height:88px;object-fit:cover;border-radius:11px}.sf-banner-fields{display:grid;grid-template-columns:1fr 1fr;gap:7px}.sf-banner-fields .wide{grid-column:1/-1}.sf-banner-actions{display:flex;gap:7px;align-items:center;margin-top:7px;flex-wrap:wrap}.sf-danger-mini{border:0;border-radius:9px;padding:8px 10px;background:#fff0f2;color:#d9364e;font-size:10px;font-weight:800;cursor:pointer}
+.sf-real-preview{border-radius:23px;background:#111827;padding:8px;box-shadow:0 14px 35px rgba(15,23,42,.15)}.sf-real-preview-screen{border-radius:17px;overflow:hidden;background:#f4f6fa;min-height:435px}.sf-preview-header{height:42px;background:#fff;display:flex;align-items:center;padding:6px 8px;gap:6px}.sf-preview-brand{width:25px;height:25px;border-radius:8px;background:var(--preview,#6366f1);object-fit:cover}.sf-preview-search{height:23px;flex:1;border-radius:8px;background:#f0f2f6}.sf-preview-banner{height:142px;margin:7px;border-radius:13px;background:linear-gradient(135deg,#151b29,var(--preview,#6366f1));background-size:cover;background-position:center;position:relative;overflow:hidden}.sf-preview-banner:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,15,25,.45),rgba(10,15,25,.05))}.sf-preview-dots{position:absolute;z-index:2;left:8px;bottom:8px;display:flex;gap:4px}.sf-preview-dots i{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.6)}.sf-preview-dots i:first-child{width:13px;border-radius:4px;background:#fff}.sf-preview-chipbar{display:flex;gap:4px;padding:1px 7px 5px}.sf-preview-chip{height:16px;width:43px;border-radius:9px;background:#fff;border:1px solid #e7eaf0}.sf-preview-products{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 7px 7px}.sf-preview-product{background:#fff;border:1px solid #e7eaf0;padding:5px}.sf-preview-product.rounded{border-radius:10px}.sf-preview-product.compact{border-radius:6px}.sf-preview-product.minimal{border:0;border-bottom:1px solid #e7eaf0;background:transparent}.sf-preview-img{height:55px;background:#edf0f4;border-radius:6px}.sf-preview-name{height:5px;width:73%;background:#dfe3ea;border-radius:3px;margin-top:5px}.sf-preview-price{height:6px;width:45%;background:var(--preview,#6366f1);border-radius:3px;margin-top:4px}
+@media(max-width:700px){.sf-banner-row{grid-template-columns:1fr}.sf-banner-row img{width:100%;height:150px}.sf-banner-fields{grid-template-columns:1fr}}
+
+
+.sf-preview{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 330px;
+    gap:14px;
+    align-items:start;
+}
+.sf-real-preview{
+    position:sticky;
+    top:70px;
+    width:330px;
+    height:auto;
+    aspect-ratio:16/11;
+    border-radius:20px;
+    background:#111827;
+    padding:7px;
+    box-shadow:0 14px 35px rgba(15,23,42,.14)
+}
+.sf-real-preview-screen{
+    height:100%;
+    border-radius:14px;
+    overflow:hidden;
+    background:#f4f6fa
+}
+.sf-preview-header{
+    height:34px;
+    background:#fff;
+    display:flex;
+    align-items:center;
+    padding:5px 7px;
+    gap:6px
+}
+.sf-preview-brand{width:23px;height:23px;border-radius:7px;background:linear-gradient(135deg,#111827,#334155);object-fit:cover}
+.sf-preview-search{height:20px;flex:1;border-radius:7px;background:#f0f2f6}
+.sf-preview-banner{
+    height:108px;
+    margin:6px;
+    border-radius:10px;
+    background:linear-gradient(135deg,#151b29,var(--preview,#6366f1));
+    background-size:cover;
+    background-position:center;
+    position:relative;
+    overflow:hidden
+}
+.sf-preview-banner:after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,rgba(10,15,25,.34),rgba(10,15,25,.03))
+}
+.sf-preview-dots{position:absolute;z-index:2;left:7px;bottom:6px;display:flex;gap:3px}
+.sf-preview-dots i{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.6)}
+.sf-preview-dots i.active{width:12px;border-radius:4px;background:var(--preview,#6366f1)}
+.sf-preview-chipbar{display:flex;gap:4px;padding:0 6px 5px}
+.sf-preview-chip{height:13px;width:38px;border-radius:8px;background:#fff;border:1px solid #e7eaf0}
+.sf-preview-products{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:0 6px 6px}
+.sf-preview-product{background:#fff;border:1px solid #e7eaf0;padding:4px}
+.sf-preview-product.rounded{border-radius:8px}.sf-preview-product.compact{border-radius:4px}.sf-preview-product.minimal{border:0;border-bottom:1px solid #e7eaf0;background:transparent}
+.sf-preview-img{height:42px;background:#edf0f4;border-radius:5px}
+.sf-preview-name{height:4px;width:72%;background:#dfe3ea;border-radius:3px;margin-top:4px}
+.sf-preview-price{height:5px;width:45%;background:var(--preview,#6366f1);border-radius:3px;margin-top:3px}
+
+.sf-banner-add,.sf-banner-row{position:relative}
+.sf-banner-list{display:grid;gap:9px;margin-top:11px}
+.sf-banner-row{
+    display:grid;grid-template-columns:135px minmax(0,1fr);gap:11px;
+    padding:10px;border-radius:14px;background:#f8fafc;border:1px solid #e7ebf1
+}
+.sf-banner-row>img{width:135px;height:78px;object-fit:cover;border-radius:9px}
+.sf-banner-fields{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sf-banner-fields .wide{grid-column:1/-1}
+.sf-banner-actions{display:flex;align-items:center;gap:7px;margin-top:7px}
+.sf-banner-save,.sf-banner-delete{
+    border:0;border-radius:9px;padding:8px 10px;font-size:10px;font-weight:800;cursor:pointer
+}
+.sf-banner-save{background:#eef0ff;color:#5347dc}
+.sf-banner-delete{background:#fff0f2;color:#d9364e}
+.sf-inline-progress{
+    display:none;position:absolute;inset:0;background:rgba(248,250,252,.78);
+    backdrop-filter:blur(2px);border-radius:inherit;z-index:5;place-items:center;
+    color:#59657a;font-size:11px;font-weight:800
+}
+.sf-inline-progress.show{display:grid}
+.sf-live-toast{
+    position:fixed;right:20px;bottom:22px;z-index:99999;
+    min-width:220px;max-width:360px;padding:12px 14px;border-radius:12px;
+    background:#172033;color:#fff;font-size:11px;font-weight:750;
+    box-shadow:0 16px 40px rgba(15,23,42,.22);
+    transform:translateY(20px);opacity:0;pointer-events:none;transition:.2s
+}
+.sf-live-toast.show{transform:translateY(0);opacity:1}
+.sf-live-toast.error{background:#b4233b}
+.sf-save-floating{
+    display:flex;justify-content:flex-end;margin-top:14px;
+}
+@media(max-width:900px){
+    .sf-preview{grid-template-columns:1fr}
+    .sf-real-preview{position:static;width:100%;max-width:430px}
+}
+@media(max-width:700px){
+    .sf-banner-row{grid-template-columns:1fr}
+    .sf-banner-row>img{width:100%;height:150px}
+    .sf-banner-fields{grid-template-columns:1fr}
+}
+
+
+.sf-preview-search-wrap{display:flex;align-items:center;gap:4px;flex:1}
+.sf-preview-search{height:20px;flex:1;border-radius:7px;background:#f0f2f6}
+.sf-preview-search-btn{width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,color-mix(in srgb,var(--preview) 72%,#111827),var(--preview))}
+.sf-preview-cart{width:31px;height:20px;border-radius:6px;background:linear-gradient(135deg,color-mix(in srgb,var(--preview) 72%,#111827),var(--preview))}
+.sf-preview-chip.active{background:linear-gradient(135deg,color-mix(in srgb,var(--preview) 72%,#111827),var(--preview));border-color:var(--preview)}
+.sf-preview-add{height:8px;width:22px;border-radius:4px;background:linear-gradient(135deg,color-mix(in srgb,var(--preview) 72%,#111827),var(--preview));margin-top:4px;margin-left:auto}
+.sf-preview-more{height:8px;width:38px;border-radius:4px;background:color-mix(in srgb,var(--preview) 14%,white);border:1px solid color-mix(in srgb,var(--preview) 30%,white);margin-top:4px}
+
+</style>
+
+<div class="storefront-page">
+<div class="sf-module-header">
+    <div>
+        <h1>Онлайн-витрина</h1>
+        <p>Ваш сайт, онлайн-заказы и запись клиентов — полностью связаны с каталогом Nika.</p>
+        <div class="sf-status">{% if settings.enabled %}<span class="sf-dot"></span><b>Опубликована</b>{% else %}<span class="sf-dot off"></span><b>Выключена</b>{% endif %}{% if settings.slug %}<span>· /s/{{ settings.slug }}</span>{% endif %}</div>
+    </div>
+    <div class="sf-module-actions">
+        <a class="sf-lite" href="/storefront/orders">Заказы</a>
+        <a class="sf-lite" href="/storefront/bookings">Записи</a>
+        {% if settings.slug %}<a class="sf-dark" href="/s/{{ settings.slug }}" target="_blank">Открыть сайт ↗</a>{% endif %}
+    </div>
+</div>
+
+<div class="sf-kpis">
+    <div class="sf-kpi"><span>Каталог</span><strong>{{ stats.total or 0 }}</strong></div>
+    <div class="sf-kpi"><span>Заказов сегодня</span><strong>{{ order_stats.today_orders or 0 }}</strong></div>
+    <div class="sf-kpi"><span>Сумма заказов сегодня</span><strong>{{ "{:,.0f}".format(order_stats.today_amount or 0).replace(",", " ") }} ₸</strong></div>
+    <div class="sf-kpi"><span>Записей сегодня</span><strong>{{ booking_stats.today_bookings or 0 }}</strong></div>
+</div>
+
+<div class="sf-layout">
+<nav class="sf-tabs">
+    <a class="sf-tab active" data-tab="overview">Обзор</a>
+    <a class="sf-tab" data-tab="design">Дизайн</a>
+    <a class="sf-tab" data-tab="sales">Продажи</a>
+    <a class="sf-tab" data-tab="booking">Онлайн-запись</a>
+    <a class="sf-tab" data-tab="delivery">Доставка</a>
+    <a class="sf-tab" data-tab="payment">Оплата</a>
+    <a class="sf-tab" data-tab="domain">Домен</a>
+</nav>
+<div>
+
+<section class="sf-card active" data-panel="overview">
+    <div class="sf-head"><h2>Состояние витрины</h2><p>Главные параметры и последние события.</p></div>
+    <div class="sf-note">Каталог синхронизируется автоматически: цена, остаток, товары и услуги берутся из Nika Business.</div>
+    <div class="sf-grid">
+        <div class="sf-field"><label>Адрес витрины</label><input name="slug" value="{{ settings.slug or '' }}" placeholder="my-business" required><small>nikabusiness.com/s/my-business</small></div>
+        <div class="sf-field"><label>Название</label><input name="title" value="{{ settings.title or settings.company_name or '' }}"></div>
+        <div class="sf-field full"><label>Описание</label><textarea name="description" rows="3">{{ settings.description or '' }}</textarea></div>
+        <div class="sf-field"><label>WhatsApp</label><input name="whatsapp" value="{{ settings.whatsapp or '' }}"></div>
+        <div class="sf-field"><label>Instagram</label><input name="instagram" value="{{ settings.instagram or '' }}"></div>
+    </div>
+    <div class="sf-recent" style="margin-top:14px">
+        <div class="sf-recent-box"><h3>Последние заказы</h3>{% for o in recent_orders %}<div class="sf-recent-row"><span>#{{ o.id }} · {{ o.customer_name }}</span><b>{{ o.total_amount }} ₸</b></div>{% else %}<div class="sf-recent-row"><span>Пока нет заказов</span></div>{% endfor %}</div>
+        <div class="sf-recent-box"><h3>Последние записи</h3>{% for b in recent_bookings %}<div class="sf-recent-row"><span>{{ b.customer_name }} · {{ b.service_name or 'Услуга' }}</span><b>{{ b.booking_date.strftime('%d.%m') }} {{ b.booking_time.strftime('%H:%M') }}</b></div>{% else %}<div class="sf-recent-row"><span>Пока нет записей</span></div>{% endfor %}</div>
+    </div>
+</section>
+
+<section class="sf-card" data-panel="design">
+    <div class="sf-head"><h2>Дизайн и баннеры</h2><p>Предпросмотр справа повторяет реальную структуру витрины и обновляется сразу.</p></div>
+
+    <div class="sf-preview">
+        <div>
+            <div class="sf-grid">
+                <div class="sf-field"><label>Фирменный цвет</label><input id="brandColor" type="color" name="brand_color" value="{{ settings.brand_color or '#6366f1' }}"></div>
+                <div class="sf-field"><label>Стиль карточек</label><select id="cardStyle" name="card_style"><option value="rounded" {% if settings.card_style=='rounded' %}selected{% endif %}>Скруглённые</option><option value="compact" {% if settings.card_style=='compact' %}selected{% endif %}>Компактные</option><option value="minimal" {% if settings.card_style=='minimal' %}selected{% endif %}>Минималистичные</option></select></div>
+            </div>
+
+            <div class="sf-upload" style="margin-top:11px">
+                <label style="font-size:10px;font-weight:800;color:#6d7a90">Логотип компании</label>
+                <div id="currentLogoWrap">{% if settings.logo_url %}<img id="currentLogo" src="{{ settings.logo_url }}">{% endif %}</div>
+                <input id="logoInput" type="file" name="logo" accept=".png,.jpg,.jpeg,.webp">
+                <label class="sf-check"><input type="checkbox" name="remove_logo" value="1"> Удалить логотип</label>
+            </div>
+
+            <div class="sf-banner-add" id="bannerAddBox">
+                <div class="sf-inline-progress">Добавляем баннер…</div>
+                <b style="font-size:12px;color:#28344a">Добавить новый баннер</b>
+                <p style="font-size:10px;color:#8792a5;margin:4px 0 10px">Лучше использовать широкий баннер 1600×600.</p>
+                <div class="sf-grid">
+                    <div class="sf-field full"><label>Изображение</label><input id="bannerImage" type="file" accept=".png,.jpg,.jpeg,.webp"></div>
+                    <div class="sf-field"><label>Заголовок</label><input id="bannerTitle" placeholder="Например: Летняя акция"></div>
+                    <div class="sf-field"><label>Подзаголовок</label><input id="bannerSubtitle" placeholder="Скидки до 20%"></div>
+                    <div class="sf-field"><label>Текст кнопки</label><input id="bannerButtonText" placeholder="Подробнее"></div>
+                    <div class="sf-field"><label>Ссылка кнопки</label><input id="bannerButtonUrl" placeholder="/s/... или https://..."></div>
+                </div>
+                <button id="addBannerBtn" type="button" class="btn small" style="margin-top:9px">Добавить баннер</button>
+            </div>
+
+            <div class="sf-banner-list" id="bannerList">
+            {% for banner in banners %}
+                <div class="sf-banner-row" data-banner-id="{{ banner.id }}">
+                    <div class="sf-inline-progress">Сохраняем…</div>
+                    <img src="{{ banner.image_url }}" alt="">
+                    <div>
+                        <div class="sf-banner-fields">
+                            <input data-field="title" value="{{ banner.title or '' }}" placeholder="Заголовок">
+                            <input data-field="subtitle" value="{{ banner.subtitle or '' }}" placeholder="Подзаголовок">
+                            <input data-field="button_text" value="{{ banner.button_text or '' }}" placeholder="Кнопка">
+                            <input data-field="button_url" value="{{ banner.button_url or '' }}" placeholder="Ссылка">
+                            <input data-field="sort_order" type="number" value="{{ banner.sort_order or 0 }}" placeholder="Порядок">
+                            <label class="sf-check"><input data-field="is_active" type="checkbox" value="1" {% if banner.is_active %}checked{% endif %}> Активен</label>
+                        </div>
+                        <div class="sf-banner-actions">
+                            <button type="button" class="sf-banner-save">Сохранить</button>
+                            <button type="button" class="sf-banner-delete">Удалить</button>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div id="noBannersNote" class="sf-note">Баннеров пока нет. Добавь первый — он сразу появится справа и на публичной витрине после её открытия.</div>
+            {% endfor %}
+            </div>
+        </div>
+
+        <div class="sf-real-preview" id="previewSite" style="--preview:{{ settings.brand_color or '#6366f1' }}">
+            <div class="sf-real-preview-screen">
+                <div class="sf-preview-header">
+                    {% if settings.logo_url %}<img id="previewLogo" class="sf-preview-brand" src="{{ settings.logo_url }}">{% else %}<div id="previewLogoFallback" class="sf-preview-brand"></div>{% endif %}
+                    <div class="sf-preview-search-wrap">
+                        <div class="sf-preview-search"></div>
+                        <div class="sf-preview-search-btn"></div>
+                    </div>
+                    <div class="sf-preview-cart"></div>
+                </div>
+                <div id="previewBanner" class="sf-preview-banner"
+                     {% if banners %}style="background-image:url('{{ banners[0].image_url }}')"{% endif %}>
+                    <div class="sf-preview-dots" id="previewDots">
+                        {% for banner in banners %}<i class="{% if loop.first %}active{% endif %}"></i>{% endfor %}
+                    </div>
+                </div>
+                <div class="sf-preview-chipbar"><div class="sf-preview-chip active"></div><div class="sf-preview-chip"></div><div class="sf-preview-chip"></div></div>
+                <div class="sf-preview-products">
+                    {% for _ in range(4) %}
+                    <div class="sf-preview-product {{ settings.card_style or 'rounded' }}">
+                        <div class="sf-preview-img"></div><div class="sf-preview-name"></div><div class="sf-preview-price"></div><div style="display:flex;align-items:center;gap:3px"><div class="sf-preview-more"></div><div class="sf-preview-add"></div></div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="sf-card" data-panel="sales">
+    <div class="sf-head"><h2>Продажи</h2><p>Что показывать клиенту и что разрешить.</p></div>
+    <div class="sf-toggle-grid">
+        <label class="sf-toggle"><span><b>Витрина опубликована</b><span>Сайт доступен покупателям</span></span><input type="checkbox" name="enabled" value="1" {% if settings.enabled %}checked{% endif %}></label>
+        <label class="sf-toggle"><span><b>Товары</b><span>Показывать товары каталога</span></span><input type="checkbox" name="show_products" value="1" {% if settings.show_products is not false %}checked{% endif %}></label>
+        <label class="sf-toggle"><span><b>Услуги</b><span>Показывать услуги</span></span><input type="checkbox" name="show_services" value="1" {% if settings.show_services is not false %}checked{% endif %}></label>
+        <label class="sf-toggle"><span><b>Онлайн-заказы</b><span>Корзина и оформление</span></span><input type="checkbox" name="allow_orders" value="1" {% if settings.allow_orders is not false %}checked{% endif %}></label>
+        <label class="sf-toggle"><span><b>Показывать остаток</b><span>Статус наличия на карточке</span></span><input type="checkbox" name="show_stock" value="1" {% if settings.show_stock is not false %}checked{% endif %}></label>
+        <label class="sf-toggle"><span><b>Категории</b><span>Фильтры по категориям</span></span><input type="checkbox" name="show_categories" value="1" {% if settings.show_categories is not false %}checked{% endif %}></label>
+    </div>
+    <div class="sf-grid" style="margin-top:12px"><div class="sf-field"><label>Минимальная сумма заказа, ₸</label><input type="number" name="min_order_amount" value="{{ settings.min_order_amount or 0 }}"></div></div>
+</section>
+
+<section class="sf-card" data-panel="booking">
+    <div class="sf-head"><h2>Онлайн-запись</h2><p>Слоты создаются автоматически по рабочему времени.</p></div>
+    <div class="sf-toggle-grid"><label class="sf-toggle"><span><b>Разрешить запись</b><span>Клиент выбирает услугу, дату и время</span></span><input type="checkbox" name="allow_booking" value="1" {% if settings.allow_booking is not false %}checked{% endif %}></label></div>
+    <div class="sf-grid" style="margin-top:12px"><div class="sf-field"><label>Начало</label><input type="time" name="work_start" value="{{ settings.work_start.strftime('%H:%M') if settings.work_start else '09:00' }}"></div><div class="sf-field"><label>Конец</label><input type="time" name="work_end" value="{{ settings.work_end.strftime('%H:%M') if settings.work_end else '18:00' }}"></div><div class="sf-field"><label>Шаг записи, минут</label><input type="number" name="slot_interval_minutes" value="{{ settings.slot_interval_minutes or 30 }}"></div></div>
+</section>
+
+<section class="sf-card" data-panel="delivery">
+    <div class="sf-head"><h2>Доставка и самовывоз</h2><p>Способы получения онлайн-заказа.</p></div>
+    <div class="sf-toggle-grid"><label class="sf-toggle"><span><b>Самовывоз</b><span>Забрать самостоятельно</span></span><input type="checkbox" name="pickup_enabled" value="1" {% if settings.pickup_enabled is not false %}checked{% endif %}></label><label class="sf-toggle"><span><b>Доставка</b><span>Показывать адрес доставки</span></span><input type="checkbox" name="delivery_enabled" value="1" {% if settings.delivery_enabled %}checked{% endif %}></label></div>
+    <div class="sf-grid" style="margin-top:12px"><div class="sf-field"><label>Стоимость доставки, ₸</label><input type="number" name="delivery_price" value="{{ settings.delivery_price or 0 }}"></div></div>
+</section>
+
+<section class="sf-card" data-panel="payment">
+    <div class="sf-head"><h2>Оплата</h2><p>Точка подключения платёжного провайдера.</p></div>
+    <div class="sf-note">Сейчас заказ создаётся со статусом «не оплачен». Kaspi / QR / эквайринг подключим только по официальному API, чтобы оплата подтверждалась сервером и не могла быть подделана.</div>
+    <div class="sf-toggle-grid"><div class="sf-toggle"><span><b>Kaspi / QR</b><span>Ожидает подключения</span></span><b>Скоро</b></div><div class="sf-toggle"><span><b>Банковская карта</b><span>Интернет-эквайринг</span></span><b>Скоро</b></div></div>
+</section>
+
+<section class="sf-card" data-panel="domain">
+    <div class="sf-head"><h2>Домен</h2><p>Публичный адрес компании.</p></div>
+    {% if settings.slug %}<div class="sf-note"><b>Текущая ссылка:</b> /s/{{ settings.slug }}</div>{% endif %}
+    <div class="sf-note">Свой домен подготовлен архитектурно, но подключение DNS и SSL сделаем отдельным этапом. Сейчас публичная ссылка Nika полностью рабочая.</div>
+</section>
+
+<div class="sf-save-floating"><button id="saveStorefrontBtn" class="btn" type="button">Сохранить настройки</button></div>
+</div>
+</div>
+</div>
+
+<div id="sfToast" class="sf-live-toast"></div>
+
+<script>
+const sfTabs = [...document.querySelectorAll('.sf-tab')];
+const sfPanels = [...document.querySelectorAll('.sf-card')];
+const sfToast = document.getElementById('sfToast');
+
+function showToast(message, error=false){
+    if(!sfToast) return;
+    sfToast.textContent = message;
+    sfToast.classList.toggle('error', error);
+    sfToast.classList.add('show');
+    clearTimeout(window.__sfToastTimer);
+    window.__sfToastTimer = setTimeout(()=>sfToast.classList.remove('show'), 2300);
+}
+
+function openSfTab(name, updateHash=true){
+    sfTabs.forEach(x=>x.classList.toggle('active', x.dataset.tab === name));
+    sfPanels.forEach(x=>x.classList.toggle('active', x.dataset.panel === name));
+    if(updateHash) history.replaceState(null,'','#'+name);
+}
+
+sfTabs.forEach(tab=>{
+    tab.addEventListener('click',e=>{
+        e.preventDefault();
+        openSfTab(tab.dataset.tab);
+    });
+});
+
+const initialTab = location.hash.replace('#','');
+if(initialTab && document.querySelector(`.sf-tab[data-tab="${initialTab}"]`)){
+    openSfTab(initialTab, false);
+}
+
+const brandColor = document.getElementById('brandColor');
+const previewSite = document.getElementById('previewSite');
+const cardStyle = document.getElementById('cardStyle');
+const logoInput = document.getElementById('logoInput');
+
+brandColor?.addEventListener('input',()=>{
+    previewSite?.style.setProperty('--preview', brandColor.value);
+});
+
+cardStyle?.addEventListener('change',()=>{
+    document.querySelectorAll('.sf-preview-product').forEach(card=>{
+        card.classList.remove('rounded','compact','minimal');
+        card.classList.add(cardStyle.value);
+    });
+});
+
+logoInput?.addEventListener('change',()=>{
+    const file = logoInput.files?.[0];
+    if(!file) return;
+    const url = URL.createObjectURL(file);
+    let img = document.getElementById('previewLogo');
+    const fallback = document.getElementById('previewLogoFallback');
+    if(!img){
+        img = document.createElement('img');
+        img.id='previewLogo';
+        img.className='sf-preview-brand';
+        fallback?.replaceWith(img);
+    }
+    img.src = url;
+});
+
+function collectSettingsFormData(){
+    const fd = new FormData();
+
+    document.querySelectorAll(
+        '[name="slug"],[name="title"],[name="description"],[name="whatsapp"],[name="instagram"],' +
+        '[name="brand_color"],[name="card_style"],[name="work_start"],[name="work_end"],' +
+        '[name="slot_interval_minutes"],[name="delivery_price"],[name="min_order_amount"]'
+    ).forEach(el => fd.set(el.name, el.value));
+
+    [
+        'enabled','show_products','show_services','allow_orders','allow_booking',
+        'delivery_enabled','pickup_enabled','show_stock','show_categories','remove_logo'
+    ].forEach(name=>{
+        const el = document.querySelector(`[name="${name}"]`);
+        if(el?.checked) fd.set(name,'1');
+    });
+
+    if(logoInput?.files?.[0]) fd.set('logo', logoInput.files[0]);
+
+    return fd;
+}
+
+document.getElementById('saveStorefrontBtn')?.addEventListener('click', async()=>{
+    const btn = document.getElementById('saveStorefrontBtn');
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = 'Сохраняем…';
+
+    try{
+        const res = await fetch('/storefront/save-ajax',{
+            method:'POST',
+            body:collectSettingsFormData(),
+            headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        const data = await res.json();
+        if(!res.ok || !data.ok) throw new Error(data.error || 'Ошибка сохранения');
+
+        if(data.settings?.logo_url){
+            let logo = document.getElementById('previewLogo');
+            if(logo) logo.src = data.settings.logo_url + '?v=' + Date.now();
+        }
+
+        showToast('Настройки применены');
+    }catch(err){
+        showToast(err.message || 'Ошибка сохранения', true);
+    }finally{
+        btn.disabled = false;
+        btn.textContent = old;
+    }
+});
+
+function refreshPreviewDots(){
+    const rows = [...document.querySelectorAll('.sf-banner-row')]
+        .filter(row => row.querySelector('[data-field="is_active"]')?.checked !== false);
+
+    const dots = document.getElementById('previewDots');
+    if(dots){
+        dots.innerHTML = rows.map((_,i)=>`<i class="${i===0?'active':''}"></i>`).join('');
+    }
+
+    const first = rows[0]?.querySelector('img')?.src;
+    const preview = document.getElementById('previewBanner');
+    if(preview){
+        preview.style.backgroundImage = first ? `url("${first}")` : '';
+    }
+}
+
+function bannerRowHtml(b){
+    return `
+    <div class="sf-banner-row" data-banner-id="${b.id}">
+        <div class="sf-inline-progress">Сохраняем…</div>
+        <img src="${b.image_url}" alt="">
+        <div>
+            <div class="sf-banner-fields">
+                <input data-field="title" value="${escapeHtml(b.title || '')}" placeholder="Заголовок">
+                <input data-field="subtitle" value="${escapeHtml(b.subtitle || '')}" placeholder="Подзаголовок">
+                <input data-field="button_text" value="${escapeHtml(b.button_text || '')}" placeholder="Кнопка">
+                <input data-field="button_url" value="${escapeHtml(b.button_url || '')}" placeholder="Ссылка">
+                <input data-field="sort_order" type="number" value="${b.sort_order || 0}">
+                <label class="sf-check"><input data-field="is_active" type="checkbox" value="1" ${b.is_active?'checked':''}> Активен</label>
+            </div>
+            <div class="sf-banner-actions">
+                <button type="button" class="sf-banner-save">Сохранить</button>
+                <button type="button" class="sf-banner-delete">Удалить</button>
+            </div>
+        </div>
+    </div>`;
+}
+
+function escapeHtml(str){
+    return String(str)
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;')
+      .replaceAll("'",'&#039;');
+}
+
+document.getElementById('addBannerBtn')?.addEventListener('click', async()=>{
+    const box = document.getElementById('bannerAddBox');
+    const progress = box.querySelector('.sf-inline-progress');
+    const image = document.getElementById('bannerImage')?.files?.[0];
+
+    if(!image){
+        showToast('Сначала выберите изображение баннера', true);
+        return;
+    }
+
+    const fd = new FormData();
+    fd.set('banner_image', image);
+    fd.set('banner_title', document.getElementById('bannerTitle').value);
+    fd.set('banner_subtitle', document.getElementById('bannerSubtitle').value);
+    fd.set('banner_button_text', document.getElementById('bannerButtonText').value);
+    fd.set('banner_button_url', document.getElementById('bannerButtonUrl').value);
+
+    progress.classList.add('show');
+    try{
+        const res = await fetch('/storefront/banners/add',{
+            method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        const data = await res.json();
+        if(!res.ok || !data.ok) throw new Error(data.error || 'Не удалось добавить баннер');
+
+        document.getElementById('noBannersNote')?.remove();
+        document.getElementById('bannerList').insertAdjacentHTML('beforeend', bannerRowHtml(data.banner));
+
+        ['bannerImage','bannerTitle','bannerSubtitle','bannerButtonText','bannerButtonUrl'].forEach(id=>{
+            const el=document.getElementById(id);
+            if(el) el.value='';
+        });
+
+        bindBannerRow(document.querySelector(`.sf-banner-row[data-banner-id="${data.banner.id}"]`));
+        refreshPreviewDots();
+        showToast('Баннер добавлен');
+        openSfTab('design');
+    }catch(err){
+        showToast(err.message || 'Ошибка добавления баннера', true);
+    }finally{
+        progress.classList.remove('show');
+    }
+});
+
+function bindBannerRow(row){
+    if(!row || row.dataset.bound==='1') return;
+    row.dataset.bound='1';
+    const id = row.dataset.bannerId;
+    const progress = row.querySelector('.sf-inline-progress');
+
+    row.querySelector('.sf-banner-save')?.addEventListener('click', async()=>{
+        const fd = new FormData();
+        ['title','subtitle','button_text','button_url','sort_order'].forEach(name=>{
+            fd.set(name,row.querySelector(`[data-field="${name}"]`)?.value || '');
+        });
+        if(row.querySelector('[data-field="is_active"]')?.checked) fd.set('is_active','1');
+
+        progress.classList.add('show');
+        try{
+            const res=await fetch(`/storefront/banners/${id}/update`,{
+                method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}
+            });
+            const data=await res.json();
+            if(!res.ok || !data.ok) throw new Error(data.error || 'Ошибка сохранения');
+            refreshPreviewDots();
+            showToast('Баннер сохранён');
+        }catch(err){
+            showToast(err.message || 'Ошибка сохранения',true);
+        }finally{
+            progress.classList.remove('show');
+        }
+    });
+
+    row.querySelector('.sf-banner-delete')?.addEventListener('click', async()=>{
+        if(!confirm('Удалить баннер?')) return;
+        progress.classList.add('show');
+        try{
+            const res=await fetch(`/storefront/banners/${id}/delete`,{
+                method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}
+            });
+            const data=await res.json();
+            if(!res.ok || !data.ok) throw new Error(data.error || 'Ошибка удаления');
+            row.remove();
+            refreshPreviewDots();
+            showToast('Баннер удалён');
+        }catch(err){
+            showToast(err.message || 'Ошибка удаления',true);
+            progress.classList.remove('show');
+        }
+    });
+
+    row.querySelector('[data-field="is_active"]')?.addEventListener('change',refreshPreviewDots);
+}
+
+document.querySelectorAll('.sf-banner-row').forEach(bindBannerRow);
+refreshPreviewDots();
+</script>
+{% endblock %}

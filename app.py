@@ -23,6 +23,11 @@ from routes.rekassa import rekassa_bp
 from routes.subscriptions import subscriptions_bp
 from subscriptions import load_subscription_context
 from routes.communications import communications_bp
+from routes.admin import admin_bp
+from routes.onboarding import onboarding_bp
+from routes.storefront import storefront_bp
+from routes.storefront_settings import storefront_settings_bp
+from routes.storefront_manage import storefront_manage_bp
 import os
 from dotenv import load_dotenv
 
@@ -59,6 +64,11 @@ app.register_blueprint(accounting_bp)
 app.register_blueprint(rekassa_bp)
 app.register_blueprint(subscriptions_bp)
 app.register_blueprint(communications_bp)
+app.register_blueprint(admin_bp)
+app.register_blueprint(onboarding_bp)
+app.register_blueprint(storefront_bp)
+app.register_blueprint(storefront_settings_bp)
+app.register_blueprint(storefront_manage_bp)
     
 # Какой URL относится к какому платному модулю.
 # Более длинные пути ставим выше коротких, чтобы проверка была точной.
@@ -93,8 +103,10 @@ def check_company_access():
         "/login",
         "/logout",
         "/register",
+        "/onboarding",
         "/subscription",
         "/static/",
+        "/s/",
     )
     if any(
         request.path == path or request.path.startswith(path)

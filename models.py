@@ -896,6 +896,360 @@ def init_db():
         ON CONFLICT (company_id, module_id) DO NOTHING
     """)
 
+
+    # ================== ONBOARDING / EASY START ==================
+
+    # Эти изменения безопасно выполняются повторно при каждом запуске.
+    cur.execute("""
+        ALTER TABLE companies
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
+    """)
+
+    cur.execute("""
+        ALTER TABLE companies
+        ADD COLUMN IF NOT EXISTS city TEXT
+    """)
+
+    cur.execute("""
+        ALTER TABLE companies
+        ADD COLUMN IF NOT EXISTS business_type TEXT
+    """)
+
+    cur.execute("""
+        ALTER TABLE companies
+        ADD COLUMN IF NOT EXISTS registration_source TEXT DEFAULT 'direct'
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS onboarding_progress (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER UNIQUE NOT NULL,
+            owner_user_id INTEGER,
+            current_step INTEGER DEFAULT 1,
+            business_type TEXT,
+            has_products BOOLEAN,
+            has_employees BOOLEAN,
+            needs_cashbox BOOLEAN,
+            needs_accounting BOOLEAN,
+            completed BOOLEAN DEFAULT FALSE,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_onboarding_company
+        ON onboarding_progress(company_id)
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_companies_created_at
+        ON companies(created_at)
+    """)
+
+
+    # ================== FUNCTIONAL ONBOARDING ==================
+
+    cur.execute("""
+        ALTER TABLE onboarding_progress
+        ADD COLUMN IF NOT EXISTS employee_count INTEGER DEFAULT 0
+    """)
+
+    cur.execute("""
+        ALTER TABLE onboarding_progress
+        ADD COLUMN IF NOT EXISTS sells_services BOOLEAN
+    """)
+
+    cur.execute("""
+        ALTER TABLE onboarding_progress
+        ADD COLUMN IF NOT EXISTS has_stock BOOLEAN
+    """)
+
+    cur.execute("""
+        ALTER TABLE onboarding_progress
+        ADD COLUMN IF NOT EXISTS needs_reports BOOLEAN
+    """)
+
+    cur.execute("""
+        ALTER TABLE onboarding_progress
+        ADD COLUMN IF NOT EXISTS needs_clients BOOLEAN
+    """)
+
+    cur.execute("""
+        ALTER TABLE onboarding_progress
+        ADD COLUMN IF NOT EXISTS needs_tasks BOOLEAN
+    """)
+
+    cur.execute("""
+        ALTER TABLE onboarding_progress
+        ADD COLUMN IF NOT EXISTS selected_modules TEXT[]
+    """)
+
+
+    # ================== STOREFRONT / ONLINE SALES ==================
+
+    cur.execute("""
+        ALTER TABLE items
+        ADD COLUMN IF NOT EXISTS storefront_visible BOOLEAN DEFAULT FALSE
+    """)
+
+    cur.execute("""
+        ALTER TABLE items
+        ADD COLUMN IF NOT EXISTS storefront_hidden BOOLEAN DEFAULT FALSE
+    """)
+
+    cur.execute("""
+        ALTER TABLE items
+        ADD COLUMN IF NOT EXISTS booking_duration_minutes INTEGER DEFAULT 60
+    """)
+
+    cur.execute("""
+        ALTER TABLE items
+        ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT TRUE
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS storefront_settings (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER UNIQUE NOT NULL,
+            slug TEXT UNIQUE NOT NULL,
+            title TEXT,
+            description TEXT,
+            logo_url TEXT,
+            cover_url TEXT,
+            whatsapp TEXT,
+            instagram TEXT,
+            enabled BOOLEAN DEFAULT FALSE,
+            show_products BOOLEAN DEFAULT TRUE,
+            show_services BOOLEAN DEFAULT TRUE,
+            allow_orders BOOLEAN DEFAULT TRUE,
+            allow_booking BOOLEAN DEFAULT TRUE,
+            allow_payment BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS online_orders (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            storefront_id INTEGER,
+            customer_name TEXT,
+            phone TEXT,
+            address TEXT,
+            delivery_method TEXT DEFAULT 'pickup',
+            comment TEXT,
+            total_amount NUMERIC(12,2) DEFAULT 0,
+            payment_status TEXT DEFAULT 'unpaid',
+            order_status TEXT DEFAULT 'new',
+            source TEXT DEFAULT 'storefront',
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS online_order_items (
+            id SERIAL PRIMARY KEY,
+            order_id INTEGER NOT NULL,
+            item_id INTEGER,
+            name TEXT,
+            quantity NUMERIC(12,3) DEFAULT 1,
+            price NUMERIC(12,2) DEFAULT 0,
+            total NUMERIC(12,2) DEFAULT 0
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bookings (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            storefront_id INTEGER,
+            item_id INTEGER,
+            employee_id INTEGER,
+            customer_name TEXT,
+            phone TEXT,
+            booking_date DATE,
+            booking_time TIME,
+            duration_minutes INTEGER DEFAULT 60,
+            status TEXT DEFAULT 'new',
+            payment_status TEXT DEFAULT 'unpaid',
+            comment TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_storefront_slug
+        ON storefront_settings(slug)
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_online_orders_company
+        ON online_orders(company_id)
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_online_order_items_order
+        ON online_order_items(order_id)
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bookings_company
+        ON bookings(company_id)
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bookings_company_date
+        ON bookings(company_id, booking_date)
+    """)
+
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS work_start TIME DEFAULT '09:00'
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS work_end TIME DEFAULT '18:00'
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS slot_interval_minutes INTEGER DEFAULT 30
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS delivery_enabled BOOLEAN DEFAULT FALSE
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS pickup_enabled BOOLEAN DEFAULT TRUE
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS delivery_price NUMERIC(12,2) DEFAULT 0
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS min_order_amount NUMERIC(12,2) DEFAULT 0
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS theme TEXT DEFAULT 'marketplace'
+    """)
+
+    cur.execute("""
+        ALTER TABLE online_orders
+        ADD COLUMN IF NOT EXISTS customer_id INTEGER
+    """)
+
+    cur.execute("""
+        ALTER TABLE online_orders
+        ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP
+    """)
+
+    cur.execute("""
+        ALTER TABLE online_orders
+        ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP
+    """)
+
+    cur.execute("""
+        ALTER TABLE bookings
+        ADD COLUMN IF NOT EXISTS customer_id INTEGER
+    """)
+
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_busy_slot
+        ON bookings(company_id, booking_date, booking_time, item_id)
+        WHERE status NOT IN ('cancelled', 'rejected')
+    """)
+
+
+
+    # ================== STOREFRONT BRANDING / FINAL SETTINGS ==================
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS brand_color TEXT DEFAULT '#6366f1'
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS card_style TEXT DEFAULT 'rounded'
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS hero_style TEXT DEFAULT 'gradient'
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS show_stock BOOLEAN DEFAULT TRUE
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS show_categories BOOLEAN DEFAULT TRUE
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS custom_domain TEXT
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS domain_status TEXT DEFAULT 'not_connected'
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS payment_provider TEXT
+    """)
+
+    cur.execute("""
+        ALTER TABLE storefront_settings
+        ADD COLUMN IF NOT EXISTS payment_enabled BOOLEAN DEFAULT FALSE
+    """)
+
+
+
+    # ================== STOREFRONT BANNERS ==================
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS storefront_banners (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            storefront_id INTEGER,
+            image_url TEXT NOT NULL,
+            title TEXT,
+            subtitle TEXT,
+            button_text TEXT,
+            button_url TEXT,
+            sort_order INTEGER DEFAULT 0,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_storefront_banners_company
+        ON storefront_banners(company_id, is_active, sort_order)
+    """)
+
+
     # 🔥 INDEXES
 
     cur.execute("""

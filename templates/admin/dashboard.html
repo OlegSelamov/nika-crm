@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nika Admin</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Inter, Arial, sans-serif;
+            background: #0d1017;
+            color: #f5f7fb;
+        }
+        a { color: inherit; text-decoration: none; }
+        .layout { min-height: 100vh; display: grid; grid-template-columns: 240px 1fr; }
+        .sidebar {
+            padding: 24px 18px;
+            border-right: 1px solid rgba(255,255,255,.08);
+            background: #10141d;
+        }
+        .brand { font-size: 22px; font-weight: 800; margin-bottom: 30px; }
+        .brand span { opacity: .55; font-weight: 500; }
+        .nav a {
+            display: block;
+            padding: 12px 14px;
+            margin: 6px 0;
+            border-radius: 12px;
+            color: #bfc7d5;
+        }
+        .nav a.active, .nav a:hover { background: rgba(255,255,255,.08); color: white; }
+        .main { padding: 28px; }
+        .top {
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-end;
+            gap:20px;
+            margin-bottom:24px;
+        }
+        h1 { margin:0; font-size:30px; }
+        .muted { color:#8993a5; }
+        .cards {
+            display:grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap:14px;
+            margin-bottom:18px;
+        }
+        .card {
+            background:#141925;
+            border:1px solid rgba(255,255,255,.08);
+            border-radius:18px;
+            padding:18px;
+        }
+        .card .label { color:#8993a5; font-size:13px; }
+        .card .value { margin-top:8px; font-size:28px; font-weight:800; }
+        .section {
+            background:#141925;
+            border:1px solid rgba(255,255,255,.08);
+            border-radius:18px;
+            overflow:hidden;
+            margin-top:18px;
+        }
+        .section-head {
+            padding:18px 20px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            border-bottom:1px solid rgba(255,255,255,.08);
+        }
+        table { width:100%; border-collapse:collapse; }
+        th, td {
+            padding:14px 18px;
+            text-align:left;
+            border-bottom:1px solid rgba(255,255,255,.06);
+            font-size:14px;
+        }
+        th { color:#8993a5; font-weight:600; font-size:12px; }
+        .badge {
+            display:inline-flex;
+            padding:5px 9px;
+            border-radius:999px;
+            background:rgba(255,255,255,.08);
+            font-size:12px;
+        }
+        .money { font-variant-numeric: tabular-nums; }
+        .btn {
+            display:inline-block;
+            padding:9px 13px;
+            border-radius:10px;
+            background:#f5f7fb;
+            color:#11151d;
+            font-weight:700;
+            font-size:13px;
+        }
+        @media (max-width: 1000px) {
+            .layout { grid-template-columns: 1fr; }
+            .sidebar { display:none; }
+            .cards { grid-template-columns: repeat(2, 1fr); }
+            .main { padding:18px; }
+            .section { overflow-x:auto; }
+            table { min-width:900px; }
+        }
+        @media (max-width: 560px) {
+            .cards { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="brand">NIKA <span>ADMIN</span></div>
+        <div class="nav">
+            <a class="active" href="/admin/">Обзор</a>
+            <a href="/admin/companies">Компании</a>
+            <a href="/admin/subscriptions">Подписки</a>
+            <a href="/admin/payments">Платежи</a>
+            <a href="#">Каталог</a>
+            <a href="#">Инфраструктура</a>
+            <a href="#">Команда</a>
+            <a href="#">Система</a>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="top">
+            <div>
+                <div class="muted">Центр управления платформой</div>
+                <h1>Nika Admin</h1>
+            </div>
+            <a href="/admin/companies" class="btn">Все компании</a>
+        </div>
+
+        <div class="cards">
+            <div class="card"><div class="label">Всего компаний</div><div class="value">{{ companies_count }}</div></div>
+            <div class="card"><div class="label">Trial</div><div class="value">{{ trial_count }}</div></div>
+            <div class="card"><div class="label">Активные</div><div class="value">{{ active_count }}</div></div>
+            <div class="card"><div class="label">Ожидают оплату</div><div class="value">{{ pending_payment_count }}</div></div>
+        </div>
+
+        <div class="cards">
+            <div class="card"><div class="label">Оплаты сегодня</div><div class="value money">{{ "{:,.0f}".format(revenue_today or 0).replace(",", " ") }} ₸</div></div>
+            <div class="card"><div class="label">Оплаты за месяц</div><div class="value money">{{ "{:,.0f}".format(revenue_month or 0).replace(",", " ") }} ₸</div></div>
+            <div class="card"><div class="label">Новые сегодня</div><div class="value">{{ new_today }}</div></div>
+            <div class="card"><div class="label">Новые за 7 дней</div><div class="value">{{ new_7_days }}</div></div>
+        </div>
+
+        <div class="section">
+            <div class="section-head">
+                <div>
+                    <strong>Последние компании</strong>
+                    <div class="muted">Регистрации и состояние подписки</div>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Компания</th>
+                    <th>Владелец</th>
+                    <th>Статус</th>
+                    <th>Trial</th>
+                    <th>Стоимость</th>
+                    <th>Последняя активность</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for company in recent_companies %}
+                    <tr>
+                        <td>
+                            <a href="/admin/companies/{{ company.id }}"><strong>{{ company.name or "Без названия" }}</strong></a><br>
+                            <span class="muted">{{ company.bin or "БИН не указан" }}</span>
+                        </td>
+                        <td>{{ company.owner_name or company.owner_username or "—" }}</td>
+                        <td><span class="badge">{{ company.subscription_status or "нет подписки" }}</span></td>
+                        <td>
+                            {% if company.trial_ends_at %}
+                                {{ company.trial_ends_at.strftime("%d.%m.%Y") }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td class="money">{{ "{:,.0f}".format(company.total_price or 0).replace(",", " ") }} ₸</td>
+                        <td>
+                            {% if company.last_seen_at %}
+                                {{ company.last_seen_at.strftime("%d.%m.%Y %H:%M") }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">Компаний пока нет.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+</body>
+</html>

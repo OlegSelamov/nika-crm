@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ company.name or "Компания" }} — Nika Admin</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#0d1017;color:#f5f7fb}
+a{color:inherit;text-decoration:none}.wrap{max-width:1500px;margin:auto;padding:26px}.muted{color:#8e98aa}
+.top{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:20px}.actions{display:flex;gap:9px;flex-wrap:wrap}
+.btn,button{border:0;border-radius:11px;padding:10px 13px;font-weight:700;cursor:pointer}
+.btn{background:#f5f7fb;color:#11151d}.btn-dark,button{background:#1c2330;color:#fff;border:1px solid rgba(255,255,255,.08)}
+.danger{background:#30191d;color:#ffccd3;border-color:#5e252e}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+.card,.panel{background:#141925;border:1px solid rgba(255,255,255,.08);border-radius:18px}.card{padding:17px}.label{font-size:12px;color:#8e98aa}.value{font-size:24px;font-weight:800;margin-top:7px}
+.panel{margin-top:16px;overflow:hidden}.panel-head{padding:17px 19px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;justify-content:space-between;gap:15px;align-items:center}
+.content{padding:18px}.info{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.info-item{background:#10151f;border-radius:13px;padding:13px}.info-item b{display:block;margin-top:4px}
+table{width:100%;border-collapse:collapse}th,td{padding:13px 17px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}th{color:#8993a5;font-size:11px}
+.badge{display:inline-flex;padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.08);font-size:12px}
+.forms{display:flex;flex-wrap:wrap;gap:9px}.forms form{display:flex;gap:7px;align-items:center}.forms select,.forms input{
+background:#10151f;color:#fff;border:1px solid rgba(255,255,255,.10);border-radius:9px;padding:9px
+}
+.flash{padding:12px 14px;background:#163322;border:1px solid #235834;border-radius:12px;margin-bottom:14px}
+@media(max-width:950px){.grid{grid-template-columns:repeat(2,1fr)}.info{grid-template-columns:1fr}.panel{overflow-x:auto}table{min-width:850px}}
+@media(max-width:550px){.grid{grid-template-columns:1fr}.wrap{padding:15px}.top{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    <div class="flash">{{ message }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="top">
+    <div>
+        <div class="muted">Nika Admin / Компания #{{ company.id }}</div>
+        <h1 style="margin:5px 0 0">{{ company.name or "Без названия" }}</h1>
+    </div>
+    <div class="actions">
+        <a class="btn-dark btn" href="/admin/companies">← Компании</a>
+        <a class="btn-dark btn" href="/admin/subscriptions">Подписки</a>
+        <a class="btn-dark btn" href="/admin/payments">Платежи</a>
+        <form method="post" action="/admin/companies/{{ company.id }}/enter">
+            <button type="submit">Открыть компанию</button>
+        </form>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card"><div class="label">Статус подписки</div><div class="value">{{ company.subscription_status or "—" }}</div></div>
+    <div class="card"><div class="label">Стоимость</div><div class="value">{{ "{:,.0f}".format(company.total_price or 0).replace(",", " ") }} ₸</div></div>
+    <div class="card"><div class="label">Сотрудников</div><div class="value">{{ employees|length }}</div></div>
+    <div class="card"><div class="label">Товаров</div><div class="value">{{ items_count }}</div></div>
+</div>
+
+<div class="grid" style="margin-top:13px">
+    <div class="card"><div class="label">Клиентов</div><div class="value">{{ clients_count }}</div></div>
+    <div class="card"><div class="label">Продаж</div><div class="value">{{ sales_stats.sales_count or 0 }}</div></div>
+    <div class="card"><div class="label">Оборот</div><div class="value">{{ "{:,.0f}".format(sales_stats.sales_total or 0).replace(",", " ") }} ₸</div></div>
+    <div class="card"><div class="label">Последняя продажа</div><div class="value" style="font-size:17px">{{ sales_stats.last_sale_at.strftime("%d.%m.%Y %H:%M") if sales_stats.last_sale_at else "—" }}</div></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><strong>Компания и владелец</strong></div>
+    <div class="content info">
+        <div class="info-item"><span class="label">БИН</span><b>{{ company.bin or "—" }}</b></div>
+        <div class="info-item"><span class="label">Телефон компании</span><b>{{ company.phone or "—" }}</b></div>
+        <div class="info-item"><span class="label">Адрес</span><b>{{ company.address or "—" }}</b></div>
+        <div class="info-item"><span class="label">Владелец</span><b>{{ company.owner_name or company.owner_username or "—" }}</b></div>
+        <div class="info-item"><span class="label">Телефон владельца</span><b>{{ company.owner_phone or "—" }}</b></div>
+        <div class="info-item"><span class="label">Последняя активность</span><b>{{ company.owner_last_seen_at.strftime("%d.%m.%Y %H:%M") if company.owner_last_seen_at else "—" }}</b></div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head">
+        <div>
+            <strong>Управление подпиской</strong>
+            <div class="muted">Ручные действия супер-администратора</div>
+        </div>
+    </div>
+    <div class="content">
+        <div class="info" style="margin-bottom:16px">
+            <div class="info-item"><span class="label">Trial до</span><b>{{ company.trial_ends_at.strftime("%d.%m.%Y %H:%M") if company.trial_ends_at else "—" }}</b></div>
+            <div class="info-item"><span class="label">Активна до</span><b>{{ company.period_end.strftime("%d.%m.%Y %H:%M") if company.period_end else "—" }}</b></div>
+            <div class="info-item"><span class="label">Следующая оплата</span><b>{{ company.next_payment_at.strftime("%d.%m.%Y %H:%M") if company.next_payment_at else "—" }}</b></div>
+        </div>
+
+        <div class="forms">
+            <form method="post" action="/admin/companies/{{ company.id }}/trial/extend">
+                <select name="days">
+                    <option value="3">+3 дня trial</option>
+                    <option value="7" selected>+7 дней trial</option>
+                    <option value="14">+14 дней trial</option>
+                    <option value="30">+30 дней trial</option>
+                </select>
+                <button type="submit">Продлить trial</button>
+            </form>
+
+            <form method="post" action="/admin/companies/{{ company.id }}/subscription/activate">
+                <select name="months">
+                    <option value="1">1 месяц</option>
+                    <option value="3">3 месяца</option>
+                    <option value="6">6 месяцев</option>
+                    <option value="12">12 месяцев</option>
+                </select>
+                <button type="submit">Активировать</button>
+            </form>
+
+            <form method="post" action="/admin/companies/{{ company.id }}/subscription/suspend" onsubmit="return confirm('Приостановить подписку этой компании?')">
+                <button class="danger" type="submit">Приостановить</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><strong>Модули</strong></div>
+    <table>
+        <thead><tr><th>Модуль</th><th>Категория</th><th>Подключён</th><th>Статус</th><th>Цена</th></tr></thead>
+        <tbody>
+        {% for module in modules %}
+        <tr>
+            <td><strong>{{ module.name }}</strong><br><span class="muted">{{ module.code }}</span></td>
+            <td>{{ module.category }}</td>
+            <td>{{ "Да" if module.enabled else "Нет" }}</td>
+            <td><span class="badge">{{ module.status or "—" }}</span></td>
+            <td>{{ "{:,.0f}".format(module.price or module.monthly_price or 0).replace(",", " ") }} ₸</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><strong>Сотрудники</strong></div>
+    <table>
+        <thead><tr><th>Сотрудник</th><th>Роль</th><th>Телефон</th><th>Последний вход</th><th>Онлайн-активность</th></tr></thead>
+        <tbody>
+        {% for employee in employees %}
+        <tr>
+            <td><strong>{{ employee.full_name or employee.username }}</strong></td>
+            <td>{{ employee.role or "—" }}</td>
+            <td>{{ employee.phone or "—" }}</td>
+            <td>{{ employee.last_login_at.strftime("%d.%m.%Y %H:%M") if employee.last_login_at else "—" }}</td>
+            <td>{{ employee.last_seen_at.strftime("%d.%m.%Y %H:%M") if employee.last_seen_at else "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">Сотрудников нет.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><strong>Платежи</strong></div>
+    <table>
+        <thead><tr><th>Дата</th><th>Сумма</th><th>Провайдер</th><th>Метод</th><th>Статус</th><th>Описание</th></tr></thead>
+        <tbody>
+        {% for payment in payments %}
+        <tr>
+            <td>{{ payment.paid_at.strftime("%d.%m.%Y %H:%M") if payment.paid_at else payment.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+            <td><strong>{{ "{:,.0f}".format(payment.amount or 0).replace(",", " ") }} {{ payment.currency or "KZT" }}</strong></td>
+            <td>{{ payment.provider or "—" }}</td>
+            <td>{{ payment.payment_method or "—" }}</td>
+            <td><span class="badge">{{ payment.status }}</span></td>
+            <td>{{ payment.description or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">Оплат ещё нет.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><strong>История изменений подписки</strong></div>
+    <table>
+        <thead><tr><th>Дата</th><th>Действие</th><th>Пользователь</th><th>Новое значение</th></tr></thead>
+        <tbody>
+        {% for change in changes %}
+        <tr>
+            <td>{{ change.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+            <td>{{ change.action }}</td>
+            <td>{{ change.user_id or "system" }}</td>
+            <td><code style="color:#c8d0dc">{{ change.new_value }}</code></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">Истории пока нет.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+</div>
+</body>
+</html>

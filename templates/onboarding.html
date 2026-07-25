@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Настройка бизнеса — Nika Business</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:'Segoe UI',Arial,sans-serif;background:linear-gradient(135deg,#0b1220,#162b5c);color:#0f172a;padding:28px 16px}
+.shell{width:min(900px,100%);margin:auto;background:rgba(255,255,255,.97);border-radius:26px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.35)}
+.head{padding:25px 30px 18px;border-bottom:1px solid #e7edf6}
+.logo{text-align:center;font-size:24px;font-weight:850}.logo span{color:#3b82f6}
+.company{text-align:center;color:#64748b;font-size:13px;margin-top:4px}
+.progress{display:flex;gap:7px;margin-top:20px}.bar{height:5px;flex:1;border-radius:10px;background:#e2e8f0}.bar.active{background:#3b82f6}
+.body{padding:28px 32px 32px}.step{display:none}.step.active{display:block}
+.eyebrow{font-size:12px;color:#3b82f6;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+h1{font-size:26px;margin:7px 0}.desc{color:#64748b;font-size:14px;line-height:1.5;margin-bottom:22px}
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.option{border:1.5px solid #e2e8f0;border-radius:15px;padding:16px;cursor:pointer;transition:.2s;background:#fff}
+.option:hover{border-color:#93c5fd;transform:translateY(-1px)}
+.option.selected{border-color:#3b82f6;background:#eff6ff;box-shadow:0 0 0 3px rgba(59,130,246,.08)}
+.option input{display:none}.option strong{display:block;font-size:15px;margin-bottom:5px}.option small{color:#64748b;line-height:1.35}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label.field{display:block}.field span{display:block;color:#64748b;font-size:12px;font-weight:650;margin-bottom:6px}
+input[type=text],input[type=number]{width:100%;height:45px;border:1px solid #dbe3ee;border-radius:11px;padding:11px 13px;font-size:14px;outline:none}
+input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+.switches{display:grid;gap:10px}.switch{display:flex;justify-content:space-between;gap:15px;align-items:center;border:1px solid #e6ebf2;border-radius:14px;padding:14px 16px;background:#fff}.switch .text strong{display:block}.switch .text small{color:#64748b}.yn{display:flex;gap:6px}.yn button{border:0;padding:8px 12px;border-radius:9px;background:#eef2f7;color:#64748b;font-weight:700;cursor:pointer}.yn button.active{background:#2563eb;color:white}
+.employee-count{display:none;margin-top:14px}.employee-count.show{display:block}
+.actions{display:flex;gap:10px;margin-top:25px}.btn{border:0;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:800;cursor:pointer}.back{background:#eef2f7;color:#475569}.next{margin-left:auto;background:linear-gradient(135deg,#6366f1,#3b82f6);color:white;min-width:190px}
+.review{display:grid;gap:9px}.review-row{display:flex;justify-content:space-between;gap:15px;padding:13px 15px;background:#f8fafc;border-radius:12px;color:#64748b}.review-row strong{color:#0f172a;text-align:right}
+.tip{margin-top:17px;padding:15px;border-radius:13px;background:#ecfdf5;color:#166534;font-size:13px;line-height:1.45}
+@media(max-width:650px){.cards,.grid{grid-template-columns:1fr}.body,.head{padding-left:20px;padding-right:20px}.actions{flex-wrap:wrap}.next,.back{width:100%;margin-left:0}}
+</style>
+</head>
+<body>
+<div class="shell">
+<div class="head">
+  <div class="logo">Nika <span>Business</span></div>
+  <div class="company">{{ company.name }} · пробный период до {{ company.trial_ends_at.strftime('%d.%m.%Y') if company.trial_ends_at else '—' }}</div>
+  <div class="progress">
+    <div class="bar active"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+  </div>
+</div>
+
+<div class="body">
+<form method="POST" action="/onboarding/save" id="wizard">
+
+<section class="step active">
+  <div class="eyebrow">Шаг 1 из 6</div><h1>Какой у вас бизнес?</h1>
+  <div class="desc">Nika подберёт стартовые модули и рабочее пространство.</div>
+  <div class="cards">
+    {% for code, preset in presets.items() %}
+      <label class="option" onclick="selectCard(this,'business_type')">
+        <input type="radio" name="business_type" value="{{ code }}" {% if loop.first %}checked{% endif %}>
+        <strong>{{ preset.name }}</strong>
+        <small>
+          {% if code == 'retail' %}Продажи, склад, товары, клиенты{% elif code == 'services' %}Услуги, клиенты, задачи, аналитика{% elif code == 'cafe' %}Касса, остатки, продажи{% elif code == 'beauty' %}Клиенты, услуги, задачи{% elif code == 'wholesale' %}Склад, продажи, аналитика{% else %}Настроим вручную{% endif %}
+        </small>
+      </label>
+    {% endfor %}
+  </div>
+  <div class="actions"><button class="btn next" type="button" onclick="next()">Продолжить →</button></div>
+</section>
+
+<section class="step">
+  <div class="eyebrow">Шаг 2 из 6</div><h1>Что вы продаёте?</h1>
+  <div class="desc">Можно выбрать и товары, и услуги одновременно.</div>
+  <div class="switches">
+    <div class="switch"><div class="text"><strong>Товары</strong><small>Каталог, штрихкоды, продажи</small></div><div class="yn" data-name="sells_products"><button type="button" class="active" data-value="1">Да</button><button type="button" data-value="0">Нет</button></div><input type="hidden" name="sells_products" value="1"></div>
+    <div class="switch"><div class="text"><strong>Услуги</strong><small>Услуги, стоимость, продажа</small></div><div class="yn" data-name="sells_services"><button type="button" data-value="1">Да</button><button type="button" class="active" data-value="0">Нет</button></div><input type="hidden" name="sells_services" value="0"></div>
+    <div class="switch"><div class="text"><strong>Нужен склад</strong><small>Остатки, приход, списание</small></div><div class="yn" data-name="has_stock"><button type="button" class="active" data-value="1">Да</button><button type="button" data-value="0">Нет</button></div><input type="hidden" name="has_stock" value="1"></div>
+  </div>
+  <div class="actions"><button class="btn back" type="button" onclick="back()">← Назад</button><button class="btn next" type="button" onclick="next()">Продолжить →</button></div>
+</section>
+
+<section class="step">
+  <div class="eyebrow">Шаг 3 из 6</div><h1>Команда</h1>
+  <div class="desc">Если сотрудников пока нет — этот раздел можно пропустить.</div>
+  <div class="switch">
+    <div class="text"><strong>Есть сотрудники?</strong><small>Nika подготовит роли и доступы.</small></div>
+    <div class="yn" data-name="has_employees"><button type="button" data-value="1">Да</button><button type="button" class="active" data-value="0">Нет</button></div>
+    <input type="hidden" name="has_employees" value="0">
+  </div>
+  <div class="employee-count">
+    <label class="field"><span>Сколько сотрудников примерно?</span><input type="number" name="employee_count" value="1" min="1" max="10000"></label>
+  </div>
+  <div class="actions"><button class="btn back" type="button" onclick="back()">← Назад</button><button class="btn next" type="button" onclick="next()">Продолжить →</button></div>
+</section>
+
+<section class="step">
+  <div class="eyebrow">Шаг 4 из 6</div><h1>Что нужно автоматизировать?</h1>
+  <div class="desc">Выбирайте по смыслу — Nika сама включит подходящие разделы.</div>
+  <div class="switches">
+    {% set choices = [
+      ('needs_cashbox','Касса и фискализация','ККМ, Rekassa, POS и настройки продаж'),
+      ('needs_accounting','Бухгалтерия','Налоги, расходы и контроль'),
+      ('needs_reports','Отчётность','Формы и управленческие отчёты'),
+      ('needs_clients','Клиентская база','История, документы и статусы'),
+      ('needs_tasks','Задачи','Контроль работы и сроков')
+    ] %}
+    {% for field,title,subtitle in choices %}
+    <div class="switch">
+      <div class="text"><strong>{{ title }}</strong><small>{{ subtitle }}</small></div>
+      <div class="yn" data-name="{{ field }}"><button type="button" data-value="1">Да</button><button type="button" class="active" data-value="0">Нет</button></div>
+      <input type="hidden" name="{{ field }}" value="0">
+    </div>
+    {% endfor %}
+  </div>
+  <div class="actions"><button class="btn back" type="button" onclick="back()">← Назад</button><button class="btn next" type="button" onclick="next()">Продолжить →</button></div>
+</section>
+
+<section class="step">
+  <div class="eyebrow">Шаг 5 из 6</div><h1>Где работает бизнес?</h1>
+  <div class="desc">Эти данные пригодятся для документов, аналитики и дальнейших интеграций.</div>
+  <div class="grid">
+    <label class="field"><span>Город</span><input type="text" name="city" value="{{ company.city or '' }}" placeholder="Например, Усть-Каменогорск"></label>
+    <label class="field"><span>Адрес точки</span><input type="text" name="address" value="{{ company.address or '' }}" placeholder="Можно заполнить позже"></label>
+  </div>
+  <div class="actions"><button class="btn back" type="button" onclick="back()">← Назад</button><button class="btn next" type="button" onclick="next()">Продолжить →</button></div>
+</section>
+
+<section class="step">
+  <div class="eyebrow">Шаг 6 из 6</div><h1>Nika всё подготовит</h1>
+  <div class="desc">После сохранения система сама включит подходящие модули и сформирует персональный план запуска.</div>
+  <div class="review">
+    <div class="review-row"><span>Компания</span><strong>{{ company.name }}</strong></div>
+    <div class="review-row"><span>Бизнес</span><strong id="reviewBusiness">—</strong></div>
+    <div class="review-row"><span>Товары</span><strong id="reviewProducts">—</strong></div>
+    <div class="review-row"><span>Услуги</span><strong id="reviewServices">—</strong></div>
+    <div class="review-row"><span>Сотрудники</span><strong id="reviewEmployees">—</strong></div>
+  </div>
+  <div class="tip">После этого ничего окончательно не блокируется: все модули и настройки можно изменить позже.</div>
+  <div class="actions"><button class="btn back" type="button" onclick="back()">← Назад</button><button class="btn next" type="submit">Подготовить Nika →</button></div>
+</section>
+
+</form>
+</div>
+</div>
+
+<script>
+let step=0;
+const steps=[...document.querySelectorAll('.step')], bars=[...document.querySelectorAll('.bar')];
+
+function render(){
+  steps.forEach((x,i)=>x.classList.toggle('active',i===step));
+  bars.forEach((x,i)=>x.classList.toggle('active',i<=step));
+  if(step===5) fillReview();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function next(){ if(step<steps.length-1){step++;render();} }
+function back(){ if(step>0){step--;render();} }
+
+function selectCard(el,name){
+  document.querySelectorAll(`input[name="${name}"]`).forEach(x=>x.closest('.option').classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('input').checked=true;
+}
+document.querySelector('.option input:checked')?.closest('.option')?.classList.add('selected');
+
+document.querySelectorAll('.yn').forEach(group=>{
+  group.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      group.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const name=group.dataset.name;
+      document.querySelector(`input[name="${name}"]`).value=btn.dataset.value;
+
+      if(name==='has_employees'){
+        document.querySelector('.employee-count').classList.toggle('show',btn.dataset.value==='1');
+      }
+    });
+  });
+});
+
+function v(name){return document.querySelector(`[name="${name}"]`)?.value}
+function fillReview(){
+  const bt=document.querySelector('input[name="business_type"]:checked');
+  document.getElementById('reviewBusiness').textContent=bt?.closest('.option')?.querySelector('strong')?.textContent || '—';
+  document.getElementById('reviewProducts').textContent=v('sells_products')==='1'?'Да':'Нет';
+  document.getElementById('reviewServices').textContent=v('sells_services')==='1'?'Да':'Нет';
+  document.getElementById('reviewEmployees').textContent=v('has_employees')==='1' ? `${v('employee_count')||1}` : 'Нет';
+}
+</script>
+</body>
+</html>

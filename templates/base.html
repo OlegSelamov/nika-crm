@@ -894,8 +894,8 @@
 		}
 		
 		.menu-icon {
-			width: 32px;
-			height: 32px;
+			width: 38px;
+			height: 38px;
 			min-width: 22px;
 			object-fit: contain;
 			flex-shrink: 0;
@@ -1067,167 +1067,7 @@
 			font-size:14px;
 		}
 		
-		/* ================= AGENT ================= */
 
-		#agent-wrapper {
-			position: fixed;
-			right: 20px;
-			bottom: 20px;
-			z-index: 99999;
-			display: flex;
-			flex-direction: column;
-			align-items: flex-end;
-			gap: 10px;
-		}
-
-		/* КРУГЛАЯ КНОПКА */
-
-		#agent-toggle {
-			width: 62px;
-			height: 62px;
-			border-radius: 50%;
-			border: none;
-			overflow:hidden;
-			padding:0;
-
-			background:
-			linear-gradient(135deg, #6366f1, #8b5cf6);
-
-			color: white;
-			font-size: 28px;
-			cursor: pointer;
-
-			box-shadow:
-			0 10px 30px rgba(99,102,241,.35);
-
-			transition: .25s ease;
-		}
-		
-		.agent-icon{
-
-			width:100%;
-			height:100%;
-
-			object-fit:cover;
-
-			border-radius:50%;
-
-			display:block;
-		}
-
-		#agent-toggle:hover {
-			transform: scale(1.08);
-		}
-
-		/* ПАНЕЛЬ */
-
-		#agent-box {
-
-			display: none;
-
-			align-items: center;
-			gap: 8px;
-
-			background: rgba(15, 23, 42, 0.92);
-
-			padding: 10px;
-			border-radius: 18px;
-
-			backdrop-filter: blur(14px);
-
-			box-shadow:
-			0 10px 35px rgba(0,0,0,.3);
-
-			min-width: 320px;
-		}
-
-		/* АКТИВНО */
-
-		#agent-box.open {
-			display: flex;
-			animation: agentShow .2s ease;
-		}
-
-		@keyframes agentShow {
-
-			from {
-				opacity: 0;
-				transform: translateY(10px) scale(.96);
-			}
-
-			to {
-				opacity: 1;
-				transform: translateY(0) scale(1);
-			}
-		}
-
-		/* INPUT */
-
-		#agent-input {
-
-			flex: 1;
-
-			height: 42px;
-
-			border: none;
-			outline: none;
-
-			border-radius: 12px;
-
-			padding: 0 12px;
-
-			background: rgba(255,255,255,.12);
-
-			color: white;
-		}
-
-		/* КНОПКИ */
-
-		#agent-box button {
-
-			width: 42px;
-			height: 42px;
-
-			border: none;
-			border-radius: 12px;
-
-			cursor: pointer;
-
-			background:
-			linear-gradient(135deg,#6366f1,#8b5cf6);
-
-			color: white;
-
-			font-size: 18px;
-		}
-
-		/* ===== MOBILE ===== */
-
-		@media (max-width:768px){
-
-			#agent-wrapper {
-				right: 14px;
-				bottom: 14px;
-			}
-
-			#agent-box {
-
-				min-width: unset;
-
-				width: calc(100vw - 28px);
-
-				padding: 8px;
-			}
-
-			#agent-toggle {
-				width: 58px;
-				height: 58px;
-				font-size: 26px;
-				padding:0;
-				overflow:hidden;
-			}
-		}
-		
 		/* ===== MOBILE SIDEBAR ===== */
 
 		.sidebar-backdrop {
@@ -1793,8 +1633,8 @@
 			text-decoration: none;
 		}
 		.topbar-user__avatar {
-			width: 32px;
-			height: 32px;
+			width: 38px;
+			height: 38px;
 			display: grid;
 			place-items: center;
 			border-radius: 10px;
@@ -1886,7 +1726,7 @@
 			border-radius: 10px;
 			background: #efedff;
 			color: #6554f6;
-			font-size: 10px;
+			font-size: 12px;
 			font-weight: 800;
 		}
 		.system-drawer__body {
@@ -2059,7 +1899,7 @@
 		/* ===== COMPACT FLOATING TOP ACTIONS ===== */
 		.app-topbar--compact {
 			position: fixed;
-			top: 4px;
+			top: 0;
 			right: 18px;
 			left: auto;
 			z-index: 10010;
@@ -2170,7 +2010,7 @@
 
 		@media (max-width: 768px) {
 			.app-topbar--compact {
-				top: 12px;
+				top: 4px;
 				right: 10px;
 				left: auto;
 				margin: 0;
@@ -2198,6 +2038,173 @@
 			}
 
 			.topbar-user--profile .topbar-user__copy {
+				display: none;
+			}
+		}
+
+
+		/* ===== AI ASSISTANT TOP BUTTON + MINI PANEL ===== */
+		.ai-assistant-panel {
+			position: fixed;
+			top: 54px;
+			right: 18px;
+			z-index: 10025;
+			width: min(520px, calc(100vw - 28px));
+			padding: 22px;
+			border: 1px solid rgba(255,255,255,.55);
+			border-radius: 22px;
+			background: rgba(255,255,255,.97);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			box-shadow: 0 18px 50px rgba(15,23,42,.18);
+			opacity: 0;
+			visibility: hidden;
+			pointer-events: none;
+			transform: translateY(-8px) scale(.98);
+			transition: .18s ease;
+		}
+
+		.ai-assistant-panel.open {
+			opacity: 1;
+			visibility: visible;
+			pointer-events: auto;
+			transform: translateY(0) scale(1);
+		}
+
+		.ai-assistant-panel__head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 14px;
+			margin-bottom: 18px;
+		}
+
+		.ai-assistant-panel__title {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.ai-assistant-panel__title img {
+			width: 42px;
+			height: 42px;
+			object-fit: contain;
+			border-radius: 10px;
+		}
+
+		.ai-assistant-panel__title b {
+			display: block;
+			color: #172033;
+			font-size: 17px;
+		}
+
+		.ai-assistant-panel__title span {
+			display: block;
+			margin-top: 2px;
+			color: #8a94a6;
+			font-size: 12px;
+		}
+
+		.ai-assistant-panel__close {
+			width: 38px;
+			height: 38px;
+			border: 0;
+			border-radius: 10px;
+			background: #f0f2f6;
+			color: #667085;
+			cursor: pointer;
+			font-size: 17px;
+		}
+
+		.ai-command-box {
+			display: flex;
+			gap: 10px;
+			align-items: center;
+		}
+
+		.ai-command-box input {
+			flex: 1;
+			min-width: 0;
+			height: 54px;
+			margin: 0;
+			padding: 0 16px;
+			border-radius: 14px;
+			background: #f6f7fb;
+			font-size: 14px;
+		}
+
+		.ai-command-btn {
+			width: 54px;
+			height: 54px;
+			flex: 0 0 54px;
+			display: grid;
+			place-items: center;
+			border: 0;
+			border-radius: 12px;
+			background: linear-gradient(135deg,#6366f1,#8b5cf6);
+			cursor: pointer;
+			box-shadow: 0 8px 18px rgba(99,102,241,.18);
+		}
+
+		.ai-command-btn img {
+			width: 27px;
+			height: 27px;
+			object-fit: contain;
+		}
+
+		.ai-assistant-controls {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 10px;
+			margin-top: 14px;
+		}
+
+		.ai-control-btn {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 7px;
+			min-height: 48px;
+			border: 1px solid #e5e9f1;
+			border-radius: 11px;
+			background: #f8f9fc;
+			color: #566176;
+			font-size: 12px;
+			font-weight: 800;
+			cursor: pointer;
+		}
+
+		.ai-control-btn.active {
+			border-color: #d7d2ff;
+			background: #f0edff;
+			color: #5d50e6;
+		}
+
+		.ai-control-btn img {
+			width: 24px;
+			height: 24px;
+			object-fit: contain;
+		}
+
+		.ai-assistant-hint {
+			margin-top: 14px;
+			padding: 13px 14px;
+			border-radius: 10px;
+			background: #f8fafc;
+			color: #8a94a6;
+			font-size: 12px;
+			line-height: 1.55;
+		}
+
+		@media (max-width: 768px) {
+			.ai-assistant-panel {
+				top: 50px;
+				right: 10px;
+				width: calc(100vw - 20px);
+				padding: 17px;
+			}
+
+			.ai-assistant-panel__title span {
 				display: none;
 			}
 		}
@@ -2529,6 +2536,17 @@
 				<span class="text">Каталог</span>
 			</a>
 {% endif %}
+
+{% if session.get("is_super_admin")
+      or session.get("role") in ["owner", "admin"]
+      or "storefront" in session.get("employee_modules", []) %}
+			<a href="/storefront/">
+				<img src="/static/icons/storefront.png"
+					 class="menu-icon"
+					 onerror="this.onerror=null;this.src='/static/icons/items.png';">
+				<span class="text">Онлайн-витрина</span>
+			</a>
+{% endif %}
 			
 {% if session.get("is_super_admin") or "tasks" in session.get("employee_modules", []) %}
 			<a href="/tasks">
@@ -2692,6 +2710,14 @@
                     <span id="chatBadge" class="top-action__badge">0</span>
                 </button>
 
+                <button class="top-action top-action--compact" type="button"
+                        onclick="toggleAiAssistant()" title="AI ассистент">
+                    <img src="/static/icons/assistant-top.png"
+                         class="top-action__icon"
+                         alt=""
+                         onerror="this.onerror=null;this.src='/static/icons/assistant-icon.png';">
+                </button>
+
                 <a href="/profile" class="topbar-user topbar-user--profile" title="Профиль">
                     <span class="topbar-user__avatar">
                         {{ (session.get("username") or "U")[:2]|upper }}
@@ -2775,28 +2801,32 @@
 
 <div id="systemToastWrap" class="system-toast-wrap"></div>
 
-<div id="agent-wrapper">
 
-	<button id="agent-toggle" onclick="toggleAgent()">
-
-		<img src="/static/icons/assistant-icon.png"
-			 alt="AI"
-			 class="agent-icon">
-
-	</button>
-
-	<div id="agent-box">
-
-		<input type="text"
-			   id="agent-input"
-			   placeholder="Введите команду...">
-
-		<button onclick="sendCommand()">▶</button>
-		<button onclick="startVoice()">🎤</button>
-		<button onclick="toggleVoice()">🔊</button>
-
-	</div>
-
+<div id="aiAssistantPanel" class="ai-assistant-panel">
+    <div class="ai-assistant-panel__head">
+        <div class="ai-assistant-panel__title">
+            <img src="/static/icons/assistant-top.png" alt="" onerror="this.onerror=null;this.src='/static/icons/assistant-icon.png';">
+            <div><b>Nika AI</b><span>Команды для работы с системой</span></div>
+        </div>
+        <button class="ai-assistant-panel__close" type="button" onclick="closeAiAssistant()">×</button>
+    </div>
+    <div class="ai-command-box">
+        <input type="text" id="agent-input" placeholder="Например: покажи выручку за сегодня">
+        <button class="ai-command-btn" type="button" onclick="sendCommand()" title="Отправить">
+            <img src="/static/icons/ai-send.png" alt="" onerror="this.style.display='none'; this.parentElement.textContent='➤';">
+        </button>
+    </div>
+    <div class="ai-assistant-controls">
+        <button id="aiMicButton" class="ai-control-btn" type="button" onclick="startVoice()">
+            <img src="/static/icons/ai-mic.png" alt="" onerror="this.style.display='none';">
+            <span>Микрофон</span>
+        </button>
+        <button id="aiSoundButton" class="ai-control-btn active" type="button" onclick="toggleVoice()">
+            <img id="aiSoundIcon" src="/static/icons/ai-sound-on.png" alt="" onerror="this.style.display='none';">
+            <span id="aiSoundText">Звук включён</span>
+        </button>
+    </div>
+    <div class="ai-assistant-hint">Можно писать обычным языком: «найди клиента», «покажи выручку», «создай клиента», «открой склад».</div>
 </div>
 
 <script>
@@ -2927,6 +2957,7 @@ function restoreSidebarState() {
 }
 
 function openSystemDrawer(type) {
+    closeAiAssistant();
     closeSystemDrawers(false);
     const backdrop = document.getElementById("systemDrawerBackdrop");
     const drawer = document.getElementById(type === "chat" ? "chatDrawer" : "notificationsDrawer");
@@ -3211,6 +3242,13 @@ document.addEventListener("DOMContentLoaded", () => {
     restoreSidebarState();
     setActiveMenuItem();
 
+    document.getElementById("agent-input")?.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            sendCommand();
+        }
+    });
+
     document.getElementById("chatInput")?.addEventListener("keydown", event => {
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
@@ -3286,9 +3324,19 @@ function speak(text, callback = null) {
 function toggleVoice() {
     voiceEnabled = !voiceEnabled;
 
+    const button = document.getElementById("aiSoundButton");
+    const label = document.getElementById("aiSoundText");
+    const icon = document.getElementById("aiSoundIcon");
+
+    if (button) button.classList.toggle("active", voiceEnabled);
+
     if (voiceEnabled) {
+        if (label) label.textContent = "Звук включён";
+        if (icon) icon.src = "/static/icons/ai-sound-on.png";
         speak("Голос включен");
     } else {
+        if (label) label.textContent = "Звук выключен";
+        if (icon) icon.src = "/static/icons/ai-sound-off.png";
         speechSynthesis.cancel();
     }
 }
@@ -3468,12 +3516,35 @@ function startVoice() {
     };
 }
 
-function toggleAgent() {
+function toggleAiAssistant() {
+    const panel = document.getElementById("aiAssistantPanel");
+    if (!panel) return;
 
-	const box = document.getElementById("agent-box");
+    const isOpen = panel.classList.toggle("open");
 
-	box.classList.toggle("open");
+    if (isOpen) {
+        closeSystemDrawers();
+        setTimeout(() => document.getElementById("agent-input")?.focus(), 80);
+    }
 }
+
+function closeAiAssistant() {
+    document.getElementById("aiAssistantPanel")?.classList.remove("open");
+}
+
+document.addEventListener("click", function(event) {
+    const panel = document.getElementById("aiAssistantPanel");
+    const aiButton = event.target.closest('[onclick="toggleAiAssistant()"]');
+
+    if (
+        panel &&
+        panel.classList.contains("open") &&
+        !panel.contains(event.target) &&
+        !aiButton
+    ) {
+        closeAiAssistant();
+    }
+});
 </script>
 
 </body>

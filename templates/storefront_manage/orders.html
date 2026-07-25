@@ -1,0 +1,529 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+.sf-work{
+    --sf-brand:#6366f1;
+    --sf-brand-soft:#eeefff;
+    --sf-brand-border:#d9dcff;
+    --sf-ink:#172033;
+    --sf-muted:#78859a;
+    --sf-line:rgba(148,163,184,.18);
+}
+.sf-work *{box-sizing:border-box}
+.sf-headbar{
+    display:flex;justify-content:space-between;gap:18px;align-items:flex-start;
+    margin-bottom:16px;flex-wrap:wrap
+}
+.sf-headbar h1{margin:0;font-size:34px;letter-spacing:-.035em;color:#101828}
+.sf-headbar p{margin:6px 0 0;color:var(--sf-muted);font-size:14px}
+.sf-head-actions{display:flex;gap:8px;flex-wrap:wrap}
+.sf-lite-btn{
+    min-height:46px;padding:0 16px;border-radius:11px;
+    display:inline-flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,.76);border:1px solid var(--sf-line);
+    color:#58657a;text-decoration:none;font-size:13px;font-weight:800
+}
+.sf-toolbar{
+    display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap
+}
+.sf-searchbox{
+    flex:1;min-width:220px;height:48px;border:1px solid var(--sf-line);
+    background:rgba(255,255,255,.82);border-radius:12px;padding:0 15px;outline:0;font-size:13px
+}
+.sf-pills{display:flex;gap:6px;overflow:auto}
+.sf-filter-pill{
+    flex:0 0 auto;min-height:42px;padding:0 14px;border:1px solid var(--sf-line);
+    border-radius:999px;background:#fff;color:#6a7689;font-size:12px;
+    font-weight:800;cursor:pointer
+}
+.sf-filter-pill.active{
+    color:#5146d9;background:var(--sf-brand-soft);border-color:var(--sf-brand-border)
+}
+.sf-list{
+    overflow:hidden;border-radius:18px;
+    background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.58);
+    box-shadow:0 9px 26px rgba(15,23,42,.055)
+}
+.sf-list table{width:100%;border-collapse:collapse;background:transparent;box-shadow:none}
+.sf-list th{
+    padding:15px 16px;text-align:left;border-bottom:1px solid #e9edf3;
+    color:#8a95a6;font-size:11px;text-transform:uppercase;letter-spacing:.05em
+}
+.sf-list td{
+    padding:16px 16px;border-bottom:1px solid #eef1f4;
+    font-size:13px;color:#445064;vertical-align:middle
+}
+.sf-list tr:last-child td{border-bottom:0}
+.sf-click-row{cursor:pointer;transition:.16s}
+.sf-click-row:hover td{background:rgba(99,102,241,.045)}
+.sf-primary{font-weight:850;color:#1f2937}
+.sf-secondary{margin-top:4px;color:#8a95a6;font-size:11px}
+.sf-status-badge{
+    display:inline-flex;padding:7px 11px;border-radius:999px;
+    background:#eef2ff;color:#5146d9;font-size:13px;font-weight:850
+}
+.sf-status-badge[data-status="new"]{background:#fff4e8;color:#c56b12}
+.sf-status-badge[data-status="accepted"],
+.sf-status-badge[data-status="confirmed"]{background:#edf3ff;color:#3568d4}
+.sf-status-badge[data-status="assembling"]{background:#f4efff;color:#794bd5}
+.sf-status-badge[data-status="ready"]{background:#eafaf5;color:#14845f}
+.sf-status-badge[data-status="completed"]{background:#eafaf3;color:#12805a}
+.sf-status-badge[data-status="cancelled"],
+.sf-status-badge[data-status="rejected"]{background:#fff0f2;color:#d63d52}
+.sf-empty-row{text-align:center!important;padding:35px!important;color:#8d97a8!important}
+
+/* modal */
+.sf-modal-overlay{
+    position:fixed;
+    inset:0;
+    z-index:10050;
+    background:rgba(15,23,42,.48);
+    backdrop-filter:blur(5px);
+    -webkit-backdrop-filter:blur(5px);
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none;
+    transition:.18s;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+}
+.sf-modal-overlay.open{opacity:1;visibility:visible;pointer-events:auto}
+.sf-modal{
+    position:relative;
+    width:min(1080px,calc(100vw - 40px));
+    height:min(760px,calc(100dvh - 40px));
+    max-height:calc(100dvh - 40px);
+    margin:auto;
+    transform:translateY(10px) scale(.985);
+    border-radius:24px;
+    background:#fff;
+    overflow:hidden;
+    box-shadow:0 28px 80px rgba(15,23,42,.28);
+    transition:.2s;
+    display:flex;
+    flex-direction:column;
+}
+.sf-modal-overlay.open .sf-modal{transform:translateY(0) scale(1)}
+.sf-modal-head{
+    padding:23px 26px 19px;
+    border-bottom:1px solid #edf0f4;
+    display:flex;
+    justify-content:space-between;
+    gap:18px;
+    align-items:flex-start;
+    flex:0 0 auto;
+}
+.sf-modal-head h2{margin:0;font-size:28px;letter-spacing:-.035em;color:#172033}
+.sf-modal-head p{margin:5px 0 0;color:#8792a5;font-size:12px}
+.sf-modal-close{
+    width:40px;height:40px;border:0;border-radius:11px;background:#f0f2f6;
+    color:#5e697b;font-size:22px;cursor:pointer
+}
+.sf-modal-body{
+    padding:22px 26px 26px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    flex:1 1 auto;
+    min-height:0;
+    max-height:none;
+}
+.sf-detail-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px}
+.sf-panel{
+    padding:18px;border-radius:18px;background:#f9fafc;border:1px solid #edf0f4
+}
+.sf-panel-title{
+    margin-bottom:10px;color:#7d899c;font-size:13px;font-weight:850;
+    letter-spacing:.05em;text-transform:uppercase
+}
+.sf-info-row{
+    display:flex;justify-content:space-between;gap:16px;
+    padding:11px 0;border-bottom:1px solid #edf0f4;font-size:12px
+}
+.sf-info-row:last-child{border-bottom:0}
+.sf-info-row span{color:#8a95a6}.sf-info-row b{text-align:right;color:#283449}
+.sf-comment{
+    padding:11px;border-radius:11px;background:#fff;border:1px solid #edf0f4;
+    color:#536075;font-size:12px;line-height:1.6
+}
+.sf-items{display:grid;gap:8px}
+.sf-item{
+    display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:10px;
+    padding:11px;border-radius:14px;background:#fff;border:1px solid #edf0f4
+}
+.sf-item-image{width:72px;height:72px;border-radius:10px;object-fit:cover;background:#edf0f4}
+.sf-item-name{font-size:13px;font-weight:850;color:#273348}
+.sf-item-sub{margin-top:5px;color:#8a95a6;font-size:11px}
+.sf-item-total{font-size:14px;font-weight:900;color:#1f2937;white-space:nowrap}
+.sf-totals{margin-top:10px;padding-top:8px;border-top:1px solid #e5e9ef}
+.sf-total-row{display:flex;justify-content:space-between;padding:7px 0;font-size:12px;color:#6f7b8f}
+.sf-total-row.final{font-size:20px;font-weight:900;color:#172033;padding-top:9px}
+.sf-status-select{
+    width:100%;height:48px;border:1px solid #dfe4ec;border-radius:11px;
+    background:#fff;padding:0 13px;outline:0;font-size:13px
+}
+.sf-save-status{
+    width:100%;min-height:48px;margin-top:10px;border:0;border-radius:11px;
+    background:linear-gradient(135deg,#5d57ec,#7867ff);color:#fff;
+    font-size:13px;font-weight:850;cursor:pointer
+}
+.sf-save-status:disabled{opacity:.55;cursor:wait}
+.sf-service-hero{
+    display:grid;grid-template-columns:120px 1fr;gap:13px;align-items:center;
+    padding:15px;border-radius:17px;background:#fff;border:1px solid #edf0f4
+}
+.sf-service-image{
+    width:120px;height:120px;border-radius:13px;object-fit:cover;background:#edf0f4
+}
+.sf-service-title{font-size:21px;font-weight:900;color:#202b3d;line-height:1.15}
+.sf-service-price{margin-top:7px;font-size:24px;font-weight:950;color:#5146d9}
+.sf-service-meta{margin-top:6px;color:#8994a6;font-size:11px}
+.sf-toast{
+    position:fixed;right:20px;bottom:22px;z-index:10050;
+    padding:13px 16px;border-radius:12px;background:#172033;color:#fff;
+    font-size:10px;font-weight:800;opacity:0;transform:translateY(14px);
+    pointer-events:none;transition:.18s;box-shadow:0 14px 35px rgba(15,23,42,.18)
+}
+.sf-toast.show{opacity:1;transform:translateY(0)}
+.sf-toast.error{background:#b4233b}
+@media(max-width:760px){
+    .sf-list{overflow:auto}
+    .sf-list table{min-width:760px}
+    .sf-detail-grid{grid-template-columns:1fr}
+    .sf-modal{
+        width:100%;
+        height:calc(100dvh - 24px);
+        max-height:calc(100dvh - 24px);
+        border-radius:20px;
+    }
+    .sf-modal-body{padding:14px}
+    .sf-service-hero{grid-template-columns:72px 1fr}
+    .sf-service-image{width:72px;height:72px}
+}
+</style>
+
+<div class="sf-work">
+    <div class="sf-headbar">
+        <div>
+            <h1>Онлайн-заказы</h1>
+            <p>Нажмите на заказ, чтобы посмотреть состав и обработать его.</p>
+        </div>
+        <div class="sf-head-actions">
+            <a class="sf-lite-btn" href="/storefront/">Настройки витрины</a>
+            <a class="sf-lite-btn" href="/storefront/bookings">Онлайн-записи</a>
+        </div>
+    </div>
+
+    <div class="sf-toolbar">
+        <input id="sfOrderSearch" class="sf-searchbox"
+               placeholder="Поиск по № заказа, клиенту или телефону">
+
+        <div class="sf-pills">
+            <button class="sf-filter-pill active" type="button" data-order-filter="all">Все</button>
+            <button class="sf-filter-pill" type="button" data-order-filter="new">Новые</button>
+            <button class="sf-filter-pill" type="button" data-order-filter="accepted">Приняты</button>
+            <button class="sf-filter-pill" type="button" data-order-filter="assembling">Собираются</button>
+            <button class="sf-filter-pill" type="button" data-order-filter="ready">Готовы</button>
+            <button class="sf-filter-pill" type="button" data-order-filter="completed">Выполнены</button>
+        </div>
+    </div>
+
+    <div class="sf-list">
+        <table>
+            <thead>
+                <tr>
+                    <th>Заказ</th>
+                    <th>Дата</th>
+                    <th>Клиент</th>
+                    <th>Позиций</th>
+                    <th>Сумма</th>
+                    <th>Получение</th>
+                    <th>Оплата</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody id="sfOrdersBody">
+                {% for o in orders %}
+                <tr class="sf-click-row"
+                    data-order-row="{{ o.id }}"
+                    data-status="{{ o.order_status or 'new' }}"
+                    data-search="#{{ o.id }} {{ (o.customer_name or '')|lower }} {{ (o.phone or '')|lower }}">
+                    <td>
+                        <div class="sf-primary">#{{ o.id }}</div>
+                    </td>
+                    <td>
+                        <div class="sf-primary">{{ o.created_at.strftime('%d.%m.%Y') }}</div>
+                        <div class="sf-secondary">{{ o.created_at.strftime('%H:%M') }}</div>
+                    </td>
+                    <td>
+                        <div class="sf-primary">{{ o.customer_name }}</div>
+                        <div class="sf-secondary">{{ o.phone }}</div>
+                    </td>
+                    <td>{{ o.positions_count or 0 }}</td>
+                    <td><div class="sf-primary">{{ "{:,.0f}".format(o.total_amount or 0).replace(",", " ") }} ₸</div></td>
+                    <td>{{ "Доставка" if o.delivery_method == "delivery" else "Самовывоз" }}</td>
+                    <td>{{ "Оплачен" if o.payment_status == "paid" else "Не оплачен" }}</td>
+                    <td>
+                        <span class="sf-status-badge"
+                              data-row-status-badge="{{ o.id }}"
+                              data-status="{{ o.order_status or 'new' }}">
+                            {% set labels = {
+                                'new':'Новый',
+                                'accepted':'Принят',
+                                'assembling':'Собирается',
+                                'ready':'Готов',
+                                'completed':'Выполнен',
+                                'cancelled':'Отменён'
+                            } %}
+                            {{ labels.get(o.order_status, o.order_status or 'Новый') }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td class="sf-empty-row" colspan="8">Онлайн-заказов пока нет.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="sfOrderModal" class="sf-modal-overlay">
+    <section class="sf-modal">
+        <div class="sf-modal-head">
+            <div>
+                <h2 id="sfOrderTitle">Заказ</h2>
+                <p id="sfOrderSubtitle"></p>
+            </div>
+            <button class="sf-modal-close" type="button" data-close-order>×</button>
+        </div>
+
+        <div class="sf-modal-body">
+            <div class="sf-detail-grid">
+                <div>
+                    <div class="sf-panel">
+                        <div class="sf-panel-title">Состав заказа</div>
+                        <div id="sfOrderItems" class="sf-items"></div>
+                        <div class="sf-totals">
+                            <div class="sf-total-row">
+                                <span>Товары</span>
+                                <b id="sfOrderSubtotal">0 ₸</b>
+                            </div>
+                            <div class="sf-total-row">
+                                <span>Доставка</span>
+                                <b id="sfOrderDelivery">0 ₸</b>
+                            </div>
+                            <div class="sf-total-row final">
+                                <span>Итого</span>
+                                <b id="sfOrderTotal">0 ₸</b>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="sf-panel">
+                        <div class="sf-panel-title">Клиент</div>
+                        <div class="sf-info-row"><span>Имя</span><b id="sfOrderCustomer"></b></div>
+                        <div class="sf-info-row"><span>Телефон</span><b id="sfOrderPhone"></b></div>
+                        <div class="sf-info-row"><span>Получение</span><b id="sfOrderDeliveryMethod"></b></div>
+                        <div class="sf-info-row" id="sfOrderAddressRow"><span>Адрес</span><b id="sfOrderAddress"></b></div>
+                        <div class="sf-info-row"><span>Оплата</span><b id="sfOrderPayment"></b></div>
+                    </div>
+
+                    <div class="sf-panel" style="margin-top:10px">
+                        <div class="sf-panel-title">Комментарий</div>
+                        <div id="sfOrderComment" class="sf-comment">—</div>
+                    </div>
+
+                    <div class="sf-panel" style="margin-top:10px">
+                        <div class="sf-panel-title">Обработка заказа</div>
+                        <select id="sfOrderStatus" class="sf-status-select">
+                            <option value="new">Новый</option>
+                            <option value="accepted">Принят</option>
+                            <option value="assembling">Собирается</option>
+                            <option value="ready">Готов</option>
+                            <option value="completed">Выполнен</option>
+                            <option value="cancelled">Отменён</option>
+                        </select>
+                        <button id="sfOrderSaveStatus" class="sf-save-status" type="button">
+                            Сохранить статус
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div id="sfWorkToast" class="sf-toast"></div>
+
+<script>
+/*
+ * ВАЖНО:
+ * base.html может иметь transform/filter/overflow на контейнерах контента.
+ * В таком случае position:fixed внутри них перестает быть относительно viewport.
+ * Переносим overlay прямо в <body>, тогда он гарантированно накрывает ВСЮ Nika:
+ * sidebar + topbar + рабочую область.
+ */
+const sfOrderModalEl = document.getElementById('sfOrderModal');
+if (sfOrderModalEl && sfOrderModalEl.parentElement !== document.body) {
+    document.body.appendChild(sfOrderModalEl);
+}
+
+const sfWorkToastEl = document.getElementById('sfWorkToast');
+if (sfWorkToastEl && sfWorkToastEl.parentElement !== document.body) {
+    document.body.appendChild(sfWorkToastEl);
+}
+
+const sfOrderState = { id:null, filter:'all' };
+
+function sfMoney(v){
+    return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(Number(v||0))+' ₸';
+}
+function sfQty(v){
+    const n=Number(v||0);
+    return Number.isInteger(n) ? String(n) : String(n).replace('.',',');
+}
+function sfEsc(v){
+    return String(v??'')
+        .replaceAll('&','&amp;').replaceAll('<','&lt;')
+        .replaceAll('>','&gt;').replaceAll('"','&quot;')
+        .replaceAll("'",'&#039;');
+}
+function sfToast(message,error=false){
+    const el=document.getElementById('sfWorkToast');
+    el.textContent=message;
+    el.classList.toggle('error',error);
+    el.classList.add('show');
+    clearTimeout(window.__sfWorkToast);
+    window.__sfWorkToast=setTimeout(()=>el.classList.remove('show'),1800);
+}
+async function sfJson(url,options={}){
+    const res=await fetch(url,options);
+    const data=await res.json();
+    if(!res.ok||!data.ok) throw new Error(data.error||'Ошибка запроса');
+    return data;
+}
+function sfApplyOrders(){
+    const q=(document.getElementById('sfOrderSearch').value||'')
+        .trim().toLocaleLowerCase('ru-RU');
+
+    document.querySelectorAll('[data-order-row]').forEach(row=>{
+        const status=row.dataset.status||'new';
+        const hay=(row.dataset.search||'').toLocaleLowerCase('ru-RU');
+        const show=
+            (sfOrderState.filter==='all'||sfOrderState.filter===status)
+            && (!q||hay.includes(q));
+        row.style.display=show?'':'none';
+    });
+}
+async function sfOpenOrder(id){
+    try{
+        const data=await sfJson(`/storefront/orders/${id}/data`);
+        const o=data.order;
+        sfOrderState.id=id;
+
+        document.getElementById('sfOrderTitle').textContent=`Заказ #${o.id}`;
+        document.getElementById('sfOrderSubtitle').textContent=o.created_at;
+        document.getElementById('sfOrderCustomer').textContent=o.customer_name||'—';
+        document.getElementById('sfOrderPhone').textContent=o.phone||'—';
+        document.getElementById('sfOrderDeliveryMethod').textContent=
+            o.delivery_method==='delivery'?'Доставка':'Самовывоз';
+        document.getElementById('sfOrderPayment').textContent=
+            o.payment_status==='paid'?'Оплачен':'Не оплачен';
+        document.getElementById('sfOrderComment').textContent=o.comment||'Комментарий не указан';
+        document.getElementById('sfOrderStatus').value=o.order_status||'new';
+
+        const addressRow=document.getElementById('sfOrderAddressRow');
+        addressRow.style.display=o.delivery_method==='delivery'?'':'none';
+        document.getElementById('sfOrderAddress').textContent=o.address||'—';
+
+        document.getElementById('sfOrderSubtotal').textContent=sfMoney(o.subtotal);
+        document.getElementById('sfOrderDelivery').textContent=
+            Number(o.delivery_price)>0?sfMoney(o.delivery_price):'Бесплатно';
+        document.getElementById('sfOrderTotal').textContent=sfMoney(o.total_amount);
+
+        document.getElementById('sfOrderItems').innerHTML=data.items.map(item=>`
+            <div class="sf-item">
+                ${item.image
+                    ? `<img class="sf-item-image" src="${sfEsc(item.image)}" alt="">`
+                    : `<div class="sf-item-image"></div>`}
+                <div>
+                    <div class="sf-item-name">${sfEsc(item.name)}</div>
+                    <div class="sf-item-sub">
+                        ${sfQty(item.quantity)} ${sfEsc(item.unit)} × ${sfMoney(item.price)}
+                    </div>
+                </div>
+                <div class="sf-item-total">${sfMoney(item.total)}</div>
+            </div>
+        `).join('') || '<div class="sf-comment">Состав заказа не найден.</div>';
+
+        sfOrderModalEl.classList.add('open');
+        document.body.style.overflow='hidden';
+    }catch(e){
+        sfToast(e.message,true);
+    }
+}
+function sfCloseOrder(){
+    sfOrderModalEl.classList.remove('open');
+    document.body.style.overflow='';
+}
+document.addEventListener('click',e=>{
+    const row=e.target.closest('[data-order-row]');
+    if(row){ sfOpenOrder(Number(row.dataset.orderRow)); return; }
+
+    if(e.target.closest('[data-close-order]')){ sfCloseOrder(); return; }
+
+    const pill=e.target.closest('[data-order-filter]');
+    if(pill){
+        sfOrderState.filter=pill.dataset.orderFilter;
+        document.querySelectorAll('[data-order-filter]').forEach(x=>x.classList.toggle('active',x===pill));
+        sfApplyOrders();
+    }
+});
+sfOrderModalEl.addEventListener('click',e=>{
+    if(e.target===e.currentTarget) sfCloseOrder();
+});
+document.getElementById('sfOrderSearch').addEventListener('input',sfApplyOrders);
+document.getElementById('sfOrderSaveStatus').addEventListener('click',async()=>{
+    if(!sfOrderState.id)return;
+
+    const btn=document.getElementById('sfOrderSaveStatus');
+    const fd=new FormData();
+    fd.set('status',document.getElementById('sfOrderStatus').value);
+
+    btn.disabled=true;
+    const old=btn.textContent;
+    btn.textContent='Сохраняем…';
+
+    try{
+        const data=await sfJson(
+            `/storefront/orders/${sfOrderState.id}/status-ajax`,
+            {method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}}
+        );
+
+        const row=document.querySelector(`[data-order-row="${sfOrderState.id}"]`);
+        if(row) row.dataset.status=data.status;
+
+        const badge=document.querySelector(`[data-row-status-badge="${sfOrderState.id}"]`);
+        if(badge){
+            badge.dataset.status=data.status;
+            badge.textContent=data.status_label;
+        }
+
+        sfToast('Статус заказа обновлён');
+        sfApplyOrders();
+    }catch(e){
+        sfToast(e.message,true);
+    }finally{
+        btn.disabled=false;
+        btn.textContent=old;
+    }
+});
+document.addEventListener('keydown',e=>{
+    if(e.key==='Escape')sfCloseOrder();
+});
+</script>
+{% endblock %}

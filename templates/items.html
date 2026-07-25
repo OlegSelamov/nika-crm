@@ -200,6 +200,31 @@ body.catalog-modal-open { overflow:hidden; }
 .catalog-modal.is-service .catalog-service-cost-note{display:block;}
 @media(max-width:600px){.catalog-type-switch{grid-template-columns:1fr;}}
 
+
+/* ===== NIKA BUSINESS ICON SYSTEM ===== */
+.catalog-btn-icon{width:22px;height:22px;display:block;object-fit:contain;}
+.catalog-search-icon{width:28px;height:28px;flex:0 0 28px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:var(--cat-purple-soft);}
+.catalog-search-icon img{width:18px;height:18px;object-fit:contain;}
+.catalog-scan-icon{width:24px;height:24px;display:block;object-fit:contain;}
+.catalog-action-icon{width:21px;height:21px;display:block;object-fit:contain;}
+.catalog-icon-btn,.catalog-danger-btn{width:42px;min-height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;}
+.catalog-empty span img{width:32px;height:32px;object-fit:contain;}
+.catalog-modal__close,.category-manager__close{display:flex;align-items:center;justify-content:center;font-size:0;}
+.catalog-modal__close img,.category-manager__close img{width:19px;height:19px;object-fit:contain;}
+.catalog-type-card__icon{flex:0 0 52px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;border-radius:15px;background:#fff;font-size:0;}
+.catalog-type-card__icon img{width:30px;height:30px;object-fit:contain;}
+.catalog-type-option input:checked + .catalog-type-card .catalog-type-card__icon{background:linear-gradient(135deg,var(--cat-purple),#9a59e8);}
+.catalog-category-manage-btn__icon{width:32px;height:32px;flex:0 0 32px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:linear-gradient(135deg,var(--cat-purple),#9a59e8);}
+.catalog-category-manage-btn__icon img{width:19px;height:19px;object-fit:contain;}
+.category-manager__type-tab{display:flex;align-items:center;justify-content:center;gap:8px;}
+.category-tab-icon{width:23px;height:23px;object-fit:contain;}
+.category-manager__actions button{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;}
+@media(max-width:760px){
+    .catalog-mobile-card__actions button,.catalog-mobile-card__actions a{min-height:42px;}
+    .catalog-type-card__icon{width:48px;height:48px;flex-basis:48px;}
+    .catalog-type-card__icon img{width:28px;height:28px;}
+}
+
 </style>
 
 {% set categories = categories|default([]) %}
@@ -221,7 +246,7 @@ body.catalog-modal-open { overflow:hidden; }
             <h1 class="catalog-title">Каталог</h1>
             <div class="catalog-note">Товары и услуги, цены, категории, штрихкоды и единицы измерения</div>
         </div>
-        <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()">＋ Добавить позицию</button>
+        <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()"><img src="/static/icons/add.png" class="catalog-btn-icon" alt="">Добавить позицию</button>
     </div>
 
     <section class="catalog-section">
@@ -233,7 +258,7 @@ body.catalog-modal-open { overflow:hidden; }
 
         <div class="catalog-toolbar">
             <label class="catalog-search">
-                <span>⌕</span>
+                <span class="catalog-search-icon"><img src="/static/icons/search.png" alt=""></span>
                 <input type="search" id="catalogSearch" placeholder="Название, штрихкод, GTIN или NTIN" autocomplete="off">
             </label>
 
@@ -246,7 +271,7 @@ body.catalog-modal-open { overflow:hidden; }
                 {% endfor %}
             </select>
 
-            <a href="/scanner" class="catalog-scan-link" aria-label="Сканировать штрихкод"><span aria-hidden="true">▥</span><span>Сканировать штрихкод камерой</span></a>
+            <a href="/scanner" class="catalog-scan-link" aria-label="Сканировать штрихкод"><img src="/static/icons/scan.png" class="catalog-scan-icon" alt=""><span>Сканировать штрихкод камерой</span></a>
         </div>
 
         <div class="catalog-table-wrap">
@@ -306,8 +331,8 @@ body.catalog-modal-open { overflow:hidden; }
                                         "is_marked": i.is_marked|default(false),
                                         "image": i.image or "",
                                         "item_type": item_type
-                                    }|tojson }})'>✎</button>
-                                <a class="catalog-danger-btn" href="/items/{{ i.id }}/delete" title="Удалить" onclick="return confirm('Удалить {{ 'услугу' if i.item_type|default('product', true) == 'service' else 'товар' }} «{{ i.name|e }}»?')">×</a>
+                                    }|tojson }})'><img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>
+                                <a class="catalog-danger-btn" href="/items/{{ i.id }}/delete" title="Удалить" onclick="return confirm('Удалить {{ 'услугу' if i.item_type|default('product', true) == 'service' else 'товар' }} «{{ i.name|e }}»?')"><img src="/static/icons/delete-item.png" class="catalog-action-icon" alt=""></a>
                             </div>
                         </td>
                     </tr>
@@ -363,7 +388,7 @@ body.catalog-modal-open { overflow:hidden; }
         </div>
 
         <div id="catalogNoResults" class="catalog-empty">
-            <span>⌕</span>
+            <span><img src="/static/icons/search-empty.png" alt=""></span>
             <strong>Товары не найдены</strong>
             <p>Измените поисковый запрос или выбранную категорию.</p>
         </div>
@@ -378,7 +403,7 @@ body.catalog-modal-open { overflow:hidden; }
                 <h3 id="itemModalTitle">Новый товар</h3>
                 <p id="itemModalSubtitle">Основные данные товара и идентификаторы маркировки</p>
             </div>
-            <button class="catalog-modal__close" type="button" onclick="closeItemModal()">×</button>
+            <button class="catalog-modal__close" type="button" onclick="closeItemModal()" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button>
         </div>
 
         <form class="catalog-modal__form" id="itemForm" method="post" action="/items/add" enctype="multipart/form-data">
@@ -387,11 +412,11 @@ body.catalog-modal-open { overflow:hidden; }
                 <div class="catalog-type-switch">
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="product" id="itemTypeProduct" checked onchange="applyItemType('product')">
-                        <span class="catalog-type-card"><span class="catalog-type-card__icon">📦</span><span class="catalog-type-card__text"><strong>Товар</strong><small>Учитывается на складе</small></span></span>
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/product.png" alt=""></span><span class="catalog-type-card__text"><strong>Товар</strong><small>Учитывается на складе</small></span></span>
                     </label>
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="service" id="itemTypeService" onchange="applyItemType('service')">
-                        <span class="catalog-type-card"><span class="catalog-type-card__icon">🛠</span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/service.png" alt=""></span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
                     </label>
                 </div>
 
@@ -427,7 +452,7 @@ body.catalog-modal-open { overflow:hidden; }
                                 </option>
                             {% endfor %}
                         </select>
-                        <button type="button" class="catalog-category-manage-btn" onclick="openCategoryManager()" title="Добавить или изменить категорию"><span class="catalog-category-manage-btn__icon">＋</span><span>Добавить категорию</span></button>
+                        <button type="button" class="catalog-category-manage-btn" onclick="openCategoryManager()" title="Добавить или изменить категорию"><span class="catalog-category-manage-btn__icon"><img src="/static/icons/add-category.png" alt=""></span><span>Добавить категорию</span></button>
                     </div>
                     <input type="hidden" name="category" id="itemCategory">
                 </label>
@@ -496,12 +521,12 @@ body.catalog-modal-open { overflow:hidden; }
     <div class="category-manager__dialog" role="dialog" aria-modal="true">
         <div class="category-manager__head">
             <h4 id="categoryManagerTitle">Категории</h4>
-            <button type="button" class="category-manager__close" onclick="closeCategoryManager()">×</button>
+            <button type="button" class="category-manager__close" onclick="closeCategoryManager()" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button>
         </div>
         <div class="category-manager__body">
             <div class="category-manager__type-tabs">
-                <button type="button" class="category-manager__type-tab is-active" data-category-type="product" onclick="setCategoryManagerType('product', this)">📦 Товары</button>
-                <button type="button" class="category-manager__type-tab" data-category-type="service" onclick="setCategoryManagerType('service', this)">🛠 Услуги</button>
+                <button type="button" class="category-manager__type-tab is-active" data-category-type="product" onclick="setCategoryManagerType('product', this)"><img src="/static/icons/product.png" class="category-tab-icon" alt="">Товары</button>
+                <button type="button" class="category-manager__type-tab" data-category-type="service" onclick="setCategoryManagerType('service', this)"><img src="/static/icons/service.png" class="category-tab-icon" alt="">Услуги</button>
             </div>
 
             <div class="category-manager__form">
@@ -536,8 +561,8 @@ body.catalog-modal-open { overflow:hidden; }
                             </small>
                         </div>
                         <div class="category-manager__actions">
-                            <button type="button" onclick="startEditCategory(this.closest('.category-manager__item'))" title="Редактировать">✎</button>
-                            <button type="button" class="delete" onclick="removeCategory(this.closest('.category-manager__item'))" title="Удалить">🗑</button>
+                            <button type="button" onclick="startEditCategory(this.closest('.category-manager__item'))" title="Редактировать"><img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>
+                            <button type="button" class="delete" onclick="removeCategory(this.closest('.category-manager__item'))" title="Удалить"><img src="/static/icons/delete-item.png" class="catalog-action-icon" alt=""></button>
                         </div>
                     </div>
                     {% endif %}
@@ -1187,8 +1212,8 @@ function upsertCategoryRow(category){
                 : 'Наценка: '+escapeHtml(String(category.markup_percent || 0))+'%')+'</small>'+
         '</div>'+
         '<div class="category-manager__actions">'+
-            `<button type="button" onclick="startEditCategory(this.closest('.category-manager__item'))" title="Редактировать">✎</button>`+
-            `<button type="button" class="delete" onclick="removeCategory(this.closest('.category-manager__item'))" title="Удалить">🗑</button>`+
+            `<button type="button" onclick="startEditCategory(this.closest('.category-manager__item'))" title="Редактировать"><img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>`+
+            `<button type="button" class="delete" onclick="removeCategory(this.closest('.category-manager__item'))" title="Удалить"><img src="/static/icons/delete-item.png" class="catalog-action-icon" alt=""></button>`+
         '</div>';
 }
 

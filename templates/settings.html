@@ -1,53 +1,8 @@
-{% extends "base.html" %}
-
-{% block content %}
-
-<h2>⚙ Настройки системы</h2>
-
-<div class="card">
-    <h3>Компания</h3>
-    <p>Реквизиты организации</p>
-
-    <a href="/company/profile" class="btn">
-        Открыть
-    </a>
-</div>
-
-<div class="card">
-    <h3>Интеграции</h3>
-    <p>ККМ, POS-терминалы, Webkassa</p>
-
-    <a href="/settings/integrations" class="btn">
-        Открыть
-    </a>
-</div>
-
-<div class="card">
-    <h3>Пользователи</h3>
-    <p>Управление сотрудниками</p>
-
-    <a href="/users" class="btn">
-        Открыть
-    </a>
-</div>
-
-<div class="card">
-    <h3>Оборудование</h3>
-    <p>ККМ, принтеры, сканеры, POS терминалы</p>
-
-    <a href="/settings/equipment" class="btn">
-        Открыть
-    </a>
-</div>
-
-<div class="card">
-    <h3>Документы</h3>
-    <p>Счета, накладные, акты</p>
-</div>
-
-<div class="card">
-    <h3>Резервные копии</h3>
-    <p>Безопасность данных</p>
-</div>
-
-{% endblock %}
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Онлайн-витрина</title>
+<style>*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;background:#0e1320;color:#f5f7fb;margin:0;padding:25px}.wrap{max-width:960px;margin:auto}.hero{margin-bottom:20px}.hero h1{margin:0 0 6px}.muted{color:#8d98aa}.panel{background:#161d2b;border:1px solid #263246;border-radius:20px;padding:22px;margin-bottom:16px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{font-size:12px;color:#a8b0bf}input,textarea{width:100%;margin-top:6px;padding:12px;border-radius:10px;border:1px solid #344157;background:#101624;color:#fff}.checks{display:flex;flex-wrap:wrap;gap:11px;margin:16px 0}.checks label{background:#101624;padding:10px 12px;border-radius:11px}.checks input{width:auto;margin:0 6px 0 0}button{border:0;border-radius:11px;padding:12px 16px;font-weight:800;cursor:pointer}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.stat{padding:15px;border-radius:14px;background:#101624}.stat strong{display:block;font-size:24px;margin-top:5px}.link{color:#9db8ff}@media(max-width:650px){.grid,.stats{grid-template-columns:1fr}}</style></head>
+<body><div class="wrap"><div class="hero"><h1>Онлайн-витрина</h1><div class="muted">Все товары и услуги из каталога появляются на сайте автоматически.</div></div>
+<div class="stats"><div class="stat"><span class="muted">Всего позиций</span><strong>{{ catalog_stats.total or 0 }}</strong></div><div class="stat"><span class="muted">Товаров</span><strong>{{ catalog_stats.products or 0 }}</strong></div><div class="stat"><span class="muted">Услуг</span><strong>{{ catalog_stats.services or 0 }}</strong></div></div>
+<form class="panel" method="post" style="margin-top:16px"><div class="grid"><label>Адрес витрины<input name="slug" value="{{ settings.slug or '' }}" placeholder="my-shop" required></label><label>Название<input name="title" value="{{ settings.title or settings.company_name or '' }}"></label><label style="grid-column:1/-1">Описание<textarea name="description">{{ settings.description or '' }}</textarea></label><label>WhatsApp<input name="whatsapp" value="{{ settings.whatsapp or '' }}"></label><label>Instagram<input name="instagram" value="{{ settings.instagram or '' }}"></label></div>
+<div class="checks"><label><input type="checkbox" name="enabled" value="1" {% if settings.enabled %}checked{% endif %}>Витрина включена</label><label><input type="checkbox" name="show_products" value="1" {% if settings.show_products is not false %}checked{% endif %}>Показывать товары</label><label><input type="checkbox" name="show_services" value="1" {% if settings.show_services is not false %}checked{% endif %}>Показывать услуги</label><label><input type="checkbox" name="allow_orders" value="1" {% if settings.allow_orders is not false %}checked{% endif %}>Онлайн-заказы</label><label><input type="checkbox" name="allow_booking" value="1" {% if settings.allow_booking is not false %}checked{% endif %}>Онлайн-запись</label></div><button>Сохранить</button>
+{% if settings.slug %}<p class="muted">Публичная ссылка: <a class="link" target="_blank" href="/s/{{ settings.slug }}">/s/{{ settings.slug }}</a></p>{% endif %}</form>
+</div></body></html>

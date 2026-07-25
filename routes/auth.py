@@ -1192,119 +1192,147 @@ def delete_user(user_id):
 def register():
     if request.method == "POST":
         conn = get_db()
-        
         cur = conn.cursor()
 
-        # 🔐 пользователь
-        username = request.form["username"]
-        password = request.form["password"]
+        try:
+            # Аккаунт владельца
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "").strip()
 
-        # 🏢 компания (твоя форма)
-        name = request.form["name"]
-        director = request.form.get("director")
-        bin = request.form.get("bin")
-        address = request.form.get("address")
-        phone = request.form.get("phone")
-        iik = request.form.get("iik")
-        bik = request.form.get("bik")
-        bank = request.form.get("bank")
-        kbe = request.form.get("kbe")
-        knp = request.form.get("knp")
+            # Компания
+            name = request.form.get("name", "").strip()
+            director = request.form.get("director", "").strip()
+            bin = request.form.get("bin", "").strip()
+            address = request.form.get("address", "").strip()
+            phone = request.form.get("phone", "").strip()
+            iik = request.form.get("iik", "").strip()
+            bik = request.form.get("bik", "").strip()
+            bank = request.form.get("bank", "").strip()
+            kbe = request.form.get("kbe", "").strip()
+            knp = request.form.get("knp", "").strip()
 
-        # 1. создаём компанию
-        cur.execute("""
-            INSERT INTO companies (
-                name, director, bin, address, phone,
-                iik, bik, bank, kbe, knp, is_active
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            name,
-            director,
-            bin,
-            address,
-            phone,
-            iik,
-            bik,
-            bank,
-            kbe,
-            knp,
-            True
-        ))
+            if not username or not password or not name:
+                return render_template(
+                    "register.html",
+                    error="Укажите название компании, логин и пароль.",
+                    form=request.form
+                )
 
-        company_id = cur.fetchone()["id"]
-        
-        # cur.execute("""
-        #     INSERT INTO integrations (
-        #         company_id,
-        #         created_at
-        #     )
-        #     VALUES (%s, %s)
-        # """, (
-        #     company_id,
-        #     now_kz()
-        # ))
+            if len(password) < 6:
+                return render_template(
+                    "register.html",
+                    error="Пароль должен содержать минимум 6 символов.",
+                    form=request.form
+                )
 
-        # 2. создаём владельца
-        cur.execute("""
-            INSERT INTO users (
+            cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+            if cur.fetchone():
+                return render_template(
+                    "register.html",
+                    error="Такой логин уже используется.",
+                    form=request.form
+                )
+
+            # 1. Компания
+            cur.execute("""
+                INSERT INTO companies (
+                    name, director, bin, address, phone,
+                    iik, bik, bank, kbe, knp, is_active
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                RETURNING id
+            """, (
+                name, director or None, bin or None, address or None, phone or None,
+                iik or None, bik or None, bank or None, kbe or None, knp or None
+            ))
+            company_id = cur.fetchone()["id"]
+
+            # 2. Владелец
+            cur.execute("""
+                INSERT INTO users (
+                    username, password, role, position, company_id,
+                    full_name, phone, is_super_admin, created_at
+                )
+                VALUES (%s, %s, 'owner', 'Владелец', %s, %s, %s, FALSE, %s)
+                RETURNING id
+            """, (
                 username,
                 password,
-                role,
-                position,
                 company_id,
-                full_name,
-                phone,
-                is_super_admin,
-                created_at
+                director or username,
+                phone or None,
+                now_kz()
+            ))
+            owner_id = cur.fetchone()["id"]
+
+            cur.execute(
+                "UPDATE companies SET owner_id = %s WHERE id = %s",
+                (owner_id, company_id)
             )
-            VALUES (%s, %s, 'owner', 'Владелец', %s, %s, %s, FALSE, %s)
-            RETURNING id
-        """, (
-            username,
-            password,
-            company_id,
-            director or username,
-            phone,
-            now_kz()
-        ))
 
-        owner_id = cur.fetchone()["id"]
+            # 3. Trial
+            cur.execute("""
+                INSERT INTO company_subscriptions (
+                    company_id, status, billing_period, base_price,
+                    trial_ends_at, period_start, next_payment_at
+                )
+                VALUES (
+                    %s, 'trial', 'month', 2990,
+                    NOW() + INTERVAL '14 days',
+                    NOW(),
+                    NOW() + INTERVAL '14 days'
+                )
+                ON CONFLICT (company_id) DO NOTHING
+            """, (company_id,))
 
-        cur.execute(
-            "UPDATE companies SET owner_id = %s WHERE id = %s",
-            (owner_id, company_id)
-        )
+            # 4. Базовые модули
+            cur.execute("""
+                INSERT INTO company_modules (
+                    company_id, module_id, enabled, status, price, billing_period
+                )
+                SELECT %s, id, TRUE, 'trial', monthly_price, 'month'
+                FROM modules
+                WHERE is_core = TRUE
+                   OR code IN ('sales', 'catalog', 'warehouse', 'clients', 'analytics')
+                ON CONFLICT (company_id, module_id) DO NOTHING
+            """, (company_id,))
 
-        # 14-дневный пробный период
-        cur.execute("""
-            INSERT INTO company_subscriptions (
-                company_id, status, billing_period, base_price,
-                trial_ends_at, period_start, next_payment_at
-            )
-            VALUES (
-                %s, 'trial', 'month', 2990,
-                NOW() + INTERVAL '14 days', NOW(), NOW() + INTERVAL '14 days'
-            )
-            ON CONFLICT (company_id) DO NOTHING
-        """, (company_id,))
+            conn.commit()
 
-        # Базовые и рекомендуемые модули для первого запуска
-        cur.execute("""
-            INSERT INTO company_modules (
-                company_id, module_id, enabled, status, price, billing_period
-            )
-            SELECT %s, id, TRUE, 'trial', monthly_price, 'month'
-            FROM modules
-            WHERE is_core = TRUE
-               OR code IN ('sales', 'catalog', 'warehouse', 'clients', 'analytics')
-            ON CONFLICT (company_id, module_id) DO NOTHING
-        """, (company_id,))
+            # 5. Сразу авторизуем НОВОГО владельца.
+            user = {
+                "id": owner_id,
+                "username": username,
+                "role": "owner",
+                "company_id": company_id,
+                "full_name": director or username,
+                "phone": phone or None,
+                "percent_rate": 0,
+                "is_super_admin": False,
+            }
 
-        conn.commit()
-        pool.putconn(conn)
+            session.clear()
+            session["user_id"] = owner_id
+            session["username"] = username
+            session["role"] = "owner"
+            session["company_id"] = company_id
+            session["full_name"] = director or username
+            session["phone"] = phone or None
+            session["percent_rate"] = 0
+            session["is_super_admin"] = False
+            session["is_creator"] = False
+            session["employee_modules"] = load_user_module_codes(user)
+            session["presence_heartbeat_at"] = now_kz().isoformat()
 
-        return redirect("/login")
+            # После настоящей регистрации продолжаем настройку этой же компании.
+            return redirect("/onboarding")
+
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+            pool.putconn(conn)
 
     return render_template("register.html")
+
