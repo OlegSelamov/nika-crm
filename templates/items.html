@@ -321,6 +321,7 @@ body.catalog-modal-open { overflow:hidden; }
                                     onclick='openEditItemModal({{ {
                                         "id": i.id,
                                         "name": i.name or "",
+                                        "description": i.description or "",
                                         "category": category_name,
                                         "category_id": i.category_id|default(""),
                                         "barcode": i.barcode or "",
@@ -371,6 +372,7 @@ body.catalog-modal-open { overflow:hidden; }
                     <button type="button" onclick='openEditItemModal({{ {
                         "id": i.id,
                         "name": i.name or "",
+                        "description": i.description or "",
                         "category": category_name,
                         "category_id": i.category_id|default(""),
                         "barcode": i.barcode or "",
@@ -447,6 +449,16 @@ body.catalog-modal-open { overflow:hidden; }
                 <label class="catalog-field catalog-field--wide">
                     <span id="itemNameLabel">Название товара *</span>
                     <input type="text" name="name" id="itemName" required placeholder="Например: Молоко 3,2%">
+                </label>
+
+                <label class="catalog-field catalog-field--wide">
+                    <span id="itemDescriptionLabel">Описание</span>
+                    <textarea name="description"
+                              id="itemDescription"
+                              rows="4"
+                              maxlength="3000"
+                              placeholder="Кратко опишите товар: характеристики, комплектность, назначение или важные особенности"></textarea>
+                    <small id="itemDescriptionHint">Описание будет показано клиенту в карточке товара на онлайн-витрине.</small>
                 </label>
 
                 <label class="catalog-field">
@@ -819,6 +831,20 @@ function applyItemType(type) {
     filterItemCategoryOptions(type);
     if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : "Название товара *";
     if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : "Например: Молоко 3,2%";
+    var descriptionLabel = document.getElementById("itemDescriptionLabel");
+    var descriptionInput = document.getElementById("itemDescription");
+    var descriptionHint = document.getElementById("itemDescriptionHint");
+    if (descriptionLabel) descriptionLabel.textContent = type === "service" ? "Описание услуги" : "Описание товара";
+    if (descriptionInput) {
+        descriptionInput.placeholder = type === "service"
+            ? "Расскажите, что входит в услугу, что получит клиент и какие данные потребуются"
+            : "Кратко опишите товар: характеристики, комплектность, назначение или важные особенности";
+    }
+    if (descriptionHint) {
+        descriptionHint.textContent = type === "service"
+            ? "Описание будет показано клиенту в карточке услуги на онлайн-витрине."
+            : "Описание будет показано клиенту в карточке товара на онлайн-витрине.";
+    }
     if (purchaseLabel) purchaseLabel.textContent = type === "service" ? "Закупочная стоимость, ₸" : "Закупочная цена, ₸";
     if (retailLabel) retailLabel.textContent = type === "service" ? "Цена услуги, ₸ *" : "Розничная цена, ₸ *";
     if (subtitle) subtitle.textContent = type === "service" ? "Основные данные услуги, цена и штрихкод" : "Основные данные товара и идентификаторы маркировки";
@@ -1044,6 +1070,7 @@ function openEditItemModal(item) {
     setServiceSaleMode(item.service_sale_mode || 'order');
 
     setValue('itemName', item.name);
+    setValue('itemDescription', item.description || '');
     setValue('itemBarcode', item.barcode);
     setValue('itemGtin', item.gtin);
     setValue('itemNtin', item.ntin);
