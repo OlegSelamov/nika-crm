@@ -483,6 +483,9 @@ body.sf-lock{overflow:hidden}
                     <a id="sfPmBooking" class="sf-action sf-action-main" href="#">
                         Выбрать дату и время
                     </a>
+                    <button id="sfPmRequest" class="sf-action sf-action-main" type="button" style="display:none;width:100%">
+                        Оставить заявку
+                    </button>
                 </div>
             </div>
         </div>
@@ -877,8 +880,16 @@ function sfRenderProductModal(){
     const stock = document.getElementById('sfPmStock');
     stock.classList.remove('out');
 
+    const serviceMode = item.service_sale_mode || 'order';
+
     if(item.item_type === 'service'){
-        stock.textContent = `${item.booking_duration_minutes || 60} минут`;
+        if(serviceMode === 'booking'){
+            stock.textContent = `${item.booking_duration_minutes || 60} минут`;
+        }else if(serviceMode === 'request'){
+            stock.textContent = 'Услуга по заявке';
+        }else{
+            stock.textContent = 'Можно заказать онлайн';
+        }
     }else if(item.stock === null){
         stock.textContent = 'В наличии';
     }else if(item.stock > 0){
@@ -909,11 +920,29 @@ function sfRenderProductModal(){
     const productControls = document.getElementById('sfPmProductControls');
     const serviceControls = document.getElementById('sfPmServiceControls');
 
+    const bookingButton = document.getElementById('sfPmBooking');
+    const requestButton = document.getElementById('sfPmRequest');
+
     if(item.item_type === 'service'){
-        productControls.style.display = 'none';
-        serviceControls.style.display = '';
-        document.getElementById('sfPmBooking').href =
-            `/s/${encodeURIComponent(SF_SLUG)}/booking/${item.id}`;
+        if(serviceMode === 'booking'){
+            productControls.style.display = 'none';
+            serviceControls.style.display = '';
+            bookingButton.style.display = '';
+            requestButton.style.display = 'none';
+            bookingButton.href = `/s/${encodeURIComponent(SF_SLUG)}/booking/${item.id}`;
+        }else if(serviceMode === 'request'){
+            productControls.style.display = 'none';
+            serviceControls.style.display = '';
+            bookingButton.style.display = 'none';
+            requestButton.style.display = '';
+        }else{
+            productControls.style.display = '';
+            serviceControls.style.display = 'none';
+            document.getElementById('sfPmAdd').disabled = false;
+            document.getElementById('sfPmBuy').disabled = false;
+            document.getElementById('sfPmAdd').style.opacity = '1';
+            document.getElementById('sfPmBuy').style.opacity = '1';
+        }
     }else{
         productControls.style.display = '';
         serviceControls.style.display = 'none';
@@ -933,7 +962,8 @@ function sfCloseProduct(){
 
 function sfModalStep(delta){
     const item = sfState.product;
-    if(!item || item.item_type === 'service') return;
+    if(!item) return;
+    if(item.item_type === 'service' && (item.service_sale_mode || 'order') !== 'order') return;
 
     let next = Math.max(1, sfState.modalQty + delta);
 
