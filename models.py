@@ -1249,6 +1249,120 @@ def init_db():
         ON storefront_banners(company_id, is_active, sort_order)
     """)
 
+    # ================== WHATSAPP / GREEN-API ==================
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS whatsapp_integrations (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+
+            provider TEXT NOT NULL DEFAULT 'green_api',
+
+            phone TEXT,
+            instance_id TEXT NOT NULL,
+            api_token TEXT NOT NULL,
+
+            enabled BOOLEAN DEFAULT TRUE,
+            incoming_enabled BOOLEAN DEFAULT TRUE,
+            outgoing_enabled BOOLEAN DEFAULT TRUE,
+
+            ai_enabled BOOLEAN DEFAULT FALSE,
+
+            status TEXT DEFAULT 'unknown',
+
+            webhook_token TEXT,
+
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+
+            UNIQUE(company_id),
+            UNIQUE(instance_id)
+        )
+    """)
+
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS whatsapp_chats (
+            id BIGSERIAL PRIMARY KEY,
+
+            company_id INTEGER NOT NULL,
+            integration_id INTEGER NOT NULL,
+
+            external_chat_id TEXT NOT NULL,
+
+            phone TEXT,
+            contact_name TEXT,
+
+            customer_id INTEGER,
+
+            last_message TEXT,
+            last_message_at TIMESTAMP,
+
+            unread_count INTEGER DEFAULT 0,
+
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+
+            UNIQUE(integration_id, external_chat_id)
+        )
+    """)
+
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS whatsapp_messages (
+            id BIGSERIAL PRIMARY KEY,
+
+            company_id INTEGER NOT NULL,
+            integration_id INTEGER NOT NULL,
+            chat_id BIGINT NOT NULL,
+
+            external_message_id TEXT,
+
+            direction TEXT NOT NULL,
+            message_type TEXT DEFAULT 'text',
+
+            message_text TEXT,
+
+            sender_phone TEXT,
+
+            status TEXT DEFAULT 'received',
+
+            is_ai BOOLEAN DEFAULT FALSE,
+
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_external_message
+        ON whatsapp_messages(integration_id, external_message_id)
+        WHERE external_message_id IS NOT NULL
+    """)
+
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_whatsapp_integrations_company
+        ON whatsapp_integrations(company_id)
+    """)
+
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_whatsapp_chats_company
+        ON whatsapp_chats(company_id)
+    """)
+
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_whatsapp_chats_last_message
+        ON whatsapp_chats(company_id, last_message_at DESC)
+    """)
+
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_chat
+        ON whatsapp_messages(chat_id, created_at)
+    """)
 
     # 🔥 INDEXES
 
