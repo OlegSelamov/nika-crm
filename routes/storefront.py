@@ -973,3 +973,4 @@ def booking_success(slug, booking_id):
         store=store,
         title="Вы записаны",
         message=f"Запись №{booking_id} создана.",
+    )
