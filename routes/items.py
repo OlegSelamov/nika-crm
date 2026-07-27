@@ -203,6 +203,68 @@ def edit_item(item_id):
             item_id,
             session.get("company_id")
         ))
+        
+        # Новое изображение при редактировании
+        images = request.files.getlist("images")
+        new_images = [
+            image for image in images
+            if image and image.filename
+        ]
+
+        if new_images:
+            # Получаем старые изображения
+            cur.execute("""
+                SELECT image
+                FROM item_images
+                WHERE item_id = %s
+            """, (item_id,))
+
+            old_images = cur.fetchall()
+
+            # Удаляем старые записи из БД
+            cur.execute("""
+                DELETE FROM item_images
+                WHERE item_id = %s
+            """, (item_id,))
+
+            # Удаляем старые файлы
+            for old_image in old_images:
+                old_path = old_image["image"]
+
+                if old_path:
+                    file_path = old_path.lstrip("/")
+
+                    if os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                        except OSError:
+                            pass
+
+            # Сохраняем новое изображение
+            for image in new_images:
+                filename = secure_filename(image.filename)
+
+                filename = f"{uuid.uuid4().hex}_{filename}"
+
+                save_path = os.path.join(
+                    UPLOAD_DIR,
+                    filename
+                )
+
+                image.save(save_path)
+
+                image_path = "/" + save_path.replace("\\", "/")
+
+                cur.execute("""
+                    INSERT INTO item_images (
+                        item_id,
+                        image
+                    )
+                    VALUES (%s, %s)
+                """, (
+                    item_id,
+                    image_path
+                ))
 
         conn.commit()
         pool.putconn(conn)
