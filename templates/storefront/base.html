@@ -967,7 +967,9 @@ function sfModalStep(delta){
 
     let next = Math.max(1, sfState.modalQty + delta);
 
-    if(item.stock !== null){
+    // Ограничение по остатку применяется только к физическим товарам.
+    // Для услуги в режиме order количество можно менять свободно.
+    if(item.item_type !== 'service' && item.stock !== null){
         next = Math.min(next, Math.max(1, Number(item.stock)));
     }
 
