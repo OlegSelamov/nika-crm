@@ -136,7 +136,12 @@
 .sf-service .sf-card-actions{grid-template-columns:1fr}
 .sf-service .sf-more{
     color:#fff;border:0;
-    background:linear-gradient(135deg,var(--brand-dark),var(--brand))
+    background:linear-gradient(135deg,var(--brand-dark),var(--brand));
+    text-decoration:none
+}
+.sf-service .sf-more:hover{
+    filter:brightness(.98);
+    transform:translateY(-1px)
 }
 
 .sf-search-empty{
@@ -340,9 +345,31 @@
                 </div>
 
                 <div class="sf-card-actions">
-                    <button class="sf-more" type="button" data-open-product="{{ item.id }}">
-                        Подробнее
-                    </button>
+                    {% set service_mode = item.service_sale_mode|default('order', true) %}
+
+                    {% if service_mode == 'booking' %}
+                        <a class="sf-more"
+                           href="{{ url_for('storefront.booking', slug=store.slug, item_id=item.id) }}"
+                           style="text-decoration:none;">
+                            Записаться
+                        </a>
+
+                    {% elif service_mode == 'request' %}
+                        <button class="sf-more"
+                                type="button"
+                                data-open-product="{{ item.id }}"
+                                data-service-mode="request">
+                            Оставить заявку
+                        </button>
+
+                    {% else %}
+                        <button class="sf-more"
+                                type="button"
+                                data-card-add="{{ item.id }}"
+                                data-service-mode="order">
+                            Заказать
+                        </button>
+                    {% endif %}
                 </div>
             </div>
         </article>
