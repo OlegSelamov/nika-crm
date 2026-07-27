@@ -73,9 +73,10 @@ def add_item():
                 ntin,
                 is_marked,
                 item_type,
+                service_sale_mode,
                 company_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             request.form["name"],
@@ -91,6 +92,7 @@ def add_item():
             request.form.get("ntin"),
             request.form.get("is_marked") == "1" if request.form.get("item_type", "product") == "product" else False,
             request.form.get("item_type", "product"),
+            (request.form.get("service_sale_mode") or "order") if request.form.get("item_type", "product") == "service" else None,
             company_id
         ))
 
@@ -180,7 +182,8 @@ def edit_item(item_id):
                 gtin = %s,
                 ntin = %s,
                 is_marked = %s,
-                item_type = %s
+                item_type = %s,
+                service_sale_mode = %s
             WHERE id = %s AND company_id = %s
         """, (
             request.form["name"],
@@ -196,6 +199,7 @@ def edit_item(item_id):
             request.form.get("ntin") if request.form.get("item_type", "product") == "product" else "",
             request.form.get("is_marked") == "1" if request.form.get("item_type", "product") == "product" else False,
             request.form.get("item_type", "product"),
+            (request.form.get("service_sale_mode") or "order") if request.form.get("item_type", "product") == "service" else None,
             item_id,
             session.get("company_id")
         ))

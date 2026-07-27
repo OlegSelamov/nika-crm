@@ -171,7 +171,7 @@ def home(slug):
             SELECT
                 i.id, i.name, i.description, i.retail_price, i.price,
                 i.discount_percent, i.category, i.unit, i.quantity,
-                i.item_type, i.booking_enabled, i.booking_duration_minutes,
+                i.item_type, i.service_sale_mode, i.booking_enabled, i.booking_duration_minutes,
                 (SELECT ii.image
                  FROM item_images ii
                  WHERE ii.item_id=i.id
@@ -239,7 +239,7 @@ def item_data(slug, item_id):
             SELECT
                 i.id, i.name, i.description, i.retail_price, i.price,
                 i.discount_percent, i.category, i.unit, i.quantity,
-                i.item_type, i.booking_enabled, i.booking_duration_minutes
+                i.item_type, i.service_sale_mode, i.booking_enabled, i.booking_duration_minutes
             FROM items i
             WHERE i.id=%s
               AND i.company_id=%s
@@ -276,6 +276,7 @@ def item_data(slug, item_id):
                 "unit": item.get("unit") or "шт.",
                 "stock": float(item["quantity"]) if item.get("quantity") is not None else None,
                 "item_type": item.get("item_type") or "product",
+                "service_sale_mode": item.get("service_sale_mode") or "order",
                 "booking_enabled": bool(item.get("booking_enabled", True)),
                 "booking_duration_minutes": int(item.get("booking_duration_minutes") or 60),
                 "images": images,
@@ -365,7 +366,7 @@ def cart_add(slug):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT id, item_type, quantity
+            SELECT id, item_type, service_sale_mode, quantity
             FROM items
             WHERE id=%s
               AND company_id=%s
@@ -377,11 +378,12 @@ def cart_add(slug):
             return jsonify({"ok": False, "error": "Товар не найден"}), 404
 
         if item.get("item_type") == "service":
-            return jsonify({
-                "ok": False,
-                "error": "Для услуги используется онлайн-запись",
-                "booking_url": url_for("storefront.booking", slug=slug, item_id=int(raw_id))
-            }), 409
+            mode = item.get("service_sale_mode") or "order"
+            if mode == "booking":
+                return jsonify({"ok": False, "error": "Для этой услуги используется онлайн-запись",
+                                "booking_url": url_for("storefront.booking", slug=slug, item_id=int(raw_id))}), 409
+            if mode == "request":
+                return jsonify({"ok": False, "error": "Для этой услуги нужно оставить заявку"}), 409
 
         if item.get("quantity") is not None:
             stock = Decimal(str(item["quantity"]))
@@ -849,6 +851,7 @@ def booking(slug, item_id):
             WHERE id=%s
               AND company_id=%s
               AND item_type='service'
+              AND COALESCE(service_sale_mode,'order')='booking'
               AND COALESCE(storefront_hidden,FALSE)=FALSE
               AND COALESCE(booking_enabled,TRUE)=TRUE
         """, (item_id, store["company_id"]))
@@ -970,4 +973,3 @@ def booking_success(slug, booking_id):
         store=store,
         title="Вы записаны",
         message=f"Запись №{booking_id} создана.",
-    )

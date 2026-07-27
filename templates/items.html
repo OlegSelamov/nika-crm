@@ -198,6 +198,7 @@ body.catalog-modal-open { overflow:hidden; }
 .catalog-service-cost-note{display:none;}
 .catalog-modal.is-service .catalog-product-only{display:none!important;}
 .catalog-modal.is-service .catalog-service-cost-note{display:block;}
+.catalog-service-mode{display:none;grid-column:1/-1;gap:8px}.catalog-modal.is-service .catalog-service-mode{display:grid}.catalog-service-mode>span{font-size:12px;font-weight:750;color:#555c70}.catalog-service-mode-options{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.catalog-service-mode-options label{display:grid;gap:5px;padding:12px;border:1px solid var(--cat-border);border-radius:12px;background:#fafafe;cursor:pointer}.catalog-service-mode-options label:has(input:checked){border-color:#bfb3ff;background:var(--cat-purple-soft)}.catalog-service-mode-options input{width:16px;height:16px;accent-color:var(--cat-purple)}.catalog-service-mode-options b{font-size:12px}.catalog-service-mode-options small{font-size:10px;color:var(--cat-muted);line-height:1.35}@media(max-width:600px){.catalog-service-mode-options{grid-template-columns:1fr}}
 @media(max-width:600px){.catalog-type-switch{grid-template-columns:1fr;}}
 
 
@@ -330,7 +331,8 @@ body.catalog-modal-open { overflow:hidden; }
                                         "unit": i.unit or "шт",
                                         "is_marked": i.is_marked|default(false),
                                         "image": i.image or "",
-                                        "item_type": item_type
+                                        "item_type": item_type,
+                                        "service_sale_mode": i.service_sale_mode|default("order", true)
                                     }|tojson }})'><img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>
                                 <a class="catalog-danger-btn" href="/items/{{ i.id }}/delete" title="Удалить" onclick="return confirm('Удалить {{ 'услугу' if i.item_type|default('product', true) == 'service' else 'товар' }} «{{ i.name|e }}»?')"><img src="/static/icons/delete-item.png" class="catalog-action-icon" alt=""></a>
                             </div>
@@ -379,7 +381,8 @@ body.catalog-modal-open { overflow:hidden; }
                         "unit": i.unit or "шт",
                         "is_marked": i.is_marked|default(false),
                         "image": i.image or "",
-                        "item_type": item_type
+                        "item_type": item_type,
+                        "service_sale_mode": i.service_sale_mode|default("order", true)
                     }|tojson }})'>Изменить</button>
                     <a href="/items/{{ i.id }}/delete" onclick="return confirm('Удалить {{ 'услугу' if i.item_type|default('product', true) == 'service' else 'товар' }} «{{ i.name|e }}»?')">Удалить</a>
                 </div>
@@ -418,6 +421,17 @@ body.catalog-modal-open { overflow:hidden; }
                         <input type="radio" name="item_type" value="service" id="itemTypeService" onchange="applyItemType('service')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/service.png" alt=""></span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
                     </label>
+                </div>
+
+
+
+                <div class="catalog-service-mode" id="catalogServiceMode">
+                    <span>Как клиент получает услугу?</span>
+                    <div class="catalog-service-mode-options">
+                        <label><input type="radio" name="service_sale_mode" value="order" checked><b>Заказать онлайн</b><small>Добавляется в корзину и оформляется как заказ</small></label>
+                        <label><input type="radio" name="service_sale_mode" value="booking"><b>Онлайн-запись</b><small>Клиент выбирает дату и свободное время</small></label>
+                        <label><input type="radio" name="service_sale_mode" value="request"><b>Оставить заявку</b><small>Клиент оставляет контакты для связи</small></label>
+                    </div>
                 </div>
 
                 <div class="catalog-field catalog-field--wide">
@@ -827,6 +841,12 @@ function applyItemType(type) {
     }
 }
 
+function setServiceSaleMode(mode){
+    mode=['order','booking','request'].includes(mode)?mode:'order';
+    var el=document.querySelector('input[name="service_sale_mode"][value="'+mode+'"]');
+    if(el) el.checked=true;
+}
+
 function openAddItemModal() {
     var form = document.getElementById('itemForm');
     form.reset();
@@ -834,6 +854,7 @@ function openAddItemModal() {
     document.getElementById('itemModalTitle').textContent = 'Новая позиция';
     document.getElementById('itemUnit').value = 'шт';
     applyItemType('product');
+    setServiceSaleMode('order');
     document.getElementById('itemIsMarked').checked = false;
     updateMarkedBadge();
     clearBarcodeStatus();
@@ -1020,6 +1041,7 @@ function openEditItemModal(item) {
     form.action = '/items/' + encodeURIComponent(item.id) + '/edit';
     document.getElementById('itemModalTitle').textContent = item.item_type === 'service' ? 'Редактировать услугу' : 'Редактировать товар';
     applyItemType(item.item_type || 'product');
+    setServiceSaleMode(item.service_sale_mode || 'order');
 
     setValue('itemName', item.name);
     setValue('itemBarcode', item.barcode);
