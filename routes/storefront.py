@@ -385,7 +385,10 @@ def cart_add(slug):
             if mode == "request":
                 return jsonify({"ok": False, "error": "Для этой услуги нужно оставить заявку"}), 409
 
-        if item.get("quantity") is not None:
+        # Остаток проверяем только для физических товаров.
+        # Услуги с service_sale_mode='order' должны свободно добавляться в корзину,
+        # даже если quantity у них равно 0.
+        if (item.get("item_type") or "product") != "service" and item.get("quantity") is not None:
             stock = Decimal(str(item["quantity"]))
             if stock <= 0:
                 return jsonify({"ok": False, "error": "Товара нет в наличии"}), 409
@@ -441,13 +444,17 @@ def cart_update(slug):
             cur = conn.cursor()
             try:
                 cur.execute("""
-                    SELECT quantity
+                    SELECT quantity, item_type
                     FROM items
                     WHERE id=%s AND company_id=%s
                 """, (int(item_id), store["company_id"]))
                 row = cur.fetchone()
 
-                if row and row.get("quantity") is not None:
+                if (
+                    row
+                    and (row.get("item_type") or "product") != "service"
+                    and row.get("quantity") is not None
+                ):
                     stock = Decimal(str(row["quantity"]))
                     qty = min(qty, stock)
             finally:
@@ -550,7 +557,7 @@ def checkout_ajax(slug):
 
     try:
         cur.execute("""
-            SELECT id, name, retail_price, price, unit, quantity
+            SELECT id, name, retail_price, price, unit, quantity, item_type
             FROM items
             WHERE company_id=%s AND id=ANY(%s)
             FOR UPDATE
@@ -565,7 +572,7 @@ def checkout_ajax(slug):
             qty = Decimal(str(data.get(str(row["id"]), "1")))
             price = _money(row.get("retail_price") or row.get("price"))
 
-            if row.get("quantity") is not None:
+            if (row.get("item_type") or "product") != "service" and row.get("quantity") is not None:
                 stock = Decimal(str(row["quantity"]))
                 if stock < qty:
                     return jsonify({
@@ -700,7 +707,7 @@ def checkout(slug):
 
     try:
         cur.execute("""
-            SELECT id, name, retail_price, price, unit, quantity
+            SELECT id, name, retail_price, price, unit, quantity, item_type
             FROM items
             WHERE company_id=%s AND id=ANY(%s)
         """, (store["company_id"], ids))
@@ -713,7 +720,11 @@ def checkout(slug):
             row = dict(raw)
             qty = Decimal(str(data.get(str(row["id"]), "1")))
 
-            if row.get("quantity") is not None and Decimal(str(row["quantity"])) < qty:
+            if (
+                (row.get("item_type") or "product") != "service"
+                and row.get("quantity") is not None
+                and Decimal(str(row["quantity"])) < qty
+            ):
                 return render_template(
                     "storefront/checkout.html",
                     store=store,
