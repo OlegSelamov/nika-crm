@@ -5,21 +5,43 @@
 .sf-wrap{max-width:1360px;margin:auto;padding:18px 20px 50px}
 
 .sf-slider{
-    position:relative;overflow:hidden;border-radius:30px;
-    background:linear-gradient(135deg,#151b29,var(--brand));
-    box-shadow:0 20px 50px rgba(15,23,42,.10)
+    position:relative;
+    overflow:hidden;
+    border-radius:30px;
+    background:#eef1f7;
+    box-shadow:0 20px 50px rgba(15,23,42,.10);
 }
-.sf-slides{position:relative;height:315px}
+.sf-slides{
+    position:relative;
+    width:100%;
+    aspect-ratio:8 / 3;
+    height:auto;
+}
 .sf-slide{
-    position:absolute;inset:0;opacity:0;visibility:hidden;
-    transition:opacity .45s ease;display:flex;align-items:flex-end;
-    padding:38px;color:#fff;background-size:cover;background-position:center
+    position:absolute;
+    inset:0;
+    opacity:0;
+    visibility:hidden;
+    transition:opacity .45s ease;
+
+    display:flex;
+    align-items:flex-end;
+    padding:38px;
+    color:#fff;
+
+    /* ВАЖНО — показываем весь баннер */
+    background-size:contain;
+    background-repeat:no-repeat;
+    background-position:center;
 }
 .sf-slide:before{
     content:"";position:absolute;inset:0;
     background:linear-gradient(90deg,rgba(9,13,23,.74),rgba(9,13,23,.10) 72%)
 }
-.sf-slide.active{opacity:1;visibility:visible}
+.sf-slide.active{
+    opacity:1;
+    visibility:visible;
+}
 .sf-slide-copy{position:relative;z-index:2;max-width:650px}
 .sf-slide h1{
     margin:0 0 10px;font-size:clamp(32px,4vw,54px);
@@ -158,12 +180,32 @@
 }
 @media(max-width:620px){
     .sf-wrap{padding:13px 13px 40px}
-    .sf-slider{border-radius:22px}
-    .sf-slides{height:220px}
-    .sf-slide{padding:23px}
+
+    .sf-slider{
+        border-radius:18px;
+    }
+
+    .sf-slides{
+        width:100%;
+        aspect-ratio:8 / 3;
+        height:auto;
+    }
+
+    .sf-slide{
+        padding:16px;
+        background-size:contain;
+        background-repeat:no-repeat;
+        background-position:center;
+    }
+
     .sf-slide h1{font-size:28px}
     .sf-slider-arrow{display:none}
-    .sf-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+
+    .sf-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:9px;
+    }
+
     .sf-card-body{padding:9px}
     .sf-name{font-size:12px;min-height:32px}
     .sf-price{font-size:17px}
