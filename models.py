@@ -1364,6 +1364,14 @@ def init_db():
         ON whatsapp_messages(chat_id, created_at)
     """)
 
+    # WhatsApp media/status metadata for the communication center.
+    cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS media_url TEXT")
+    cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS file_name TEXT")
+    cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS mime_type TEXT")
+    cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS caption TEXT")
+    cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP")
+    cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMP")
+
     # 🔥 INDEXES
 
     cur.execute("""

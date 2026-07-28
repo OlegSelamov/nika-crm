@@ -373,6 +373,7 @@ def whatsapp_chats_list():
                 "customer_id": _safe_row_value(row, "customer_id"),
                 "last_message": _safe_row_value(row, "last_message", "") or "",
                 "last_message_at_label": last_at.strftime("%d.%m.%Y %H:%M") if last_at else "",
+                "last_message_at_short": last_at.strftime("%H:%M") if last_at else "",
                 "unread_count": unread,
             })
 
@@ -612,6 +613,155 @@ def whatsapp_chat_send(chat_id):
         release_db(conn)
 
 
+
+# =========================================================
+# КОНТЕКСТ КЛИЕНТА ДЛЯ WHATSAPP-ЧАТА
+# =========================================================
+
+@whatsapp_bp.route("/api/chats/<int:chat_id>/context", methods=["GET"])
+def whatsapp_chat_context(chat_id):
+    if not _require_company():
+        return jsonify({"ok": False, "error": "Требуется авторизация"}), 401
+
+    company_id = session.get("company_id")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT wc.id, wc.phone, wc.contact_name, wc.customer_id,
+                   c.full_name, c.company_name, c.status, c.category,
+                   c.payment, c.address, c.photo
+            FROM whatsapp_chats wc
+            LEFT JOIN clients c
+              ON c.id = wc.customer_id AND c.company_id = wc.company_id
+            WHERE wc.id = %s AND wc.company_id = %s
+            LIMIT 1
+        """, (chat_id, company_id))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"ok": False, "error": "Чат не найден"}), 404
+
+        customer_id = _safe_row_value(row, "customer_id")
+        stats = {
+            "sales_count": 0,
+            "total_revenue": 0,
+            "average_check": 0,
+            "debt": 0,
+            "last_sale_at": "",
+            "last_sale_total": 0,
+        }
+
+        if customer_id:
+            cur.execute("""
+                SELECT
+                    COUNT(*) AS sales_count,
+                    COALESCE(SUM(total_amount) FILTER (WHERE status = 'Оплачено'), 0) AS total_revenue,
+                    COALESCE(AVG(total_amount) FILTER (WHERE status = 'Оплачено'), 0) AS average_check,
+                    COALESCE(SUM(GREATEST(COALESCE(total_amount,0)-COALESCE(paid_amount,0),0)),0) AS debt
+                FROM sales
+                WHERE company_id = %s AND client_id = %s
+            """, (company_id, customer_id))
+            aggregate = cur.fetchone() or {}
+            stats.update({
+                "sales_count": int(_safe_row_value(aggregate, "sales_count", 0) or 0),
+                "total_revenue": float(_safe_row_value(aggregate, "total_revenue", 0) or 0),
+                "average_check": float(_safe_row_value(aggregate, "average_check", 0) or 0),
+                "debt": float(_safe_row_value(aggregate, "debt", 0) or 0),
+            })
+            cur.execute("""
+                SELECT total_amount, created_at
+                FROM sales
+                WHERE company_id = %s AND client_id = %s
+                ORDER BY id DESC
+                LIMIT 1
+            """, (company_id, customer_id))
+            last_sale = cur.fetchone()
+            if last_sale:
+                created = _safe_row_value(last_sale, "created_at")
+                stats["last_sale_at"] = created.strftime("%d.%m.%Y %H:%M") if created else ""
+                stats["last_sale_total"] = float(_safe_row_value(last_sale, "total_amount", 0) or 0)
+
+        return jsonify({
+            "ok": True,
+            "client": {
+                "id": customer_id,
+                "full_name": _safe_row_value(row, "full_name") or _safe_row_value(row, "contact_name") or _safe_row_value(row, "phone") or "Клиент WhatsApp",
+                "company_name": _safe_row_value(row, "company_name") or "",
+                "phone": _safe_row_value(row, "phone") or "",
+                "status": _safe_row_value(row, "status") or "",
+                "category": _safe_row_value(row, "category") or "",
+                "payment": _safe_row_value(row, "payment") or "",
+                "address": _safe_row_value(row, "address") or "",
+                "photo": _safe_row_value(row, "photo") or "",
+            },
+            "stats": stats,
+        })
+    except Exception as e:
+        print("WHATSAPP CONTEXT ERROR:", e)
+        return jsonify({"ok": False, "error": "Не удалось загрузить карточку клиента"}), 500
+    finally:
+        try: cur.close()
+        except Exception: pass
+        release_db(conn)
+
+
+@whatsapp_bp.route("/api/chats/<int:chat_id>/create-client", methods=["POST"])
+def whatsapp_create_client(chat_id):
+    if not _require_company():
+        return jsonify({"ok": False, "error": "Требуется авторизация"}), 401
+
+    company_id = session.get("company_id")
+    data = request.get_json(silent=True) or {}
+    full_name = str(data.get("full_name", "")).strip()
+    if not full_name:
+        return jsonify({"ok": False, "error": "Укажите имя клиента"}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, phone, customer_id
+            FROM whatsapp_chats
+            WHERE id = %s AND company_id = %s
+            LIMIT 1
+        """, (chat_id, company_id))
+        chat = cur.fetchone()
+        if not chat:
+            return jsonify({"ok": False, "error": "Чат не найден"}), 404
+        if _safe_row_value(chat, "customer_id"):
+            return jsonify({"ok": True, "customer_id": _safe_row_value(chat, "customer_id")})
+
+        cur.execute("""
+            INSERT INTO clients (
+                full_name, phone, status, payment, created_at,
+                company_id, is_deleted, comment
+            )
+            VALUES (%s, %s, 'Новый', 'Не оплачено', %s, %s, FALSE, %s)
+            RETURNING id
+        """, (
+            full_name,
+            _safe_row_value(chat, "phone") or "",
+            now_kz(),
+            company_id,
+            "Создан из WhatsApp-чата Nika Business",
+        ))
+        customer_id = cur.fetchone()["id"]
+        cur.execute("""
+            UPDATE whatsapp_chats
+            SET customer_id = %s, contact_name = %s, updated_at = NOW()
+            WHERE id = %s AND company_id = %s
+        """, (customer_id, full_name, chat_id, company_id))
+        conn.commit()
+        return jsonify({"ok": True, "customer_id": customer_id})
+    except Exception as e:
+        conn.rollback()
+        print("WHATSAPP CREATE CLIENT ERROR:", e)
+        return jsonify({"ok": False, "error": "Не удалось создать клиента"}), 500
+    finally:
+        try: cur.close()
+        except Exception: pass
+        release_db(conn)
+
 # =========================================================
 # WEBHOOK GREEN-API
 # =========================================================
@@ -655,7 +805,20 @@ def green_api_webhook():
 
             webhook_type = payload.get("typeWebhook")
 
-            # Пока обрабатываем только входящие сообщения
+            # Обновляем статусы исходящих сообщений.
+            if webhook_type in ("outgoingMessageStatus", "outgoingAPIMessageReceived"):
+                message_id = payload.get("idMessage")
+                status = payload.get("status") or payload.get("statusMessage") or "sent"
+                if message_id:
+                    cur.execute("""
+                        UPDATE whatsapp_messages
+                        SET status = %s
+                        WHERE integration_id = %s
+                          AND external_message_id = %s
+                    """, (status, integration["id"], message_id))
+                    conn.commit()
+                return jsonify({"ok": True})
+
             if webhook_type != "incomingMessageReceived":
                 return jsonify({"ok": True})
 

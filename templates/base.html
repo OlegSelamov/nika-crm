@@ -2565,7 +2565,40 @@
 			}
 		}
 
-    </style>
+    
+
+/* ===== NIKA COMMUNICATIONS PRO ===== */
+#chatDrawer{width:min(1120px,calc(100vw - 28px));}
+#whatsappChatPanel .chat-layout{grid-template-columns:280px minmax(0,1fr) 260px;}
+.wa-client-panel{min-width:0;overflow-y:auto;border-left:1px solid #e5eaf1;background:#fff;padding:14px;}
+.wa-client-card{display:flex;flex-direction:column;align-items:center;text-align:center;padding:16px 10px;border-radius:18px;background:linear-gradient(145deg,#f6fff9,#f7f8ff);border:1px solid #e4e9f1;}
+.wa-client-avatar{width:64px;height:64px;display:grid;place-items:center;border-radius:20px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:20px;font-weight:900;box-shadow:0 10px 22px rgba(34,197,94,.22);overflow:hidden;}
+.wa-client-avatar img{width:100%;height:100%;object-fit:cover;}
+.wa-client-card h4{margin:10px 0 2px;font-size:14px;color:#1f2937;}
+.wa-client-card p{margin:0;color:#8791a3;font-size:10px;overflow-wrap:anywhere;}
+.wa-client-state{margin-top:8px;padding:5px 8px;border-radius:999px;background:#ecfdf3;color:#15803d;font-size:9px;font-weight:800;}
+.wa-client-state.unlinked{background:#fff7ed;color:#c2410c;}
+.wa-quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0;}
+.wa-action-btn{min-height:40px;padding:8px;border:1px solid #e4e9f1;border-radius:11px;background:#f8fafc;color:#465168;font-size:9px;font-weight:800;cursor:pointer;text-decoration:none;display:flex;align-items:center;justify-content:center;text-align:center;}
+.wa-action-btn:hover{background:#f0edff;border-color:#d8d2ff;color:#5f52e8;}
+.wa-action-btn.primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);border:0;color:#fff;}
+.wa-action-btn.green{background:linear-gradient(135deg,#22c55e,#16a34a);border:0;color:#fff;}
+.wa-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+.wa-stat{padding:10px;border-radius:12px;background:#f7f9fc;border:1px solid #e8ecf2;text-align:left;}
+.wa-stat span{display:block;color:#929caf;font-size:8px;}
+.wa-stat b{display:block;margin-top:3px;color:#263047;font-size:11px;}
+.wa-last-sale{margin-top:10px;padding:11px;border-radius:12px;background:#f7f9fc;border:1px solid #e8ecf2;}
+.wa-last-sale small{color:#929caf;font-size:8px;}.wa-last-sale b{display:block;margin-top:4px;font-size:10px;color:#263047;}
+.wa-chat-time{margin-left:auto;color:#9aa3b3;font-size:7px;white-space:nowrap;}
+.wa-message-status{display:inline-flex;align-items:center;gap:3px;float:right;margin-top:4px;font-size:8px;color:#8b95a6;}
+.wa-message-status.read{color:#3b82f6;}.wa-message-status.failed{color:#ef4444;}
+.wa-empty-client{padding:30px 10px;text-align:center;color:#929caf;font-size:10px;line-height:1.5;}
+.whatsapp-chat-header__actions{display:flex;gap:7px;align-items:center;}
+.wa-icon-btn{width:34px;height:34px;border:1px solid #e5eaf1;border-radius:10px;background:#f8fafc;cursor:pointer;color:#64748b;}
+@media(max-width:920px){#whatsappChatPanel .chat-layout{grid-template-columns:220px minmax(0,1fr)}.wa-client-panel{display:none;}}
+@media(max-width:768px){#chatDrawer{width:calc(100vw - 8px)}#whatsappChatPanel .chat-layout{grid-template-columns:108px minmax(0,1fr)}.whatsapp-search{padding:5px}.whatsapp-search input{font-size:8px;padding:0 7px}.wa-chat-time{display:none}}
+
+</style>
 </head>
 
 <body>
@@ -2934,7 +2967,10 @@
                         <b id="whatsappActiveName">Выберите диалог</b>
                         <small id="whatsappActivePhone">Переписка с клиентом</small>
                     </div>
-                    <a id="whatsappCustomerLink" class="whatsapp-customer-link" href="#">Открыть клиента</a>
+                    <div class="whatsapp-chat-header__actions">
+                        <button class="wa-icon-btn" type="button" onclick="refreshActiveWhatsappChat()" title="Обновить">↻</button>
+                        <a id="whatsappCustomerLink" class="whatsapp-customer-link" href="#">Открыть клиента</a>
+                    </div>
                 </div>
 
                 <div id="whatsappMessages" class="system-drawer__body chat-messages">
@@ -2946,6 +2982,10 @@
                     <button id="whatsappSendButton" type="button" onclick="sendWhatsappChatMessage()" disabled>➤</button>
                 </div>
             </div>
+
+            <aside id="whatsappClientPanel" class="wa-client-panel">
+                <div class="wa-empty-client">Выберите диалог, чтобы увидеть карточку клиента и быстрые действия.</div>
+            </aside>
         </div>
     </div>
 </aside>
@@ -3464,6 +3504,7 @@ async function loadWhatsappChats(loadMessagesAfter = false) {
                     <b>${escapeHtml(chat.display_name || chat.phone || "Клиент")}</b>
                     <small>${escapeHtml(chat.last_message || chat.phone || "Новый диалог")}</small>
                 </span>
+                <time class="wa-chat-time">${escapeHtml(chat.last_message_at_short || "")}</time>
                 <span class="chat-contact__badge ${chat.unread_count > 0 ? "show" : ""}">
                     ${chat.unread_count > 99 ? "99+" : chat.unread_count}
                 </span>
@@ -3507,6 +3548,7 @@ function selectWhatsappChat(chatId, chatName = "", phone = "", customerId = null
 
     loadWhatsappChats(false);
     loadWhatsappMessages(true);
+    loadWhatsappClientContext();
 }
 
 async function loadWhatsappMessages(scrollToBottom = false) {
@@ -3544,7 +3586,7 @@ async function loadWhatsappMessages(scrollToBottom = false) {
                         <time>${escapeHtml(item.created_at_label)}</time>
                     </div>
                     <p>${escapeHtml(item.message || `[${item.message_type}]`)}</p>
-                    ${item.is_mine && item.status ? `<span class="whatsapp-status">${escapeHtml(item.status)}</span>` : ""}
+                    ${item.is_mine ? renderWhatsappStatus(item.status) : ""}
                 </article>
             `).join("");
         }
@@ -3646,6 +3688,63 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 5000);
     setInterval(pingPresence, 30000);
 });
+
+
+
+function formatMoneyKzt(value){
+    return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(Number(value||0))+' ₸';
+}
+function renderWhatsappStatus(status){
+    const map={queued:['✓','В очереди',''],sent:['✓','Отправлено',''],delivered:['✓✓','Доставлено',''],read:['✓✓','Прочитано','read'],failed:['!','Ошибка','failed'],received:['','Получено','']};
+    const row=map[String(status||'').toLowerCase()]||['✓',status||'Отправлено',''];
+    return `<span class="wa-message-status ${row[2]}">${row[0]} ${escapeHtml(row[1])}</span>`;
+}
+async function loadWhatsappClientContext(){
+    const panel=document.getElementById('whatsappClientPanel');
+    if(!panel||!activeWhatsappChatId)return;
+    panel.innerHTML='<div class="wa-empty-client">Загрузка карточки клиента…</div>';
+    try{
+        const response=await fetch(`/whatsapp/api/chats/${activeWhatsappChatId}/context`,{headers:{Accept:'application/json'}});
+        const data=await response.json();
+        if(!response.ok||!data.ok)throw new Error(data.error||'Ошибка');
+        const c=data.client||{}; const s=data.stats||{};
+        const initials=((c.full_name||activeWhatsappChatName||'WA').slice(0,2)).toUpperCase();
+        const avatar=c.photo?`<img src="${escapeHtml(c.photo)}" alt="">`:escapeHtml(initials);
+        panel.innerHTML=`
+          <div class="wa-client-card">
+            <div class="wa-client-avatar">${avatar}</div>
+            <h4>${escapeHtml(c.full_name||activeWhatsappChatName||'Клиент WhatsApp')}</h4>
+            <p>${escapeHtml(c.phone||activeWhatsappChatPhone||'')}</p>
+            <span class="wa-client-state ${c.id?'':'unlinked'}">${c.id?'Клиент привязан':'Новый контакт'}</span>
+          </div>
+          <div class="wa-quick-actions">
+            ${c.id?`<a class="wa-action-btn primary" href="/clients/${c.id}">Карточка клиента</a>`:`<button class="wa-action-btn green" onclick="createClientFromWhatsapp()">Создать клиента</button>`}
+            <a class="wa-action-btn" href="/sales${c.id?`?client_id=${c.id}`:''}">Создать продажу</a>
+            <a class="wa-action-btn" href="/tasks${c.id?`?client_id=${c.id}`:''}">Создать задачу</a>
+            <button class="wa-action-btn" onclick="copyWhatsappPhone()">Копировать номер</button>
+          </div>
+          <div class="wa-stats">
+            <div class="wa-stat"><span>Покупок</span><b>${Number(s.sales_count||0)}</b></div>
+            <div class="wa-stat"><span>Выручка</span><b>${formatMoneyKzt(s.total_revenue)}</b></div>
+            <div class="wa-stat"><span>Долг</span><b>${formatMoneyKzt(s.debt)}</b></div>
+            <div class="wa-stat"><span>Средний чек</span><b>${formatMoneyKzt(s.average_check)}</b></div>
+          </div>
+          <div class="wa-last-sale"><small>Последняя продажа</small><b>${s.last_sale_at?escapeHtml(s.last_sale_at)+' · '+formatMoneyKzt(s.last_sale_total):'Продаж пока нет'}</b></div>`;
+    }catch(e){panel.innerHTML='<div class="wa-empty-client">Не удалось загрузить карточку клиента.</div>';}
+}
+async function createClientFromWhatsapp(){
+    if(!activeWhatsappChatId)return;
+    const suggested=activeWhatsappChatName&&activeWhatsappChatName!==activeWhatsappChatPhone?activeWhatsappChatName:'Клиент WhatsApp';
+    const fullName=prompt('Имя клиента',suggested); if(!fullName)return;
+    const response=await fetch(`/whatsapp/api/chats/${activeWhatsappChatId}/create-client`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({full_name:fullName})});
+    const data=await response.json();
+    if(!response.ok||!data.ok){alert(data.error||'Не удалось создать клиента');return;}
+    activeWhatsappCustomerId=data.customer_id;
+    showSystemToast('WhatsApp','Клиент создан и привязан к диалогу');
+    await loadWhatsappChats(false); await loadWhatsappClientContext();
+}
+function copyWhatsappPhone(){navigator.clipboard?.writeText(activeWhatsappChatPhone||'');showSystemToast('Номер скопирован',activeWhatsappChatPhone||'');}
+function refreshActiveWhatsappChat(){loadWhatsappChats(false);loadWhatsappMessages(false);loadWhatsappClientContext();}
 
 // ================== ГОЛОС ==================
 let voiceEnabled = true;
