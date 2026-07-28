@@ -202,6 +202,8 @@ def login():
         session["is_creator"] = False  # устаревшее поле: права определяются через role
         session["employee_modules"] = load_user_module_codes(user)
         session["presence_heartbeat_at"] = now_kz().isoformat()
+        
+        session.permanent = True
 
         # 👑 Супер админ
         if user["is_super_admin"]:
@@ -270,6 +272,8 @@ def api_login():
     session["is_creator"] = False  # устаревшее поле: права определяются через role
     session["employee_modules"] = load_user_module_codes(user)
     session["presence_heartbeat_at"] = now_kz().isoformat()
+    
+    session.permanent = True
 
     return jsonify({
         "success": True,
@@ -1323,6 +1327,8 @@ def register():
             session["is_creator"] = False
             session["employee_modules"] = load_user_module_codes(user)
             session["presence_heartbeat_at"] = now_kz().isoformat()
+            
+            session.permanent = True
 
             # После настоящей регистрации продолжаем настройку этой же компании.
             return redirect("/onboarding")

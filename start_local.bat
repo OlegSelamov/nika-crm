@@ -1,16 +1,31 @@
 @echo off
+set NIKA_ENV_FILE=.env.local
+venv\Scripts\python.exe app.py
+pause@echo off
+title Nika Business LOCAL
 
-cd /d %~dp0
+cd /d "%~dp0"
 
-start "" pythonw app.py
+set "NIKA_ENV_FILE=.env.local"
 
-:waitloop
+echo ========================================
+echo NIKA BUSINESS LOCAL
+echo ENV: %NIKA_ENV_FILE%
+echo ========================================
+echo.
 
-curl http://127.0.0.1:5000 >nul 2>&1
-
-if errorlevel 1 (
-    timeout /t 1 >nul
-    goto waitloop
+if not exist ".env.local" (
+    echo ERROR: .env.local not found
+    pause
+    exit /b 1
 )
 
-start chrome --app=http://127.0.0.1:5000
+if not exist "app.py" (
+    echo ERROR: app.py not found
+    pause
+    exit /b 1
+)
+
+"C:\Users\user\AppData\Local\Programs\Python\Python311\python.exe" app.py
+
+pause

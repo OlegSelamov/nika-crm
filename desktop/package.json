@@ -1,11 +1,40 @@
 {
   "name": "nika-business",
   "version": "1.0.0",
+  "description": "Nika Business",
+  "author": "Nika Business",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "local": "set NIKA_MODE=local&& electron .",
+    "vps": "set NIKA_MODE=vps&& electron .",
+    "start": "set NIKA_MODE=vps&& electron .",
+    "build": "electron-builder --win"
   },
   "devDependencies": {
-    "electron": "^30.0.0"
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.nikabusiness.app",
+    "productName": "Nika Business",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Nika Business",
+      "artifactName": "NikaBusinessSetup.exe"
+    }
   }
 }

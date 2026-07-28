@@ -7,6 +7,13 @@ const { spawn } = require('child_process');
 let win;
 let flaskProcess;
 
+const APP_MODE = process.env.NIKA_MODE || "vps";
+const DEV_MODE = APP_MODE === "local";
+
+const APP_URL = DEV_MODE
+    ? "http://127.0.0.1:5000"
+    : "https://nikabusiness.com";
+
 function startFlask() {
 
     flaskProcess = spawn(
@@ -39,16 +46,23 @@ function createWindow() {
 
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false
+            contextIsolation: false,
+			partition: "persist:nika-business"
         }
 
     });
 
-    setTimeout(() => {
+	if (DEV_MODE) {
 
-        win.loadURL('http://127.0.0.1:5000');
+		setTimeout(() => {
+			win.loadURL(APP_URL);
+		}, 5000);
 
-    }, 5000);
+	} else {
+
+		win.loadURL(APP_URL);
+
+	}
 
 	win.maximize();
 
@@ -70,15 +84,15 @@ function createWindow() {
 
 app.whenReady().then(async () => {
 
-    startFlask();
+    if (DEV_MODE) {
+        startFlask();
+    }
 
     createWindow();
 
     setTimeout(async () => {
-
         await detectPrinters();
-
-    }, 7000);
+    }, DEV_MODE ? 7000 : 2000);
 
 });
 
@@ -190,9 +204,9 @@ ipcMain.on('print-document', () => {
 
 app.on('window-all-closed', () => {
 
-    if (flaskProcess) {
-        flaskProcess.kill();
-    }
+	if (DEV_MODE && flaskProcess) {
+		flaskProcess.kill();
+	}
 
     app.quit();
 });

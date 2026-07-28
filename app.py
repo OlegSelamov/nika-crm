@@ -1,3 +1,12 @@
+import os
+from dotenv import load_dotenv
+
+# Загружаем нужное окружение ДО импорта routes и models.
+env_file = os.getenv("NIKA_ENV_FILE", ".env.test")
+load_dotenv(env_file, override=True)
+
+APP_MODE = os.getenv("APP_MODE", "test")
+
 from flask import Flask, render_template, request, redirect, session, g
 from routes.dashboard import dashboard_bp
 from routes.clients import clients_bp
@@ -29,11 +38,6 @@ from routes.storefront import storefront_bp
 from routes.storefront_settings import storefront_settings_bp
 from routes.storefront_manage import storefront_manage_bp
 from routes.whatsapp import whatsapp_bp
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
@@ -42,6 +46,12 @@ app = Flask(
     static_folder=os.path.join(BASE_DIR, "static")
 )
 app.secret_key = "nika_super_secret_key"
+
+from datetime import timedelta
+
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+
+app.config["APP_MODE"] = APP_MODE
 
 # подключаем роуты
 app.register_blueprint(dashboard_bp)
