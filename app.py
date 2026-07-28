@@ -28,6 +28,7 @@ from routes.onboarding import onboarding_bp
 from routes.storefront import storefront_bp
 from routes.storefront_settings import storefront_settings_bp
 from routes.storefront_manage import storefront_manage_bp
+from routes.whatsapp import whatsapp_bp
 import os
 from dotenv import load_dotenv
 
@@ -69,6 +70,7 @@ app.register_blueprint(onboarding_bp)
 app.register_blueprint(storefront_bp)
 app.register_blueprint(storefront_settings_bp)
 app.register_blueprint(storefront_manage_bp)
+app.register_blueprint(whatsapp_bp)
     
 # Какой URL относится к какому платному модулю.
 # Более длинные пути ставим выше коротких, чтобы проверка была точной.
@@ -107,6 +109,7 @@ def check_company_access():
         "/subscription",
         "/static/",
         "/s/",
+        "/whatsapp/webhook",
     )
     if any(
         request.path == path or request.path.startswith(path)

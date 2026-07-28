@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, session, redirect
+from models import get_db, pool
 
 settings_bp = Blueprint("settings", __name__)
 
@@ -59,3 +60,43 @@ def scales():
 @settings_bp.route("/settings/rekassa")
 def rekassa_settings():
     return render_template("rekassa_settings.html")
+    
+@settings_bp.route("/settings/whatsapp")
+def whatsapp_settings():
+
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    company_id = session.get("company_id")
+
+    if not company_id:
+        return redirect("/dashboard")
+
+    conn = get_db()
+
+    try:
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT
+                id,
+                phone,
+                instance_id,
+                enabled,
+                ai_enabled,
+                status,
+                updated_at
+            FROM whatsapp_integrations
+            WHERE company_id = %s
+            LIMIT 1
+        """, (company_id,))
+
+        whatsapp = cur.fetchone()
+
+    finally:
+        pool.putconn(conn)
+
+    return render_template(
+        "settings/whatsapp.html",
+        whatsapp=whatsapp
+    )

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>WhatsApp — Nika Business</title>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    padding:30px;
+    background:#0e1320;
+    color:#f5f7fb;
+    font-family:Inter,Arial,sans-serif;
+}
+
+.wrap{
+    max-width:850px;
+    margin:auto;
+}
+
+h1{
+    margin:0 0 7px;
+}
+
+.muted{
+    color:#8d98aa;
+}
+
+.panel{
+    margin-top:25px;
+    padding:25px;
+    background:#161d2b;
+    border:1px solid #263246;
+    border-radius:22px;
+}
+
+.status{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:25px;
+}
+
+.status-dot{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:#6b7280;
+}
+
+.status-dot.connected{
+    background:#22c55e;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:15px;
+}
+
+.full{
+    grid-column:1/-1;
+}
+
+label{
+    display:block;
+    font-size:13px;
+    color:#a8b0bf;
+}
+
+input{
+    width:100%;
+    margin-top:7px;
+    padding:13px 14px;
+
+    border-radius:11px;
+    border:1px solid #344157;
+
+    background:#101624;
+    color:#fff;
+
+    outline:none;
+}
+
+input:focus{
+    border-color:#6366f1;
+}
+
+.actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:22px;
+}
+
+button{
+    border:0;
+    border-radius:11px;
+    padding:12px 18px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.primary{
+    background:#6366f1;
+    color:#fff;
+}
+
+.secondary{
+    background:#263246;
+    color:#fff;
+}
+
+.success{
+    background:#22c55e;
+    color:#07150b;
+}
+
+.message{
+    margin-top:18px;
+    padding:12px;
+    border-radius:10px;
+    background:#101624;
+    display:none;
+}
+
+.test-box{
+    display:none;
+    margin-top:25px;
+    padding-top:22px;
+    border-top:1px solid #263246;
+}
+
+@media(max-width:650px){
+
+    body{
+        padding:15px;
+    }
+
+    .grid{
+        grid-template-columns:1fr;
+    }
+
+    .full{
+        grid-column:auto;
+    }
+
+    .actions button{
+        width:100%;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+    <h1>WhatsApp</h1>
+
+    <div class="muted">
+        Подключение WhatsApp к Nika Business через GREEN-API
+    </div>
+
+
+    <div class="panel">
+
+        <div class="status">
+
+            <div
+                id="statusDot"
+                class="status-dot
+                {% if whatsapp and whatsapp.status == 'authorized' %}
+                connected
+                {% endif %}
+                ">
+            </div>
+
+            <strong id="statusText">
+
+                {% if whatsapp %}
+
+                    {% if whatsapp.status == 'authorized' %}
+                        WhatsApp подключён
+                    {% else %}
+                        {{ whatsapp.status or 'Статус не проверен' }}
+                    {% endif %}
+
+                {% else %}
+                    WhatsApp не подключён
+                {% endif %}
+
+            </strong>
+
+        </div>
+
+
+        <div class="grid">
+
+            <label>
+                Номер WhatsApp
+
+                <input
+                    id="phone"
+                    placeholder="+7 777 123 45 67"
+                    value="{{ whatsapp.phone if whatsapp else '' }}"
+                >
+            </label>
+
+
+            <label>
+                ID Instance
+
+                <input
+                    id="instanceId"
+                    placeholder="1234567890"
+                    value="{{ whatsapp.instance_id if whatsapp else '' }}"
+                >
+            </label>
+
+
+            <label class="full">
+                API Token Instance
+
+                <input
+                    id="apiToken"
+                    type="password"
+                    placeholder="{% if whatsapp %}Оставьте пустым, если токен менять не нужно{% else %}Введите API Token Instance{% endif %}"
+                >
+            </label>
+
+        </div>
+
+
+        <div class="actions">
+
+            <button
+                class="primary"
+                onclick="saveIntegration()"
+            >
+                Сохранить
+            </button>
+
+
+            <button
+                class="secondary"
+                onclick="checkStatus()"
+            >
+                Проверить подключение
+            </button>
+
+
+            <button
+                class="success"
+                onclick="showTest()"
+            >
+                Отправить тест
+            </button>
+
+        </div>
+
+
+        <div id="message" class="message"></div>
+
+
+        <div id="testBox" class="test-box">
+
+            <div class="grid">
+
+                <label>
+                    Кому отправить
+
+                    <input
+                        id="testPhone"
+                        placeholder="+7 777 123 45 67"
+                    >
+                </label>
+
+
+                <label>
+                    Сообщение
+
+                    <input
+                        id="testMessage"
+                        value="Тестовое сообщение из Nika Business"
+                    >
+                </label>
+
+            </div>
+
+
+            <div class="actions">
+
+                <button
+                    class="primary"
+                    onclick="sendTest()"
+                >
+                    Отправить сообщение
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+function showMessage(text, ok=true){
+
+    const box = document.getElementById("message");
+
+    box.style.display = "block";
+
+    box.style.color = ok
+        ? "#86efac"
+        : "#fca5a5";
+
+    box.textContent = text;
+}
+
+
+async function saveIntegration(){
+
+    const phone =
+        document.getElementById("phone").value.trim();
+
+    const instanceId =
+        document.getElementById("instanceId").value.trim();
+
+    const apiToken =
+        document.getElementById("apiToken").value.trim();
+
+
+    const response = await fetch(
+        "/whatsapp/integration",
+        {
+            method:"POST",
+
+            headers:{
+                "Content-Type":"application/json"
+            },
+
+            body:JSON.stringify({
+                phone:phone,
+                instance_id:instanceId,
+                api_token:apiToken
+            })
+        }
+    );
+
+
+    const data = await response.json();
+
+
+    if(data.ok){
+
+        showMessage(
+            "Настройки WhatsApp сохранены."
+        );
+
+        document.getElementById("apiToken").value = "";
+
+        setTimeout(checkStatus,500);
+
+    }else{
+
+        showMessage(
+            data.error || "Ошибка сохранения",
+            false
+        );
+    }
+}
+
+
+async function checkStatus(){
+
+    const response =
+        await fetch("/whatsapp/status");
+
+
+    const data =
+        await response.json();
+
+
+    const dot =
+        document.getElementById("statusDot");
+
+    const text =
+        document.getElementById("statusText");
+
+
+    if(data.ok && data.connected){
+
+        dot.classList.add("connected");
+
+        text.textContent =
+            "WhatsApp подключён";
+
+        showMessage(
+            "GREEN-API работает. WhatsApp авторизован."
+        );
+
+    }else{
+
+        dot.classList.remove("connected");
+
+        text.textContent =
+            data.state ||
+            "WhatsApp не подключён";
+
+        showMessage(
+            data.error ||
+            "WhatsApp пока не авторизован.",
+            false
+        );
+    }
+}
+
+
+function showTest(){
+
+    document.getElementById(
+        "testBox"
+    ).style.display = "block";
+}
+
+
+async function sendTest(){
+
+    const phone =
+        document.getElementById(
+            "testPhone"
+        ).value.trim();
+
+    const message =
+        document.getElementById(
+            "testMessage"
+        ).value.trim();
+
+
+    const response =
+        await fetch(
+            "/whatsapp/send",
+            {
+                method:"POST",
+
+                headers:{
+                    "Content-Type":"application/json"
+                },
+
+                body:JSON.stringify({
+                    phone:phone,
+                    message:message
+                })
+            }
+        );
+
+
+    const data =
+        await response.json();
+
+
+    if(data.ok){
+
+        showMessage(
+            "Сообщение отправлено в WhatsApp."
+        );
+
+    }else{
+
+        showMessage(
+            data.error ||
+            "Не удалось отправить сообщение.",
+            false
+        );
+    }
+}
+
+</script>
+
+</body>
+</html>
