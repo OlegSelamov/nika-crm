@@ -624,6 +624,7 @@
 		}
 
 		/* === КОММЕНТАРИЙ === */
+		.comment-field {
 			flex: 1;
 			min-width: 160px;
 		}
@@ -2796,12 +2797,7 @@ body.wa-modal-open {
 }
 
 
-		/* ===== ПЛАВНАЯ НАВИГАЦИЯ МЕЖДУ СТРАНИЦАМИ ===== */
-
-		/*
-		 * Chromium/Electron выполняет полноценный переход между Flask-страницами,
-		 * но сохраняет визуальную непрерывность оболочки приложения.
-		 */
+		/* ===== NATIVE VIEW TRANSITIONS ===== */
 		@view-transition {
 			navigation: auto;
 		}
@@ -2816,7 +2812,6 @@ body.wa-modal-open {
 
 		.page-shell {
 			view-transition-name: nika-page;
-			contain: layout paint;
 		}
 
 		::view-transition-group(nika-sidebar),
@@ -2825,72 +2820,26 @@ body.wa-modal-open {
 		}
 
 		::view-transition-old(nika-page) {
-			animation: nika-page-out .12s ease both;
+			animation: nika-page-fade-out .07s ease-out both;
 		}
 
 		::view-transition-new(nika-page) {
-			animation: nika-page-in .20s cubic-bezier(.2,.75,.25,1) both;
+			animation: nika-page-fade-in .12s ease-out both;
 		}
 
-		@keyframes nika-page-out {
-			to {
-				opacity: 0;
-				transform: translateY(-3px);
-			}
+		@keyframes nika-page-fade-out {
+			to { opacity: 0; }
 		}
 
-		@keyframes nika-page-in {
-			from {
-				opacity: 0;
-				transform: translateY(7px);
-			}
-			to {
-				opacity: 1;
-				transform: translateY(0);
-			}
-		}
-
-		/* Резервный переход для Chromium без cross-document View Transitions */
-		html:not(.nika-page-ready) .page-shell {
-			opacity: 0;
-			transform: translateY(6px);
-		}
-
-		html.nika-page-ready .page-shell {
-			opacity: 1;
-			transform: translateY(0);
-			transition:
-				opacity .18s ease,
-				transform .18s cubic-bezier(.2,.75,.25,1);
-		}
-
-		html.nika-page-leaving .page-shell {
-			opacity: 0;
-			transform: translateY(-3px);
-			transition:
-				opacity .10s ease,
-				transform .10s ease;
-			pointer-events: none;
-		}
-
-		html.nika-page-leaving {
-			cursor: progress;
-		}
-
-		html.nika-page-leaving .sidebar a {
-			pointer-events: none;
+		@keyframes nika-page-fade-in {
+			from { opacity: 0; }
+			to { opacity: 1; }
 		}
 
 		@media (prefers-reduced-motion: reduce) {
 			::view-transition-old(nika-page),
 			::view-transition-new(nika-page) {
 				animation: none !important;
-			}
-
-			html.nika-page-ready .page-shell,
-			html.nika-page-leaving .page-shell {
-				transition: none !important;
-				transform: none !important;
 			}
 		}
 
@@ -4413,83 +4362,24 @@ document.addEventListener("click", function(event) {
 });
 
 
-// ================== ПЛАВНАЯ НАВИГАЦИЯ ==================
-(function initSmoothNavigation() {
-    const root = document.documentElement;
-    let navigationStarted = false;
 
-    function revealPage() {
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                root.classList.add("nika-page-ready");
-                root.classList.remove("nika-page-leaving");
-            });
-        });
-    }
 
-    function isInternalPageLink(link, event) {
-        if (!link || !link.href) return false;
-        if (event.defaultPrevented) return false;
-        if (event.button !== 0) return false;
-        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false;
-        if (link.target && link.target !== "_self") return false;
-        if (link.hasAttribute("download")) return false;
-        if (link.dataset.noTransition === "true") return false;
 
-        const url = new URL(link.href, window.location.href);
-
-        if (url.origin !== window.location.origin) return false;
-        if (!["http:", "https:"].includes(url.protocol)) return false;
-        if (url.pathname === window.location.pathname &&
-            url.search === window.location.search &&
-            url.hash) return false;
-
-        return true;
-    }
-
-    function saveShellState() {
+// ================== СОХРАНЕНИЕ СОСТОЯНИЯ ОБОЛОЧКИ ==================
+(function preserveAppShellState() {
+    function saveSidebarScroll() {
         const sidebar = document.getElementById("sidebar");
         if (sidebar) {
             sessionStorage.setItem("nikaSidebarScroll", String(sidebar.scrollTop));
         }
-        sessionStorage.setItem("nikaWindowScroll", String(window.scrollY));
     }
 
     document.addEventListener("click", event => {
-        const link = event.target.closest("a[href]");
-        if (!isInternalPageLink(link, event) || navigationStarted) return;
-
-        navigationStarted = true;
-        saveShellState();
-
-        /*
-         * View Transitions API сама перехватит межстраничную отрисовку.
-         * Класс ниже служит резервом и убирает резкий скачок в старых версиях.
-         */
-        root.classList.add("nika-page-leaving");
-
-        // Даём короткой анимации начаться, затем выполняем обычный Flask-переход.
-        if (!document.startViewTransition) {
-            event.preventDefault();
-            setTimeout(() => {
-                window.location.assign(link.href);
-            }, 85);
-        }
+        const link = event.target.closest(".sidebar a[href]");
+        if (link) saveSidebarScroll();
     }, true);
 
-    window.addEventListener("pageshow", event => {
-        navigationStarted = false;
-        revealPage();
-
-        // При возврате из back/forward cache принудительно восстанавливаем состояние.
-        if (event.persisted) {
-            setActiveMenuItem?.();
-            restoreSidebarState?.();
-        }
-    });
-
-    window.addEventListener("pagehide", saveShellState);
-    revealPage();
+    window.addEventListener("pagehide", saveSidebarScroll);
 })();
 
 </script>
