@@ -289,6 +289,329 @@ def send_message():
         }), 502
 
 
+
+# =========================================================
+# ЧАТЫ WHATSAPP ДЛЯ ВЕРХНЕЙ ШТОРКИ NIKA
+# =========================================================
+
+def _require_company():
+    return bool(session.get("user_id") and session.get("company_id"))
+
+
+def _safe_row_value(row, key, default=None):
+    try:
+        return row[key]
+    except Exception:
+        return default
+
+
+@whatsapp_bp.route("/api/chats", methods=["GET"])
+def whatsapp_chats_list():
+    if not _require_company():
+        return jsonify({"ok": False, "error": "Требуется авторизация"}), 401
+
+    company_id = session.get("company_id")
+    search = str(request.args.get("search", "")).strip()
+    limit = min(max(request.args.get("limit", 100, type=int), 1), 200)
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+        params = [company_id]
+        where_search = ""
+
+        if search:
+            where_search = """
+                AND (
+                    COALESCE(wc.contact_name, '') ILIKE %s
+                    OR COALESCE(wc.phone, '') ILIKE %s
+                    OR COALESCE(wc.last_message, '') ILIKE %s
+                )
+            """
+            needle = f"%{search}%"
+            params.extend([needle, needle, needle])
+
+        params.append(limit)
+
+        cur.execute(f"""
+            SELECT
+                wc.id,
+                wc.external_chat_id,
+                wc.phone,
+                wc.contact_name,
+                wc.customer_id,
+                wc.last_message,
+                wc.last_message_at,
+                COALESCE(wc.unread_count, 0) AS unread_count,
+                COALESCE(c.full_name, wc.contact_name, wc.phone, 'Клиент') AS display_name
+            FROM whatsapp_chats wc
+            LEFT JOIN clients c
+              ON c.id = wc.customer_id
+             AND c.company_id = wc.company_id
+            WHERE wc.company_id = %s
+            {where_search}
+            ORDER BY wc.last_message_at DESC NULLS LAST, wc.id DESC
+            LIMIT %s
+        """, tuple(params))
+
+        rows = cur.fetchall()
+        items = []
+        total_unread = 0
+
+        for row in rows:
+            unread = int(_safe_row_value(row, "unread_count", 0) or 0)
+            total_unread += unread
+            last_at = _safe_row_value(row, "last_message_at")
+
+            items.append({
+                "id": _safe_row_value(row, "id"),
+                "external_chat_id": _safe_row_value(row, "external_chat_id", ""),
+                "phone": _safe_row_value(row, "phone", "") or "",
+                "contact_name": _safe_row_value(row, "contact_name", "") or "",
+                "display_name": _safe_row_value(row, "display_name", "Клиент") or "Клиент",
+                "customer_id": _safe_row_value(row, "customer_id"),
+                "last_message": _safe_row_value(row, "last_message", "") or "",
+                "last_message_at_label": last_at.strftime("%d.%m.%Y %H:%M") if last_at else "",
+                "unread_count": unread,
+            })
+
+        return jsonify({
+            "ok": True,
+            "items": items,
+            "total_unread": total_unread,
+        })
+
+    except Exception as e:
+        print("WHATSAPP CHATS LIST ERROR:", e)
+        return jsonify({"ok": False, "error": "Не удалось загрузить WhatsApp-чаты"}), 500
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        release_db(conn)
+
+
+@whatsapp_bp.route("/api/chats/<int:chat_id>/messages", methods=["GET"])
+def whatsapp_chat_messages(chat_id):
+    if not _require_company():
+        return jsonify({"ok": False, "error": "Требуется авторизация"}), 401
+
+    company_id = session.get("company_id")
+    limit = min(max(request.args.get("limit", 150, type=int), 1), 300)
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT id, phone, contact_name, customer_id, external_chat_id
+            FROM whatsapp_chats
+            WHERE id = %s AND company_id = %s
+            LIMIT 1
+        """, (chat_id, company_id))
+        chat = cur.fetchone()
+
+        if not chat:
+            return jsonify({"ok": False, "error": "Чат не найден"}), 404
+
+        cur.execute("""
+            SELECT *
+            FROM (
+                SELECT
+                    id,
+                    external_message_id,
+                    direction,
+                    message_type,
+                    message_text,
+                    sender_phone,
+                    status,
+                    is_ai,
+                    created_at
+                FROM whatsapp_messages
+                WHERE company_id = %s
+                  AND chat_id = %s
+                ORDER BY id DESC
+                LIMIT %s
+            ) q
+            ORDER BY q.id
+        """, (company_id, chat_id, limit))
+
+        items = []
+        for row in cur.fetchall():
+            created_at = _safe_row_value(row, "created_at")
+            direction = _safe_row_value(row, "direction", "incoming") or "incoming"
+            items.append({
+                "id": _safe_row_value(row, "id"),
+                "external_message_id": _safe_row_value(row, "external_message_id", "") or "",
+                "direction": direction,
+                "is_mine": direction == "outgoing",
+                "message_type": _safe_row_value(row, "message_type", "textMessage") or "textMessage",
+                "message": _safe_row_value(row, "message_text", "") or "",
+                "sender_phone": _safe_row_value(row, "sender_phone", "") or "",
+                "status": _safe_row_value(row, "status", "") or "",
+                "is_ai": bool(_safe_row_value(row, "is_ai", False)),
+                "created_at_label": created_at.strftime("%d.%m.%Y %H:%M") if created_at else "",
+            })
+
+        cur.execute("""
+            UPDATE whatsapp_chats
+            SET unread_count = 0,
+                updated_at = NOW()
+            WHERE id = %s AND company_id = %s
+        """, (chat_id, company_id))
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "chat": {
+                "id": _safe_row_value(chat, "id"),
+                "phone": _safe_row_value(chat, "phone", "") or "",
+                "contact_name": _safe_row_value(chat, "contact_name", "") or "",
+                "customer_id": _safe_row_value(chat, "customer_id"),
+                "external_chat_id": _safe_row_value(chat, "external_chat_id", "") or "",
+            },
+            "items": items,
+        })
+
+    except Exception as e:
+        conn.rollback()
+        print("WHATSAPP CHAT MESSAGES ERROR:", e)
+        return jsonify({"ok": False, "error": "Не удалось загрузить переписку"}), 500
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        release_db(conn)
+
+
+@whatsapp_bp.route("/api/chats/<int:chat_id>/messages", methods=["POST"])
+def whatsapp_chat_send(chat_id):
+    if not _require_company():
+        return jsonify({"ok": False, "error": "Требуется авторизация"}), 401
+
+    company_id = session.get("company_id")
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message", "")).strip()
+
+    if not message:
+        return jsonify({"ok": False, "error": "Введите сообщение"}), 400
+
+    if len(message) > 4000:
+        return jsonify({"ok": False, "error": "Сообщение слишком длинное"}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT
+                wc.id,
+                wc.external_chat_id,
+                wc.phone,
+                wc.integration_id,
+                wi.instance_id,
+                wi.api_token,
+                wi.enabled,
+                wi.phone AS integration_phone
+            FROM whatsapp_chats wc
+            JOIN whatsapp_integrations wi
+              ON wi.id = wc.integration_id
+             AND wi.company_id = wc.company_id
+            WHERE wc.id = %s
+              AND wc.company_id = %s
+              AND wi.enabled = TRUE
+            LIMIT 1
+        """, (chat_id, company_id))
+        chat = cur.fetchone()
+
+        if not chat:
+            return jsonify({"ok": False, "error": "Чат или интеграция не найдены"}), 404
+
+        instance_id = _safe_row_value(chat, "instance_id")
+        api_token = _safe_row_value(chat, "api_token")
+        external_chat_id = _safe_row_value(chat, "external_chat_id")
+
+        url = (
+            f"https://api.green-api.com/"
+            f"waInstance{instance_id}/"
+            f"sendMessage/{api_token}"
+        )
+
+        response = requests.post(
+            url,
+            json={"chatId": external_chat_id, "message": message},
+            timeout=20,
+        )
+        response.raise_for_status()
+        result = response.json()
+        external_message_id = result.get("idMessage")
+
+        cur.execute("""
+            INSERT INTO whatsapp_messages (
+                company_id,
+                integration_id,
+                chat_id,
+                external_message_id,
+                direction,
+                message_type,
+                message_text,
+                sender_phone,
+                status,
+                is_ai,
+                created_at
+            )
+            VALUES (
+                %s, %s, %s, %s,
+                'outgoing', 'textMessage', %s, %s,
+                'sent', FALSE, NOW()
+            )
+            ON CONFLICT DO NOTHING
+            RETURNING id
+        """, (
+            company_id,
+            _safe_row_value(chat, "integration_id"),
+            chat_id,
+            external_message_id,
+            message,
+            _safe_row_value(chat, "integration_phone", "") or "",
+        ))
+        inserted = cur.fetchone()
+
+        cur.execute("""
+            UPDATE whatsapp_chats
+            SET last_message = %s,
+                last_message_at = NOW(),
+                updated_at = NOW()
+            WHERE id = %s AND company_id = %s
+        """, (message, chat_id, company_id))
+
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "id": _safe_row_value(inserted, "id") if inserted else None,
+            "external_message_id": external_message_id,
+        })
+
+    except requests.RequestException as e:
+        conn.rollback()
+        print("GREEN API CHAT SEND ERROR:", e)
+        return jsonify({"ok": False, "error": "GREEN-API не отправил сообщение"}), 502
+    except Exception as e:
+        conn.rollback()
+        print("WHATSAPP CHAT SEND ERROR:", e)
+        return jsonify({"ok": False, "error": "Не удалось отправить сообщение"}), 500
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        release_db(conn)
+
+
 # =========================================================
 # WEBHOOK GREEN-API
 # =========================================================

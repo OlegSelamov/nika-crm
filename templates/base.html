@@ -2419,6 +2419,112 @@
 			}
 		}
 
+
+		/* ===== UNIFIED CHAT HUB: TEAM + WHATSAPP ===== */
+		.chat-channel-tabs {
+			display: flex;
+			gap: 6px;
+			padding: 8px 12px;
+			border-bottom: 1px solid #e6ebf2;
+			background: #fff;
+		}
+		.chat-channel-tab {
+			position: relative;
+			display: inline-flex;
+			align-items: center;
+			gap: 7px;
+			padding: 9px 13px;
+			border: 1px solid #e5eaf1;
+			border-radius: 11px;
+			background: #f7f9fc;
+			color: #667085;
+			font-size: 11px;
+			font-weight: 800;
+			cursor: pointer;
+		}
+		.chat-channel-tab.active {
+			border-color: #d8d2ff;
+			background: #efedff;
+			color: #5f52e8;
+		}
+		.chat-channel-tab__badge {
+			display: none;
+			min-width: 18px;
+			height: 18px;
+			padding: 0 5px;
+			align-items: center;
+			justify-content: center;
+			border-radius: 999px;
+			background: #ef4444;
+			color: #fff;
+			font-size: 8px;
+		}
+		.chat-channel-tab__badge.show { display: inline-flex; }
+		.chat-channel-panel {
+			display: none;
+			flex: 1;
+			min-height: 0;
+			overflow: hidden;
+		}
+		.chat-channel-panel.active { display: flex; }
+		.whatsapp-search {
+			padding: 8px;
+			border-bottom: 1px solid #e5eaf1;
+		}
+		.whatsapp-search input {
+			height: 38px;
+			padding: 0 11px;
+			font-size: 10px;
+			background: #fff;
+		}
+		.whatsapp-chat-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			padding: 10px 13px;
+			border-bottom: 1px solid #e5eaf1;
+			background: #fff;
+		}
+		.whatsapp-chat-header b {
+			display: block;
+			font-size: 11px;
+			color: #253047;
+		}
+		.whatsapp-chat-header small {
+			display: block;
+			margin-top: 2px;
+			font-size: 9px;
+			color: #8e98aa;
+		}
+		.whatsapp-customer-link {
+			display: none;
+			padding: 7px 9px;
+			border-radius: 9px;
+			background: #eafaf0;
+			color: #15803d;
+			text-decoration: none;
+			font-size: 9px;
+			font-weight: 800;
+		}
+		.whatsapp-customer-link.show { display: inline-flex; }
+		.whatsapp-avatar {
+			background: linear-gradient(135deg,#22c55e,#16a34a);
+		}
+		.whatsapp-message-ai {
+			box-shadow: inset 3px 0 0 #8b5cf6;
+		}
+		.whatsapp-status {
+			margin-left: 7px;
+			color: #98a2b3;
+			font-size: 8px;
+		}
+		@media (max-width: 768px) {
+			.chat-channel-tabs { padding: 7px; }
+			.chat-channel-tab { flex: 1; justify-content: center; padding: 8px 6px; }
+			.whatsapp-chat-header { padding: 8px 10px; }
+		}
+
 		/* ===== FULLY HIDE DRAWERS WHEN CLOSED ===== */
 		.system-drawer,
 		#chatDrawer {
@@ -2759,45 +2865,90 @@
 <aside id="chatDrawer" class="system-drawer">
     <div class="system-drawer__head">
         <div>
-            <h3 id="chatDrawerTitle">Чат</h3>
-            <small id="chatDrawerSubtitle">Общий чат компании</small>
+            <h3 id="chatDrawerTitle">Коммуникации</h3>
+            <small id="chatDrawerSubtitle">Команда и клиенты WhatsApp</small>
         </div>
         <button class="drawer-close" type="button" onclick="closeSystemDrawers()">×</button>
     </div>
 
-    <div class="chat-layout">
-        <div class="chat-sidebar">
-            <button id="generalChatButton"
-                    class="chat-contact active"
-                    type="button"
-                    onclick="selectChat('general')">
-                <span class="chat-contact__avatar">👥</span>
-                <span class="chat-contact__main">
-                    <b>Общий чат</b>
-                    <small>Все сотрудники</small>
-                </span>
-                <span id="generalChatUnread" class="chat-contact__badge">0</span>
-            </button>
+    <div class="chat-channel-tabs">
+        <button id="teamChatTab" class="chat-channel-tab active" type="button" onclick="switchChatChannel('team')">
+            Команда
+            <span id="teamChatTabBadge" class="chat-channel-tab__badge">0</span>
+        </button>
+        <button id="whatsappChatTab" class="chat-channel-tab" type="button" onclick="switchChatChannel('whatsapp')">
+            WhatsApp
+            <span id="whatsappChatTabBadge" class="chat-channel-tab__badge">0</span>
+        </button>
+    </div>
 
-            <div class="chat-sidebar__caption">Личные сообщения</div>
-            <div id="chatContacts" class="chat-contacts">
-                <div class="drawer-empty">Загрузка сотрудников…</div>
+    <div id="teamChatPanel" class="chat-channel-panel active">
+        <div class="chat-layout">
+            <div class="chat-sidebar">
+                <button id="generalChatButton"
+                        class="chat-contact active"
+                        type="button"
+                        onclick="selectChat('general')">
+                    <span class="chat-contact__avatar">👥</span>
+                    <span class="chat-contact__main">
+                        <b>Общий чат</b>
+                        <small>Все сотрудники</small>
+                    </span>
+                    <span id="generalChatUnread" class="chat-contact__badge">0</span>
+                </button>
+
+                <div class="chat-sidebar__caption">Личные сообщения</div>
+                <div id="chatContacts" class="chat-contacts">
+                    <div class="drawer-empty">Загрузка сотрудников…</div>
+                </div>
+            </div>
+
+            <div class="chat-main">
+                <div id="chatMessages" class="system-drawer__body chat-messages">
+                    <div class="drawer-empty">Загрузка сообщений…</div>
+                </div>
+
+                <div class="chat-composer">
+                    <textarea id="chatInput" maxlength="2000" placeholder="Напишите сообщение…"></textarea>
+                    <button type="button" onclick="sendChatMessage()">➤</button>
+                </div>
             </div>
         </div>
+    </div>
 
-        <div class="chat-main">
-            <div id="chatMessages" class="system-drawer__body chat-messages">
-                <div class="drawer-empty">Загрузка сообщений…</div>
+    <div id="whatsappChatPanel" class="chat-channel-panel">
+        <div class="chat-layout">
+            <div class="chat-sidebar">
+                <div class="whatsapp-search">
+                    <input id="whatsappChatSearch" type="search" placeholder="Поиск клиента или номера…" oninput="debouncedWhatsappSearch()">
+                </div>
+                <div class="chat-sidebar__caption">Клиенты WhatsApp</div>
+                <div id="whatsappChatContacts" class="chat-contacts">
+                    <div class="drawer-empty">Загрузка WhatsApp-чатов…</div>
+                </div>
             </div>
 
-            <div class="chat-composer">
-                <textarea id="chatInput" maxlength="2000" placeholder="Напишите сообщение…"></textarea>
-                <button type="button" onclick="sendChatMessage()">➤</button>
+            <div class="chat-main">
+                <div class="whatsapp-chat-header">
+                    <div>
+                        <b id="whatsappActiveName">Выберите диалог</b>
+                        <small id="whatsappActivePhone">Переписка с клиентом</small>
+                    </div>
+                    <a id="whatsappCustomerLink" class="whatsapp-customer-link" href="#">Открыть клиента</a>
+                </div>
+
+                <div id="whatsappMessages" class="system-drawer__body chat-messages">
+                    <div class="drawer-empty">Выберите чат слева</div>
+                </div>
+
+                <div class="chat-composer">
+                    <textarea id="whatsappChatInput" maxlength="4000" placeholder="Ответить клиенту в WhatsApp…" disabled></textarea>
+                    <button id="whatsappSendButton" type="button" onclick="sendWhatsappChatMessage()" disabled>➤</button>
+                </div>
             </div>
         </div>
     </div>
 </aside>
-
 
 <div id="systemToastWrap" class="system-toast-wrap"></div>
 
@@ -2892,6 +3043,15 @@ let chatDrawerWasOpened = false;
 let activeChatType = "general";
 let activeChatUserId = null;
 let activeChatUserName = "";
+let activeChatChannel = "team";
+let teamUnreadTotal = 0;
+let whatsappUnreadTotal = 0;
+let activeWhatsappChatId = null;
+let activeWhatsappChatName = "";
+let activeWhatsappChatPhone = "";
+let activeWhatsappCustomerId = null;
+let lastWhatsappMessageId = 0;
+let whatsappSearchTimer = null;
 
 function normalizePath(path) {
     if (!path) return "/";
@@ -2966,7 +3126,11 @@ function openSystemDrawer(type) {
 
     if (type === "chat") {
         chatDrawerWasOpened = true;
-        loadChatConversations(true);
+        if (activeChatChannel === "whatsapp") {
+            loadWhatsappChats(true);
+        } else {
+            loadChatConversations(true);
+        }
     } else {
         loadNotifications();
     }
@@ -3005,6 +3169,34 @@ function updateBadge(id, count) {
     if (!badge) return;
     badge.textContent = count > 99 ? "99+" : count;
     badge.classList.toggle("show", count > 0);
+}
+
+function updateCombinedChatBadge() {
+    updateBadge("chatBadge", Number(teamUnreadTotal || 0) + Number(whatsappUnreadTotal || 0));
+    updateBadge("teamChatTabBadge", Number(teamUnreadTotal || 0));
+    updateBadge("whatsappChatTabBadge", Number(whatsappUnreadTotal || 0));
+}
+
+function switchChatChannel(channel) {
+    activeChatChannel = channel === "whatsapp" ? "whatsapp" : "team";
+
+    document.getElementById("teamChatTab")?.classList.toggle("active", activeChatChannel === "team");
+    document.getElementById("whatsappChatTab")?.classList.toggle("active", activeChatChannel === "whatsapp");
+    document.getElementById("teamChatPanel")?.classList.toggle("active", activeChatChannel === "team");
+    document.getElementById("whatsappChatPanel")?.classList.toggle("active", activeChatChannel === "whatsapp");
+
+    const title = document.getElementById("chatDrawerTitle");
+    const subtitle = document.getElementById("chatDrawerSubtitle");
+
+    if (activeChatChannel === "whatsapp") {
+        if (title) title.textContent = "WhatsApp";
+        if (subtitle) subtitle.textContent = "Диалоги с клиентами";
+        loadWhatsappChats(true);
+    } else {
+        if (title) title.textContent = activeChatType === "private" ? activeChatUserName : "Общий чат";
+        if (subtitle) subtitle.textContent = activeChatType === "private" ? "Личные сообщения" : "Все участники компании";
+        loadChatConversations(true);
+    }
 }
 
 async function loadNotifications(silent = false) {
@@ -3073,7 +3265,8 @@ async function loadChatConversations(loadMessagesAfter = false) {
         if (!response.ok) return;
 
         const data = await response.json();
-        updateBadge("chatBadge", data.total_unread || 0);
+        teamUnreadTotal = data.total_unread || 0;
+        updateCombinedChatBadge();
 
         const generalBadge = document.getElementById("generalChatUnread");
         if (generalBadge) {
@@ -3229,6 +3422,181 @@ async function sendChatMessage() {
     }
 }
 
+
+function debouncedWhatsappSearch() {
+    clearTimeout(whatsappSearchTimer);
+    whatsappSearchTimer = setTimeout(() => loadWhatsappChats(false), 250);
+}
+
+async function loadWhatsappChats(loadMessagesAfter = false) {
+    try {
+        const search = document.getElementById("whatsappChatSearch")?.value.trim() || "";
+        const params = new URLSearchParams({limit: "100"});
+        if (search) params.set("search", search);
+
+        const response = await fetch(`/whatsapp/api/chats?${params.toString()}`, {
+            headers: {"Accept": "application/json"}
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (!data.ok) return;
+
+        whatsappUnreadTotal = data.total_unread || 0;
+        updateCombinedChatBadge();
+
+        const contacts = document.getElementById("whatsappChatContacts");
+        if (!contacts) return;
+
+        if (!data.items?.length) {
+            contacts.innerHTML = '<div class="drawer-empty">Диалогов WhatsApp пока нет</div>';
+            return;
+        }
+
+        contacts.innerHTML = data.items.map(chat => `
+            <button class="chat-contact ${Number(activeWhatsappChatId) === Number(chat.id) ? "active" : ""}"
+                    type="button"
+                    onclick='selectWhatsappChat(${JSON.stringify(chat.id)}, ${JSON.stringify(chat.display_name)}, ${JSON.stringify(chat.phone)}, ${JSON.stringify(chat.customer_id)})'>
+                <span class="chat-contact__avatar whatsapp-avatar">
+                    ${escapeHtml((chat.display_name || "WA").slice(0, 2).toUpperCase())}
+                </span>
+                <span class="chat-contact__main">
+                    <b>${escapeHtml(chat.display_name || chat.phone || "Клиент")}</b>
+                    <small>${escapeHtml(chat.last_message || chat.phone || "Новый диалог")}</small>
+                </span>
+                <span class="chat-contact__badge ${chat.unread_count > 0 ? "show" : ""}">
+                    ${chat.unread_count > 99 ? "99+" : chat.unread_count}
+                </span>
+            </button>
+        `).join("");
+
+        if (loadMessagesAfter && activeWhatsappChatId) {
+            await loadWhatsappMessages(true);
+        }
+    } catch (error) {
+        console.error("WhatsApp chats error:", error);
+    }
+}
+
+function selectWhatsappChat(chatId, chatName = "", phone = "", customerId = null) {
+    activeWhatsappChatId = Number(chatId);
+    activeWhatsappChatName = chatName || phone || "Клиент";
+    activeWhatsappChatPhone = phone || "";
+    activeWhatsappCustomerId = customerId || null;
+
+    const name = document.getElementById("whatsappActiveName");
+    const phoneBox = document.getElementById("whatsappActivePhone");
+    const input = document.getElementById("whatsappChatInput");
+    const button = document.getElementById("whatsappSendButton");
+    const link = document.getElementById("whatsappCustomerLink");
+
+    if (name) name.textContent = activeWhatsappChatName;
+    if (phoneBox) phoneBox.textContent = activeWhatsappChatPhone || "WhatsApp";
+    if (input) input.disabled = false;
+    if (button) button.disabled = false;
+
+    if (link) {
+        if (activeWhatsappCustomerId) {
+            link.href = `/clients/${activeWhatsappCustomerId}`;
+            link.classList.add("show");
+        } else {
+            link.removeAttribute("href");
+            link.classList.remove("show");
+        }
+    }
+
+    loadWhatsappChats(false);
+    loadWhatsappMessages(true);
+}
+
+async function loadWhatsappMessages(scrollToBottom = false) {
+    if (!activeWhatsappChatId) return;
+
+    try {
+        const response = await fetch(`/whatsapp/api/chats/${activeWhatsappChatId}/messages?limit=200`, {
+            headers: {"Accept": "application/json"}
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (!data.ok) return;
+
+        const box = document.getElementById("whatsappMessages");
+        if (!box) return;
+
+        const newestId = data.items?.length ? data.items[data.items.length - 1].id : 0;
+        const drawerOpen = document.getElementById("chatDrawer")?.classList.contains("open");
+
+        if ((!drawerOpen || activeChatChannel !== "whatsapp") && lastWhatsappMessageId && newestId > lastWhatsappMessageId) {
+            const incoming = [...(data.items || [])].reverse()
+                .find(item => item.id > lastWhatsappMessageId && !item.is_mine);
+            if (incoming) showSystemToast(`WhatsApp: ${activeWhatsappChatName}`, incoming.message);
+        }
+        lastWhatsappMessageId = Math.max(lastWhatsappMessageId, newestId);
+
+        if (!data.items?.length) {
+            box.innerHTML = '<div class="drawer-empty">Сообщений пока нет</div>';
+        } else {
+            box.innerHTML = data.items.map(item => `
+                <article class="chat-message ${item.is_mine ? "mine" : ""} ${item.is_ai ? "whatsapp-message-ai" : ""}">
+                    <div class="chat-message__meta">
+                        <b>${item.is_mine ? (item.is_ai ? "Nika AI" : "Вы") : escapeHtml(activeWhatsappChatName)}</b>
+                        <time>${escapeHtml(item.created_at_label)}</time>
+                    </div>
+                    <p>${escapeHtml(item.message || `[${item.message_type}]`)}</p>
+                    ${item.is_mine && item.status ? `<span class="whatsapp-status">${escapeHtml(item.status)}</span>` : ""}
+                </article>
+            `).join("");
+        }
+
+        if (scrollToBottom || (drawerOpen && activeChatChannel === "whatsapp")) {
+            box.scrollTop = box.scrollHeight;
+        }
+
+        await loadWhatsappChats(false);
+    } catch (error) {
+        console.error("WhatsApp messages error:", error);
+    }
+}
+
+async function sendWhatsappChatMessage() {
+    const input = document.getElementById("whatsappChatInput");
+    const button = document.getElementById("whatsappSendButton");
+    const message = input?.value.trim();
+
+    if (!activeWhatsappChatId) {
+        alert("Выберите WhatsApp-диалог");
+        return;
+    }
+    if (!message) return;
+
+    input.disabled = true;
+    if (button) button.disabled = true;
+
+    try {
+        const response = await fetch(`/whatsapp/api/chats/${activeWhatsappChatId}/messages`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({message})
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            alert(data.error || "Не удалось отправить сообщение");
+            return;
+        }
+
+        input.value = "";
+        await loadWhatsappMessages(true);
+    } catch (error) {
+        alert("Не удалось отправить сообщение");
+    } finally {
+        input.disabled = false;
+        if (button) button.disabled = false;
+        input.focus();
+    }
+}
+
 async function pingPresence() {
     try {
         const response = await fetch("/api/presence/ping", {method: "POST"});
@@ -3256,15 +3624,25 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    document.getElementById("whatsappChatInput")?.addEventListener("keydown", event => {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            sendWhatsappChatMessage();
+        }
+    });
+
     loadNotifications();
     loadChatConversations(true);
+    loadWhatsappChats(false);
     pingPresence();
 
     setInterval(() => loadNotifications(true), 15000);
     setInterval(() => {
         const drawerOpen = document.getElementById("chatDrawer")?.classList.contains("open");
         loadChatConversations(false);
-        if (drawerOpen) loadChatMessages(false);
+        loadWhatsappChats(false);
+        if (drawerOpen && activeChatChannel === "team") loadChatMessages(false);
+        if (drawerOpen && activeChatChannel === "whatsapp" && activeWhatsappChatId) loadWhatsappMessages(false);
     }, 5000);
     setInterval(pingPresence, 30000);
 });
