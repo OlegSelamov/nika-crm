@@ -2844,6 +2844,8 @@ body.wa-modal-open {
 		}
 
 </style>
+
+	{% block page_css %}{% endblock %}
 </head>
 
 <body>
@@ -4383,6 +4385,10 @@ document.addEventListener("click", function(event) {
 })();
 
 </script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% block page_js %}{% endblock %}
 
 </body>
 </html>
