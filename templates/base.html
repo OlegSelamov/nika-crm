@@ -2595,8 +2595,37 @@
 .wa-empty-client{padding:30px 10px;text-align:center;color:#929caf;font-size:10px;line-height:1.5;}
 .whatsapp-chat-header__actions{display:flex;gap:7px;align-items:center;}
 .wa-icon-btn{width:34px;height:34px;border:1px solid #e5eaf1;border-radius:10px;background:#f8fafc;cursor:pointer;color:#64748b;}
-@media(max-width:920px){#whatsappChatPanel .chat-layout{grid-template-columns:220px minmax(0,1fr)}.wa-client-panel{display:none;}}
-@media(max-width:768px){#chatDrawer{width:calc(100vw - 8px)}#whatsappChatPanel .chat-layout{grid-template-columns:108px minmax(0,1fr)}.whatsapp-search{padding:5px}.whatsapp-search input{font-size:8px;padding:0 7px}.wa-chat-time{display:none}}
+@media (max-width: 920px) {
+    #whatsappChatPanel .chat-layout {
+        grid-template-columns: 220px minmax(0, 1fr);
+    }
+
+    .wa-client-panel {
+        display: none;
+    }
+}
+@media (max-width: 768px) {
+    #chatDrawer {
+        width: calc(100vw - 8px);
+    }
+
+    #whatsappChatPanel .chat-layout {
+        grid-template-columns: 108px minmax(0, 1fr);
+    }
+
+    .whatsapp-search {
+        padding: 5px;
+    }
+
+    .whatsapp-search input {
+        font-size: 8px;
+        padding: 0 7px;
+    }
+
+    .wa-chat-time {
+        display: none;
+    }
+}
 
 </style>
 </head>
