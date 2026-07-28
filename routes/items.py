@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, jsonify
+from flask import Blueprint, render_template, request, redirect, jsonify, send_file
 from models import get_db, pool
 from werkzeug.utils import secure_filename
 from flask import session
@@ -7,6 +7,11 @@ from flask import jsonify
 import json
 import os
 import uuid
+from io import BytesIO
+from decimal import Decimal, InvalidOperation
+
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 UPLOAD_DIR = os.path.join(
     "static",
@@ -681,3 +686,284 @@ def api_create_item():
         "success": True,
         "item": dict(item)
     })
+
+# ================== ИМПОРТ / ЭКСПОРТ КАТАЛОГА ==================
+
+_CATALOG_HEADERS = [
+    "Название", "Тип", "Категория", "Ед. изм.", "Штрихкод",
+    "GTIN", "NTIN", "Закупочная цена", "Оптовая цена",
+    "Розничная цена", "Скидка %", "Описание", "Количество"
+]
+
+_CATALOG_ALIASES = {
+    "название": "name", "наименование": "name", "товар": "name",
+    "тип": "item_type", "тип позиции": "item_type",
+    "категория": "category",
+    "ед. изм.": "unit", "ед изм": "unit", "единица измерения": "unit",
+    "штрихкод": "barcode", "barcode": "barcode", "ean": "barcode",
+    "gtin": "gtin", "ntin": "ntin",
+    "закупочная цена": "purchase_price", "закуп": "purchase_price",
+    "оптовая цена": "wholesale_price", "опт": "wholesale_price",
+    "розничная цена": "retail_price", "цена": "retail_price",
+    "скидка %": "discount_percent", "скидка": "discount_percent",
+    "описание": "description", "количество": "quantity", "остаток": "quantity",
+}
+
+
+def _catalog_number(value, default=0):
+    if value in (None, ""):
+        return default
+    try:
+        normalized = str(value).strip().replace(" ", "").replace(",", ".")
+        return Decimal(normalized)
+    except (InvalidOperation, ValueError):
+        return default
+
+
+def _catalog_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def _style_excel_sheet(ws):
+    header_fill = PatternFill("solid", fgColor="252B3A")
+    header_font = Font(color="FFFFFF", bold=True)
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.freeze_panes = "A2"
+    widths = [34, 14, 24, 13, 20, 18, 18, 18, 18, 18, 12, 40, 14]
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + index)].width = width
+    ws.auto_filter.ref = ws.dimensions
+
+
+@items_bp.route("/items/export.xlsx")
+def export_items_xlsx():
+    company_id = session.get("company_id")
+    if not company_id:
+        return "Компания не выбрана", 403
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT name, item_type, category, unit, barcode, gtin, ntin,
+                   purchase_price, wholesale_price, retail_price,
+                   discount_percent, description, quantity
+            FROM items
+            WHERE company_id = %s
+            ORDER BY COALESCE(item_type, 'product'), category, name
+        """, (company_id,))
+        rows = cur.fetchall()
+    finally:
+        pool.putconn(conn)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Каталог"
+    ws.append(_CATALOG_HEADERS)
+
+    for row in rows:
+        ws.append([
+            row.get("name") or "",
+            "Услуга" if (row.get("item_type") or "product") == "service" else "Товар",
+            row.get("category") or "",
+            row.get("unit") or "",
+            row.get("barcode") or "",
+            row.get("gtin") or "",
+            row.get("ntin") or "",
+            row.get("purchase_price") or 0,
+            row.get("wholesale_price") or 0,
+            row.get("retail_price") or 0,
+            row.get("discount_percent") or 0,
+            row.get("description") or "",
+            row.get("quantity") or 0,
+        ])
+
+    _style_excel_sheet(ws)
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=f"nika_catalog_company_{company_id}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@items_bp.route("/items/import-template.xlsx")
+def items_import_template():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Каталог"
+    ws.append(_CATALOG_HEADERS)
+    ws.append([
+        "Масло моторное 5W-30", "Товар", "Масла", "шт",
+        "4870000000000", "", "", 12000, 0, 15500, 0,
+        "Пример товара. Эту строку можно удалить.", 10
+    ])
+    ws.append([
+        "Замена масла", "Услуга", "Автосервис", "услуга",
+        "", "", "", 0, 0, 5000, 0,
+        "Пример услуги. Эту строку можно удалить.", 0
+    ])
+    _style_excel_sheet(ws)
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="nika_catalog_import_template.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@items_bp.route("/items/import", methods=["POST"])
+def import_items_xlsx():
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "message": "Компания не выбрана"}), 403
+
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify({"success": False, "message": "Выберите Excel-файл"}), 400
+    if not upload.filename.lower().endswith(".xlsx"):
+        return jsonify({"success": False, "message": "Поддерживается формат .xlsx"}), 400
+
+    duplicate_mode = request.form.get("duplicate_mode", "skip")
+    if duplicate_mode not in ("skip", "update"):
+        duplicate_mode = "skip"
+
+    try:
+        wb = load_workbook(upload, read_only=True, data_only=True)
+        ws = wb.active
+    except Exception:
+        return jsonify({"success": False, "message": "Не удалось открыть Excel-файл"}), 400
+
+    raw_headers = [_catalog_text(cell.value).lower() for cell in ws[1]]
+    header_map = {}
+    for column_index, header in enumerate(raw_headers, start=1):
+        field = _CATALOG_ALIASES.get(header)
+        if field:
+            header_map[field] = column_index
+
+    if "name" not in header_map:
+        return jsonify({
+            "success": False,
+            "message": "В файле нет обязательной колонки «Название»"
+        }), 400
+
+    def value(row, field):
+        column = header_map.get(field)
+        return row[column - 1] if column else None
+
+    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        for excel_row, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            name = _catalog_text(value(row, "name"))
+            if not name:
+                continue
+
+            try:
+                raw_type = _catalog_text(value(row, "item_type")).lower()
+                item_type = "service" if raw_type in ("услуга", "service", "работа") else "product"
+                category = _catalog_text(value(row, "category")) or ("Услуги" if item_type == "service" else "Без категории")
+                barcode = _catalog_text(value(row, "barcode"))
+                gtin = _catalog_text(value(row, "gtin"))
+                ntin = _catalog_text(value(row, "ntin"))
+                unit = _catalog_text(value(row, "unit")) or ("услуга" if item_type == "service" else "шт")
+                purchase_price = _catalog_number(value(row, "purchase_price"))
+                wholesale_price = _catalog_number(value(row, "wholesale_price"))
+                retail_price = _catalog_number(value(row, "retail_price"))
+                discount_percent = int(_catalog_number(value(row, "discount_percent")))
+                description = _catalog_text(value(row, "description"))
+                quantity = _catalog_number(value(row, "quantity")) if item_type == "product" else Decimal("0")
+
+                cur.execute("""
+                    INSERT INTO categories (company_id, name, markup_percent, category_type)
+                    SELECT %s, %s, 0, %s
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM categories
+                        WHERE company_id = %s AND LOWER(name) = LOWER(%s)
+                              AND category_type = %s
+                    )
+                """, (company_id, category, item_type, company_id, category, item_type))
+
+                existing = None
+                if barcode:
+                    cur.execute("""
+                        SELECT id FROM items
+                        WHERE company_id = %s AND barcode = %s
+                              AND COALESCE(item_type, 'product') = %s
+                        LIMIT 1
+                    """, (company_id, barcode, item_type))
+                    existing = cur.fetchone()
+
+                if not existing:
+                    cur.execute("""
+                        SELECT id FROM items
+                        WHERE company_id = %s AND LOWER(name) = LOWER(%s)
+                              AND COALESCE(item_type, 'product') = %s
+                        LIMIT 1
+                    """, (company_id, name, item_type))
+                    existing = cur.fetchone()
+
+                if existing and duplicate_mode == "skip":
+                    stats["skipped"] += 1
+                    continue
+
+                if existing:
+                    cur.execute("""
+                        UPDATE items SET
+                            name=%s, category=%s, unit=%s, description=%s,
+                            retail_price=%s, wholesale_price=%s, purchase_price=%s,
+                            discount_percent=%s, barcode=%s, gtin=%s, ntin=%s,
+                            item_type=%s, quantity=%s,
+                            is_marked=CASE WHEN %s='service' THEN FALSE ELSE COALESCE(is_marked, FALSE) END
+                        WHERE id=%s AND company_id=%s
+                    """, (
+                        name, category, unit, description, retail_price,
+                        wholesale_price, purchase_price, discount_percent,
+                        barcode, gtin, ntin, item_type, quantity,
+                        item_type, existing["id"], company_id
+                    ))
+                    stats["updated"] += 1
+                else:
+                    cur.execute("""
+                        INSERT INTO items (
+                            name, category, unit, description, retail_price,
+                            wholesale_price, purchase_price, discount_percent,
+                            barcode, gtin, ntin, is_marked, item_type,
+                            service_sale_mode, quantity, company_id
+                        ) VALUES (
+                            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE,%s,%s,%s,%s
+                        )
+                    """, (
+                        name, category, unit, description, retail_price,
+                        wholesale_price, purchase_price, discount_percent,
+                        barcode, gtin, ntin, item_type,
+                        "order" if item_type == "service" else None,
+                        quantity, company_id
+                    ))
+                    stats["created"] += 1
+            except Exception as row_error:
+                stats["errors"].append({"row": excel_row, "message": str(row_error)[:180]})
+                if len(stats["errors"]) >= 50:
+                    break
+
+        conn.commit()
+        return jsonify({"success": True, **stats})
+    except Exception as error:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(error)}), 500
+    finally:
+        pool.putconn(conn)

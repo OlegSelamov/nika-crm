@@ -247,7 +247,10 @@ body.catalog-modal-open { overflow:hidden; }
             <h1 class="catalog-title">Каталог</h1>
             <div class="catalog-note">Товары и услуги, цены, категории, штрихкоды и единицы измерения</div>
         </div>
-        <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()"><img src="/static/icons/add.png" class="catalog-btn-icon" alt="">Добавить позицию</button>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="nika-data-trigger" type="button" onclick="openCatalogDataModal()"><span class="nika-data-trigger__icon">▤</span>Данные</button>
+            <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()"><img src="/static/icons/add.png" class="catalog-btn-icon" alt="">Добавить позицию</button>
+        </div>
     </div>
 
     <section class="catalog-section">
@@ -398,6 +401,65 @@ body.catalog-modal-open { overflow:hidden; }
             <p>Измените поисковый запрос или выбранную категорию.</p>
         </div>
     </section>
+</div>
+
+
+<div class="nika-data-modal" id="catalogDataModal" aria-hidden="true">
+    <div class="nika-data-modal__backdrop" onclick="closeCatalogDataModal()"></div>
+    <div class="nika-data-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="catalogDataModalTitle">
+        <div class="nika-data-modal__head">
+            <div>
+                <span class="nika-data-modal__eyebrow">NIKA DATA CENTER</span>
+                <h2 id="catalogDataModalTitle">Данные: каталог</h2>
+                <p>Импортируйте, выгружайте и сохраняйте рабочую базу в Excel.</p>
+            </div>
+            <button type="button" class="nika-data-modal__close" onclick="closeCatalogDataModal()" aria-label="Закрыть">×</button>
+        </div>
+
+        <div class="nika-data-actions-grid">
+            <a class="nika-data-action" href="/items/export.xlsx">
+                <span class="nika-data-action__icon">↓</span>
+                <span><b>Экспорт Excel</b><small>Скачать текущие данные</small></span>
+            </a>
+            <a class="nika-data-action" href="/items/import-template.xlsx">
+                <span class="nika-data-action__icon">▤</span>
+                <span><b>Скачать шаблон</b><small>Правильная структура файла</small></span>
+            </a>
+        </div>
+
+        <form id="catalogDataImportForm" class="nika-data-import" enctype="multipart/form-data">
+            <div class="nika-data-import__title">
+                <div><b>Импорт из Excel</b><small>NTIN, GTIN, штрихкод и фотографии необязательны.</small></div>
+                <span class="nika-data-safe-badge">Безопасный режим</span>
+            </div>
+
+            <label class="nika-data-dropzone" id="catalogDataDropzone">
+                <input type="file" name="file" accept=".xlsx" required id="catalogDataFileInput">
+                <span class="nika-data-dropzone__icon">↑</span>
+                <b id="catalogDataFileName">Выберите Excel-файл</b>
+                <small>Нажмите сюда или перетащите файл .xlsx</small>
+            </label>
+
+            <label class="nika-data-field">
+                <span>Что делать с найденными позициями</span>
+                <select name="duplicate_mode">
+                    <option value="skip">Не менять — пропустить найденные</option>
+                    <option value="update">Обновить данными из Excel</option>
+                </select>
+            </label>
+
+            <div class="nika-data-warning">
+                По умолчанию существующие записи не изменяются. Если импорт завершится ошибкой, транзакция будет отменена.
+            </div>
+
+            <div id="catalogDataImportResult" class="nika-data-result"></div>
+
+            <div class="nika-data-modal__footer">
+                <button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeCatalogDataModal()">Отмена</button>
+                <button type="submit" class="nika-data-btn nika-data-btn--primary">Начать импорт</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="catalog-modal" id="itemModal" aria-hidden="true">
@@ -1382,5 +1444,175 @@ async function removeCategory(row){
 .category-manager__meta b{font-size:13px!important;}
 .category-manager__meta small{font-size:11px!important;}
 </style>
+
+
+<style>
+.nika-data-trigger{min-height:42px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;border:1px solid #d9d2ff;border-radius:12px;color:#7257ff;background:#efecff;font:inherit;font-size:13px;font-weight:850;cursor:pointer;transition:.18s ease}.nika-data-trigger:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(114,87,255,.14)}.nika-data-trigger__icon{width:24px;height:24px;display:grid;place-items:center;border-radius:8px;color:#fff;background:linear-gradient(135deg,#7257ff,#9a59e8);font-size:15px}.nika-data-modal{position:fixed!important;inset:0!important;z-index:2147483500!important;display:none;align-items:center;justify-content:center;width:100vw!important;height:100dvh!important;padding:12px}.nika-data-modal.is-open{display:flex}.nika-data-modal__backdrop{position:fixed;inset:0;background:rgba(35,31,60,.48);backdrop-filter:blur(8px)}.nika-data-modal__dialog{position:relative;z-index:1;width:min(680px,100%);max-height:calc(100dvh - 24px);overflow-y:auto;border:1px solid #ded9f4;border-radius:22px;background:#fff;box-shadow:0 32px 100px rgba(33,25,77,.32)}.nika-data-modal__head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:21px 22px;border-bottom:1px solid #e7e3f2;background:linear-gradient(180deg,#fcfbff,#f7f5ff)}.nika-data-modal__eyebrow{display:block;margin-bottom:5px;color:#7257ff;font-size:9px;font-weight:900;letter-spacing:.12em}.nika-data-modal__head h2{margin:0 0 5px;color:#202434;font-size:20px}.nika-data-modal__head p{margin:0;color:#747a8d;font-size:12px}.nika-data-modal__close{flex:0 0 36px;width:36px;height:36px;border:1px solid #e0dcea;border-radius:11px;color:#676d7f;background:#f3f2f7;font-size:22px;cursor:pointer}.nika-data-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:18px 22px 0}.nika-data-action{min-width:0;display:flex;align-items:center;gap:11px;padding:13px;border:1px solid #e6e2f0;border-radius:14px;color:#202434;background:#fbfaff;text-decoration:none;transition:.18s ease}.nika-data-action:hover{transform:translateY(-1px);border-color:#cfc6ff;box-shadow:0 8px 18px rgba(114,87,255,.10)}.nika-data-action__icon{flex:0 0 40px;width:40px;height:40px;display:grid;place-items:center;border-radius:12px;color:#7257ff;background:#efecff;font-size:22px;font-weight:900}.nika-data-action span:last-child{min-width:0;display:grid;gap:3px}.nika-data-action b{font-size:13px}.nika-data-action small{color:#747a8d;font-size:10px}.nika-data-import{display:grid;gap:14px;padding:18px 22px 22px}.nika-data-import__title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.nika-data-import__title>div{display:grid;gap:4px}.nika-data-import__title b{font-size:15px}.nika-data-import__title small{color:#747a8d;font-size:11px}.nika-data-safe-badge{display:inline-flex;align-items:center;min-height:26px;padding:0 9px;border-radius:999px;color:#16815e;background:#e7f7f1;font-size:9px;font-weight:850;white-space:nowrap}.nika-data-dropzone{position:relative;min-height:145px;display:grid;place-content:center;justify-items:center;gap:6px;padding:18px;border:1.5px dashed #cfc7ed;border-radius:16px;background:#faf9ff;text-align:center;cursor:pointer;transition:.18s ease}.nika-data-dropzone:hover,.nika-data-dropzone.is-dragover{border-color:#7257ff;background:#f4f1ff}.nika-data-dropzone input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.nika-data-dropzone__icon{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;color:#fff;background:linear-gradient(135deg,#7257ff,#9a59e8);font-size:25px}.nika-data-dropzone b{max-width:100%;color:#202434;font-size:13px;overflow-wrap:anywhere}.nika-data-dropzone small{color:#747a8d;font-size:10px}.nika-data-field{display:grid;gap:7px}.nika-data-field>span{color:#555c70;font-size:11px;font-weight:800}.nika-data-field select{width:100%;min-height:44px;padding:0 12px;border:1px solid #e3dfee;border-radius:11px;color:#202434;background:#fff;font:inherit;font-size:12px;outline:0}.nika-data-warning{padding:11px 12px;border:1px solid #f0dfb7;border-radius:11px;color:#8c641a;background:#fff8e8;font-size:10px;line-height:1.45}.nika-data-result{display:none;padding:12px;border-radius:11px;font-size:11px;line-height:1.5}.nika-data-result.is-success{display:block;color:#167557;background:#e9f8f2;border:1px solid #c8eadf}.nika-data-result.is-error{display:block;color:#bd4040;background:#fdecec;border:1px solid #f3cccc}.nika-data-modal__footer{display:flex;justify-content:flex-end;gap:9px;padding-top:2px}.nika-data-btn{min-height:43px;padding:0 16px;border-radius:11px;font:inherit;font-size:12px;font-weight:850;cursor:pointer}.nika-data-btn--light{color:#7257ff;background:#efecff;border:1px solid #d9d2ff}.nika-data-btn--primary{color:#fff;background:linear-gradient(135deg,#7257ff,#9a59e8);border:0;box-shadow:0 8px 18px rgba(114,87,255,.2)}.nika-data-btn:disabled{opacity:.6;cursor:wait}body.nika-data-modal-open{overflow:hidden}@media(max-width:700px){.nika-data-actions-grid{grid-template-columns:1fr}.nika-data-modal{padding:6px}.nika-data-modal__dialog{max-height:calc(100dvh - 12px);border-radius:17px}.nika-data-modal__head,.nika-data-import{padding-left:15px;padding-right:15px}.nika-data-actions-grid{padding-left:15px;padding-right:15px}.nika-data-modal__footer{display:grid;grid-template-columns:1fr 1fr}.nika-data-trigger{width:100%}}
+</style>
+
+
+<script>
+function mountNikaDataModal(id) {
+    const modal = document.getElementById(id);
+    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+    return modal;
+}
+function openCatalogDataModal() {
+    const modal = mountNikaDataModal('catalogDataModal');
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('nika-data-modal-open');
+}
+function closeCatalogDataModal() {
+    const modal = document.getElementById('catalogDataModal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('nika-data-modal-open');
+}
+function openClientsDataModal() {
+    const modal = mountNikaDataModal('clientsDataModal');
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('nika-data-modal-open');
+}
+function closeClientsDataModal() {
+    const modal = document.getElementById('clientsDataModal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('nika-data-modal-open');
+}
+function updateCatalogDataFile(input) {
+    updateNikaDataFileName(input, 'catalogDataFileName');
+}
+function updateClientsDataFile(input) {
+    updateNikaDataFileName(input, 'clientsDataFileName');
+}
+function updateNikaDataFileName(input, labelId) {
+    const label = document.getElementById(labelId);
+    const file = input && input.files ? input.files[0] : null;
+    if (!label) return;
+    label.textContent = file ? file.name : 'Выберите Excel-файл';
+}
+function showNikaDataResult(resultId, type, message) {
+    const result = document.getElementById(resultId);
+    if (!result) return;
+    result.className = 'nika-data-result ' + (type === 'success' ? 'is-success' : 'is-error');
+    result.innerHTML = message;
+}
+async function submitNikaDataImport(formId, url, resultId) {
+    const form = document.getElementById(formId);
+    if (!form) return;
+    const input = form.querySelector('input[type="file"]');
+    const file = input && input.files ? input.files[0] : null;
+    if (!file) {
+        showNikaDataResult(resultId, 'error', 'Сначала выберите Excel-файл.');
+        return;
+    }
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+        showNikaDataResult(resultId, 'error', 'Поддерживается только файл формата .xlsx');
+        return;
+    }
+
+    const submit = form.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    submit.textContent = 'Импортируем…';
+    const result = document.getElementById(resultId);
+    if (result) {
+        result.className = 'nika-data-result';
+        result.textContent = '';
+    }
+
+    try {
+        const response = await fetch(url, { method: 'POST', body: new FormData(form) });
+        const raw = await response.text();
+        let data;
+        try { data = raw ? JSON.parse(raw) : {}; }
+        catch (_) { throw new Error(raw || 'Сервер вернул некорректный ответ'); }
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || data.error || 'Ошибка импорта');
+        }
+
+        const errors = Array.isArray(data.errors) ? data.errors : [];
+        let html = `Создано: <b>${data.created || 0}</b><br>` +
+                   `Обновлено: <b>${data.updated || 0}</b><br>` +
+                   `Пропущено: <b>${data.skipped || 0}</b><br>` +
+                   `Ошибок: <b>${errors.length}</b>`;
+        if (errors.length) {
+            const errorLines = errors.slice(0, 8).map(function(error) {
+                if (typeof error === 'string') return error;
+                const row = error && error.row ? `Строка ${error.row}: ` : '';
+                const message = error && error.message ? error.message : JSON.stringify(error);
+                return row + message;
+            });
+            html += `<br><br><b>Причины:</b><br><small>${errorLines.join('<br>')}</small>`;
+        }
+        showNikaDataResult(resultId, 'success', html);
+        if (!errors.length) setTimeout(() => window.location.reload(), 1100);
+    } catch (error) {
+        showNikaDataResult(resultId, 'error', error.message || 'Не удалось выполнить импорт');
+    } finally {
+        submit.disabled = false;
+        submit.textContent = 'Начать импорт';
+    }
+}
+function attachNikaDropzone(zone) {
+    const input = zone.querySelector('input[type="file"]');
+    if (!input) return;
+
+    ['dragenter', 'dragover'].forEach(type => zone.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        zone.classList.add('is-dragover');
+    }));
+    ['dragleave', 'drop'].forEach(type => zone.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        zone.classList.remove('is-dragover');
+    }));
+    zone.addEventListener('drop', event => {
+        const files = event.dataTransfer && event.dataTransfer.files;
+        if (!files || !files.length) return;
+        try {
+            const transfer = new DataTransfer();
+            transfer.items.add(files[0]);
+            input.files = transfer.files;
+        } catch (_) {
+            try { input.files = files; } catch (__){ return; }
+        }
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+}
+document.addEventListener('DOMContentLoaded', () => {
+    mountNikaDataModal('catalogDataModal');
+    mountNikaDataModal('clientsDataModal');
+
+    const catalogInput = document.getElementById('catalogDataFileInput');
+    if (catalogInput) catalogInput.addEventListener('change', () => updateCatalogDataFile(catalogInput));
+    const clientsInput = document.getElementById('clientsDataFileInput');
+    if (clientsInput) clientsInput.addEventListener('change', () => updateClientsDataFile(clientsInput));
+
+    document.getElementById('catalogDataImportForm')?.addEventListener('submit', event => {
+        event.preventDefault();
+        submitNikaDataImport('catalogDataImportForm', '/items/import', 'catalogDataImportResult');
+    });
+    document.getElementById('clientsDataImportForm')?.addEventListener('submit', event => {
+        event.preventDefault();
+        submitNikaDataImport('clientsDataImportForm', '/clients/import', 'clientsDataImportResult');
+    });
+
+    document.querySelectorAll('.nika-data-dropzone').forEach(attachNikaDropzone);
+});
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        closeCatalogDataModal();
+        closeClientsDataModal();
+    }
+});
+</script>
 
 {% endblock %}

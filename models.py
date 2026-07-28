@@ -547,6 +547,15 @@ def init_db():
         conn.commit()
     except:
         conn.rollback()
+        
+    try:
+        cur.execute("""
+            ALTER TABLE items
+            ADD COLUMN service_sale_mode TEXT DEFAULT 'order'
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
 
     try:
         cur.execute("""

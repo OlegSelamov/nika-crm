@@ -8,9 +8,12 @@
             <div class="clients-note">Управление клиентской базой, статусами и контактами</div>
         </div>
 
-        <button class="clients-btn clients-btn--primary" type="button" onclick="openClientModal()">
-            ＋ Добавить клиента
-        </button>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="nika-data-trigger" type="button" onclick="openClientsDataModal()"><span class="nika-data-trigger__icon">▤</span>Данные</button>
+            <button class="clients-btn clients-btn--primary" type="button" onclick="openClientModal()">
+                ＋ Добавить клиента
+            </button>
+        </div>
     </div>
 
     <section class="clients-toolbar">
@@ -64,6 +67,7 @@
                     <tbody>
                     {% for c in clients %}
                     <tr class="client-record active-client-record"
+                        onclick="event.stopPropagation(); openClientCard({{ c.id }}, false)"
                         data-id="{{ c.id }}"
                         data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}"
                         data-company-name="{{ c.company_name or '' }}"
@@ -78,7 +82,7 @@
                         data-payment="{{ c.payment or 'Не оплачено' }}"
                         data-comment="{{ c.comment or '' }}">
                         <td>
-                            <a class="client-main" href="/clients/{{ c.id }}">
+                            <button class="client-main client-main--button" type="button" onclick="event.stopPropagation(); openClientCard({{ c.id }}, false)">
                                 <div class="client-avatar-mini">
                                     {% if c.photo %}
                                     <img src="{{ c.photo }}" alt="">
@@ -90,7 +94,7 @@
                                     <strong>{{ c.full_name or "Без имени" }}</strong>
                                     <small>{{ c.company_name or "Без компании" }}</small>
                                 </div>
-                            </a>
+                            </button>
                         </td>
                         <td>{{ c.iin or "—" }}</td>
                         <td>{{ c.phone or "—" }}</td>
@@ -103,12 +107,13 @@
                         <td>
                             <div class="client-actions">
                                 <button class="client-action client-action--edit" type="button"
-                                        onclick="openClientModal(this.closest('.client-record'))">
+                                        onclick="event.stopPropagation(); openClientCard(Number(this.closest('.client-record').dataset.id), true)">
                                     Изменить
                                 </button>
                                 <a class="client-action client-action--delete"
+                                   onclick="event.stopPropagation(); return confirm('Переместить клиента в удалённые?')"
                                    href="/clients/{{ c.id }}/delete"
-                                   onclick="return confirm('Переместить клиента в удалённые?')">
+                                   >
                                     Удалить
                                 </a>
                             </div>
@@ -122,6 +127,7 @@
             <div class="mobile-clients-list">
                 {% for c in clients %}
                 <article class="mobile-client-card client-record active-client-record"
+                         onclick="event.stopPropagation(); openClientCard({{ c.id }}, false)"
                          data-id="{{ c.id }}"
                          data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}"
                          data-company-name="{{ c.company_name or '' }}"
@@ -136,7 +142,7 @@
                          data-payment="{{ c.payment or 'Не оплачено' }}"
                          data-comment="{{ c.comment or '' }}">
                     <div class="mobile-client-top">
-                        <a class="client-main" href="/clients/{{ c.id }}">
+                        <button class="client-main client-main--button" type="button" onclick="event.stopPropagation(); openClientCard({{ c.id }}, false)">
                             <div class="client-avatar-mini">
                                 {% if c.photo %}<img src="{{ c.photo }}" alt="">{% else %}{{ (c.full_name or c.company_name or 'К')[:1]|upper }}{% endif %}
                             </div>
@@ -144,7 +150,7 @@
                                 <strong>{{ c.full_name or "Без имени" }}</strong>
                                 <small>{{ c.company_name or "Без компании" }}</small>
                             </div>
-                        </a>
+                        </button>
                         <span class="client-status client-status--{{ (c.status or 'Новый')|lower|replace(' ', '-') }}">{{ c.status or "Новый" }}</span>
                     </div>
                     <div class="mobile-client-info">
@@ -154,8 +160,8 @@
                         <span><small>Адрес</small>{{ c.address or "—" }}</span>
                     </div>
                     <div class="mobile-client-actions">
-                        <button class="client-action client-action--edit" type="button" onclick="openClientModal(this.closest('.client-record'))">Изменить</button>
-                        <a class="client-action client-action--delete" href="/clients/{{ c.id }}/delete" onclick="return confirm('Переместить клиента в удалённые?')">Удалить</a>
+                        <button class="client-action client-action--edit" type="button" onclick="event.stopPropagation(); openClientCard(Number(this.closest('.client-record').dataset.id), true)">Изменить</button>
+                        <a class="client-action client-action--delete" href="/clients/{{ c.id }}/delete" onclick="event.stopPropagation(); return confirm('Переместить клиента в удалённые?')">Удалить</a>
                     </div>
                 </article>
                 {% endfor %}
@@ -202,6 +208,65 @@
     </section>
 </div>
 
+
+<div class="nika-data-modal" id="clientsDataModal" aria-hidden="true">
+    <div class="nika-data-modal__backdrop" onclick="closeClientsDataModal()"></div>
+    <div class="nika-data-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="clientsDataModalTitle">
+        <div class="nika-data-modal__head">
+            <div>
+                <span class="nika-data-modal__eyebrow">NIKA DATA CENTER</span>
+                <h2 id="clientsDataModalTitle">Данные: клиенты</h2>
+                <p>Импортируйте, выгружайте и сохраняйте рабочую базу в Excel.</p>
+            </div>
+            <button type="button" class="nika-data-modal__close" onclick="closeClientsDataModal()" aria-label="Закрыть">×</button>
+        </div>
+
+        <div class="nika-data-actions-grid">
+            <a class="nika-data-action" href="/clients/export.xlsx">
+                <span class="nika-data-action__icon">↓</span>
+                <span><b>Экспорт Excel</b><small>Скачать текущие данные</small></span>
+            </a>
+            <a class="nika-data-action" href="/clients/import-template.xlsx">
+                <span class="nika-data-action__icon">▤</span>
+                <span><b>Скачать шаблон</b><small>Правильная структура файла</small></span>
+            </a>
+        </div>
+
+        <form id="clientsDataImportForm" class="nika-data-import" enctype="multipart/form-data">
+            <div class="nika-data-import__title">
+                <div><b>Импорт из Excel</b><small>Дубли определяются сначала по ИИН/БИН, затем по телефону.</small></div>
+                <span class="nika-data-safe-badge">Безопасный режим</span>
+            </div>
+
+            <label class="nika-data-dropzone" id="clientsDataDropzone">
+                <input type="file" name="file" accept=".xlsx" required id="clientsDataFileInput">
+                <span class="nika-data-dropzone__icon">↑</span>
+                <b id="clientsDataFileName">Выберите Excel-файл</b>
+                <small>Нажмите сюда или перетащите файл .xlsx</small>
+            </label>
+
+            <label class="nika-data-field">
+                <span>Что делать с найденными клиентами</span>
+                <select name="duplicate_mode">
+                    <option value="skip">Не менять — пропустить найденные</option>
+                    <option value="update">Обновить данными из Excel</option>
+                </select>
+            </label>
+
+            <div class="nika-data-warning">
+                По умолчанию существующие записи не изменяются. Если импорт завершится ошибкой, транзакция будет отменена.
+            </div>
+
+            <div id="clientsDataImportResult" class="nika-data-result"></div>
+
+            <div class="nika-data-modal__footer">
+                <button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeClientsDataModal()">Отмена</button>
+                <button type="submit" class="nika-data-btn nika-data-btn--primary">Начать импорт</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="client-modal" id="clientModal" aria-hidden="true">
     <div class="client-modal-backdrop" onclick="closeClientModal()"></div>
     <div class="client-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle">
@@ -227,6 +292,69 @@
             <div class="client-modal-actions client-field-full"><button class="clients-btn clients-btn--light" type="button" onclick="closeClientModal()">Отмена</button><button class="clients-btn clients-btn--primary" type="submit" id="clientSubmitBtn">Сохранить клиента</button></div>
         </form>
     </div>
+</div>
+
+<div class="client-card-modal" id="clientCardModal" aria-hidden="true">
+    <div class="client-card-backdrop" onclick="closeClientCard()"></div>
+    <section class="client-card-dialog" role="dialog" aria-modal="true" aria-labelledby="clientCardName">
+        <header class="client-card-header">
+            <div class="client-card-identity">
+                <div class="client-card-avatar" id="clientCardAvatar">К</div>
+                <div>
+                    <div class="client-card-company" id="clientCardCompany">Загрузка…</div>
+                    <h2 id="clientCardName">Карточка клиента</h2>
+                    <div class="client-card-subline">
+                        <span id="clientCardStatus" class="client-status client-status--новый">Новый</span>
+                        <span id="clientCardSaveState" class="client-card-save-state">Просмотр</span>
+                    </div>
+                </div>
+            </div>
+            <div class="client-card-header-actions">
+                <button type="button" class="clients-btn clients-btn--light" id="clientCardEditBtn" onclick="enableClientCardEdit()">Редактировать</button>
+                <button type="button" class="client-modal-close" onclick="closeClientCard()">×</button>
+            </div>
+        </header>
+
+        <nav class="client-card-tabs">
+            <button type="button" class="client-card-tab is-active" data-card-tab="overview" onclick="switchClientCardTab('overview')">Обзор</button>
+            <button type="button" class="client-card-tab" data-card-tab="sales" onclick="switchClientCardTab('sales')">Продажи <span id="clientCardSalesCount">0</span></button>
+            <button type="button" class="client-card-tab" data-card-tab="photos" onclick="switchClientCardTab('photos')">Фотографии</button>
+        </nav>
+
+        <div class="client-card-body">
+            <div class="client-card-loading" id="clientCardLoading">Загрузка карточки клиента…</div>
+
+            <section class="client-card-panel is-active" data-card-panel="overview">
+                <div class="client-card-finance">
+                    <div><small>Всего продаж</small><strong id="clientCardTotal">0 ₸</strong></div>
+                    <div><small>Оплачено</small><strong id="clientCardPaid">0 ₸</strong></div>
+                    <div><small>Долг</small><strong id="clientCardDebt">0 ₸</strong></div>
+                </div>
+
+                <div class="client-card-fields" id="clientCardFields">
+                    <label><span>ФИО *</span><input data-client-field="full_name" disabled></label>
+                    <label><span>Организация</span><input data-client-field="company_name" disabled></label>
+                    <label><span>ИИН / БИН</span><input data-client-field="iin" disabled></label>
+                    <label><span>Телефон</span><input data-client-field="phone" disabled></label>
+                    <label><span>Статус</span><select data-client-field="status" disabled><option>Новый</option><option>В работе</option><option>Ожидание</option><option>Завершен</option></select></label>
+                    <label><span>Категория</span><select data-client-field="category" disabled><option>Клиент</option><option>Предприниматель</option><option>Партнер</option><option>Другое</option></select></label>
+                    <label><span>Оплата</span><select data-client-field="payment" disabled><option>Наличные</option><option>Безнал</option><option>Kaspi QR</option><option>Не оплачено</option></select></label>
+                    <label><span>Номер договора</span><input data-client-field="contract_number" disabled></label>
+                    <label><span>Дата договора</span><input type="date" data-client-field="contract_date" disabled></label>
+                    <label class="client-card-field-wide"><span>Адрес</span><input data-client-field="address" disabled></label>
+                    <label class="client-card-field-full"><span>Комментарий</span><textarea data-client-field="comment" disabled></textarea></label>
+                </div>
+            </section>
+
+            <section class="client-card-panel" data-card-panel="sales">
+                <div class="client-card-sales" id="clientCardSales"></div>
+            </section>
+
+            <section class="client-card-panel" data-card-panel="photos">
+                <div class="client-card-gallery" id="clientCardGallery"></div>
+            </section>
+        </div>
+    </section>
 </div>
 
 <style>
@@ -344,6 +472,305 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closeClientModal();
 });
+</script>
+
+
+<style>
+.nika-data-trigger{min-height:42px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;border:1px solid #d9d2ff;border-radius:12px;color:#7257ff;background:#efecff;font:inherit;font-size:13px;font-weight:850;cursor:pointer;transition:.18s ease}.nika-data-trigger:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(114,87,255,.14)}.nika-data-trigger__icon{width:24px;height:24px;display:grid;place-items:center;border-radius:8px;color:#fff;background:linear-gradient(135deg,#7257ff,#9a59e8);font-size:15px}.nika-data-modal{position:fixed!important;inset:0!important;z-index:2147483500!important;display:none;align-items:center;justify-content:center;width:100vw!important;height:100dvh!important;padding:12px}.nika-data-modal.is-open{display:flex}.nika-data-modal__backdrop{position:fixed;inset:0;background:rgba(35,31,60,.48);backdrop-filter:blur(8px)}.nika-data-modal__dialog{position:relative;z-index:1;width:min(680px,100%);max-height:calc(100dvh - 24px);overflow-y:auto;border:1px solid #ded9f4;border-radius:22px;background:#fff;box-shadow:0 32px 100px rgba(33,25,77,.32)}.nika-data-modal__head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:21px 22px;border-bottom:1px solid #e7e3f2;background:linear-gradient(180deg,#fcfbff,#f7f5ff)}.nika-data-modal__eyebrow{display:block;margin-bottom:5px;color:#7257ff;font-size:9px;font-weight:900;letter-spacing:.12em}.nika-data-modal__head h2{margin:0 0 5px;color:#202434;font-size:20px}.nika-data-modal__head p{margin:0;color:#747a8d;font-size:12px}.nika-data-modal__close{flex:0 0 36px;width:36px;height:36px;border:1px solid #e0dcea;border-radius:11px;color:#676d7f;background:#f3f2f7;font-size:22px;cursor:pointer}.nika-data-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:18px 22px 0}.nika-data-action{min-width:0;display:flex;align-items:center;gap:11px;padding:13px;border:1px solid #e6e2f0;border-radius:14px;color:#202434;background:#fbfaff;text-decoration:none;transition:.18s ease}.nika-data-action:hover{transform:translateY(-1px);border-color:#cfc6ff;box-shadow:0 8px 18px rgba(114,87,255,.10)}.nika-data-action__icon{flex:0 0 40px;width:40px;height:40px;display:grid;place-items:center;border-radius:12px;color:#7257ff;background:#efecff;font-size:22px;font-weight:900}.nika-data-action span:last-child{min-width:0;display:grid;gap:3px}.nika-data-action b{font-size:13px}.nika-data-action small{color:#747a8d;font-size:10px}.nika-data-import{display:grid;gap:14px;padding:18px 22px 22px}.nika-data-import__title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.nika-data-import__title>div{display:grid;gap:4px}.nika-data-import__title b{font-size:15px}.nika-data-import__title small{color:#747a8d;font-size:11px}.nika-data-safe-badge{display:inline-flex;align-items:center;min-height:26px;padding:0 9px;border-radius:999px;color:#16815e;background:#e7f7f1;font-size:9px;font-weight:850;white-space:nowrap}.nika-data-dropzone{position:relative;min-height:145px;display:grid;place-content:center;justify-items:center;gap:6px;padding:18px;border:1.5px dashed #cfc7ed;border-radius:16px;background:#faf9ff;text-align:center;cursor:pointer;transition:.18s ease}.nika-data-dropzone:hover,.nika-data-dropzone.is-dragover{border-color:#7257ff;background:#f4f1ff}.nika-data-dropzone input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.nika-data-dropzone__icon{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;color:#fff;background:linear-gradient(135deg,#7257ff,#9a59e8);font-size:25px}.nika-data-dropzone b{max-width:100%;color:#202434;font-size:13px;overflow-wrap:anywhere}.nika-data-dropzone small{color:#747a8d;font-size:10px}.nika-data-field{display:grid;gap:7px}.nika-data-field>span{color:#555c70;font-size:11px;font-weight:800}.nika-data-field select{width:100%;min-height:44px;padding:0 12px;border:1px solid #e3dfee;border-radius:11px;color:#202434;background:#fff;font:inherit;font-size:12px;outline:0}.nika-data-warning{padding:11px 12px;border:1px solid #f0dfb7;border-radius:11px;color:#8c641a;background:#fff8e8;font-size:10px;line-height:1.45}.nika-data-result{display:none;padding:12px;border-radius:11px;font-size:11px;line-height:1.5}.nika-data-result.is-success{display:block;color:#167557;background:#e9f8f2;border:1px solid #c8eadf}.nika-data-result.is-error{display:block;color:#bd4040;background:#fdecec;border:1px solid #f3cccc}.nika-data-modal__footer{display:flex;justify-content:flex-end;gap:9px;padding-top:2px}.nika-data-btn{min-height:43px;padding:0 16px;border-radius:11px;font:inherit;font-size:12px;font-weight:850;cursor:pointer}.nika-data-btn--light{color:#7257ff;background:#efecff;border:1px solid #d9d2ff}.nika-data-btn--primary{color:#fff;background:linear-gradient(135deg,#7257ff,#9a59e8);border:0;box-shadow:0 8px 18px rgba(114,87,255,.2)}.nika-data-btn:disabled{opacity:.6;cursor:wait}body.nika-data-modal-open{overflow:hidden}@media(max-width:700px){.nika-data-actions-grid{grid-template-columns:1fr}.nika-data-modal{padding:6px}.nika-data-modal__dialog{max-height:calc(100dvh - 12px);border-radius:17px}.nika-data-modal__head,.nika-data-import{padding-left:15px;padding-right:15px}.nika-data-actions-grid{padding-left:15px;padding-right:15px}.nika-data-modal__footer{display:grid;grid-template-columns:1fr 1fr}.nika-data-trigger{width:100%}}
+</style>
+
+
+<script>
+function mountNikaDataModal(id) {
+    const modal = document.getElementById(id);
+    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+    return modal;
+}
+function openCatalogDataModal() {
+    const modal = mountNikaDataModal('catalogDataModal');
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('nika-data-modal-open');
+}
+function closeCatalogDataModal() {
+    const modal = document.getElementById('catalogDataModal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('nika-data-modal-open');
+}
+function openClientsDataModal() {
+    const modal = mountNikaDataModal('clientsDataModal');
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('nika-data-modal-open');
+}
+function closeClientsDataModal() {
+    const modal = document.getElementById('clientsDataModal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('nika-data-modal-open');
+}
+function updateCatalogDataFile(input) {
+    updateNikaDataFileName(input, 'catalogDataFileName');
+}
+function updateClientsDataFile(input) {
+    updateNikaDataFileName(input, 'clientsDataFileName');
+}
+function updateNikaDataFileName(input, labelId) {
+    const label = document.getElementById(labelId);
+    const file = input && input.files ? input.files[0] : null;
+    if (!label) return;
+    label.textContent = file ? file.name : 'Выберите Excel-файл';
+}
+function showNikaDataResult(resultId, type, message) {
+    const result = document.getElementById(resultId);
+    if (!result) return;
+    result.className = 'nika-data-result ' + (type === 'success' ? 'is-success' : 'is-error');
+    result.innerHTML = message;
+}
+async function submitNikaDataImport(formId, url, resultId) {
+    const form = document.getElementById(formId);
+    if (!form) return;
+    const input = form.querySelector('input[type="file"]');
+    const file = input && input.files ? input.files[0] : null;
+    if (!file) {
+        showNikaDataResult(resultId, 'error', 'Сначала выберите Excel-файл.');
+        return;
+    }
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+        showNikaDataResult(resultId, 'error', 'Поддерживается только файл формата .xlsx');
+        return;
+    }
+
+    const submit = form.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    submit.textContent = 'Импортируем…';
+    const result = document.getElementById(resultId);
+    if (result) {
+        result.className = 'nika-data-result';
+        result.textContent = '';
+    }
+
+    try {
+        const response = await fetch(url, { method: 'POST', body: new FormData(form) });
+        const raw = await response.text();
+        let data;
+        try { data = raw ? JSON.parse(raw) : {}; }
+        catch (_) { throw new Error(raw || 'Сервер вернул некорректный ответ'); }
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || data.error || 'Ошибка импорта');
+        }
+
+        const errors = Array.isArray(data.errors) ? data.errors : [];
+        let html = `Создано: <b>${data.created || 0}</b><br>` +
+                   `Обновлено: <b>${data.updated || 0}</b><br>` +
+                   `Пропущено: <b>${data.skipped || 0}</b><br>` +
+                   `Ошибок: <b>${errors.length}</b>`;
+        if (errors.length) {
+            const errorLines = errors.slice(0, 8).map(function(error) {
+                if (typeof error === 'string') return error;
+                const row = error && error.row ? `Строка ${error.row}: ` : '';
+                const message = error && error.message ? error.message : JSON.stringify(error);
+                return row + message;
+            });
+            html += `<br><br><b>Причины:</b><br><small>${errorLines.join('<br>')}</small>`;
+        }
+        showNikaDataResult(resultId, 'success', html);
+        if (!errors.length) setTimeout(() => window.location.reload(), 1100);
+    } catch (error) {
+        showNikaDataResult(resultId, 'error', error.message || 'Не удалось выполнить импорт');
+    } finally {
+        submit.disabled = false;
+        submit.textContent = 'Начать импорт';
+    }
+}
+function attachNikaDropzone(zone) {
+    const input = zone.querySelector('input[type="file"]');
+    if (!input) return;
+
+    ['dragenter', 'dragover'].forEach(type => zone.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        zone.classList.add('is-dragover');
+    }));
+    ['dragleave', 'drop'].forEach(type => zone.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        zone.classList.remove('is-dragover');
+    }));
+    zone.addEventListener('drop', event => {
+        const files = event.dataTransfer && event.dataTransfer.files;
+        if (!files || !files.length) return;
+        try {
+            const transfer = new DataTransfer();
+            transfer.items.add(files[0]);
+            input.files = transfer.files;
+        } catch (_) {
+            try { input.files = files; } catch (__){ return; }
+        }
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+}
+document.addEventListener('DOMContentLoaded', () => {
+    mountNikaDataModal('catalogDataModal');
+    mountNikaDataModal('clientsDataModal');
+
+    const catalogInput = document.getElementById('catalogDataFileInput');
+    if (catalogInput) catalogInput.addEventListener('change', () => updateCatalogDataFile(catalogInput));
+    const clientsInput = document.getElementById('clientsDataFileInput');
+    if (clientsInput) clientsInput.addEventListener('change', () => updateClientsDataFile(clientsInput));
+
+    document.getElementById('catalogDataImportForm')?.addEventListener('submit', event => {
+        event.preventDefault();
+        submitNikaDataImport('catalogDataImportForm', '/items/import', 'catalogDataImportResult');
+    });
+    document.getElementById('clientsDataImportForm')?.addEventListener('submit', event => {
+        event.preventDefault();
+        submitNikaDataImport('clientsDataImportForm', '/clients/import', 'clientsDataImportResult');
+    });
+
+    document.querySelectorAll('.nika-data-dropzone').forEach(attachNikaDropzone);
+});
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        closeCatalogDataModal();
+        closeClientsDataModal();
+    }
+});
+</script>
+
+<style>
+.client-main--button{border:0;background:transparent;padding:0;text-align:left;cursor:pointer}.client-record{cursor:pointer}.client-card-modal{position:fixed;inset:0;z-index:2147483400;display:none;align-items:center;justify-content:center;padding:18px}.client-card-modal.is-open{display:flex}.client-card-backdrop{position:fixed;inset:0;background:rgba(20,22,34,.52);backdrop-filter:blur(7px)}.client-card-dialog{position:relative;z-index:1;width:min(1080px,100%);height:min(760px,calc(100dvh - 36px));display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.7);border-radius:22px;background:#fff;box-shadow:0 32px 100px rgba(25,20,55,.34)}.client-card-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 20px;border-bottom:1px solid #e5e7ef;background:linear-gradient(180deg,#fff,#faf9ff)}.client-card-identity{min-width:0;display:flex;align-items:center;gap:13px}.client-card-avatar{flex:0 0 54px;width:54px;height:54px;display:grid;place-items:center;overflow:hidden;border-radius:16px;color:#7257ff;background:#efecff;font-size:20px;font-weight:900}.client-card-avatar img{width:100%;height:100%;object-fit:cover}.client-card-company{color:#747a8d;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}.client-card-header h2{margin:2px 0 5px;font-size:21px}.client-card-subline{display:flex;align-items:center;gap:8px}.client-card-save-state{color:#747a8d;font-size:11px;font-weight:800}.client-card-save-state.is-saving{color:#a26a00}.client-card-save-state.is-saved{color:#16815e}.client-card-save-state.is-error{color:#c94646}.client-card-header-actions{display:flex;align-items:center;gap:8px}.client-card-tabs{display:flex;gap:5px;padding:10px 20px;border-bottom:1px solid #e5e7ef;background:#fff}.client-card-tab{min-height:38px;padding:0 13px;border:0;border-radius:10px;color:#747a8d;background:transparent;font:inherit;font-size:12px;font-weight:850;cursor:pointer}.client-card-tab span{margin-left:4px}.client-card-tab.is-active{color:#7257ff;background:#efecff}.client-card-body{position:relative;flex:1;min-height:0;overflow-y:auto;padding:18px 20px 22px;background:#fafafe}.client-card-loading{display:none;padding:30px;text-align:center;color:#747a8d}.client-card-loading.is-visible{display:block}.client-card-panel{display:none}.client-card-panel.is-active{display:block}.client-card-finance{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.client-card-finance>div{padding:15px;border:1px solid #e5e7ef;border-radius:14px;background:#fff}.client-card-finance small{display:block;margin-bottom:6px;color:#747a8d;font-size:10px;font-weight:800}.client-card-finance strong{font-size:18px}.client-card-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;padding:16px;border:1px solid #e5e7ef;border-radius:16px;background:#fff}.client-card-fields label{min-width:0;display:grid;gap:5px}.client-card-fields label>span{color:#5b6174;font-size:10px;font-weight:800}.client-card-fields input,.client-card-fields select,.client-card-fields textarea{width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:9px;color:#202434;background:#f7f8fb;outline:0;font:inherit;font-size:13px}.client-card-fields input,.client-card-fields select{height:43px;padding:0 11px}.client-card-fields textarea{min-height:105px;padding:11px;resize:vertical}.client-card-fields input:disabled,.client-card-fields select:disabled,.client-card-fields textarea:disabled{opacity:1;color:#202434;-webkit-text-fill-color:#202434}.client-card-modal.is-editing .client-card-fields input,.client-card-modal.is-editing .client-card-fields select,.client-card-modal.is-editing .client-card-fields textarea{border-color:#ddd8f0;background:#fff}.client-card-modal.is-editing .client-card-fields input:focus,.client-card-modal.is-editing .client-card-fields select:focus,.client-card-modal.is-editing .client-card-fields textarea:focus{border-color:#9f90ff;box-shadow:0 0 0 3px rgba(114,87,255,.09)}.client-card-field-wide{grid-column:span 2}.client-card-field-full{grid-column:1/-1}.client-card-sales{display:grid;gap:9px}.client-card-sale{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #e5e7ef;border-radius:13px;background:#fff;cursor:pointer}.client-card-sale b{font-size:13px}.client-card-sale small{display:block;margin-top:3px;color:#747a8d;font-size:10px}.client-card-sale strong{white-space:nowrap}.client-card-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px}.client-card-gallery img{width:100%;height:145px;object-fit:cover;border-radius:14px;border:1px solid #e5e7ef}.client-card-empty{padding:38px;border:1px dashed #d8dbe5;border-radius:15px;color:#747a8d;background:#fff;text-align:center}body.client-card-open{overflow:hidden}@media(max-width:760px){.client-card-modal{padding:6px}.client-card-dialog{height:calc(100dvh - 12px);border-radius:17px}.client-card-header{align-items:flex-start;padding:14px}.client-card-header-actions{flex-shrink:0}.client-card-header-actions .clients-btn{min-height:38px;padding:0 11px;font-size:11px}.client-card-tabs{padding:8px 12px;overflow-x:auto}.client-card-body{padding:12px}.client-card-finance{grid-template-columns:1fr}.client-card-fields{grid-template-columns:1fr;padding:13px}.client-card-field-wide{grid-column:auto}.client-card-company{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.client-card-header h2{max-width:180px;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.client-card-avatar{display:none}}
+</style>
+
+<script>
+let clientCardId = null;
+let clientCardData = null;
+let clientCardEditMode = false;
+let clientCardSaveTimer = null;
+let clientCardSaveSequence = 0;
+
+function moneyKz(value){ return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(Number(value||0)) + ' ₸'; }
+
+async function openClientCard(clientId, editMode = false){
+    if (!clientId) return;
+    clientCardId = Number(clientId);
+    clientCardEditMode = false;
+    const modal = document.getElementById('clientCardModal');
+    if (modal.parentElement !== document.body) document.body.appendChild(modal);
+    modal.classList.add('is-open');
+    modal.classList.remove('is-editing');
+    modal.setAttribute('aria-hidden','false');
+    document.body.classList.add('client-card-open');
+    document.getElementById('clientCardLoading').classList.add('is-visible');
+    document.querySelectorAll('.client-card-panel').forEach(p=>p.classList.remove('is-active'));
+    document.querySelector('[data-card-panel="overview"]').classList.add('is-active');
+    document.querySelectorAll('.client-card-tab').forEach(t=>t.classList.toggle('is-active',t.dataset.cardTab==='overview'));
+    setClientCardSaveState('Просмотр','');
+    try{
+        const response = await fetch(`/api/client/${clientCardId}`, {headers:{'Accept':'application/json'}});
+        const data = await response.json();
+        if(!response.ok || data.status==='error') throw new Error(data.message || 'Не удалось загрузить клиента');
+        clientCardData = data;
+        renderClientCard(data);
+        if(editMode) enableClientCardEdit();
+    }catch(error){
+        document.getElementById('clientCardLoading').textContent = error.message;
+    }
+}
+
+function renderClientCard(data){
+    const c=data.client||{}; const deals=Array.isArray(data.deals)?data.deals:[];
+    document.getElementById('clientCardLoading').classList.remove('is-visible');
+    document.getElementById('clientCardName').textContent=c.full_name||'Без имени';
+    document.getElementById('clientCardCompany').textContent=c.company_name||'Без организации';
+    const avatar=document.getElementById('clientCardAvatar');
+    avatar.innerHTML=c.photo?`<img src="${escapeHtml(c.photo)}" alt="">`:escapeHtml((c.full_name||c.company_name||'К').slice(0,1).toUpperCase());
+    updateClientCardStatus(c.status||'Новый');
+    document.querySelectorAll('[data-client-field]').forEach(el=>{ const key=el.dataset.clientField; el.value=key==='contract_date'?normalizeDateValue(c[key]||''):(c[key]||''); el.disabled=true; });
+    const total=deals.reduce((sum,s)=>sum+Number(s.total_amount||0),0);
+    const paid=deals.reduce((sum,s)=>sum+Number(s.paid_amount||(s.status==='Оплачено'?s.total_amount:0)||0),0);
+    document.getElementById('clientCardTotal').textContent=moneyKz(total);
+    document.getElementById('clientCardPaid').textContent=moneyKz(paid);
+    document.getElementById('clientCardDebt').textContent=moneyKz(Math.max(0,total-paid));
+    document.getElementById('clientCardSalesCount').textContent=deals.length;
+    document.getElementById('clientCardSales').innerHTML=deals.length?deals.map(s=>`<article class="client-card-sale" onclick="openSaleModal(${Number(s.id)})"><div><b>Продажа #${escapeHtml(String(s.sale_number||s.id))}</b><small>${escapeHtml(formatClientSaleDate(s.created_at))} · ${escapeHtml(s.status||'')}</small></div><strong>${moneyKz(s.total_amount)}</strong></article>`).join(''):'<div class="client-card-empty">Продаж пока нет</div>';
+    const photos=String(c.comment_photos||'').split('|').filter(Boolean);
+    document.getElementById('clientCardGallery').innerHTML=photos.length?photos.map(src=>`<img src="${escapeHtml(src)}" alt="Фото клиента">`).join(''):'<div class="client-card-empty">Фотографий пока нет</div>';
+    document.getElementById('clientCardEditBtn').textContent='Редактировать';
+}
+
+function enableClientCardEdit(){
+    if(!clientCardId) return;
+    clientCardEditMode=true;
+    const modal=document.getElementById('clientCardModal');
+    modal.classList.add('is-editing');
+    document.querySelectorAll('[data-client-field]').forEach(el=>el.disabled=false);
+    document.getElementById('clientCardEditBtn').textContent='Готово';
+    document.getElementById('clientCardEditBtn').onclick=finishClientCardEdit;
+    setClientCardSaveState('Редактирование','');
+    document.querySelector('[data-client-field="full_name"]')?.focus();
+}
+
+async function finishClientCardEdit(){
+    clearTimeout(clientCardSaveTimer);
+    await saveClientCardNow();
+    clientCardEditMode=false;
+    document.getElementById('clientCardModal').classList.remove('is-editing');
+    document.querySelectorAll('[data-client-field]').forEach(el=>el.disabled=true);
+    const btn=document.getElementById('clientCardEditBtn'); btn.textContent='Редактировать'; btn.onclick=enableClientCardEdit;
+    setClientCardSaveState('Просмотр','');
+}
+
+function scheduleClientCardSave(){
+    if(!clientCardEditMode) return;
+    clearTimeout(clientCardSaveTimer);
+    setClientCardSaveState('Есть изменения','is-saving');
+    clientCardSaveTimer=setTimeout(saveClientCardNow,650);
+}
+
+async function saveClientCardNow(){
+    if(!clientCardId || !clientCardEditMode) return;
+    const payload={}; document.querySelectorAll('[data-client-field]').forEach(el=>payload[el.dataset.clientField]=el.value);
+    if(!payload.full_name.trim()){ setClientCardSaveState('Укажите ФИО','is-error'); return; }
+    const seq=++clientCardSaveSequence; setClientCardSaveState('Сохранение…','is-saving');
+    try{
+        const response=await fetch(`/api/client/${clientCardId}/update`,{method:'PATCH',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
+        const data=await response.json(); if(!response.ok||data.status!=='ok') throw new Error(data.message||'Ошибка сохранения');
+        if(seq!==clientCardSaveSequence) return; clientCardData.client=data.client; updateClientCardAfterSave(data.client); setClientCardSaveState('✓ Сохранено','is-saved');
+    }catch(error){ if(seq===clientCardSaveSequence) setClientCardSaveState(error.message||'Ошибка','is-error'); }
+}
+
+function updateClientCardAfterSave(c){
+    document.getElementById('clientCardName').textContent=c.full_name||'Без имени'; document.getElementById('clientCardCompany').textContent=c.company_name||'Без организации'; updateClientCardStatus(c.status||'Новый');
+    document.querySelectorAll(`.client-record[data-id="${clientCardId}"]`).forEach(record=>{
+        record.dataset.fullName=c.full_name||''; record.dataset.companyName=c.company_name||''; record.dataset.iin=c.iin||''; record.dataset.phone=c.phone||''; record.dataset.address=c.address||''; record.dataset.status=c.status||'Новый'; record.dataset.category=c.category||''; record.dataset.payment=c.payment||''; record.dataset.comment=c.comment||''; record.dataset.contractNumber=c.contract_number||''; record.dataset.contractDate=c.contract_date||'';
+        record.dataset.search=[c.full_name,c.company_name,c.iin,c.phone,c.address,c.category,c.status].filter(Boolean).join(' ').toLowerCase();
+        const strong=record.querySelector('.client-main strong'); const small=record.querySelector('.client-main small'); if(strong)strong.textContent=c.full_name||'Без имени'; if(small)small.textContent=c.company_name||'Без компании';
+        const cells=record.querySelectorAll('td'); if(cells.length){ if(cells[1])cells[1].textContent=c.iin||'—'; if(cells[2])cells[2].textContent=c.phone||'—'; if(cells[3])cells[3].textContent=c.category||'—'; }
+        const status=record.querySelector('.client-status'); if(status){status.textContent=c.status||'Новый';status.className='client-status client-status--'+statusClass(c.status||'Новый');}
+        record.querySelectorAll('.mobile-client-info>span').forEach(block=>{const label=block.querySelector('small')?.textContent.trim(); if(label==='Телефон')block.lastChild.textContent=c.phone||'—'; if(label==='ИИН')block.lastChild.textContent=c.iin||'—'; if(label==='Категория')block.lastChild.textContent=c.category||'—'; if(label==='Адрес')block.lastChild.textContent=c.address||'—';});
+    });
+}
+
+function updateClientCardStatus(value){const el=document.getElementById('clientCardStatus');el.textContent=value;el.className='client-status client-status--'+statusClass(value);}
+function statusClass(value){return String(value||'Новый').toLowerCase().replaceAll(' ','-');}
+function setClientCardSaveState(text,cls){const el=document.getElementById('clientCardSaveState');el.textContent=text;el.className='client-card-save-state '+(cls||'');}
+function switchClientCardTab(tab){document.querySelectorAll('.client-card-tab').forEach(b=>b.classList.toggle('is-active',b.dataset.cardTab===tab));document.querySelectorAll('.client-card-panel').forEach(p=>p.classList.toggle('is-active',p.dataset.cardPanel===tab));}
+function closeClientCard(){clearTimeout(clientCardSaveTimer);const modal=document.getElementById('clientCardModal');modal.classList.remove('is-open','is-editing');modal.setAttribute('aria-hidden','true');document.body.classList.remove('client-card-open');clientCardId=null;clientCardData=null;clientCardEditMode=false;}
+function escapeHtml(value){return String(value??'').replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));}
+function formatClientSaleDate(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+
+document.addEventListener('DOMContentLoaded',()=>{
+    const modal=document.getElementById('clientCardModal'); if(modal&&modal.parentElement!==document.body)document.body.appendChild(modal);
+    document.querySelectorAll('[data-client-field]').forEach(el=>el.addEventListener(el.tagName==='SELECT'?'change':'input',scheduleClientCardSave));
+});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.getElementById('clientCardModal')?.classList.contains('is-open'))closeClientCard();});
 </script>
 
 {% endblock %}

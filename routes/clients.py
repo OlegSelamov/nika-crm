@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from io import BytesIO
 import os
 
 from flask import (
@@ -9,8 +10,11 @@ from flask import (
     request,
     session,
     url_for,
+    send_file,
 )
 from werkzeug.utils import secure_filename
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 from models import get_db, pool
 from utils.timezone import now_kz
@@ -392,6 +396,61 @@ def api_client(client_id):
         pool.putconn(conn)
 
 
+
+
+@clients_bp.route("/api/client/<int:client_id>/update", methods=["PATCH", "POST"])
+def api_update_client(client_id):
+    """Partially update a client without reloading the clients page."""
+    company_id = _company_id()
+    data = request.get_json(silent=True) or {}
+
+    allowed_fields = {
+        "full_name", "phone", "iin", "company_name", "status", "category",
+        "payment", "comment", "address", "contract_number", "contract_date",
+    }
+    updates = {key: data.get(key) for key in allowed_fields if key in data}
+
+    if not updates:
+        return jsonify({"status": "error", "message": "Нет данных для сохранения"}), 400
+
+    if "full_name" in updates and not str(updates["full_name"] or "").strip():
+        return jsonify({"status": "error", "message": "Укажите имя клиента"}), 400
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM clients WHERE id = %s AND company_id = %s",
+            (client_id, company_id),
+        )
+        if not cur.fetchone():
+            return jsonify({"status": "error", "message": "Клиент не найден"}), 404
+
+        set_parts = []
+        params = []
+        for field, value in updates.items():
+            if field == "contract_date":
+                set_parts.append("contract_date = NULLIF(%s, '')::date")
+                params.append(str(value or "").strip())
+            else:
+                set_parts.append(f"{field} = %s")
+                params.append(str(value or "").strip())
+
+        params.extend([client_id, company_id])
+        cur.execute(
+            f"UPDATE clients SET {', '.join(set_parts)} WHERE id = %s AND company_id = %s RETURNING *",
+            tuple(params),
+        )
+        updated = cur.fetchone()
+        conn.commit()
+        return jsonify({"status": "ok", "client": _serialize_row(updated)})
+    except Exception as error:
+        conn.rollback()
+        return jsonify({"status": "error", "message": str(error)}), 500
+    finally:
+        pool.putconn(conn)
+
+
 @clients_bp.route("/clients/<int:client_id>/edit", methods=["POST"])
 def edit_client(client_id):
     company_id = _company_id()
@@ -704,5 +763,222 @@ def get_client_by_iin(iin):
             return jsonify({"found": True, "client": _serialize_row(client)})
 
         return jsonify({"found": False})
+    finally:
+        pool.putconn(conn)
+
+# ================== ИМПОРТ / ЭКСПОРТ КЛИЕНТОВ ==================
+
+_CLIENT_HEADERS = [
+    "ФИО / Наименование", "Телефон", "ИИН / БИН", "Компания",
+    "Адрес", "Статус", "Категория", "Оплата", "Комментарий"
+]
+
+_CLIENT_ALIASES = {
+    "фио / наименование": "full_name", "фио": "full_name",
+    "наименование": "full_name", "клиент": "full_name",
+    "телефон": "phone", "номер телефона": "phone",
+    "иин / бин": "iin", "иин": "iin", "бин": "iin",
+    "компания": "company_name", "название компании": "company_name",
+    "адрес": "address", "статус": "status", "категория": "category",
+    "оплата": "payment", "комментарий": "comment",
+}
+
+
+def _client_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def _style_clients_excel(ws):
+    fill = PatternFill("solid", fgColor="252B3A")
+    font = Font(color="FFFFFF", bold=True)
+    for cell in ws[1]:
+        cell.fill = fill
+        cell.font = font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.freeze_panes = "A2"
+    widths = [32, 20, 18, 28, 36, 16, 18, 18, 42]
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + index)].width = width
+    ws.auto_filter.ref = ws.dimensions
+
+
+@clients_bp.route("/clients/export.xlsx")
+def export_clients_xlsx():
+    company_id = _company_id()
+    if not company_id:
+        return "Компания не выбрана", 403
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT full_name, phone, iin, company_name, address,
+                   status, category, payment, comment
+            FROM clients
+            WHERE company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+            ORDER BY full_name
+        """, (company_id,))
+        rows = cur.fetchall()
+    finally:
+        pool.putconn(conn)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Клиенты"
+    ws.append(_CLIENT_HEADERS)
+    for row in rows:
+        ws.append([row.get(key) or "" for key in (
+            "full_name", "phone", "iin", "company_name", "address",
+            "status", "category", "payment", "comment"
+        )])
+    _style_clients_excel(ws)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=f"nika_clients_company_{company_id}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@clients_bp.route("/clients/import-template.xlsx")
+def clients_import_template():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Клиенты"
+    ws.append(_CLIENT_HEADERS)
+    ws.append([
+        "ТОО Пример", "+7 777 000 00 00", "123456789012",
+        "ТОО Пример", "г. Усть-Каменогорск", "Новый",
+        "Корпоративный", "Не оплачено", "Пример — строку можно удалить"
+    ])
+    _style_clients_excel(ws)
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="nika_clients_import_template.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@clients_bp.route("/clients/import", methods=["POST"])
+def import_clients_xlsx():
+    company_id = _company_id()
+    if not company_id:
+        return jsonify({"success": False, "message": "Компания не выбрана"}), 403
+
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify({"success": False, "message": "Выберите Excel-файл"}), 400
+    if not upload.filename.lower().endswith(".xlsx"):
+        return jsonify({"success": False, "message": "Поддерживается формат .xlsx"}), 400
+
+    duplicate_mode = request.form.get("duplicate_mode", "skip")
+    if duplicate_mode not in ("skip", "update"):
+        duplicate_mode = "skip"
+
+    try:
+        wb = load_workbook(upload, read_only=True, data_only=True)
+        ws = wb.active
+    except Exception:
+        return jsonify({"success": False, "message": "Не удалось открыть Excel-файл"}), 400
+
+    headers = [_client_text(cell.value).lower() for cell in ws[1]]
+    header_map = {}
+    for column_index, header in enumerate(headers, start=1):
+        field = _CLIENT_ALIASES.get(header)
+        if field:
+            header_map[field] = column_index
+
+    if "full_name" not in header_map:
+        return jsonify({
+            "success": False,
+            "message": "В файле нет обязательной колонки «ФИО / Наименование»"
+        }), 400
+
+    def value(row, field):
+        column = header_map.get(field)
+        return _client_text(row[column - 1]) if column else ""
+
+    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        for excel_row, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            full_name = value(row, "full_name")
+            if not full_name:
+                continue
+            try:
+                phone = value(row, "phone")
+                iin = value(row, "iin")
+                company_name = value(row, "company_name")
+                address = value(row, "address")
+                status = value(row, "status") or "Новый"
+                category = value(row, "category")
+                payment = value(row, "payment") or "Не оплачено"
+                comment = value(row, "comment")
+
+                existing = None
+                if iin:
+                    cur.execute("""
+                        SELECT id FROM clients
+                        WHERE company_id=%s AND iin=%s LIMIT 1
+                    """, (company_id, iin))
+                    existing = cur.fetchone()
+                if not existing and phone:
+                    cur.execute("""
+                        SELECT id FROM clients
+                        WHERE company_id=%s AND phone=%s LIMIT 1
+                    """, (company_id, phone))
+                    existing = cur.fetchone()
+
+                if existing and duplicate_mode == "skip":
+                    stats["skipped"] += 1
+                    continue
+
+                if existing:
+                    cur.execute("""
+                        UPDATE clients SET
+                            full_name=%s, phone=%s, iin=%s, company_name=%s,
+                            address=%s, status=%s, category=%s, payment=%s,
+                            comment=%s, is_deleted=FALSE
+                        WHERE id=%s AND company_id=%s
+                    """, (
+                        full_name, phone, iin, company_name, address, status,
+                        category, payment, comment, existing["id"], company_id
+                    ))
+                    stats["updated"] += 1
+                else:
+                    cur.execute("""
+                        INSERT INTO clients (
+                            full_name, phone, iin, company_name, address,
+                            status, category, payment, comment, created_at,
+                            company_id, is_deleted
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
+                    """, (
+                        full_name, phone, iin, company_name, address, status,
+                        category, payment, comment, now_kz(), company_id
+                    ))
+                    stats["created"] += 1
+            except Exception as row_error:
+                stats["errors"].append({"row": excel_row, "message": str(row_error)[:180]})
+                if len(stats["errors"]) >= 50:
+                    break
+
+        conn.commit()
+        return jsonify({"success": True, **stats})
+    except Exception as error:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(error)}), 500
     finally:
         pool.putconn(conn)
