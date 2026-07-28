@@ -2894,55 +2894,6 @@ body.wa-modal-open {
 			}
 		}
 
-
-		/* ===== БЕСШОВНАЯ PJAX-НАВИГАЦИЯ ===== */
-		.page-shell {
-			position: relative;
-		}
-
-		.page-shell.nika-loading {
-			pointer-events: none;
-		}
-
-		.page-shell.nika-loading::after {
-			content: "";
-			position: absolute;
-			top: 16px;
-			right: 16px;
-			width: 18px;
-			height: 18px;
-			border: 2px solid rgba(99,102,241,.18);
-			border-top-color: #6366f1;
-			border-radius: 50%;
-			animation: nika-loader-spin .65s linear infinite;
-			z-index: 20;
-		}
-
-		.page-shell.nika-swap-out {
-			opacity: .25;
-			transform: translateY(2px);
-			transition: opacity .08s ease, transform .08s ease;
-		}
-
-		.page-shell.nika-swap-in {
-			animation: nika-content-in .16s cubic-bezier(.2,.75,.25,1);
-		}
-
-		@keyframes nika-loader-spin {
-			to { transform: rotate(360deg); }
-		}
-
-		@keyframes nika-content-in {
-			from {
-				opacity: .35;
-				transform: translateY(3px);
-			}
-			to {
-				opacity: 1;
-				transform: translateY(0);
-			}
-		}
-
 </style>
 </head>
 
@@ -4462,195 +4413,83 @@ document.addEventListener("click", function(event) {
 });
 
 
+// ================== ПЛАВНАЯ НАВИГАЦИЯ ==================
+(function initSmoothNavigation() {
+    const root = document.documentElement;
+    let navigationStarted = false;
 
+    function revealPage() {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                root.classList.add("nika-page-ready");
+                root.classList.remove("nika-page-leaving");
+            });
+        });
+    }
 
-
-// ================== БЕСШОВНАЯ PJAX-НАВИГАЦИЯ ==================
-(function initPjaxNavigation() {
-    const cache = new Map();
-    let activeController = null;
-    let navigating = false;
-
-    function isPjaxLink(link, event) {
+    function isInternalPageLink(link, event) {
         if (!link || !link.href) return false;
-        if (event && (event.defaultPrevented || event.button !== 0 ||
-            event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) return false;
+        if (event.defaultPrevented) return false;
+        if (event.button !== 0) return false;
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false;
         if (link.target && link.target !== "_self") return false;
         if (link.hasAttribute("download")) return false;
-        if (link.classList.contains("logout-link")) return false;
-        if (link.dataset.noPjax === "true") return false;
-        if (!link.closest(".sidebar, .app-topbar")) return false;
+        if (link.dataset.noTransition === "true") return false;
 
-        const url = new URL(link.href, location.href);
-        if (url.origin !== location.origin) return false;
+        const url = new URL(link.href, window.location.href);
+
+        if (url.origin !== window.location.origin) return false;
         if (!["http:", "https:"].includes(url.protocol)) return false;
-        if (url.pathname === location.pathname && url.search === location.search) return false;
+        if (url.pathname === window.location.pathname &&
+            url.search === window.location.search &&
+            url.hash) return false;
+
         return true;
     }
 
-    async function executeScripts(container) {
-        const scripts = Array.from(container.querySelectorAll("script"));
-
-        for (const oldScript of scripts) {
-            const src = oldScript.getAttribute("src");
-
-            if (src) {
-                const absoluteSrc = new URL(src, location.href).href;
-                const alreadyLoaded = Array.from(document.scripts)
-                    .some(script => script.src === absoluteSrc && script !== oldScript);
-
-                if (!alreadyLoaded) {
-                    await new Promise((resolve, reject) => {
-                        const script = document.createElement("script");
-                        script.src = absoluteSrc;
-                        script.async = false;
-                        script.onload = resolve;
-                        script.onerror = reject;
-                        document.head.appendChild(script);
-                    }).catch(error => console.error("Script load error:", error));
-                }
-
-                oldScript.remove();
-                continue;
-            }
-
-            const code = oldScript.textContent || "";
-            oldScript.remove();
-
-            if (!code.trim()) continue;
-
-            try {
-                // Функциональная область не допускает конфликтов повторных const/let.
-                new Function(code).call(window);
-            } catch (error) {
-                console.error("Page script error:", error);
-            }
-        }
-    }
-
-    async function getPage(url) {
-        const key = url.href;
-        if (cache.has(key)) return cache.get(key);
-
-        const response = await fetch(key, {
-            headers: {
-                "X-Nika-PJAX": "1",
-                "Accept": "text/html"
-            },
-            signal: activeController?.signal
-        });
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const html = await response.text();
-        cache.set(key, html);
-        return html;
-    }
-
-    async function navigate(url, pushState = true) {
-        if (navigating) return;
-        navigating = true;
-
-        const shell = document.querySelector(".page-shell");
-        if (!shell) {
-            location.href = url.href;
-            return;
-        }
-
-        activeController?.abort();
-        activeController = new AbortController();
-
-        shell.classList.add("nika-loading", "nika-swap-out");
-
-        try {
-            const html = await getPage(url);
-            const doc = new DOMParser().parseFromString(html, "text/html");
-            const nextShell = doc.querySelector(".page-shell");
-
-            if (!nextShell) {
-                location.href = url.href;
-                return;
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 70));
-
-            shell.innerHTML = nextShell.innerHTML;
-            document.title = doc.title || document.title;
-
-            if (pushState) {
-                history.pushState({nikaPjax: true}, "", url.href);
-            }
-
-            setActiveMenuItem?.();
-            window.scrollTo({top: 0, behavior: "auto"});
-
-            shell.classList.remove("nika-swap-out");
-            shell.classList.add("nika-swap-in");
-
-            await executeScripts(shell);
-
-            requestAnimationFrame(() => {
-                shell.classList.remove("nika-loading");
-                setTimeout(() => shell.classList.remove("nika-swap-in"), 180);
-            });
-
-            document.dispatchEvent(new CustomEvent("nika:page-loaded", {
-                detail: {url: url.href}
-            }));
-        } catch (error) {
-            if (error.name !== "AbortError") {
-                console.error("PJAX navigation error:", error);
-                location.href = url.href;
-            }
-        } finally {
-            navigating = false;
-        }
-    }
-
-    document.addEventListener("click", event => {
-        const link = event.target.closest("a[href]");
-        if (!isPjaxLink(link, event)) return;
-
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
+    function saveShellState() {
         const sidebar = document.getElementById("sidebar");
         if (sidebar) {
             sessionStorage.setItem("nikaSidebarScroll", String(sidebar.scrollTop));
         }
+        sessionStorage.setItem("nikaWindowScroll", String(window.scrollY));
+    }
 
-        navigate(new URL(link.href, location.href), true);
+    document.addEventListener("click", event => {
+        const link = event.target.closest("a[href]");
+        if (!isInternalPageLink(link, event) || navigationStarted) return;
+
+        navigationStarted = true;
+        saveShellState();
+
+        /*
+         * View Transitions API сама перехватит межстраничную отрисовку.
+         * Класс ниже служит резервом и убирает резкий скачок в старых версиях.
+         */
+        root.classList.add("nika-page-leaving");
+
+        // Даём короткой анимации начаться, затем выполняем обычный Flask-переход.
+        if (!document.startViewTransition) {
+            event.preventDefault();
+            setTimeout(() => {
+                window.location.assign(link.href);
+            }, 85);
+        }
     }, true);
 
-    window.addEventListener("popstate", () => {
-        navigate(new URL(location.href), false);
+    window.addEventListener("pageshow", event => {
+        navigationStarted = false;
+        revealPage();
+
+        // При возврате из back/forward cache принудительно восстанавливаем состояние.
+        if (event.persisted) {
+            setActiveMenuItem?.();
+            restoreSidebarState?.();
+        }
     });
 
-    // Предзагрузка пунктов меню после первой отрисовки.
-    window.addEventListener("load", () => {
-        const links = document.querySelectorAll(".sidebar a[href]:not(.logout-link)");
-        let delay = 250;
-
-        links.forEach(link => {
-            const url = new URL(link.href, location.href);
-            if (url.origin !== location.origin) return;
-
-            setTimeout(() => {
-                if (!cache.has(url.href)) {
-                    fetch(url.href, {
-                        headers: {"X-Nika-PJAX": "1", "Accept": "text/html"}
-                    })
-                    .then(response => response.ok ? response.text() : null)
-                    .then(html => {
-                        if (html) cache.set(url.href, html);
-                    })
-                    .catch(() => {});
-                }
-            }, delay);
-
-            delay += 90;
-        });
-    }, {once: true});
+    window.addEventListener("pagehide", saveShellState);
+    revealPage();
 })();
 
 </script>
