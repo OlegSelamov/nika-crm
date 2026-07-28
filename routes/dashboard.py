@@ -267,6 +267,7 @@ def dashboard():
     ON items.id = stock_movements.item_id
 
     WHERE items.company_id = %s
+    AND COALESCE(items.item_type, 'product') = 'product'
 
     GROUP BY items.id
 

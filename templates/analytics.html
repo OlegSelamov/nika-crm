@@ -2,558 +2,6 @@
 
 {% block content %}
 
-{% set revenue = total or 0 %}
-{% set net_profit = profit or 0 %}
-{% set expenses_total = expenses_total or 0 %}
-{% set gross_profit = gross_profit if gross_profit is not none else (net_profit + expenses_total) %}
-{% set sales_qty = sales_count or 0 %}
-{% set average_receipt = average_check if average_check is not none else ((revenue / sales_qty) if sales_qty else 0) %}
-{% set returns_total = returns_total or 0 %}
-{% set returns_count_value = returns_count or 0 %}
-{% set margin_value = margin_percent if margin_percent is not none else ((net_profit / revenue * 100) if revenue else 0) %}
-{% set client_count_value = clients_count if clients_count is not none else (top_clients|default([])|length) %}
-{% set new_clients_value = new_clients or 0 %}
-{% set purchase_total = purchase_total or 0 %}
-{% set salary_total = salary_total or 0 %}
-{% set taxes_total = taxes_total or 0 %}
-
-<div class="analytics-page">
-
-    <header class="analytics-page-head">
-        <div>
-            <div class="analytics-eyebrow">Управленческая аналитика</div>
-            <h1>Аналитика бизнеса</h1>
-            <p>Продажи, прибыль, расходы, сотрудники, товары и клиенты в одном отчёте</p>
-        </div>
-
-        <form method="get" class="analytics-period-form">
-            <div class="analytics-date-field">
-                <span>С</span>
-                <input type="date" name="from" value="{{ date_from }}">
-            </div>
-
-            <div class="analytics-date-field">
-                <span>По</span>
-                <input type="date" name="to" value="{{ date_to }}">
-            </div>
-
-            <button type="submit">Применить</button>
-        </form>
-    </header>
-
-    <div class="analytics-period-presets">
-        <button type="button" data-period="today">Сегодня</button>
-        <button type="button" data-period="week">7 дней</button>
-        <button type="button" data-period="month">Этот месяц</button>
-        <button type="button" data-period="previous-month">Прошлый месяц</button>
-        <button type="button" data-period="year">Этот год</button>
-    </div>
-
-    <section class="analytics-kpi-grid">
-
-        <article class="analytics-kpi analytics-kpi--revenue">
-            <div class="analytics-kpi-head">
-                <span>Выручка</span>
-                <i><img src="/static/icons/analytics-revenue.png" alt="Выручка"></i>
-            </div>
-            <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
-            <small>За выбранный период</small>
-        </article>
-
-        <article class="analytics-kpi analytics-kpi--profit">
-            <div class="analytics-kpi-head">
-                <span>Чистая прибыль</span>
-                <i><img src="/static/icons/analytics-profit.png" alt="Чистая прибыль"></i>
-            </div>
-            <strong>{{ "{:,.0f}".format(net_profit).replace(",", " ") }} ₸</strong>
-            <small>Маржа {{ "{:,.1f}".format(margin_value) }}%</small>
-        </article>
-
-        <article class="analytics-kpi analytics-kpi--expense">
-            <div class="analytics-kpi-head">
-                <span>Расходы</span>
-                <i><img src="/static/icons/analytics-expenses.png" alt="Расходы"></i>
-            </div>
-            <strong>{{ "{:,.0f}".format(expenses_total).replace(",", " ") }} ₸</strong>
-            <small>Все расходы компании</small>
-        </article>
-
-        <article class="analytics-kpi analytics-kpi--sales">
-            <div class="analytics-kpi-head">
-                <span>Продаж</span>
-                <i><img src="/static/icons/analytics-sales.png" alt="Продажи"></i>
-            </div>
-            <strong>{{ sales_qty }}</strong>
-            <small>Средний чек {{ "{:,.0f}".format(average_receipt).replace(",", " ") }} ₸</small>
-        </article>
-
-        <article class="analytics-kpi analytics-kpi--returns">
-            <div class="analytics-kpi-head">
-                <span>Возвраты</span>
-                <i><img src="/static/icons/analytics-returns.png" alt="Возвраты"></i>
-            </div>
-            <strong>{{ "{:,.0f}".format(returns_total).replace(",", " ") }} ₸</strong>
-            <small>{{ returns_count_value }} операций</small>
-        </article>
-
-        <article class="analytics-kpi analytics-kpi--clients">
-            <div class="analytics-kpi-head">
-                <span>Клиенты</span>
-                <i><img src="/static/icons/analytics-clients.png" alt="Клиенты"></i>
-            </div>
-            <strong>{{ client_count_value }}</strong>
-            <small>Новых за период: {{ new_clients_value }}</small>
-        </article>
-
-    </section>
-
-    <section class="analytics-main-grid">
-
-        <article class="analytics-panel analytics-sales-panel">
-            <div class="analytics-panel-head">
-                <div>
-                    <h2>Динамика бизнеса</h2>
-                    <p>Выручка, прибыль и расходы по дням</p>
-                </div>
-
-                <div class="analytics-chart-legend">
-                    <span><i class="legend-revenue"></i>Выручка</span>
-                    <span><i class="legend-profit"></i>Прибыль</span>
-                    <span><i class="legend-expense"></i>Расходы</span>
-                </div>
-            </div>
-
-            <div class="analytics-chart-box analytics-chart-box--large">
-                <canvas id="businessChart"></canvas>
-            </div>
-        </article>
-
-        <article class="analytics-panel analytics-payments-panel">
-            <div class="analytics-panel-head">
-                <div>
-                    <h2>Способы оплаты</h2>
-                    <p>Структура выручки</p>
-                </div>
-            </div>
-
-            <div class="analytics-doughnut-wrap">
-                <canvas id="paymentsChart"></canvas>
-                <div class="analytics-doughnut-total">
-                    <span>Всего</span>
-                    <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
-                </div>
-            </div>
-
-            <div class="analytics-payment-list">
-                <div><span><i class="pay-cash"></i>Наличные</span><b>{{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }} ₸</b></div>
-                <div><span><i class="pay-card"></i>Карта</span><b>{{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }} ₸</b></div>
-                <div><span><i class="pay-kaspi"></i>Kaspi</span><b>{{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }} ₸</b></div>
-            </div>
-        </article>
-
-    </section>
-
-    <section class="analytics-secondary-grid">
-
-        <article class="analytics-panel analytics-expense-panel">
-            <div class="analytics-panel-head">
-                <div>
-                    <h2>Структура расходов</h2>
-                    <p>На что компания тратит деньги</p>
-                </div>
-            </div>
-
-            <div class="analytics-expense-layout">
-                <div class="analytics-chart-box analytics-chart-box--donut">
-                    <canvas id="expensesChart"></canvas>
-                </div>
-
-                <div class="analytics-expense-summary">
-                    <div><span class="analytics-label-icon"><img src="/static/icons/purchases.png" alt="">Закупки</span><b>{{ "{:,.0f}".format(purchase_total).replace(",", " ") }} ₸</b></div>
-                    <div><span class="analytics-label-icon"><img src="/static/icons/salary.png" alt="">Зарплата</span><b>{{ "{:,.0f}".format(salary_total).replace(",", " ") }} ₸</b></div>
-                    <div><span class="analytics-label-icon"><img src="/static/icons/taxes.png" alt="">Налоги</span><b>{{ "{:,.0f}".format(taxes_total).replace(",", " ") }} ₸</b></div>
-                    {% for row in (expense_categories|default([]))[:4] %}
-                    <div><span>{{ row.category }}</span><b>{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸</b></div>
-                    {% endfor %}
-                </div>
-            </div>
-        </article>
-
-        <article class="analytics-panel analytics-profit-panel">
-            <div class="analytics-panel-head">
-                <div>
-                    <h2>Финансовый результат</h2>
-                    <p>Из чего формируется прибыль</p>
-                </div>
-            </div>
-
-            <div class="analytics-profit-flow">
-                <div class="analytics-profit-row">
-                    <span>Выручка</span>
-                    <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
-                </div>
-                <div class="analytics-profit-progress"><i style="width:100%"></i></div>
-
-                <div class="analytics-profit-row">
-                    <span>Валовая прибыль</span>
-                    <strong>{{ "{:,.0f}".format(gross_profit).replace(",", " ") }} ₸</strong>
-                </div>
-                <div class="analytics-profit-progress analytics-profit-progress--gross">
-                    <i style="width:{{ ((gross_profit / revenue * 100) if revenue else 0)|round(1) }}%"></i>
-                </div>
-
-                <div class="analytics-profit-row">
-                    <span>Расходы</span>
-                    <strong class="analytics-negative">− {{ "{:,.0f}".format(expenses_total).replace(",", " ") }} ₸</strong>
-                </div>
-                <div class="analytics-profit-progress analytics-profit-progress--expense">
-                    <i style="width:{{ ((expenses_total / revenue * 100) if revenue else 0)|round(1) }}%"></i>
-                </div>
-
-                <div class="analytics-profit-result">
-                    <span>Чистая прибыль</span>
-                    <strong>{{ "{:,.0f}".format(net_profit).replace(",", " ") }} ₸</strong>
-                </div>
-            </div>
-        </article>
-
-    </section>
-
-    <section class="analytics-panel analytics-employees-panel">
-        <div class="analytics-panel-head analytics-panel-head--employees">
-            <div>
-                <h2>Эффективность сотрудников</h2>
-                <p>Продажи, средний чек, возвраты и вознаграждение</p>
-            </div>
-
-            {% if employee_stats %}
-            <div class="analytics-leader">
-                <span class="analytics-leader-label"><img src="/static/icons/leader.png" alt="">Лидер периода</span>
-                <strong>{{ employee_stats[0].full_name or employee_stats[0].username }}</strong>
-            </div>
-            {% endif %}
-        </div>
-
-        <div class="analytics-employee-table-wrap">
-            <table class="analytics-employee-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Сотрудник</th>
-                        <th>Продаж</th>
-                        <th>Выручка</th>
-                        <th>Средний чек</th>
-                        <th>Возвраты</th>
-                        <th>Ставка</th>
-                        <th>Вознаграждение</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for employee in employee_stats|default([]) %}
-                    <tr onclick="window.location='/analytics/employee/{{ employee.id }}?from={{ date_from }}&to={{ date_to }}'">
-                        <td class="analytics-rank">
-                            {% if loop.index == 1 %}<img src="/static/icons/rank-1.png" alt="1 место">
-                            {% elif loop.index == 2 %}<img src="/static/icons/rank-2.png" alt="2 место">
-                            {% elif loop.index == 3 %}<img src="/static/icons/rank-3.png" alt="3 место">
-                            {% else %}{{ loop.index }}
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="analytics-employee-name">{{ employee.full_name or employee.username }}</div>
-                            <div class="analytics-employee-role">{{ employee.role or 'Сотрудник' }}</div>
-                            <div class="analytics-employee-progress"><i style="width:{{ employee.progress_percent|default(0) }}%"></i></div>
-                        </td>
-                        <td>{{ employee.sales_count or 0 }}</td>
-                        <td><b>{{ "{:,.0f}".format(employee.revenue or 0).replace(",", " ") }} ₸</b></td>
-                        <td>{{ "{:,.0f}".format(employee.average_check or 0).replace(",", " ") }} ₸</td>
-                        <td>{{ employee.refund_count or 0 }}</td>
-                        <td>{{ employee.percent_rate or 0 }}%</td>
-                        <td class="analytics-reward">{{ "{:,.0f}".format(employee.reward or 0).replace(",", " ") }} ₸</td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="8" class="analytics-empty-row">За выбранный период данных нет</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="analytics-employee-cards">
-            {% for employee in employee_stats|default([]) %}
-            <a href="/analytics/employee/{{ employee.id }}?from={{ date_from }}&to={{ date_to }}" class="analytics-employee-card">
-                <div class="analytics-employee-card-top">
-                    <div>
-                        <span class="analytics-rank">
-                            {% if loop.index == 1 %}<img src="/static/icons/rank-1.png" alt="1 место">
-                            {% elif loop.index == 2 %}<img src="/static/icons/rank-2.png" alt="2 место">
-                            {% elif loop.index == 3 %}<img src="/static/icons/rank-3.png" alt="3 место">
-                            {% else %}{{ loop.index }}
-                            {% endif %}
-                        </span>
-                        <div>
-                            <strong>{{ employee.full_name or employee.username }}</strong>
-                            <small>{{ employee.role or 'Сотрудник' }}</small>
-                        </div>
-                    </div>
-                    <b>{{ "{:,.0f}".format(employee.revenue or 0).replace(",", " ") }} ₸</b>
-                </div>
-
-                <div class="analytics-employee-progress"><i style="width:{{ employee.progress_percent|default(0) }}%"></i></div>
-
-                <div class="analytics-employee-card-grid">
-                    <div><span>Продаж</span><b>{{ employee.sales_count or 0 }}</b></div>
-                    <div><span>Средний чек</span><b>{{ "{:,.0f}".format(employee.average_check or 0).replace(",", " ") }} ₸</b></div>
-                    <div><span>Возвраты</span><b>{{ employee.refund_count or 0 }}</b></div>
-                    <div><span>Вознаграждение</span><b>{{ "{:,.0f}".format(employee.reward or 0).replace(",", " ") }} ₸</b></div>
-                </div>
-            </a>
-            {% else %}
-            <div class="analytics-empty">За выбранный период данных по сотрудникам нет</div>
-            {% endfor %}
-        </div>
-    </section>
-
-    <section class="analytics-lists-grid">
-
-        <article class="analytics-panel">
-            <div class="analytics-panel-head">
-                <div>
-                    <h2>Топ товаров</h2>
-                    <p>По объёму выручки</p>
-                </div>
-                <span class="analytics-panel-icon"><img src="/static/icons/top-products.png" alt="Топ товаров"></span>
-            </div>
-
-            <div class="analytics-ranking-list">
-                {% for item in top_items|default([]) %}
-                <div class="analytics-ranking-row">
-                    <span class="analytics-ranking-number">{{ loop.index }}</span>
-                    <div>
-                        <strong>{{ item.name }}</strong>
-                        <small>{{ item.quantity|default(0) }} продано</small>
-                    </div>
-                    <b>{{ "{:,.0f}".format(item.total or 0).replace(",", " ") }} ₸</b>
-                </div>
-                {% else %}
-                <div class="analytics-empty">Нет данных по товарам</div>
-                {% endfor %}
-            </div>
-        </article>
-
-        <article class="analytics-panel">
-            <div class="analytics-panel-head">
-                <div>
-                    <h2>Топ клиентов</h2>
-                    <p>По сумме покупок</p>
-                </div>
-                <span class="analytics-panel-icon"><img src="/static/icons/top-clients.png" alt="Топ клиентов"></span>
-            </div>
-
-            <div class="analytics-ranking-list">
-                {% for client in top_clients|default([]) %}
-                <div class="analytics-ranking-row">
-                    <span class="analytics-ranking-number">{{ loop.index }}</span>
-                    <div>
-                        <strong>{{ client.full_name }}</strong>
-                        <small>{{ client.sales_count|default(0) }} покупок</small>
-                    </div>
-                    <b>{{ "{:,.0f}".format(client.total or 0).replace(",", " ") }} ₸</b>
-                </div>
-                {% else %}
-                <div class="analytics-empty">Нет данных по клиентам</div>
-                {% endfor %}
-            </div>
-        </article>
-
-        <article class="analytics-panel">
-            <div class="analytics-panel-head">
-                <div>
-                    <h2>Ключевые показатели</h2>
-                    <p>Быстрая оценка бизнеса</p>
-                </div>
-                <span class="analytics-panel-icon"><img src="/static/icons/key-metrics.png" alt="Ключевые показатели"></span>
-            </div>
-
-            <div class="analytics-metric-list">
-                <div><span>Средний чек</span><b>{{ "{:,.0f}".format(average_receipt).replace(",", " ") }} ₸</b></div>
-                <div><span>Маржинальность</span><b>{{ "{:,.1f}".format(margin_value) }}%</b></div>
-                <div><span>Возвратов</span><b>{{ returns_count_value }}</b></div>
-                <div><span>Новых клиентов</span><b>{{ new_clients_value }}</b></div>
-                <div><span>Продаж на сотрудника</span><b>{{ "{:,.1f}".format((sales_qty / employee_stats|length) if employee_stats|default([])|length else 0) }}</b></div>
-            </div>
-        </article>
-
-    </section>
-
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<script>
-const css = getComputedStyle(document.documentElement);
-
-const labels = {{ chart_labels|default([])|tojson }};
-const revenueValues = {{ chart_values|default([])|tojson }};
-const profitValues = {{ profit_chart_values|default([])|tojson }};
-const expenseValues = {{ expense_chart_values|default([])|tojson }};
-
-new Chart(document.getElementById("businessChart"), {
-    type: "line",
-    data: {
-        labels,
-        datasets: [
-            {
-                label: "Выручка",
-                data: revenueValues,
-                borderColor: "#6f57ff",
-                backgroundColor: "rgba(111,87,255,.10)",
-                fill: true,
-                borderWidth: 3,
-                tension: .38,
-                pointRadius: 2,
-                pointHoverRadius: 5
-            },
-            {
-                label: "Прибыль",
-                data: profitValues,
-                borderColor: "#17a779",
-                backgroundColor: "rgba(23,167,121,.06)",
-                fill: false,
-                borderWidth: 2,
-                tension: .38,
-                pointRadius: 2
-            },
-            {
-                label: "Расходы",
-                data: expenseValues,
-                borderColor: "#dc6074",
-                backgroundColor: "rgba(220,96,116,.06)",
-                fill: false,
-                borderWidth: 2,
-                tension: .38,
-                pointRadius: 2
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    label(context) {
-                        return `${context.dataset.label}: ${new Intl.NumberFormat("ru-RU").format(context.raw || 0)} ₸`;
-                    }
-                }
-            }
-        },
-        scales: {
-            x: { grid: { display: false }, ticks: { color: "#8a91a3", maxRotation: 0 } },
-            y: {
-                beginAtZero: true,
-                grid: { color: "rgba(125,132,151,.10)" },
-                ticks: {
-                    color: "#8a91a3",
-                    callback(value) {
-                        return new Intl.NumberFormat("ru-RU", { notation: "compact" }).format(value);
-                    }
-                }
-            }
-        }
-    }
-});
-
-new Chart(document.getElementById("paymentsChart"), {
-    type: "doughnut",
-    data: {
-        labels: ["Наличные", "Карта", "Kaspi"],
-        datasets: [{
-			data: [
-				{{ payments.cash or 0 }},
-				{{ payments.card or 0 }},
-				{{ payments.kaspi or 0 }}
-			],
-            backgroundColor: ["#6f57ff", "#20a7d8", "#e9578f"],
-            borderColor: "#ffffff",
-            borderWidth: 4,
-            hoverOffset: 6
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: "72%",
-        plugins: { legend: { display: false } }
-    }
-});
-
-const expenseCategoryLabels = {{ expense_categories|default([])|map(attribute='category')|list|tojson }};
-const expenseCategoryValues = {{ expense_categories|default([])|map(attribute='total')|list|tojson }};
-
-new Chart(document.getElementById("expensesChart"), {
-    type: "doughnut",
-    data: {
-        labels: expenseCategoryLabels.length ? expenseCategoryLabels : ["Закупки", "Зарплата", "Налоги"],
-        datasets: [{
-            data: expenseCategoryValues.length ? expenseCategoryValues : [
-                {{ purchase_total }},
-                {{ salary_total }},
-                {{ taxes_total }}
-            ],
-            backgroundColor: ["#6f57ff", "#20a7d8", "#e9578f", "#f2a34a", "#17a779", "#8a91a3", "#b65bd5"],
-            borderColor: "#ffffff",
-            borderWidth: 3
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: "68%",
-        plugins: {
-            legend: {
-                position: "bottom",
-                labels: { boxWidth: 9, usePointStyle: true, font: { size: 10 } }
-            }
-        }
-    }
-});
-
-function localDate(date) {
-    const offset = date.getTimezoneOffset();
-    return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 10);
-}
-
-function applyAnalyticsPeriod(period) {
-    const form = document.querySelector(".analytics-period-form");
-    const from = form.querySelector('[name="from"]');
-    const to = form.querySelector('[name="to"]');
-    const now = new Date();
-
-    let start = new Date(now);
-    let end = new Date(now);
-
-    if (period === "week") {
-        start.setDate(now.getDate() - 6);
-    } else if (period === "month") {
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (period === "previous-month") {
-        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        end = new Date(now.getFullYear(), now.getMonth(), 0);
-    } else if (period === "year") {
-        start = new Date(now.getFullYear(), 0, 1);
-    }
-
-    from.value = localDate(start);
-    to.value = localDate(end);
-    form.submit();
-}
-
-document.querySelectorAll(".analytics-period-presets button").forEach(button => {
-    button.addEventListener("click", () => applyAnalyticsPeriod(button.dataset.period));
-});
-</script>
-
 <style>
 .analytics-page{
     --an-text:#222737;
@@ -1378,7 +826,6 @@ document.querySelectorAll(".analytics-period-presets button").forEach(button => 
 }
 </style>
 
-
 <style>
 /* ===== УВЕЛИЧЕННАЯ ТИПОГРАФИКА БЕЗ ИЗМЕНЕНИЯ СЕТКИ ===== */
 
@@ -1607,7 +1054,6 @@ document.querySelectorAll(".analytics-period-presets button").forEach(button => 
 }
 </style>
 
-
 <style>
 /* ===== ЦИФРЫ В ВЕРХНИХ КАРТОЧКАХ ===== */
 .analytics-kpi strong{
@@ -1639,7 +1085,6 @@ document.querySelectorAll(".analytics-period-presets button").forEach(button => 
     }
 }
 </style>
-
 
 <style id="analytics-icon-system">
 /* Nika Business — единая система иконок аналитики */
@@ -1730,5 +1175,557 @@ document.querySelectorAll(".analytics-period-presets button").forEach(button => 
     }
 }
 </style>
+
+{% set revenue = total or 0 %}
+{% set net_profit = profit or 0 %}
+{% set expenses_total = expenses_total or 0 %}
+{% set gross_profit = gross_profit if gross_profit is not none else (net_profit + expenses_total) %}
+{% set sales_qty = sales_count or 0 %}
+{% set average_receipt = average_check if average_check is not none else ((revenue / sales_qty) if sales_qty else 0) %}
+{% set returns_total = returns_total or 0 %}
+{% set returns_count_value = returns_count or 0 %}
+{% set margin_value = margin_percent if margin_percent is not none else ((net_profit / revenue * 100) if revenue else 0) %}
+{% set client_count_value = clients_count if clients_count is not none else (top_clients|default([])|length) %}
+{% set new_clients_value = new_clients or 0 %}
+{% set purchase_total = purchase_total or 0 %}
+{% set salary_total = salary_total or 0 %}
+{% set taxes_total = taxes_total or 0 %}
+
+<div class="analytics-page">
+
+    <header class="analytics-page-head">
+        <div>
+            <div class="analytics-eyebrow">Управленческая аналитика</div>
+            <h1>Аналитика бизнеса</h1>
+            <p>Продажи, прибыль, расходы, сотрудники, товары и клиенты в одном отчёте</p>
+        </div>
+
+        <form method="get" class="analytics-period-form">
+            <div class="analytics-date-field">
+                <span>С</span>
+                <input type="date" name="from" value="{{ date_from }}">
+            </div>
+
+            <div class="analytics-date-field">
+                <span>По</span>
+                <input type="date" name="to" value="{{ date_to }}">
+            </div>
+
+            <button type="submit">Применить</button>
+        </form>
+    </header>
+
+    <div class="analytics-period-presets">
+        <button type="button" data-period="today">Сегодня</button>
+        <button type="button" data-period="week">7 дней</button>
+        <button type="button" data-period="month">Этот месяц</button>
+        <button type="button" data-period="previous-month">Прошлый месяц</button>
+        <button type="button" data-period="year">Этот год</button>
+    </div>
+
+    <section class="analytics-kpi-grid">
+
+        <article class="analytics-kpi analytics-kpi--revenue">
+            <div class="analytics-kpi-head">
+                <span>Выручка</span>
+                <i><img src="/static/icons/analytics-revenue.png" alt="Выручка"></i>
+            </div>
+            <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
+            <small>За выбранный период</small>
+        </article>
+
+        <article class="analytics-kpi analytics-kpi--profit">
+            <div class="analytics-kpi-head">
+                <span>Чистая прибыль</span>
+                <i><img src="/static/icons/analytics-profit.png" alt="Чистая прибыль"></i>
+            </div>
+            <strong>{{ "{:,.0f}".format(net_profit).replace(",", " ") }} ₸</strong>
+            <small>Маржа {{ "{:,.1f}".format(margin_value) }}%</small>
+        </article>
+
+        <article class="analytics-kpi analytics-kpi--expense">
+            <div class="analytics-kpi-head">
+                <span>Расходы</span>
+                <i><img src="/static/icons/analytics-expenses.png" alt="Расходы"></i>
+            </div>
+            <strong>{{ "{:,.0f}".format(expenses_total).replace(",", " ") }} ₸</strong>
+            <small>Все расходы компании</small>
+        </article>
+
+        <article class="analytics-kpi analytics-kpi--sales">
+            <div class="analytics-kpi-head">
+                <span>Продаж</span>
+                <i><img src="/static/icons/analytics-sales.png" alt="Продажи"></i>
+            </div>
+            <strong>{{ sales_qty }}</strong>
+            <small>Средний чек {{ "{:,.0f}".format(average_receipt).replace(",", " ") }} ₸</small>
+        </article>
+
+        <article class="analytics-kpi analytics-kpi--returns">
+            <div class="analytics-kpi-head">
+                <span>Возвраты</span>
+                <i><img src="/static/icons/analytics-returns.png" alt="Возвраты"></i>
+            </div>
+            <strong>{{ "{:,.0f}".format(returns_total).replace(",", " ") }} ₸</strong>
+            <small>{{ returns_count_value }} операций</small>
+        </article>
+
+        <article class="analytics-kpi analytics-kpi--clients">
+            <div class="analytics-kpi-head">
+                <span>Клиенты</span>
+                <i><img src="/static/icons/analytics-clients.png" alt="Клиенты"></i>
+            </div>
+            <strong>{{ client_count_value }}</strong>
+            <small>Новых за период: {{ new_clients_value }}</small>
+        </article>
+
+    </section>
+
+    <section class="analytics-main-grid">
+
+        <article class="analytics-panel analytics-sales-panel">
+            <div class="analytics-panel-head">
+                <div>
+                    <h2>Динамика бизнеса</h2>
+                    <p>Выручка, прибыль и расходы по дням</p>
+                </div>
+
+                <div class="analytics-chart-legend">
+                    <span><i class="legend-revenue"></i>Выручка</span>
+                    <span><i class="legend-profit"></i>Прибыль</span>
+                    <span><i class="legend-expense"></i>Расходы</span>
+                </div>
+            </div>
+
+            <div class="analytics-chart-box analytics-chart-box--large">
+                <canvas id="businessChart"></canvas>
+            </div>
+        </article>
+
+        <article class="analytics-panel analytics-payments-panel">
+            <div class="analytics-panel-head">
+                <div>
+                    <h2>Способы оплаты</h2>
+                    <p>Структура выручки</p>
+                </div>
+            </div>
+
+            <div class="analytics-doughnut-wrap">
+                <canvas id="paymentsChart"></canvas>
+                <div class="analytics-doughnut-total">
+                    <span>Всего</span>
+                    <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
+                </div>
+            </div>
+
+            <div class="analytics-payment-list">
+                <div><span><i class="pay-cash"></i>Наличные</span><b>{{ "{:,.0f}".format(payments.cash or 0).replace(",", " ") }} ₸</b></div>
+                <div><span><i class="pay-card"></i>Карта</span><b>{{ "{:,.0f}".format(payments.card or 0).replace(",", " ") }} ₸</b></div>
+                <div><span><i class="pay-kaspi"></i>Kaspi</span><b>{{ "{:,.0f}".format(payments.kaspi or 0).replace(",", " ") }} ₸</b></div>
+            </div>
+        </article>
+
+    </section>
+
+    <section class="analytics-secondary-grid">
+
+        <article class="analytics-panel analytics-expense-panel">
+            <div class="analytics-panel-head">
+                <div>
+                    <h2>Структура расходов</h2>
+                    <p>На что компания тратит деньги</p>
+                </div>
+            </div>
+
+            <div class="analytics-expense-layout">
+                <div class="analytics-chart-box analytics-chart-box--donut">
+                    <canvas id="expensesChart"></canvas>
+                </div>
+
+                <div class="analytics-expense-summary">
+                    <div><span class="analytics-label-icon"><img src="/static/icons/purchases.png" alt="">Закупки</span><b>{{ "{:,.0f}".format(purchase_total).replace(",", " ") }} ₸</b></div>
+                    <div><span class="analytics-label-icon"><img src="/static/icons/salary.png" alt="">Зарплата</span><b>{{ "{:,.0f}".format(salary_total).replace(",", " ") }} ₸</b></div>
+                    <div><span class="analytics-label-icon"><img src="/static/icons/taxes.png" alt="">Налоги</span><b>{{ "{:,.0f}".format(taxes_total).replace(",", " ") }} ₸</b></div>
+                    {% for row in (expense_categories|default([]))[:4] %}
+                    <div><span>{{ row.category }}</span><b>{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸</b></div>
+                    {% endfor %}
+                </div>
+            </div>
+        </article>
+
+        <article class="analytics-panel analytics-profit-panel">
+            <div class="analytics-panel-head">
+                <div>
+                    <h2>Финансовый результат</h2>
+                    <p>Из чего формируется прибыль</p>
+                </div>
+            </div>
+
+            <div class="analytics-profit-flow">
+                <div class="analytics-profit-row">
+                    <span>Выручка</span>
+                    <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
+                </div>
+                <div class="analytics-profit-progress"><i style="width:100%"></i></div>
+
+                <div class="analytics-profit-row">
+                    <span>Валовая прибыль</span>
+                    <strong>{{ "{:,.0f}".format(gross_profit).replace(",", " ") }} ₸</strong>
+                </div>
+                <div class="analytics-profit-progress analytics-profit-progress--gross">
+                    <i style="width:{{ ((gross_profit / revenue * 100) if revenue else 0)|round(1) }}%"></i>
+                </div>
+
+                <div class="analytics-profit-row">
+                    <span>Расходы</span>
+                    <strong class="analytics-negative">− {{ "{:,.0f}".format(expenses_total).replace(",", " ") }} ₸</strong>
+                </div>
+                <div class="analytics-profit-progress analytics-profit-progress--expense">
+                    <i style="width:{{ ((expenses_total / revenue * 100) if revenue else 0)|round(1) }}%"></i>
+                </div>
+
+                <div class="analytics-profit-result">
+                    <span>Чистая прибыль</span>
+                    <strong>{{ "{:,.0f}".format(net_profit).replace(",", " ") }} ₸</strong>
+                </div>
+            </div>
+        </article>
+
+    </section>
+
+    <section class="analytics-panel analytics-employees-panel">
+        <div class="analytics-panel-head analytics-panel-head--employees">
+            <div>
+                <h2>Эффективность сотрудников</h2>
+                <p>Продажи, средний чек, возвраты и вознаграждение</p>
+            </div>
+
+            {% if employee_stats %}
+            <div class="analytics-leader">
+                <span class="analytics-leader-label"><img src="/static/icons/leader.png" alt="">Лидер периода</span>
+                <strong>{{ employee_stats[0].full_name or employee_stats[0].username }}</strong>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="analytics-employee-table-wrap">
+            <table class="analytics-employee-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Сотрудник</th>
+                        <th>Продаж</th>
+                        <th>Выручка</th>
+                        <th>Средний чек</th>
+                        <th>Возвраты</th>
+                        <th>Ставка</th>
+                        <th>Вознаграждение</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for employee in employee_stats|default([]) %}
+                    <tr onclick="window.location='/analytics/employee/{{ employee.id }}?from={{ date_from }}&to={{ date_to }}'">
+                        <td class="analytics-rank">
+                            {% if loop.index == 1 %}<img src="/static/icons/rank-1.png" alt="1 место">
+                            {% elif loop.index == 2 %}<img src="/static/icons/rank-2.png" alt="2 место">
+                            {% elif loop.index == 3 %}<img src="/static/icons/rank-3.png" alt="3 место">
+                            {% else %}{{ loop.index }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="analytics-employee-name">{{ employee.full_name or employee.username }}</div>
+                            <div class="analytics-employee-role">{{ employee.role or 'Сотрудник' }}</div>
+                            <div class="analytics-employee-progress"><i style="width:{{ employee.progress_percent|default(0) }}%"></i></div>
+                        </td>
+                        <td>{{ employee.sales_count or 0 }}</td>
+                        <td><b>{{ "{:,.0f}".format(employee.revenue or 0).replace(",", " ") }} ₸</b></td>
+                        <td>{{ "{:,.0f}".format(employee.average_check or 0).replace(",", " ") }} ₸</td>
+                        <td>{{ employee.refund_count or 0 }}</td>
+                        <td>{{ employee.percent_rate or 0 }}%</td>
+                        <td class="analytics-reward">{{ "{:,.0f}".format(employee.reward or 0).replace(",", " ") }} ₸</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="analytics-empty-row">За выбранный период данных нет</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="analytics-employee-cards">
+            {% for employee in employee_stats|default([]) %}
+            <a href="/analytics/employee/{{ employee.id }}?from={{ date_from }}&to={{ date_to }}" class="analytics-employee-card">
+                <div class="analytics-employee-card-top">
+                    <div>
+                        <span class="analytics-rank">
+                            {% if loop.index == 1 %}<img src="/static/icons/rank-1.png" alt="1 место">
+                            {% elif loop.index == 2 %}<img src="/static/icons/rank-2.png" alt="2 место">
+                            {% elif loop.index == 3 %}<img src="/static/icons/rank-3.png" alt="3 место">
+                            {% else %}{{ loop.index }}
+                            {% endif %}
+                        </span>
+                        <div>
+                            <strong>{{ employee.full_name or employee.username }}</strong>
+                            <small>{{ employee.role or 'Сотрудник' }}</small>
+                        </div>
+                    </div>
+                    <b>{{ "{:,.0f}".format(employee.revenue or 0).replace(",", " ") }} ₸</b>
+                </div>
+
+                <div class="analytics-employee-progress"><i style="width:{{ employee.progress_percent|default(0) }}%"></i></div>
+
+                <div class="analytics-employee-card-grid">
+                    <div><span>Продаж</span><b>{{ employee.sales_count or 0 }}</b></div>
+                    <div><span>Средний чек</span><b>{{ "{:,.0f}".format(employee.average_check or 0).replace(",", " ") }} ₸</b></div>
+                    <div><span>Возвраты</span><b>{{ employee.refund_count or 0 }}</b></div>
+                    <div><span>Вознаграждение</span><b>{{ "{:,.0f}".format(employee.reward or 0).replace(",", " ") }} ₸</b></div>
+                </div>
+            </a>
+            {% else %}
+            <div class="analytics-empty">За выбранный период данных по сотрудникам нет</div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="analytics-lists-grid">
+
+        <article class="analytics-panel">
+            <div class="analytics-panel-head">
+                <div>
+                    <h2>Топ товаров</h2>
+                    <p>По объёму выручки</p>
+                </div>
+                <span class="analytics-panel-icon"><img src="/static/icons/top-products.png" alt="Топ товаров"></span>
+            </div>
+
+            <div class="analytics-ranking-list">
+                {% for item in top_items|default([]) %}
+                <div class="analytics-ranking-row">
+                    <span class="analytics-ranking-number">{{ loop.index }}</span>
+                    <div>
+                        <strong>{{ item.name }}</strong>
+                        <small>{{ item.quantity|default(0) }} продано</small>
+                    </div>
+                    <b>{{ "{:,.0f}".format(item.total or 0).replace(",", " ") }} ₸</b>
+                </div>
+                {% else %}
+                <div class="analytics-empty">Нет данных по товарам</div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="analytics-panel">
+            <div class="analytics-panel-head">
+                <div>
+                    <h2>Топ клиентов</h2>
+                    <p>По сумме покупок</p>
+                </div>
+                <span class="analytics-panel-icon"><img src="/static/icons/top-clients.png" alt="Топ клиентов"></span>
+            </div>
+
+            <div class="analytics-ranking-list">
+                {% for client in top_clients|default([]) %}
+                <div class="analytics-ranking-row">
+                    <span class="analytics-ranking-number">{{ loop.index }}</span>
+                    <div>
+                        <strong>{{ client.full_name }}</strong>
+                        <small>{{ client.sales_count|default(0) }} покупок</small>
+                    </div>
+                    <b>{{ "{:,.0f}".format(client.total or 0).replace(",", " ") }} ₸</b>
+                </div>
+                {% else %}
+                <div class="analytics-empty">Нет данных по клиентам</div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="analytics-panel">
+            <div class="analytics-panel-head">
+                <div>
+                    <h2>Ключевые показатели</h2>
+                    <p>Быстрая оценка бизнеса</p>
+                </div>
+                <span class="analytics-panel-icon"><img src="/static/icons/key-metrics.png" alt="Ключевые показатели"></span>
+            </div>
+
+            <div class="analytics-metric-list">
+                <div><span>Средний чек</span><b>{{ "{:,.0f}".format(average_receipt).replace(",", " ") }} ₸</b></div>
+                <div><span>Маржинальность</span><b>{{ "{:,.1f}".format(margin_value) }}%</b></div>
+                <div><span>Возвратов</span><b>{{ returns_count_value }}</b></div>
+                <div><span>Новых клиентов</span><b>{{ new_clients_value }}</b></div>
+                <div><span>Продаж на сотрудника</span><b>{{ "{:,.1f}".format((sales_qty / employee_stats|length) if employee_stats|default([])|length else 0) }}</b></div>
+            </div>
+        </article>
+
+    </section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const css = getComputedStyle(document.documentElement);
+
+const labels = {{ chart_labels|default([])|tojson }};
+const revenueValues = {{ chart_values|default([])|tojson }};
+const profitValues = {{ profit_chart_values|default([])|tojson }};
+const expenseValues = {{ expense_chart_values|default([])|tojson }};
+
+new Chart(document.getElementById("businessChart"), {
+    type: "line",
+    data: {
+        labels,
+        datasets: [
+            {
+                label: "Выручка",
+                data: revenueValues,
+                borderColor: "#6f57ff",
+                backgroundColor: "rgba(111,87,255,.10)",
+                fill: true,
+                borderWidth: 3,
+                tension: .38,
+                pointRadius: 2,
+                pointHoverRadius: 5
+            },
+            {
+                label: "Прибыль",
+                data: profitValues,
+                borderColor: "#17a779",
+                backgroundColor: "rgba(23,167,121,.06)",
+                fill: false,
+                borderWidth: 2,
+                tension: .38,
+                pointRadius: 2
+            },
+            {
+                label: "Расходы",
+                data: expenseValues,
+                borderColor: "#dc6074",
+                backgroundColor: "rgba(220,96,116,.06)",
+                fill: false,
+                borderWidth: 2,
+                tension: .38,
+                pointRadius: 2
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label(context) {
+                        return `${context.dataset.label}: ${new Intl.NumberFormat("ru-RU").format(context.raw || 0)} ₸`;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: { grid: { display: false }, ticks: { color: "#8a91a3", maxRotation: 0 } },
+            y: {
+                beginAtZero: true,
+                grid: { color: "rgba(125,132,151,.10)" },
+                ticks: {
+                    color: "#8a91a3",
+                    callback(value) {
+                        return new Intl.NumberFormat("ru-RU", { notation: "compact" }).format(value);
+                    }
+                }
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById("paymentsChart"), {
+    type: "doughnut",
+    data: {
+        labels: ["Наличные", "Карта", "Kaspi"],
+        datasets: [{
+			data: [
+				{{ payments.cash or 0 }},
+				{{ payments.card or 0 }},
+				{{ payments.kaspi or 0 }}
+			],
+            backgroundColor: ["#6f57ff", "#20a7d8", "#e9578f"],
+            borderColor: "#ffffff",
+            borderWidth: 4,
+            hoverOffset: 6
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "72%",
+        plugins: { legend: { display: false } }
+    }
+});
+
+const expenseCategoryLabels = {{ expense_categories|default([])|map(attribute='category')|list|tojson }};
+const expenseCategoryValues = {{ expense_categories|default([])|map(attribute='total')|list|tojson }};
+
+new Chart(document.getElementById("expensesChart"), {
+    type: "doughnut",
+    data: {
+        labels: expenseCategoryLabels.length ? expenseCategoryLabels : ["Закупки", "Зарплата", "Налоги"],
+        datasets: [{
+            data: expenseCategoryValues.length ? expenseCategoryValues : [
+                {{ purchase_total }},
+                {{ salary_total }},
+                {{ taxes_total }}
+            ],
+            backgroundColor: ["#6f57ff", "#20a7d8", "#e9578f", "#f2a34a", "#17a779", "#8a91a3", "#b65bd5"],
+            borderColor: "#ffffff",
+            borderWidth: 3
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "68%",
+        plugins: {
+            legend: {
+                position: "bottom",
+                labels: { boxWidth: 9, usePointStyle: true, font: { size: 10 } }
+            }
+        }
+    }
+});
+
+function localDate(date) {
+    const offset = date.getTimezoneOffset();
+    return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
+
+function applyAnalyticsPeriod(period) {
+    const form = document.querySelector(".analytics-period-form");
+    const from = form.querySelector('[name="from"]');
+    const to = form.querySelector('[name="to"]');
+    const now = new Date();
+
+    let start = new Date(now);
+    let end = new Date(now);
+
+    if (period === "week") {
+        start.setDate(now.getDate() - 6);
+    } else if (period === "month") {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (period === "previous-month") {
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        end = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (period === "year") {
+        start = new Date(now.getFullYear(), 0, 1);
+    }
+
+    from.value = localDate(start);
+    to.value = localDate(end);
+    form.submit();
+}
+
+document.querySelectorAll(".analytics-period-presets button").forEach(button => {
+    button.addEventListener("click", () => applyAnalyticsPeriod(button.dataset.period));
+});
+</script>
 
 {% endblock %}
