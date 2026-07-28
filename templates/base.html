@@ -2796,53 +2796,6 @@ body.wa-modal-open {
     }
 }
 
-
-		/* ===== NATIVE VIEW TRANSITIONS ===== */
-		@view-transition {
-			navigation: auto;
-		}
-
-		.sidebar {
-			view-transition-name: nika-sidebar;
-		}
-
-		.app-topbar {
-			view-transition-name: nika-topbar;
-		}
-
-		.page-shell {
-			view-transition-name: nika-page;
-		}
-
-		::view-transition-group(nika-sidebar),
-		::view-transition-group(nika-topbar) {
-			animation-duration: 0s;
-		}
-
-		::view-transition-old(nika-page) {
-			animation: nika-page-fade-out .07s ease-out both;
-		}
-
-		::view-transition-new(nika-page) {
-			animation: nika-page-fade-in .12s ease-out both;
-		}
-
-		@keyframes nika-page-fade-out {
-			to { opacity: 0; }
-		}
-
-		@keyframes nika-page-fade-in {
-			from { opacity: 0; }
-			to { opacity: 1; }
-		}
-
-		@media (prefers-reduced-motion: reduce) {
-			::view-transition-old(nika-page),
-			::view-transition-new(nika-page) {
-				animation: none !important;
-			}
-		}
-
 </style>
 
 	{% block page_css %}{% endblock %}
