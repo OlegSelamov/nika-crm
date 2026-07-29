@@ -3,42 +3,7 @@
 {% block title %}{{ item.name }} — {{ store.title or store.company_name }}{% endblock %}
 
 {% block extra_head %}
-<style>
-.sf-direct{
-    max-width:1120px;margin:0 auto;padding:28px 20px 60px
-}
-.sf-direct-back{
-    display:inline-flex;margin-bottom:15px;color:#697386;text-decoration:none;
-    font-size:12px;font-weight:800
-}
-.sf-direct-card{
-    display:grid;grid-template-columns:1.05fr .95fr;gap:20px;
-    padding:18px;border-radius:25px;background:#fff;border:1px solid var(--line)
-}
-.sf-direct-main{
-    aspect-ratio:1/1;border-radius:19px;background:#f5f6f9;
-    display:grid;place-items:center;overflow:hidden
-}
-.sf-direct-main img{width:100%;height:100%;object-fit:contain}
-.sf-direct-info{padding:18px 14px;display:flex;flex-direction:column}
-.sf-direct-cat{font-size:10px;font-weight:850;color:var(--brand);text-transform:uppercase}
-.sf-direct-title{font-size:36px;line-height:1.05;letter-spacing:-.04em;margin:9px 0}
-.sf-direct-price{font-size:34px;font-weight:950;color:var(--brand-deep);margin:11px 0}
-.sf-direct-desc{color:#667085;line-height:1.65;font-size:13px}
-.sf-direct-note{
-    margin-top:auto;padding:14px;border-radius:13px;background:var(--brand-soft);
-    color:var(--brand-deep);font-size:11px;line-height:1.5
-}
-.sf-direct-open{
-    min-height:48px;margin-top:12px;border:0;border-radius:13px;
-    color:#fff;background:linear-gradient(135deg,var(--brand-dark),var(--brand));
-    font-size:12px;font-weight:900;cursor:pointer
-}
-@media(max-width:760px){
-    .sf-direct-card{grid-template-columns:1fr}
-    .sf-direct-title{font-size:27px}
-}
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/storefront/item.css') }}">
 {% endblock %}
 
 {% block content %}

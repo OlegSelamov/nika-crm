@@ -1,0 +1,1197 @@
+.accounting-page {
+    visibility: visible;
+}
+
+:root {
+    --acc-bg: #f6f7fb;
+    --acc-card: #ffffff;
+    --acc-card-soft: #fafafe;
+    --acc-border: #e5e7ef;
+    --acc-text: #202434;
+    --acc-muted: #73798d;
+    --acc-purple: #7257ff;
+    --acc-purple-dark: #5b43df;
+    --acc-purple-soft: #efecff;
+    --acc-green: #1b8f68;
+    --acc-green-soft: #e8f7f1;
+    --acc-orange: #b96d1b;
+    --acc-orange-soft: #fff2e2;
+    --acc-red: #cb4848;
+    --acc-red-soft: #fdecec;
+    --acc-shadow: 0 10px 28px rgba(52, 48, 89, .08);
+}
+
+.accounting-page {
+    width: 100%;
+    min-width: 0;
+    color: var(--acc-text);
+}
+
+.accounting-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 20px;
+}
+
+.accounting-page .page-title {
+    margin: 0;
+    color: #202434 !important;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-shadow: none !important;
+}
+
+.accounting-page .page-note {
+    margin-top: 5px;
+    color: #6f7689 !important;
+    font-size: 13px;
+    text-shadow: none !important;
+}
+
+.accounting-primary-btn,
+.accounting-secondary-btn,
+.accounting-cancel-btn {
+    min-height: 42px;
+    padding: 0 17px;
+    border-radius: 12px;
+    border: 0;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: .18s ease;
+}
+
+.accounting-primary-btn {
+    color: #fff !important;
+    background: linear-gradient(135deg, var(--acc-purple), #9a59e8);
+    box-shadow: 0 9px 20px rgba(114, 87, 255, .22);
+}
+
+.accounting-primary-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(114, 87, 255, .28);
+}
+
+.accounting-primary-btn--small {
+    min-height: 40px;
+    white-space: nowrap;
+}
+
+.accounting-secondary-btn,
+.accounting-cancel-btn {
+    color: var(--acc-purple) !important;
+    background: var(--acc-purple-soft);
+    border: 1px solid #d9d2ff;
+}
+
+.accounting-secondary-btn:hover,
+.accounting-cancel-btn:hover {
+    background: #e9e4ff;
+}
+
+.accounting-header-actions {
+    display:flex;
+    align-items:center;
+    gap:9px;
+}
+
+.accounting-header-actions form {
+    margin:0;
+}
+
+.accounting-sync-notice {
+    margin-bottom:14px;
+    padding:11px 14px;
+    border:1px solid #ccebdc;
+    border-radius:12px;
+    color:#197454;
+    background:#edf9f4;
+    font-size:12px;
+    font-weight:700;
+}
+
+.accounting-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.accounting-stat {
+    position: relative;
+    min-width: 0;
+    min-height: 112px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid var(--acc-border);
+    border-radius: 18px;
+    background: var(--acc-card);
+    box-shadow: var(--acc-shadow);
+    overflow: hidden;
+}
+
+.accounting-stat::after {
+    content: "";
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    right: -30px;
+    top: -35px;
+    border-radius: 50%;
+    background: var(--stat-color);
+    filter: blur(22px);
+    opacity: .13;
+}
+
+.accounting-stat--violet { --stat-color: #7857ff; }
+.accounting-stat--cyan { --stat-color: #17bed0; }
+.accounting-stat--orange { --stat-color: #ff9f45; }
+.accounting-stat--green { --stat-color: #28c890; }
+
+.accounting-stat__icon {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.accounting-stat__body {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.accounting-stat__label {
+    color: var(--acc-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.accounting-stat__value {
+    color: var(--acc-text);
+    font-size: clamp(18px, 1.6vw, 25px);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.accounting-stat small {
+    color: var(--acc-muted);
+    font-size: 11px;
+}
+
+.accounting-section {
+    min-width: 0;
+    margin-bottom: 18px;
+    padding: 20px;
+    border: 1px solid var(--acc-border);
+    border-radius: 19px;
+    background: var(--acc-card);
+    box-shadow: var(--acc-shadow);
+}
+
+.accounting-section__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 17px;
+}
+
+.accounting-section__head h2 {
+    margin: 0 0 4px;
+    color: var(--acc-text);
+    font-size: 17px;
+}
+
+.accounting-section__head p {
+    margin: 0;
+    color: var(--acc-muted);
+    font-size: 12px;
+}
+
+.accounting-tools {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.accounting-tool {
+    min-width: 0;
+    min-height: 82px;
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 14px;
+    border: 1px solid var(--acc-border);
+    border-radius: 15px;
+    color: var(--acc-text);
+    background: var(--acc-card-soft);
+    text-align: left;
+    cursor: pointer;
+    transition: .18s ease;
+}
+
+.accounting-tool:hover {
+    transform: translateY(-2px);
+    border-color: #d3caff;
+    background: #f6f3ff;
+}
+
+.accounting-tool__icon {
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    color: var(--tool-color);
+    background: color-mix(in srgb, var(--tool-color) 13%, white);
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.accounting-tool--purple { --tool-color: #7457ff; }
+.accounting-tool--blue { --tool-color: #437ef1; }
+.accounting-tool--cyan { --tool-color: #1cb6c4; }
+.accounting-tool--orange { --tool-color: #e68b2f; }
+.accounting-tool--green { --tool-color: #26a87d; }
+.accounting-tool--pink { --tool-color: #d75cab; }
+
+.accounting-tool__content {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.accounting-tool__content strong {
+    color: var(--acc-text);
+    font-size: 13px;
+}
+
+.accounting-tool__content small {
+    color: var(--acc-muted);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.accounting-tool__arrow {
+    margin-left: auto;
+    color: var(--tool-color);
+    font-size: 23px;
+}
+
+.accounting-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+    gap: 18px;
+}
+
+.accounting-timeline,
+.debts-list {
+    display: grid;
+    gap: 10px;
+}
+
+.tax-event,
+.debt-card {
+    min-width: 0;
+    display: flex;
+    gap: 13px;
+    padding: 13px;
+    border: 1px solid var(--acc-border);
+    border-radius: 14px;
+    background: var(--acc-card-soft);
+}
+
+.tax-event__date {
+    flex: 0 0 53px;
+    min-height: 57px;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    border-radius: 13px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+}
+
+.tax-event__date strong {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.tax-event__date span {
+    margin-top: 3px;
+    font-size: 10px;
+}
+
+.tax-event__content,
+.debt-card__content {
+    min-width: 0;
+    flex: 1;
+}
+
+.tax-event__top,
+.debt-card__top,
+.debt-card__bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.tax-event__top strong,
+.debt-card__top strong {
+    color: var(--acc-text);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.tax-event p,
+.debt-card p {
+    margin: 5px 0 0;
+    color: var(--acc-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.tax-event__amount {
+    display: inline-block;
+    margin-top: 7px;
+    color: var(--acc-text);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.debt-card__icon {
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--acc-orange);
+    background: var(--acc-orange-soft);
+    font-weight: 900;
+}
+
+.debt-card__bottom {
+    margin-top: 9px;
+}
+
+.debt-card__bottom span {
+    color: var(--acc-muted);
+    font-size: 10px;
+}
+
+.debt-card__bottom strong {
+    color: var(--acc-text);
+    font-size: 13px;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+.status-badge--planned {
+    color: #674cdb;
+    background: #eeeaff;
+}
+
+.status-badge--paid,
+.status-badge--completed,
+.status-badge--active {
+    color: var(--acc-green);
+    background: var(--acc-green-soft);
+}
+
+.status-badge--overdue,
+.status-badge--debt {
+    color: var(--acc-red);
+    background: var(--acc-red-soft);
+}
+
+.status-badge--warning {
+    color: var(--acc-orange);
+    background: var(--acc-orange-soft);
+}
+
+.accounting-docs-head {
+    align-items: flex-end;
+}
+
+.accounting-doc-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.accounting-search {
+    min-width: 200px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 11px;
+    border: 1px solid var(--acc-border);
+    border-radius: 11px;
+    background: #fff;
+}
+
+.accounting-search:focus-within {
+    border-color: #baaefe;
+    box-shadow: 0 0 0 3px rgba(114, 87, 255, .09);
+}
+
+.accounting-search input,
+.accounting-doc-actions select {
+    color: var(--acc-text);
+    background: transparent;
+    border: 0;
+    outline: none;
+    font: inherit;
+    font-size: 11px;
+}
+
+.accounting-search input {
+    width: 100%;
+    min-width: 0;
+}
+
+.accounting-search input::placeholder {
+    color: #9ca2b1;
+}
+
+.accounting-doc-actions select {
+    height: 40px;
+    padding: 0 30px 0 11px;
+    border: 1px solid var(--acc-border);
+    border-radius: 11px;
+    background: #fff;
+}
+
+.accounting-doc-actions option,
+.accounting-field option {
+    color: var(--acc-text);
+    background: #fff;
+}
+
+.accounting-doc-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.accounting-doc-table {
+    width: 100%;
+    min-width: 750px;
+    border-collapse: collapse;
+}
+
+.accounting-doc-table th,
+.accounting-doc-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--acc-border);
+    text-align: left;
+}
+
+.accounting-doc-table th {
+    color: #858b9e;
+    background: #fafafe;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.accounting-doc-table td {
+    color: var(--acc-text);
+    font-size: 11px;
+}
+
+.accounting-doc-table tbody tr:hover {
+    background: #faf8ff;
+}
+
+.document-name {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.document-name__icon {
+    flex: 0 0 35px;
+    width: 35px;
+    height: 35px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+}
+
+.document-name div {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.document-name strong {
+    color: var(--acc-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.document-name small {
+    color: var(--acc-muted);
+}
+
+.accounting-doc-table td:last-child {
+    position: relative;
+    width: 38px;
+}
+
+.document-menu-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--acc-border);
+    border-radius: 9px;
+    color: #70768a;
+    background: #fff;
+    cursor: pointer;
+}
+
+.document-menu {
+    position: absolute;
+    z-index: 30;
+    right: 8px;
+    top: 45px;
+    display: none;
+    min-width: 155px;
+    padding: 6px;
+    border: 1px solid var(--acc-border);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 18px 45px rgba(35, 38, 58, .15);
+}
+
+.document-menu.is-open {
+    display: grid;
+}
+
+.document-menu a,
+.document-menu button {
+    width: 100%;
+    display: block;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--acc-text);
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    font-size: 10px;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.document-menu a:hover,
+.document-menu button:hover {
+    background: #f4f1ff;
+}
+
+.document-menu .danger-action {
+    color: var(--acc-red);
+}
+
+.document-menu form {
+    margin: 0;
+}
+
+.accounting-mobile-documents {
+    display: none;
+}
+
+.accounting-empty {
+    min-height: 230px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    padding: 25px;
+    text-align: center;
+}
+
+.accounting-empty--compact {
+    min-height: 180px;
+}
+
+.accounting-empty--hidden {
+    display: none;
+}
+
+.accounting-empty > span {
+    width: 55px;
+    height: 55px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 12px;
+    border-radius: 17px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+    font-size: 23px;
+}
+
+.accounting-empty strong {
+    color: var(--acc-text);
+    font-size: 14px;
+}
+
+.accounting-empty p {
+    max-width: 330px;
+    margin: 6px 0 15px;
+    color: var(--acc-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.accounting-empty button {
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid #d9d2ff;
+    border-radius: 10px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.accounting-modal {
+    position: fixed;
+    z-index: 100000;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.accounting-modal.is-open {
+    display: flex;
+}
+
+.accounting-modal__backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(45, 42, 69, .34);
+    backdrop-filter: blur(6px);
+}
+
+.accounting-modal__dialog {
+    position: relative;
+    z-index: 1;
+    width: min(680px, 100%);
+    max-height: calc(100dvh - 40px);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--acc-border);
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 28px 80px rgba(43, 39, 78, .22);
+    overflow: hidden;
+}
+
+.accounting-modal__dialog--small {
+    width: min(520px, 100%);
+}
+
+.accounting-modal__head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 19px 20px;
+    border-bottom: 1px solid var(--acc-border);
+    background: #fbfbfe;
+}
+
+.accounting-modal__head h3 {
+    margin: 0 0 4px;
+    color: var(--acc-text);
+    font-size: 17px;
+}
+
+.accounting-modal__head p {
+    margin: 0;
+    color: var(--acc-muted);
+    font-size: 11px;
+}
+
+.accounting-modal__head > button {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--acc-border);
+    border-radius: 10px;
+    color: #666d7f;
+    background: #f1f2f6;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.accounting-modal__body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 20px;
+}
+
+.accounting-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.accounting-field {
+    min-width: 0;
+    display: grid;
+    gap: 7px;
+}
+
+.accounting-field--wide {
+    grid-column: 1 / -1;
+}
+
+.accounting-field > span {
+    color: #555c70;
+    font-size: 10px;
+    font-weight: 750;
+}
+
+.accounting-field input,
+.accounting-field select,
+.accounting-field textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--acc-border);
+    border-radius: 11px;
+    color: var(--acc-text);
+    background: #fff;
+    outline: none;
+    font: inherit;
+    font-size: 12px;
+}
+
+.accounting-field input,
+.accounting-field select {
+    min-height: 43px;
+    padding: 0 12px;
+}
+
+.accounting-field textarea {
+    padding: 11px 12px;
+    resize: vertical;
+}
+
+.accounting-field input::placeholder,
+.accounting-field textarea::placeholder {
+    color: #9ea4b4;
+}
+
+.accounting-field input:focus,
+.accounting-field select:focus,
+.accounting-field textarea:focus {
+    border-color: #b9adff;
+    box-shadow: 0 0 0 3px rgba(114, 87, 255, .09);
+}
+
+.accounting-field input[type="file"] {
+    padding: 9px;
+}
+
+.accounting-field small {
+    color: var(--acc-muted);
+    font-size: 9px;
+}
+
+.accounting-modal__footer,
+.accounting-report-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 9px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--acc-border);
+    background: #fff;
+}
+
+body.accounting-modal-open {
+    overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+    .accounting-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .accounting-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 850px) {
+    .accounting-tools {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .accounting-docs-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .accounting-doc-actions {
+        width: 100%;
+    }
+
+    .accounting-search {
+        flex: 1;
+    }
+}
+
+@media (max-width: 640px) {
+    .accounting-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .accounting-header-actions {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+
+    .accounting-header-actions form,
+    .accounting-header-actions button {
+        width:100%;
+    }
+
+    .accounting-page .page-title {
+        font-size: 24px;
+    }
+
+    .accounting-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+    }
+
+    .accounting-stat {
+        min-height: 104px;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 9px;
+        padding: 13px;
+        border-radius: 15px;
+    }
+
+    .accounting-stat__icon {
+        flex-basis: 34px;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        font-size: 14px;
+    }
+
+    .accounting-stat__value {
+        font-size: 17px;
+    }
+
+    .accounting-section {
+        padding: 14px;
+        border-radius: 16px;
+    }
+
+    .accounting-section__head {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 11px;
+    }
+
+    .accounting-section__head .accounting-secondary-btn {
+        width: 100%;
+    }
+
+    .accounting-tools {
+        grid-template-columns: 1fr;
+        gap: 9px;
+    }
+
+    .accounting-tool {
+        min-height: 72px;
+    }
+
+    .tax-event__top,
+    .debt-card__top {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .accounting-doc-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .accounting-search {
+        grid-column: 1 / -1;
+        min-width: 0;
+    }
+
+    .accounting-doc-table-wrap {
+        display: none;
+    }
+
+    .accounting-mobile-documents {
+        display: grid;
+        gap: 10px;
+    }
+
+    .mobile-document-card {
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid var(--acc-border);
+        border-radius: 14px;
+        background: var(--acc-card-soft);
+    }
+
+    .mobile-document-card__top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 9px;
+    }
+
+    .mobile-document-card__top .document-name {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .mobile-document-card__top .document-name strong {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .mobile-document-card__info {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+        margin-top: 12px;
+    }
+
+    .mobile-document-card__info span {
+        min-width: 0;
+        display: grid;
+        gap: 3px;
+        padding: 8px;
+        border: 1px solid var(--acc-border);
+        border-radius: 9px;
+        color: var(--acc-text);
+        background: #fff;
+        font-size: 10px;
+        overflow-wrap: anywhere;
+    }
+
+    .mobile-document-card__info small {
+        color: var(--acc-muted);
+        font-size: 8px;
+    }
+
+    .mobile-document-card__actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 11px;
+    }
+
+    .mobile-document-card__actions a,
+    .mobile-document-card__actions button {
+        flex: 1;
+        min-height: 36px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #d9d2ff;
+        border-radius: 9px;
+        color: var(--acc-purple);
+        background: var(--acc-purple-soft);
+        font: inherit;
+        font-size: 10px;
+        font-weight: 750;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .accounting-modal {
+        align-items: flex-start;
+        padding: 10px;
+    }
+
+    .accounting-modal__dialog {
+        width: 100%;
+        max-height: calc(100dvh - 20px);
+        margin: auto 0;
+        border-radius: 17px;
+    }
+
+    .accounting-modal__head,
+    .accounting-modal__body {
+        padding: 15px;
+    }
+
+    .accounting-form-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .accounting-field--wide {
+        grid-column: auto;
+    }
+
+    .accounting-modal__footer,
+    .accounting-report-actions {
+        position: sticky;
+        bottom: -15px;
+        margin: 18px -15px -15px;
+        padding: 13px 15px;
+    }
+
+    .accounting-modal__footer > *,
+    .accounting-report-actions > * {
+        flex: 1;
+    }
+}
+
+.accounting-finance-stats { margin-top: -2px; }
+.accounting-operations-table { min-width: 0 !important; table-layout: fixed; }
+.accounting-operations-table th:nth-child(1) { width: 34%; }
+.accounting-operations-table th:nth-child(2) { width: 11%; }
+.accounting-operations-table th:nth-child(3) { width: 12%; }
+.accounting-operations-table th:nth-child(4) { width: 17%; }
+.accounting-operations-table th:nth-child(5) { width: 16%; }
+.accounting-operations-table th:nth-child(6) { width: 10%; }
+.accounting-operations-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.operation-badge--income { color:#14835f !important; background:#e6f7f1 !important; }
+.operation-badge--expense { color:#b56b19 !important; background:#fff1df !important; }
+.operation-badge--refund { color:#c94646 !important; background:#fdeaea !important; }
+.operation-amount { font-size: 12px; }
+.operation-amount--income { color:#14835f; }
+.operation-amount--expense,
+.operation-amount--refund { color:#c94646; }
+.operation-open-link { color:#7257ff; font-size:10px; font-weight:800; text-decoration:none; }
+@media(max-width:640px) {
+    .accounting-operations-table { display:none; }
+}
+
+.tax-head-actions,.tax-period-form{display:flex;align-items:center;gap:8px}.tax-period-form input{height:42px;padding:0 11px;border:1px solid var(--acc-border);border-radius:11px;background:#fff;color:var(--acc-text)}
+.tax-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.tax-summary-grid article{display:grid;gap:5px;padding:14px;border:1px solid var(--acc-border);border-radius:14px;background:var(--acc-card-soft)}.tax-summary-grid span,.tax-summary-grid small{color:var(--acc-muted);font-size:10px}.tax-summary-grid strong{font-size:19px;color:var(--acc-text)}
+.tax-two-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tax-panel{padding:15px;border:1px solid var(--acc-border);border-radius:15px;background:#fff}.tax-panel__title{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:11px}.tax-panel__title h3{margin:0 0 3px;font-size:14px}.tax-panel__title p{margin:0;color:var(--acc-muted);font-size:10px}.tax-panel__title>strong{font-size:17px}.tax-lines{display:grid;gap:7px}.tax-lines div{display:flex;justify-content:space-between;gap:10px;padding:8px 9px;border-radius:9px;background:var(--acc-card-soft);font-size:10px}.tax-lines span{color:var(--acc-muted)}
+.tax-employees-table-wrap{width:100%;overflow-x:auto;margin-top:13px}.tax-employees-table{width:100%;min-width:800px;border-collapse:collapse}.tax-employees-table th,.tax-employees-table td{padding:10px 8px;border-bottom:1px solid var(--acc-border);font-size:10px;text-align:left}.tax-employees-table th{color:var(--acc-muted);background:var(--acc-card-soft);font-size:9px;text-transform:uppercase}.tax-empty{margin-top:13px;padding:18px;border:1px dashed var(--acc-border);border-radius:13px;color:var(--acc-muted);text-align:center;font-size:11px}.tax-footer-note{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:14px;padding:13px;border-radius:13px;background:var(--acc-purple-soft)}.tax-footer-note>div{display:grid;gap:3px}.tax-footer-note strong{font-size:11px}.tax-footer-note span{color:var(--acc-muted);font-size:9px}.tax-check{display:flex!important;align-items:center;gap:9px;padding:10px;border:1px solid var(--acc-border);border-radius:10px;background:var(--acc-card-soft)}.tax-check input{width:17px!important;height:17px!important;min-height:0!important}.tax-check span{font-size:11px;color:var(--acc-text)}
+@media(max-width:900px){.tax-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tax-two-columns{grid-template-columns:1fr}.tax-workspace__head{align-items:stretch;flex-direction:column}.tax-head-actions{flex-wrap:wrap}.tax-period-form{flex:1}.tax-period-form input{flex:1}}
+@media(max-width:640px){.tax-summary-grid{grid-template-columns:1fr 1fr}.tax-head-actions{display:grid;grid-template-columns:1fr 1fr}.tax-period-form{grid-column:1/-1}.tax-footer-note{align-items:stretch;flex-direction:column}.tax-footer-note form,.tax-footer-note button{width:100%}}
+
+.debt-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 11px;
+}
+
+.debt-card__actions form {
+    margin: 0;
+}
+
+.debt-paid-btn,
+.debt-delete-btn {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 9px;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.debt-paid-btn {
+    color: #16815e;
+    background: #e7f7f1;
+    border: 1px solid #c8ebdf;
+}
+
+.debt-paid-btn:hover {
+    background: #dcf4eb;
+}
+
+.debt-delete-btn {
+    color: #c94646;
+    background: #fdecec;
+    border: 1px solid #f5cece;
+}
+
+.debt-delete-btn:hover {
+    background: #fbe1e1;
+}
+
+.debt-paid-label {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 12px;
+    border-radius: 9px;
+    color: #16815e;
+    background: #e7f7f1;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+@media (max-width: 640px) {
+    .debt-card__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .debt-card__actions form,
+    .debt-paid-btn,
+    .debt-delete-btn,
+    .debt-paid-label {
+        width: 100%;
+        box-sizing: border-box;
+        justify-content: center;
+    }
+}

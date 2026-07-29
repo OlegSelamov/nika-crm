@@ -1,0 +1,209 @@
+.sf-wrap{max-width:1360px;margin:auto;padding:18px 20px 50px}
+
+.sf-slider{
+    position:relative;
+    overflow:hidden;
+    border-radius:30px;
+    background:#eef1f7;
+    box-shadow:0 20px 50px rgba(15,23,42,.10);
+}
+.sf-slides{
+    position:relative;
+    width:100%;
+    aspect-ratio:8 / 3;
+    height:auto;
+}
+.sf-slide{
+    position:absolute;
+    inset:0;
+    opacity:0;
+    visibility:hidden;
+    transition:opacity .45s ease;
+
+    display:flex;
+    align-items:flex-end;
+    padding:38px;
+    color:#fff;
+
+    /* ВАЖНО — показываем весь баннер */
+    background-size:contain;
+    background-repeat:no-repeat;
+    background-position:center;
+}
+.sf-slide:before{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,rgba(9,13,23,.74),rgba(9,13,23,.10) 72%)
+}
+.sf-slide.active{
+    opacity:1;
+    visibility:visible;
+}
+.sf-slide-copy{position:relative;z-index:2;max-width:650px}
+.sf-slide h1{
+    margin:0 0 10px;font-size:clamp(32px,4vw,54px);
+    line-height:1;letter-spacing:-.04em
+}
+.sf-slide p{margin:0;color:#e3e5f1;line-height:1.55}
+.sf-slide-btn{
+    display:inline-flex;margin-top:16px;padding:11px 15px;border-radius:11px;
+    color:#fff;text-decoration:none;font-size:11px;font-weight:900;
+    background:linear-gradient(135deg,var(--brand-dark),var(--brand))
+}
+.sf-slider-nav{
+    position:absolute;left:20px;bottom:16px;z-index:5;display:flex;gap:6px
+}
+.sf-slider-dot{
+    width:7px;height:7px;padding:0;border:0;border-radius:99px;
+    background:rgba(255,255,255,.58);cursor:pointer;transition:.2s
+}
+.sf-slider-dot.active{width:24px;background:var(--brand)}
+.sf-slider-arrow{
+    position:absolute;z-index:5;top:50%;transform:translateY(-50%);
+    width:38px;height:38px;border:0;border-radius:12px;
+    background:rgba(255,255,255,.9);color:#171b27;cursor:pointer;font-size:20px;
+    opacity:0;transition:.2s
+}
+.sf-slider:hover .sf-slider-arrow{opacity:1}
+.sf-slider-prev{left:14px}.sf-slider-next{right:14px}
+
+.sf-chips{display:flex;gap:8px;overflow:auto;padding:16px 0 0;scrollbar-width:none}
+.sf-chip{
+    flex:0 0 auto;padding:10px 13px;border:1px solid var(--line);
+    cursor:pointer;font:inherit;
+    border-radius:999px;background:#fff;text-decoration:none;
+    font-size:12px;font-weight:800;color:#687386;transition:.18s
+}
+.sf-chip:hover{
+    color:var(--brand);border-color:var(--brand-border);background:var(--brand-soft-2)
+}
+.sf-chip.active{
+    color:#fff;border-color:var(--brand);
+    background:linear-gradient(135deg,var(--brand-dark),var(--brand))
+}
+
+.sf-section{margin-top:23px}
+.sf-section-head{
+    display:flex;justify-content:space-between;align-items:end;margin-bottom:12px
+}
+.sf-section h2{margin:0;font-size:24px}
+.sf-meta{font-size:11px;color:var(--muted)}
+.sf-grid{
+    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px
+}
+.sf-card{
+    background:#fff;border:1px solid var(--line);overflow:hidden;
+    display:flex;flex-direction:column;transition:.18s
+}
+.sf-card.rounded{border-radius:20px}
+.sf-card.compact{border-radius:14px}
+.sf-card.minimal{border-radius:0;border-width:0 0 1px;background:transparent}
+.sf-card:hover{
+    transform:translateY(-3px);
+    box-shadow:0 16px 38px rgba(15,23,42,.09)
+}
+.sf-media{
+    aspect-ratio:1/1;background:#eef1f5;overflow:hidden;
+    display:grid;place-items:center;cursor:pointer
+}
+.sf-media img{width:100%;height:100%;object-fit:cover}
+.sf-ph{color:#c5cad3;font-size:40px}
+.sf-card-body{
+    padding:12px;display:flex;flex-direction:column;gap:7px;flex:1
+}
+.sf-cat{
+    font-size:10px;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.sf-name{
+    font-size:14px;font-weight:800;min-height:36px;line-height:1.3;
+    cursor:pointer
+}
+.sf-price{
+    font-size:20px;font-weight:950;margin-top:auto;color:var(--brand-deep)
+}
+.sf-stock{font-size:10px;color:#169766;font-weight:800}
+.sf-stock.out{color:#e4495d}
+
+.sf-card-actions{
+    display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:2px
+}
+.sf-more{
+    min-height:41px;border:1px solid var(--brand-border);border-radius:11px;
+    background:var(--brand-soft);color:var(--brand);
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:850;cursor:pointer
+}
+.sf-card-add{
+    width:42px;height:41px;border:0;border-radius:11px;
+    background:linear-gradient(135deg,var(--brand-dark),var(--brand));
+    color:#fff;font-size:20px;font-weight:900;cursor:pointer
+}
+.sf-card-stepper{
+    display:none;grid-template-columns:31px 34px 31px;
+    border:1px solid var(--brand-border);border-radius:11px;
+    overflow:hidden;background:#fff
+}
+.sf-card-stepper button{
+    width:31px;height:39px;border:0;background:var(--brand-soft);
+    color:var(--brand);font-size:17px;font-weight:900;cursor:pointer
+}
+.sf-card-stepper span{
+    height:39px;display:grid;place-items:center;font-size:10px;font-weight:900
+}
+
+.sf-service .sf-card-actions{grid-template-columns:1fr}
+.sf-service .sf-more{
+    color:#fff;border:0;
+    background:linear-gradient(135deg,var(--brand-dark),var(--brand));
+    text-decoration:none
+}
+.sf-service .sf-more:hover{
+    filter:brightness(.98);
+    transform:translateY(-1px)
+}
+
+.sf-search-empty{
+    display:none;padding:45px 20px;margin-top:20px;text-align:center;
+    background:#fff;border:1px dashed #ccd3de;border-radius:18px;color:var(--muted)
+}
+.sf-search-empty.show{display:block}
+
+@media(max-width:1100px){
+    .sf-grid{grid-template-columns:repeat(4,1fr)}
+}
+@media(max-width:850px){
+    .sf-grid{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:620px){
+    .sf-wrap{padding:13px 13px 40px}
+
+    .sf-slider{
+        border-radius:18px;
+    }
+
+    .sf-slides{
+        width:100%;
+        aspect-ratio:8 / 3;
+        height:auto;
+    }
+
+    .sf-slide{
+        padding:16px;
+        background-size:contain;
+        background-repeat:no-repeat;
+        background-position:center;
+    }
+
+    .sf-slide h1{font-size:28px}
+    .sf-slider-arrow{display:none}
+
+    .sf-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:9px;
+    }
+
+    .sf-card-body{padding:9px}
+    .sf-name{font-size:12px;min-height:32px}
+    .sf-price{font-size:17px}
+    .sf-more{font-size:10px}
+}
