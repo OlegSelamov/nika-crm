@@ -203,6 +203,10 @@
                 <span class="nika-data-action__icon">▤</span>
                 <span><b>Скачать шаблон</b><small>Правильная структура файла</small></span>
             </a>
+            <button class="nika-data-action nika-data-action--button" type="button" onclick="openCatalogEnrichmentModal()">
+                <span class="nika-data-action__icon">✦</span>
+                <span><b>Обогатить каталог</b><small>Найти GTIN и NTIN по названию</small></span>
+            </button>
         </div>
 
         <form id="catalogDataImportForm" class="nika-data-import" enctype="multipart/form-data">
@@ -237,6 +241,58 @@
                 <button type="submit" class="nika-data-btn nika-data-btn--primary">Начать импорт</button>
             </div>
         </form>
+    </div>
+</div>
+
+
+<div class="catalog-enrichment-modal" id="catalogEnrichmentModal" aria-hidden="true">
+    <div class="catalog-enrichment-modal__backdrop" onclick="closeCatalogEnrichmentModal()"></div>
+    <div class="catalog-enrichment-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="catalogEnrichmentTitle">
+        <div class="nika-data-modal__head">
+            <div>
+                <span class="nika-data-modal__eyebrow">NIKA CATALOG AI</span>
+                <h2 id="catalogEnrichmentTitle">Обогащение каталога</h2>
+                <p>Поиск официальных карточек НКТ по названию. Данные применяются только после подтверждения.</p>
+            </div>
+            <button type="button" class="nika-data-modal__close" onclick="closeCatalogEnrichmentModal()" aria-label="Закрыть">×</button>
+        </div>
+
+        <div class="catalog-enrichment-settings" id="catalogEnrichmentSettings">
+            <label class="nika-data-field">
+                <span>Сколько товаров проверить за один запуск</span>
+                <select id="catalogEnrichmentLimit">
+                    <option value="25">25 товаров</option>
+                    <option value="50">50 товаров</option>
+                    <option value="100">100 товаров</option>
+                </select>
+            </label>
+            <label class="catalog-enrichment-check"><input type="checkbox" id="enrichOnlyMissing" checked><span>Проверять только товары без GTIN или NTIN</span></label>
+            <div class="catalog-enrichment-fields">
+                <b>Что разрешено подставлять</b>
+                <label><input type="checkbox" data-enrichment-field="gtin" checked> GTIN</label>
+                <label><input type="checkbox" data-enrichment-field="ntin" checked> NTIN</label>
+                <label><input type="checkbox" data-enrichment-field="barcode"> официальный штрихкод</label>
+                <label><input type="checkbox" data-enrichment-field="unit" checked> единицу измерения</label>
+                <label><input type="checkbox" data-enrichment-field="is_marked" checked> признак маркировки</label>
+                <label><input type="checkbox" data-enrichment-field="name"> заменить название</label>
+            </div>
+            <div class="nika-data-warning">На первом этапе Nika ничего не обновляет автоматически. Для каждого найденного совпадения потребуется нажать «Применить».</div>
+            <div class="nika-data-modal__footer">
+                <button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeCatalogEnrichmentModal()">Отмена</button>
+                <button type="button" class="nika-data-btn nika-data-btn--primary" id="catalogEnrichmentStart" onclick="startCatalogEnrichment()">Начать поиск</button>
+            </div>
+        </div>
+
+        <div class="catalog-enrichment-work" id="catalogEnrichmentWork" hidden>
+            <div class="catalog-enrichment-progress">
+                <div class="catalog-enrichment-progress__top"><b id="catalogEnrichmentProgressText">Подготовка…</b><span id="catalogEnrichmentCounters">0 / 0</span></div>
+                <div class="catalog-enrichment-progress__bar"><span id="catalogEnrichmentProgressBar"></span></div>
+            </div>
+            <div class="catalog-enrichment-result" id="catalogEnrichmentResult"></div>
+            <div class="nika-data-modal__footer">
+                <button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeCatalogEnrichmentModal()">Закрыть</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -326,14 +382,50 @@
                 <label class="catalog-field">
                     <span>Единица измерения</span>
                     <select name="unit" id="itemUnit">
-                        <option value="шт">шт</option>
-                        <option value="кг">кг</option>
-                        <option value="г">г</option>
-                        <option value="л">л</option>
-                        <option value="мл">мл</option>
-                        <option value="м">м</option>
-                        <option value="час">час</option>
-                        <option value="услуга">услуга</option>
+                        <optgroup label="Штучные единицы">
+                            <option value="шт">Штука (шт)</option>
+                            <option value="пар">Пара (пар)</option>
+                            <option value="компл">Комплект (компл)</option>
+                            <option value="набор">Набор</option>
+                            <option value="упак">Упаковка (упак)</option>
+                            <option value="пач">Пачка</option>
+                            <option value="кор">Коробка</option>
+                            <option value="бут">Бутылка</option>
+                            <option value="кан">Канистра</option>
+                            <option value="рул">Рулон</option>
+                        </optgroup>
+                        <optgroup label="Вес">
+                            <option value="кг">Килограмм (кг)</option>
+                            <option value="г">Грамм (г)</option>
+                            <option value="т">Тонна (т)</option>
+                        </optgroup>
+                        <optgroup label="Объём">
+                            <option value="л">Литр (л)</option>
+                            <option value="мл">Миллилитр (мл)</option>
+                        </optgroup>
+                        <optgroup label="Длина и площадь">
+                            <option value="м">Метр (м)</option>
+                            <option value="см">Сантиметр (см)</option>
+                            <option value="мм">Миллиметр (мм)</option>
+                            <option value="м²">Квадратный метр (м²)</option>
+                            <option value="м³">Кубический метр (м³)</option>
+                        </optgroup>
+                        <optgroup label="Время">
+                            <option value="час">Час</option>
+                            <option value="день">День</option>
+                            <option value="неделя">Неделя</option>
+                            <option value="месяц">Месяц</option>
+                            <option value="год">Год</option>
+                            <option value="смена">Смена</option>
+                        </optgroup>
+                        <optgroup label="Услуги и перевозки">
+                            <option value="услуга">Услуга</option>
+                            <option value="человек">Человек</option>
+                            <option value="место">Место</option>
+                            <option value="пассажир">Пассажир</option>
+                            <option value="рейс">Рейс</option>
+                            <option value="тур">Тур</option>
+                        </optgroup>
                     </select>
                 </label>
 

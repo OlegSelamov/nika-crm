@@ -228,6 +228,13 @@ function applyItemType(type) {
     if (serviceRadio) serviceRadio.checked = type === "service";
     if (modal) modal.classList.toggle("is-service", type === "service");
     filterItemCategoryOptions(type);
+
+    var unitSelect = document.getElementById("itemUnit");
+    if (unitSelect) {
+        if (type === "service" && unitSelect.value === "шт") unitSelect.value = "услуга";
+        if (type === "product" && unitSelect.value === "услуга") unitSelect.value = "шт";
+    }
+
     if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : "Название товара *";
     if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : "Например: Молоко 3,2%";
     var descriptionLabel = document.getElementById("itemDescriptionLabel");
@@ -339,15 +346,47 @@ function updateMarkedBadge() {
 }
 
 function normalizeMeasure(measure) {
-    var value = String(measure || '').trim().toLowerCase();
+    var value = String(measure || '')
+        .trim()
+        .toLowerCase()
+        .replace(/ё/g, 'е')
+        .replace(/\s+/g, ' ');
+
     var aliases = {
-        'штука':'шт','штук':'шт','шт.':'шт','piece':'шт','pcs':'шт',
-        'килограмм':'кг','kg':'кг',
-        'грамм':'г','gr':'г',
-        'литр':'л','liter':'л','l':'л',
-        'миллилитр':'мл','ml':'мл',
-        'метр':'м','meter':'м'
+        'штука':'шт','штуки':'шт','штук':'шт','шт.':'шт','piece':'шт','pcs':'шт',
+        'пара':'пар','пары':'пар','пар.':'пар','pair':'пар',
+        'комплект':'компл','комплекта':'компл','компл.':'компл','к-т':'компл','kit':'компл','set':'компл',
+        'набор':'набор',
+        'упаковка':'упак','упаковки':'упак','упак.':'упак','уп.':'упак','pack':'упак',
+        'пачка':'пач','пач.':'пач',
+        'коробка':'кор','кор.':'кор','короб':'кор','box':'кор',
+        'бутылка':'бут','бут.':'бут',
+        'канистра':'кан','кан.':'кан',
+        'рулон':'рул','рул.':'рул','roll':'рул',
+        'килограмм':'кг','килограммы':'кг','кг.':'кг','kg':'кг',
+        'грамм':'г','граммы':'г','гр':'г','гр.':'г','g':'г','gr':'г',
+        'тонна':'т','тонны':'т','т.':'т','ton':'т',
+        'литр':'л','литры':'л','л.':'л','liter':'л','litre':'л','l':'л',
+        'миллилитр':'мл','миллилитры':'мл','мл.':'мл','ml':'мл',
+        'метр':'м','метры':'м','м.':'м','пог.м':'м','пог. м':'м','погонный метр':'м','meter':'м',
+        'сантиметр':'см','сантиметры':'см','см.':'см','cm':'см',
+        'миллиметр':'мм','миллиметры':'мм','мм.':'мм','mm':'мм',
+        'квадратный метр':'м²','кв.м':'м²','кв. м':'м²','м2':'м²','m2':'м²','m²':'м²',
+        'кубический метр':'м³','куб.м':'м³','куб. м':'м³','м3':'м³','m3':'м³','m³':'м³',
+        'час':'час','часа':'час','часов':'час','ч.':'час','hour':'час',
+        'день':'день','дня':'день','дней':'день','сутки':'день','day':'день',
+        'неделя':'неделя','недели':'неделя','недель':'неделя','нед.':'неделя','week':'неделя',
+        'месяц':'месяц','месяца':'месяц','месяцев':'месяц','мес':'месяц','мес.':'месяц','month':'месяц',
+        'год':'год','года':'год','лет':'год','year':'год',
+        'смена':'смена','смены':'смена',
+        'услуга':'услуга','услуги':'услуга','работа':'услуга','service':'услуга',
+        'человек':'человек','чел':'человек','чел.':'человек','person':'человек',
+        'место':'место','места':'место','мест':'место',
+        'пассажир':'пассажир','пассажира':'пассажир',
+        'рейс':'рейс','рейса':'рейс',
+        'тур':'тур','тура':'тур'
     };
+
     return aliases[value] || value;
 }
 
@@ -913,4 +952,194 @@ document.addEventListener('keydown', event => {
         closeCatalogDataModal();
         closeClientsDataModal();
     }
+});
+// ================== ОБОГАЩЕНИЕ КАТАЛОГА НКТ ==================
+function mountCatalogEnrichmentModal() {
+    const modal = document.getElementById('catalogEnrichmentModal');
+    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+    return modal;
+}
+
+function openCatalogEnrichmentModal() {
+    closeCatalogDataModal();
+    const modal = mountCatalogEnrichmentModal();
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('nika-data-modal-open');
+}
+
+function closeCatalogEnrichmentModal() {
+    const modal = mountCatalogEnrichmentModal();
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('nika-data-modal-open');
+}
+
+function getCatalogEnrichmentFields() {
+    const fields = {};
+    document.querySelectorAll('[data-enrichment-field]').forEach(input => {
+        fields[input.dataset.enrichmentField] = Boolean(input.checked);
+    });
+    return fields;
+}
+
+function enrichmentEscape(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+}
+
+function setEnrichmentProgress(done, total, text) {
+    const percent = total ? Math.round(done / total * 100) : 0;
+    const bar = document.getElementById('catalogEnrichmentProgressBar');
+    const counter = document.getElementById('catalogEnrichmentCounters');
+    const label = document.getElementById('catalogEnrichmentProgressText');
+    if (bar) bar.style.width = percent + '%';
+    if (counter) counter.textContent = done + ' / ' + total;
+    if (label) label.textContent = text || 'Поиск товаров…';
+}
+
+function renderEnrichmentCandidate(item, candidate) {
+    const gtin = candidate.gtin || '—';
+    const ntin = candidate.ntin || '—';
+    const manufacturer = candidate.manufacturer ? ' · ' + candidate.manufacturer : '';
+    return `
+        <div class="enrichment-card__candidate">
+            <div class="enrichment-card__candidate-info">
+                <span class="enrichment-score">Совпадение ${candidate.score || 0}%</span>
+                <strong>${enrichmentEscape(candidate.name || 'Без названия')}</strong>
+                <span>GTIN: ${enrichmentEscape(gtin)} · NTIN: ${enrichmentEscape(ntin)}${enrichmentEscape(manufacturer)}</span>
+            </div>
+            <button type="button" class="enrichment-apply">Применить</button>
+        </div>`;
+}
+
+function appendEnrichmentResult(item, candidates, errorMessage) {
+    const root = document.getElementById('catalogEnrichmentResult');
+    if (!root) return;
+
+    const card = document.createElement('article');
+    card.className = 'enrichment-card';
+    card.innerHTML = `
+        <div class="enrichment-card__head">
+            <div><b>${enrichmentEscape(item.name)}</b><br><small>Текущий штрихкод: ${enrichmentEscape(item.barcode || '—')}</small></div>
+        </div>`;
+
+    if (errorMessage) {
+        card.innerHTML += `<div class="enrichment-error">${enrichmentEscape(errorMessage)}</div>`;
+    } else if (!candidates || !candidates.length) {
+        card.innerHTML += '<div class="enrichment-empty">Подходящих карточек НКТ не найдено.</div>';
+    } else {
+        const candidatesRoot = document.createElement('div');
+        candidatesRoot.className = 'enrichment-candidates';
+        candidates.forEach(function (candidate) {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = renderEnrichmentCandidate(item, candidate);
+            const candidateNode = wrapper.firstElementChild;
+            const button = candidateNode.querySelector('.enrichment-apply');
+            button.addEventListener('click', async function () {
+                button.disabled = true;
+                button.textContent = 'Сохраняем…';
+                try {
+                    const response = await fetch('/api/catalog/enrichment/apply', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+                        body: JSON.stringify({
+                            item_id: item.id,
+                            candidate: candidate,
+                            fields: getCatalogEnrichmentFields()
+                        })
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) throw new Error(data.message || 'Не удалось обновить товар');
+                    candidatesRoot.querySelectorAll('.enrichment-apply').forEach(function (otherButton) {
+                        otherButton.disabled = true;
+                    });
+                    button.textContent = 'Применено';
+                    button.classList.add('enrichment-applied');
+                } catch (error) {
+                    button.disabled = false;
+                    button.textContent = 'Повторить';
+                    alert(error.message || 'Ошибка сохранения');
+                }
+            });
+            candidatesRoot.appendChild(candidateNode);
+        });
+        card.appendChild(candidatesRoot);
+    }
+    root.appendChild(card);
+}
+
+async function startCatalogEnrichment() {
+    const startButton = document.getElementById('catalogEnrichmentStart');
+    const settings = document.getElementById('catalogEnrichmentSettings');
+    const work = document.getElementById('catalogEnrichmentWork');
+    const result = document.getElementById('catalogEnrichmentResult');
+    const limit = document.getElementById('catalogEnrichmentLimit')?.value || '25';
+    const onlyMissing = document.getElementById('enrichOnlyMissing')?.checked ? '1' : '0';
+
+    if (startButton) {
+        startButton.disabled = true;
+        startButton.textContent = 'Подготовка…';
+    }
+
+    try {
+        const listResponse = await fetch(`/api/catalog/enrichment/items?limit=${encodeURIComponent(limit)}&only_missing=${onlyMissing}`, {
+            headers: {'Accept': 'application/json'}
+        });
+        const listData = await listResponse.json();
+        if (!listResponse.ok || !listData.success) throw new Error(listData.message || 'Не удалось получить товары');
+
+        const items = Array.isArray(listData.items) ? listData.items : [];
+        if (!items.length) {
+            throw new Error('Нет товаров, которым требуется обогащение.');
+        }
+
+        if (settings) settings.hidden = true;
+        if (work) work.hidden = false;
+        if (result) result.innerHTML = '';
+        setEnrichmentProgress(0, items.length, 'Поиск карточек НКТ…');
+
+        for (let index = 0; index < items.length; index += 1) {
+            const item = items[index];
+            try {
+                const response = await fetch('/api/catalog/enrichment/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+                    body: JSON.stringify({item_id: item.id})
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    if (data.configured === false) throw new Error(data.message);
+                    appendEnrichmentResult(item, [], data.message || 'Ошибка поиска');
+                } else {
+                    appendEnrichmentResult(item, data.candidates || []);
+                }
+            } catch (error) {
+                appendEnrichmentResult(item, [], error.message || 'Ошибка соединения');
+                if ((error.message || '').includes('NCT_API_TOKEN')) {
+                    setEnrichmentProgress(index + 1, items.length, 'Нужно добавить ключ НКТ');
+                    break;
+                }
+            }
+            setEnrichmentProgress(index + 1, items.length, 'Поиск карточек НКТ…');
+        }
+        setEnrichmentProgress(items.length, items.length, 'Поиск завершён');
+    } catch (error) {
+        alert(error.message || 'Не удалось начать обогащение');
+        if (settings) settings.hidden = false;
+        if (work) work.hidden = true;
+    } finally {
+        if (startButton) {
+            startButton.disabled = false;
+            startButton.textContent = 'Начать поиск';
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', mountCatalogEnrichmentModal);
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeCatalogEnrichmentModal();
 });

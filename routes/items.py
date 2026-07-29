@@ -7,6 +7,9 @@ from flask import jsonify
 import json
 import os
 import uuid
+import re
+import requests
+from difflib import SequenceMatcher
 from io import BytesIO
 from decimal import Decimal, InvalidOperation
 
@@ -728,6 +731,43 @@ def _catalog_text(value):
     return str(value).strip()
 
 
+_UNIT_ALIASES = {
+    "штука": "шт", "штуки": "шт", "штук": "шт", "шт.": "шт", "piece": "шт", "pcs": "шт",
+    "пара": "пар", "пары": "пар", "пар.": "пар", "pair": "пар",
+    "комплект": "компл", "комплекта": "компл", "компл.": "компл", "к-т": "компл", "kit": "компл", "set": "компл",
+    "упаковка": "упак", "упаковки": "упак", "упак.": "упак", "уп.": "упак", "pack": "упак",
+    "пачка": "пач", "пач.": "пач", "коробка": "кор", "кор.": "кор", "короб": "кор", "box": "кор",
+    "бутылка": "бут", "бут.": "бут", "канистра": "кан", "кан.": "кан", "рулон": "рул", "рул.": "рул", "roll": "рул",
+    "килограмм": "кг", "килограммы": "кг", "кг.": "кг", "kg": "кг",
+    "грамм": "г", "граммы": "г", "гр": "г", "гр.": "г", "g": "г", "gr": "г",
+    "тонна": "т", "тонны": "т", "т.": "т", "ton": "т",
+    "литр": "л", "литры": "л", "л.": "л", "liter": "л", "litre": "л", "l": "л",
+    "миллилитр": "мл", "миллилитры": "мл", "мл.": "мл", "ml": "мл",
+    "метр": "м", "метры": "м", "м.": "м", "пог.м": "м", "пог. м": "м", "погонный метр": "м", "meter": "м",
+    "сантиметр": "см", "сантиметры": "см", "см.": "см", "cm": "см",
+    "миллиметр": "мм", "миллиметры": "мм", "мм.": "мм", "mm": "мм",
+    "квадратный метр": "м²", "кв.м": "м²", "кв. м": "м²", "м2": "м²", "m2": "м²", "m²": "м²",
+    "кубический метр": "м³", "куб.м": "м³", "куб. м": "м³", "м3": "м³", "m3": "м³", "m³": "м³",
+    "час": "час", "часа": "час", "часов": "час", "ч.": "час", "hour": "час",
+    "день": "день", "дня": "день", "дней": "день", "сутки": "день", "day": "день",
+    "неделя": "неделя", "недели": "неделя", "недель": "неделя", "нед.": "неделя", "week": "неделя",
+    "месяц": "месяц", "месяца": "месяц", "месяцев": "месяц", "мес": "месяц", "мес.": "месяц", "month": "месяц",
+    "год": "год", "года": "год", "лет": "год", "year": "год", "смены": "смена",
+    "услуги": "услуга", "работа": "услуга", "service": "услуга",
+    "чел": "человек", "чел.": "человек", "person": "человек", "места": "место", "мест": "место",
+    "пассажира": "пассажир", "рейса": "рейс", "тура": "тур",
+}
+
+
+def _normalize_unit(value, default=""):
+    unit = _catalog_text(value).lower().replace("ё", "е")
+    unit = re.sub(r"\s+", " ", unit).strip()
+    if not unit:
+        return default
+    # Неизвестное значение не заменяем на «шт»: сохраняем исходное для проверки.
+    return _UNIT_ALIASES.get(unit, unit)
+
+
 def _style_excel_sheet(ws):
     header_fill = PatternFill("solid", fgColor="252B3A")
     header_font = Font(color="FFFFFF", bold=True)
@@ -880,7 +920,7 @@ def import_items_xlsx():
                 barcode = _catalog_text(value(row, "barcode"))
                 gtin = _catalog_text(value(row, "gtin"))
                 ntin = _catalog_text(value(row, "ntin"))
-                unit = _catalog_text(value(row, "unit")) or ("услуга" if item_type == "service" else "шт")
+                unit = _normalize_unit(value(row, "unit"), "услуга" if item_type == "service" else "шт")
                 purchase_price = _catalog_number(value(row, "purchase_price"))
                 wholesale_price = _catalog_number(value(row, "wholesale_price"))
                 retail_price = _catalog_number(value(row, "retail_price"))
@@ -965,5 +1005,355 @@ def import_items_xlsx():
     except Exception as error:
         conn.rollback()
         return jsonify({"success": False, "message": str(error)}), 500
+    finally:
+        pool.putconn(conn)
+
+
+# ================== ОБОГАЩЕНИЕ КАТАЛОГА НКТ ==================
+
+def _nct_normalize_name(value):
+    value = (value or "").lower().replace("ё", "е")
+    value = re.sub(r"[^0-9a-zа-яәіңғүұқөһ]+", " ", value, flags=re.IGNORECASE)
+    return " ".join(value.split())
+
+
+def _nct_search_queries(value):
+    """Формирует несколько вариантов запроса от точного к более широкому."""
+    original = _catalog_text(value)
+    if not original:
+        return []
+
+    # Убираем внутренний код 1С в начале: (001NB), (002VP) и т.п.
+    cleaned = re.sub(r"^\s*\([^)]{1,30}\)\s*", "", original).strip()
+
+    variants = [cleaned]
+
+    # Нормализуем похожие кириллические буквы внутри артикулов.
+    # Например 281133М000 -> 281133M000.
+    latinized = cleaned.translate(str.maketrans({
+        "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M",
+        "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T", "Х": "X",
+        "а": "a", "е": "e", "к": "k", "м": "m", "о": "o",
+        "р": "p", "с": "c", "т": "t", "х": "x",
+    }))
+    variants.append(latinized)
+
+    # Артикулы и модельные коды часто дают самый точный результат.
+    article_tokens = re.findall(
+        r"(?i)\b(?=[A-ZА-Я0-9-]*\d)[A-ZА-Я0-9]+(?:[-/][A-ZА-Я0-9]+)*\b",
+        cleaned
+    )
+    variants.extend(reversed(article_tokens))
+
+    # Полезные укороченные варианты без общих служебных слов.
+    words = cleaned.split()
+    if len(words) > 5:
+        variants.append(" ".join(words[:5]))
+    if len(words) > 3:
+        variants.append(" ".join(words[:3]))
+
+    stop_words = {
+        "передний", "задний", "левый", "правый", "без", "для",
+        "в", "на", "и", "комплект", "шт", "новый"
+    }
+    meaningful = [word for word in words if word.lower() not in stop_words]
+    if meaningful:
+        variants.append(" ".join(meaningful))
+
+    unique = []
+    seen = set()
+    for variant in variants:
+        variant = re.sub(r"\s+", " ", variant).strip(" ,.;:-")
+        key = variant.casefold()
+        if len(variant) >= 2 and key not in seen:
+            seen.add(key)
+            unique.append(variant)
+
+    return unique[:8]
+
+
+def _nct_extract_list(payload):
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+    # НКТ возвращает список товаров в поле "result" (в единственном числе).
+    # Поддерживаем также другие возможные варианты оболочки ответа.
+    for key in ("result", "results", "data", "items", "products", "content"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            nested = _nct_extract_list(value)
+            if nested:
+                return nested
+    return [payload] if payload else []
+
+
+def _nct_value(product, *keys):
+    for key in keys:
+        value = product.get(key) if isinstance(product, dict) else None
+        if value not in (None, ""):
+            return value
+    return ""
+
+
+def _nct_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "да"}
+
+
+def _nct_search_by_name(query):
+    """Ищет товар по нескольким вариантам наименования в НКТ."""
+    search_url = "https://nct.gov.kz/api/integration/ofd/search_ofd/"
+    token = (os.getenv("NCT_API_TOKEN") or "").strip()
+    if not token:
+        return {
+            "configured": False,
+            "message": "Не задан NCT_API_TOKEN. Добавьте действующий ключ НКТ в .env и полностью перезапустите Nika."
+        }
+
+    all_products = []
+    used_queries = []
+    last_status = None
+
+    for search_query in _nct_search_queries(query):
+        response = None
+
+        for auth_scheme in ("JWT", "Bearer"):
+            response = requests.get(
+                search_url,
+                params={"q": search_query},
+                headers={
+                    "Accept": "application/json",
+                    "Authorization": f"{auth_scheme} {token}",
+                },
+                timeout=20,
+            )
+            if response.status_code != 401:
+                break
+
+        if response is None:
+            continue
+
+        last_status = response.status_code
+        if response.status_code >= 400:
+            details = (response.text or "").strip().replace("\n", " ")
+            if len(details) > 300:
+                details = details[:300] + "..."
+            raise RuntimeError(
+                f"НКТ вернул HTTP {response.status_code}"
+                + (f": {details}" if details else "")
+            )
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RuntimeError("НКТ вернул ответ не в формате JSON") from exc
+
+        products = _nct_extract_list(payload)
+        used_queries.append({
+            "query": search_query,
+            "found": len(products),
+        })
+        all_products.extend(products)
+
+        # Если точный или артикульный запрос уже дал достаточно результатов,
+        # не перегружаем API лишними обращениями.
+        if len(all_products) >= 20:
+            break
+
+    source_name = _nct_normalize_name(
+        re.sub(r"^\s*\([^)]{1,30}\)\s*", "", query or "")
+    )
+    candidates = []
+
+    for product in all_products:
+        if not isinstance(product, dict):
+            continue
+        if _nct_bool(_nct_value(product, "ntin_isdeactivated", "is_deactivated")):
+            continue
+
+        name = _nct_value(
+            product,
+            "name_ru", "name", "product_name", "title", "full_name",
+            "trade_name", "short_name"
+        )
+        if not name:
+            continue
+
+        candidate_name = _nct_normalize_name(str(name))
+        score = round(SequenceMatcher(None, source_name, candidate_name).ratio() * 100)
+
+        # Совпадение артикула сильно важнее полного текстового сходства.
+        source_articles = set(re.findall(r"\b[a-zа-я0-9]+(?:[-/][a-zа-я0-9]+)*\b", source_name))
+        candidate_articles = set(re.findall(r"\b[a-zа-я0-9]+(?:[-/][a-zа-я0-9]+)*\b", candidate_name))
+        shared_articles = {
+            token for token in source_articles & candidate_articles
+            if any(ch.isdigit() for ch in token) and len(token) >= 4
+        }
+        if shared_articles:
+            score = max(score, 95)
+
+        gtin = _catalog_text(_nct_value(product, "gtin", "GTIN", "barcode", "ean"))
+        ntin = _catalog_text(_nct_value(product, "ntin_code", "ntin", "NTIN", "kztin"))
+
+        candidates.append({
+            "name": _catalog_text(name),
+            "name_kk": _catalog_text(_nct_value(product, "name_kk")),
+            "gtin": gtin,
+            "ntin": ntin,
+            "barcode": gtin or _catalog_text(_nct_value(product, "barcode", "ean")),
+            "measure": _catalog_text(_nct_value(product, "measure", "unit", "measure_name")),
+            "is_marked": _nct_bool(_nct_value(product, "is_markedeac", "is_marked", "marked")),
+            "is_social": _nct_bool(_nct_value(product, "is_social")),
+            "modified": _catalog_text(_nct_value(product, "modified")),
+            "manufacturer": _catalog_text(
+                _nct_value(product, "manufacturer_name", "manufacturer", "producer")
+            ),
+            "score": score,
+        })
+
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+    unique = []
+    seen = set()
+
+    for candidate in candidates:
+        identity = (
+            candidate.get("gtin"),
+            candidate.get("ntin"),
+            candidate.get("name"),
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        unique.append(candidate)
+        if len(unique) >= 10:
+            break
+
+    print("NCT SEARCH DEBUG:", {
+        "source": query,
+        "queries": used_queries,
+        "status": last_status,
+        "candidates": len(unique),
+    })
+
+    return {
+        "configured": True,
+        "candidates": unique,
+        "queries": used_queries,
+    }
+
+
+@items_bp.route("/api/catalog/enrichment/items")
+def catalog_enrichment_items():
+    company_id = session.get("company_id")
+    limit = min(max(int(request.args.get("limit", 25)), 1), 100)
+    only_missing = request.args.get("only_missing", "1") != "0"
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        missing_sql = "AND (COALESCE(gtin, '') = '' OR COALESCE(ntin, '') = '')" if only_missing else ""
+        cur.execute(f"""
+            SELECT id, name, barcode, gtin, ntin, unit
+            FROM items
+            WHERE company_id = %s
+              AND COALESCE(item_type, 'product') = 'product'
+              {missing_sql}
+            ORDER BY id
+            LIMIT %s
+        """, (company_id, limit))
+        rows = [dict(row) for row in cur.fetchall()]
+        return jsonify({"success": True, "items": rows, "count": len(rows)})
+    finally:
+        pool.putconn(conn)
+
+
+@items_bp.route("/api/catalog/enrichment/search", methods=["POST"])
+def catalog_enrichment_search():
+    data = request.get_json(silent=True) or {}
+    item_id = data.get("item_id")
+    company_id = session.get("company_id")
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, name, barcode, gtin, ntin, unit
+            FROM items
+            WHERE id = %s AND company_id = %s
+              AND COALESCE(item_type, 'product') = 'product'
+        """, (item_id, company_id))
+        item = cur.fetchone()
+    finally:
+        pool.putconn(conn)
+
+    if not item:
+        return jsonify({"success": False, "message": "Товар не найден"}), 404
+
+    try:
+        result = _nct_search_by_name(item["name"])
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 502
+
+    if not result.get("configured"):
+        return jsonify({"success": False, "configured": False, "message": result["message"]}), 503
+
+    return jsonify({
+        "success": True,
+        "item": dict(item),
+        "candidates": result.get("candidates", [])
+    })
+
+
+@items_bp.route("/api/catalog/enrichment/apply", methods=["POST"])
+def catalog_enrichment_apply():
+    data = request.get_json(silent=True) or {}
+    item_id = data.get("item_id")
+    candidate = data.get("candidate") or {}
+    fields = data.get("fields") or {}
+    company_id = session.get("company_id")
+
+    allowed = {
+        "gtin": _catalog_text(candidate.get("gtin")),
+        "ntin": _catalog_text(candidate.get("ntin")),
+        "barcode": _catalog_text(candidate.get("barcode")),
+        "unit": _catalog_text(candidate.get("measure")),
+        "name": _catalog_text(candidate.get("name")),
+        "is_marked": bool(candidate.get("is_marked")),
+    }
+    updates, values = [], []
+    for field in ("gtin", "ntin", "barcode", "unit", "name", "is_marked"):
+        if fields.get(field) and allowed[field] not in (None, ""):
+            updates.append(f"{field} = %s")
+            values.append(allowed[field])
+
+    if not updates:
+        return jsonify({"success": False, "message": "Не выбраны данные для обновления"}), 400
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        values.extend([item_id, company_id])
+        cur.execute(f"""
+            UPDATE items
+            SET {', '.join(updates)}
+            WHERE id = %s AND company_id = %s
+              AND COALESCE(item_type, 'product') = 'product'
+            RETURNING id, name, barcode, gtin, ntin, unit, is_marked
+        """, values)
+        updated = cur.fetchone()
+        if not updated:
+            conn.rollback()
+            return jsonify({"success": False, "message": "Товар не найден"}), 404
+        conn.commit()
+        return jsonify({"success": True, "item": dict(updated)})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(exc)}), 500
     finally:
         pool.putconn(conn)
