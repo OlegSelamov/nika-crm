@@ -641,6 +641,16 @@ document.getElementById('sfPmBuy')?.addEventListener('click', async()=>{
     }
 });
 
+document.getElementById('sfPmRequest')?.addEventListener('click', async()=>{
+    if(!sfState.product) return;
+    try{
+        await sfAddToCart(sfState.product.id, 1);
+        sfOpenCart();
+    }catch(error){
+        sfToast(error.message, true);
+    }
+});
+
 document.getElementById('sfProductOverlay')?.addEventListener('click',event=>{
     if(event.target === event.currentTarget) sfCloseProduct();
 });

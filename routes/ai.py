@@ -52,6 +52,7 @@ AI_INSTRUCTIONS = """
 Отвечай только обычным текстом: не используй Markdown, звёздочки, решётки, обратные кавычки, ссылки в скобках и служебные символы. Для перечислений используй короткие строки без маркеров.
 Для любых актуальных данных о продажах, прибыли, товарах, остатках, клиентах, задачах, расходах, бухгалтерии, пользователях или организациях обязательно используй доступные функции.
 На любой вопрос о товаре или услуге, её цене, описании или наличии сначала обязательно вызови search_items. Каталог организации — единственный источник этих данных. Если позиция найдена, назови точное название и розничную цену из результата. Не заменяй услугу инструкцией, как выполнить её самостоятельно, и не придумывай состав услуги, которого нет в описании.
+Если вопрос относится именно к онлайн-витрине, опубликованным позициям, доставке, самовывозу или ссылке сайта, обязательно вызови search_storefront. Не считай весь внутренний каталог опубликованным: источник публичных позиций — только результат search_storefront.
 Не выдумывай цифры и не утверждай, что действие выполнено, если функция его не выполняла.
 Когда пользователь просит создать, изменить, удалить, оплатить, списать или провести запись, обязательно вызови prepare_action. В action укажи точное действие, а в data_json передай JSON-объект с реальными полями. Не говори, что действие выполнено: prepare_action только готовит подтверждение.
 Если для действия нужен id, сначала найди запись функцией поиска. Не угадывай id.
@@ -372,6 +373,21 @@ AI_TOOLS = [
             "properties": {
                 "query": {"type": "string", "minLength": 1, "maxLength": 150},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+            },
+            "required": ["query", "limit"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "search_storefront",
+        "description": "Получить настройки онлайн-витрины и найти только позиции, которые реально опубликованы для клиентов.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": ["string", "null"], "maxLength": 150},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 30},
             },
             "required": ["query", "limit"],
             "additionalProperties": False,
@@ -830,6 +846,98 @@ def _search_items(company_id, query, limit):
     return {"query": query, "count": len(rows), "items": [dict(row) for row in rows]}
 
 
+def _search_storefront(company_id, query, limit):
+    _require_read_module("storefront")
+    if not company_id:
+        raise ActionError("Сначала выберите организацию")
+    store = _query_rows(
+        """
+        SELECT id, slug, title, description, enabled, show_products,
+               show_services, allow_orders, allow_booking,
+               pickup_enabled, delivery_enabled, delivery_price,
+               min_order_amount
+        FROM storefront_settings
+        WHERE company_id=%s
+        LIMIT 1
+        """,
+        (company_id,),
+        one=True,
+    )
+    if not store:
+        return {
+            "configured": False,
+            "enabled": False,
+            "count": 0,
+            "items": [],
+            "message": "Онлайн-витрина ещё не настроена",
+        }
+
+    store = dict(store)
+    query = str(query or "").strip()[:150]
+    pattern = f"%{query}%"
+    rows = _query_rows(
+        """
+        SELECT i.id, i.name, i.category, i.description,
+               COALESCE(i.retail_price,i.price,0) AS price,
+               i.quantity, i.unit,
+               COALESCE(i.item_type,'product') AS item_type,
+               COALESCE(i.service_sale_mode,'order') AS service_sale_mode,
+               i.booking_duration_minutes
+        FROM items i
+        WHERE i.company_id=%s
+          AND COALESCE(i.storefront_hidden,FALSE)=FALSE
+          AND (
+              (COALESCE(i.item_type,'product')='service' AND %s=TRUE)
+              OR (COALESCE(i.item_type,'product')<>'service' AND %s=TRUE)
+          )
+          AND (
+              %s='' OR COALESCE(i.name,'') ILIKE %s
+              OR COALESCE(i.category,'') ILIKE %s
+              OR COALESCE(i.description,'') ILIKE %s
+          )
+        ORDER BY i.category NULLS LAST, i.name
+        LIMIT %s
+        """,
+        (
+            company_id,
+            bool(store.get("show_services", True)),
+            bool(store.get("show_products", True)),
+            query,
+            pattern,
+            pattern,
+            pattern,
+            min(30, max(1, int(limit))),
+        ),
+    )
+    public_base_url = os.getenv("PUBLIC_BASE_URL", "https://nikabusiness.com").rstrip("/")
+    storefront_url = f"{public_base_url}/s/{store['slug']}"
+    result_items = []
+    for raw in rows:
+        item = dict(raw)
+        item["item_url"] = f"{storefront_url}/item/{item['id']}"
+        if item.get("item_type") == "service" and item.get("service_sale_mode") == "booking":
+            item["booking_url"] = f"{storefront_url}/booking/{item['id']}"
+        result_items.append(item)
+    return {
+        "configured": True,
+        "enabled": bool(store.get("enabled")),
+        "storefront_url": storefront_url,
+        "settings": {
+            "title": store.get("title"),
+            "description": store.get("description"),
+            "allow_orders": bool(store.get("allow_orders")),
+            "allow_booking": bool(store.get("allow_booking")),
+            "pickup_enabled": bool(store.get("pickup_enabled")),
+            "delivery_enabled": bool(store.get("delivery_enabled")),
+            "delivery_price": store.get("delivery_price") or 0,
+            "min_order_amount": store.get("min_order_amount") or 0,
+        },
+        "query": query,
+        "count": len(result_items),
+        "items": result_items,
+    }
+
+
 def _get_client_history(company_id, client_id, limit):
     _require_read_module("clients")
     if not company_id:
@@ -873,6 +981,8 @@ def _require_read_module(module):
     if session.get("is_super_admin"):
         return
     if module == "users" and session.get("role") in ("owner", "admin"):
+        return
+    if module == "storefront" and session.get("role") in ("owner", "admin"):
         return
     if module not in set(session.get("employee_modules") or []):
         raise PermissionDenied("У вашей учётной записи нет доступа к этому разделу")
@@ -1311,6 +1421,10 @@ def _execute_tool(name, arguments, company_id, conversation_id=None, user_id=Non
         return _search_clients(company_id, arguments["query"], arguments["limit"])
     if name == "search_items":
         return _search_items(company_id, arguments["query"], arguments["limit"])
+    if name == "search_storefront":
+        return _search_storefront(
+            company_id, arguments.get("query"), arguments["limit"]
+        )
     if name == "get_client_history":
         return _get_client_history(company_id, arguments["client_id"], arguments["limit"])
     if name == "search_system_records":
@@ -1478,8 +1592,16 @@ def _generate_reply(
         "товар", "услуг", "каталог", "прайс", "цен", "стоим", "сколько стоит",
         "налич", "продаете", "продаёте",
     )
+    storefront_markers = (
+        "онлайн витрин", "онлайн-витрин", "витрин", "на сайте", "опубликован",
+        "доставк", "самовывоз", "ссылка на сайт",
+    )
+    force_storefront_search = any(
+        marker in normalized_message for marker in storefront_markers
+    )
     force_catalog_search = (
         any(marker in normalized_message for marker in catalog_markers)
+        and not force_storefront_search
         and not any(marker in normalized_message for marker in mutation_markers)
     )
 
@@ -1497,7 +1619,9 @@ def _generate_reply(
             "max_output_tokens": 900,
             "parallel_tool_calls": False,
         }
-        if force_catalog_search and tool_round == 0:
+        if force_storefront_search and tool_round == 0:
+            request_options["tool_choice"] = {"type": "function", "name": "search_storefront"}
+        elif force_catalog_search and tool_round == 0:
             request_options["tool_choice"] = {"type": "function", "name": "search_items"}
         if AI_MODEL.startswith("gpt-5.6"):
             request_options["reasoning"] = {"effort": "none"}

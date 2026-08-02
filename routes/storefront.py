@@ -388,8 +388,8 @@ def cart_add(slug):
             if mode == "booking":
                 return jsonify({"ok": False, "error": "Для этой услуги используется онлайн-запись",
                                 "booking_url": url_for("storefront.booking", slug=slug, item_id=int(raw_id))}), 409
-            if mode == "request":
-                return jsonify({"ok": False, "error": "Для этой услуги нужно оставить заявку"}), 409
+            # Режим request оформляется как обычная заявка в online_orders.
+            # Отличается только смыслом для менеджера: услуга требует уточнения деталей.
 
         # Остаток проверяем только для физических товаров.
         # Услуги с service_sale_mode='order' должны свободно добавляться в корзину,
