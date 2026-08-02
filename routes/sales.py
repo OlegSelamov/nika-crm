@@ -47,7 +47,7 @@ def add_sale():
         session.get("company_id"),
         0,
         0,
-        "РќРѕРІР°СЏ",
+        "Новая",
         now_kz()
     ))
 
@@ -98,7 +98,7 @@ def pay_sale():
         kaspi = total
 
     paid = total
-    status = "РћРїР»Р°С‡РµРЅРѕ"
+    status = "Оплачено"
 
     conn = get_db()
     
@@ -167,7 +167,7 @@ def pay_sale():
             unit = (
                 db_item["unit"]
                 if db_item and db_item["unit"]
-                else "С€С‚"
+                else "шт"
             )
 
             cur.execute("""
@@ -187,7 +187,7 @@ def pay_sale():
             """, (
                 sale_id,
                 item.get("id"),
-                item.get("name") or f"РўРѕРІР°СЂ #{item.get('id')}",
+                item.get("name") or f"Товар #{item.get('id')}",
                 item.get("price", 0),
                 item.get("qty", 1),
                 item.get("price", 0) * item.get("qty", 1),
@@ -356,7 +356,7 @@ def get_sale(sale_id):
                 i["price"],
 
             "unit":
-                i["unit"] if i["unit"] else "С€С‚",
+                i["unit"] if i["unit"] else "шт",
 
             "gtin":
                 i["gtin"] if "gtin" in i.keys() else "",
@@ -401,19 +401,19 @@ def sales_history():
 
     for sale in sales:
 
-        payment_type = "вЂ”"
+        payment_type = "—"
 
         if sale["sale_type"] == "cash":
-            payment_type = "РќР°Р»РёС‡РЅС‹Рµ"
+            payment_type = "Наличные"
 
         elif sale["sale_type"] == "card":
-            payment_type = "РљР°СЂС‚Р°"
+            payment_type = "Карта"
 
         elif sale["sale_type"] == "kaspi":
             payment_type = "Kaspi POS"
 
         elif sale["sale_type"] == "invoice":
-            payment_type = "РЎС‡С‘С‚"
+            payment_type = "Счёт"
 
         result.append({
 
@@ -465,7 +465,7 @@ def smart_sale(payload=None):
     clients = cur.fetchall()
 
     client = None
-    search = (client_name or "").lower().replace("С‘", "Рµ")
+    search = (client_name or "").lower().replace("ё", "е")
 
     for c in clients:
         if not c:
@@ -476,7 +476,7 @@ def smart_sale(payload=None):
         if not full_name:
             continue
 
-        full_name_clean = full_name.lower().replace("С‘", "Рµ")
+        full_name_clean = full_name.lower().replace("ё", "е")
 
         if search in full_name_clean:
             client = c
@@ -494,7 +494,7 @@ def smart_sale(payload=None):
     items = cur.fetchall()
 
     item = None
-    search_item = (item_name or "").lower().replace("С‘", "Рµ")
+    search_item = (item_name or "").lower().replace("ё", "е")
 
     for i in items:
         if not i:
@@ -505,7 +505,7 @@ def smart_sale(payload=None):
         if not name_i:
             continue
 
-        name_clean = name_i.lower().replace("С‘", "Рµ")
+        name_clean = name_i.lower().replace("ё", "е")
 
         if search_item in name_clean:
             item = i
@@ -541,7 +541,7 @@ def smart_sale(payload=None):
         sale_number,
         item["retail_price"],
         0,
-        "РќРѕРІР°СЏ",
+        "Новая",
         now_kz()
     ))
 
@@ -564,7 +564,7 @@ def smart_sale(payload=None):
 
     return jsonify({
         "success": True,
-        "message": f"РџСЂРѕРґР°Р¶Р° СЃРѕР·РґР°РЅР°: {client_name} в†’ {item_name}"
+        "message": f"Продажа создана: {client_name} → {item_name}"
     })
     
 @sales_bp.route("/sales/create-invoice", methods=["POST"])
@@ -610,7 +610,7 @@ def create_invoice():
         sale_number,
         total,
         0,
-        "РЎС‡С‘С‚ РІС‹СЃС‚Р°РІР»РµРЅ",
+        "Счёт выставлен",
         now_kz(),
         "invoice"
     ))
@@ -625,8 +625,8 @@ def create_invoice():
 
         db_item = cur.fetchone()
 
-        name = db_item["name"] if db_item else "РўРѕРІР°СЂ"
-        unit = db_item["unit"] if db_item and db_item["unit"] else "С€С‚"
+        name = db_item["name"] if db_item else "Товар"
+        unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
 
         qty = item.get("qty", 1)
         price = item.get("price", 0)
@@ -726,7 +726,7 @@ def process_sale(conn, sale_id):
         unit = (
             db_item["unit"]
             if db_item and db_item["unit"]
-            else "С€С‚"
+            else "шт"
         )
 
         purchase_price = (
@@ -834,7 +834,7 @@ def invoice(sale_id):
     sale, items, client = get_sale_data(sale_id)
 
     if sale["sale_type"] != "invoice":
-        return "РЎС‡РµС‚ РґРѕСЃС‚СѓРїРµРЅ С‚РѕР»СЊРєРѕ РґР»СЏ Р±РµР·РЅР°Р»РёС‡РЅРѕР№ РїСЂРѕРґР°Р¶Рё"
+        return "Счет доступен только для безналичной продажи"
 
     conn = get_db()
     
@@ -849,13 +849,13 @@ def invoice(sale_id):
     pool.putconn(conn)
 
     if not company:
-        return "РђРєС‚РёРІРЅР°СЏ РѕСЂРіР°РЅРёР·Р°С†РёСЏ РЅРµ РІС‹Р±СЂР°РЅР°"
+        return "Активная организация не выбрана"
 
     date_obj = sale["created_at"]
     sale_date = date_obj.strftime("%d.%m.%Y")
 
     total = int(sale["total_amount"])
-    total_text = number_to_words_kz(total) + " С‚РµРЅРіРµ 00 С‚РёС‹РЅ"
+    total_text = number_to_words_kz(total) + " тенге 00 тиын"
     director_short = format_fio(company["director"])
     
     new_items = []
@@ -866,7 +866,7 @@ def invoice(sale_id):
             "quantity": i["quantity"],
             "price": i["price"],
             "total": i["total"],
-            "unit": i["unit"] if i["unit"] else "С€С‚"
+            "unit": i["unit"] if i["unit"] else "шт"
         })
 
     return render_template(
@@ -899,12 +899,12 @@ def mark_paid():
 
     if not sale:
         pool.putconn(conn)
-        return {"success": False, "error": "РџСЂРѕРґР°Р¶Р° РЅРµ РЅР°Р№РґРµРЅР°"}, 404
+        return {"success": False, "error": "Продажа не найдена"}, 404
 
     cur.execute("""
         UPDATE sales
         SET 
-            status = 'РћРїР»Р°С‡РµРЅРѕ',
+            status = 'Оплачено',
             paid_amount = total_amount,
             paid_at = %s,
             sale_type = 'invoice',
@@ -938,7 +938,7 @@ def check(sale_id):
     print("=" * 50)
 
     if sale["sale_type"] == "invoice":
-        return "Р§РµРє РґРѕСЃС‚СѓРїРµРЅ С‚РѕР»СЊРєРѕ РґР»СЏ РєР°СЃСЃРѕРІРѕР№ РїСЂРѕРґР°Р¶Рё"
+        return "Чек доступен только для кассовой продажи"
 
     conn = get_db()
     
@@ -952,7 +952,7 @@ def check(sale_id):
     company = cur.fetchone()
 
     if not company:
-        return "РќРµС‚ РєРѕРјРїР°РЅРёРё"
+        return "Нет компании"
 
     date_obj = sale["created_at"] + timedelta(hours=5)
 
@@ -982,7 +982,7 @@ def check(sale_id):
 
             "unit":
                 db_item["unit"]
-                if db_item else "С€С‚",
+                if db_item else "шт",
 
             "gtin":
                 db_item["gtin"]
@@ -1021,9 +1021,9 @@ def nakladnaya(sale_id):
 
     sale, items, client = get_sale_data(sale_id)
 
-    # вќЊ Р·Р°РїСЂРµС‰Р°РµРј РґРѕ РѕРїР»Р°С‚С‹
-    if sale["status"] != "РћРїР»Р°С‡РµРЅРѕ":
-        return "РќР°РєР»Р°РґРЅР°СЏ РґРѕСЃС‚СѓРїРЅР° С‚РѕР»СЊРєРѕ РїРѕСЃР»Рµ РѕРїР»Р°С‚С‹"
+    # ❌ запрещаем до оплаты
+    if sale["status"] != "Оплачено":
+        return "Накладная доступна только после оплаты"
 
     conn = get_db()
     
@@ -1038,18 +1038,18 @@ def nakladnaya(sale_id):
     pool.putconn(conn)
 
     if not company:
-        return "РќРµС‚ РєРѕРјРїР°РЅРёРё"
+        return "Нет компании"
 
     from datetime import datetime
 
-    # РґР°С‚Р°
+    # дата
     date_obj = sale["created_at"]
     sale_date = date_obj.strftime("%d.%m.%Y")
 
-    # РґРёСЂРµРєС‚РѕСЂ
+    # директор
     director_short = format_fio(company["director"])
 
-    # рџ”Ґ HEADER
+    # 🔥 HEADER
     header = {
         "sender_name": company["name"],
         "sender_address": company["address"],
@@ -1063,7 +1063,7 @@ def nakladnaya(sale_id):
         "ttn": "",
     }
 
-    # рџ”Ґ РўРћР’РђР Р«
+    # 🔥 ТОВАРЫ
     new_items = []
     total_amount = 0
 
@@ -1073,7 +1073,7 @@ def nakladnaya(sale_id):
         new_items.append({
             "name": i["name"],
             "code": i["item_id"],
-            "unit": i["unit"] if i["unit"] else "С€С‚",
+            "unit": i["unit"] if i["unit"] else "шт",
             "qty_plan": i["quantity"],
             "qty_fact": i["quantity"],
             "price": i["price"],
@@ -1083,14 +1083,14 @@ def nakladnaya(sale_id):
 
         total_amount += amount
 
-    # рџ”Ґ РРўРћР“Рћ
+    # 🔥 ИТОГО
     totals = {
         "qty_plan": sum(i["quantity"] for i in items),
         "qty_fact": sum(i["quantity"] for i in items),
         "amount": total_amount,
         "vat": 0,
         "qty_words": number_to_words_kz(sum(i["quantity"] for i in items)),
-        "amount_words": number_to_words_kz(total_amount) + " С‚РµРЅРіРµ 00 С‚РёС‹РЅ"
+        "amount_words": number_to_words_kz(total_amount) + " тенге 00 тиын"
     }
 
     return render_template(
@@ -1119,18 +1119,18 @@ def schet_factura(sale_id):
     pool.putconn(conn)
 
     if not company:
-        return "РќРµС‚ РєРѕРјРїР°РЅРёРё"
+        return "Нет компании"
         
-    payment_type = "РЅР°Р»РёС‡РЅС‹Р№ СЂР°СЃС‡РµС‚"
+    payment_type = "наличный расчет"
 
     if sale["sale_type"] == "cash":
-        # РїСЂРѕРІРµСЂСЏРµРј СЃРїРѕСЃРѕР±С‹ РѕРїР»Р°С‚С‹
+        # проверяем способы оплаты
         if (sale["card_amount"] or 0) > 0 or (sale["kaspi_amount"] or 0) > 0:
-            payment_type = "Р±РµР·РЅР°Р»РёС‡РЅС‹Р№ СЂР°СЃС‡РµС‚"
+            payment_type = "безналичный расчет"
         else:
-            payment_type = "РЅР°Р»РёС‡РЅС‹Р№ СЂР°СЃС‡РµС‚"
+            payment_type = "наличный расчет"
     else:
-        payment_type = "Р±РµР·РЅР°Р»РёС‡РЅС‹Р№ СЂР°СЃС‡РµС‚"
+        payment_type = "безналичный расчет"
         
     date_obj = sale["created_at"]
     sale_date = date_obj.strftime("%d.%m.%Y")
@@ -1167,7 +1167,7 @@ def analytics():
 
     try:
         # =========================================================
-        # РћРЎРќРћР’РќР«Р• РџРћРљРђР—РђРўР•Р›Р
+        # ОСНОВНЫЕ ПОКАЗАТЕЛИ
         # =========================================================
 
         cur.execute("""
@@ -1177,7 +1177,7 @@ def analytics():
                 COALESCE(AVG(total_amount), 0) AS average_check
             FROM sales
             WHERE company_id = %s
-              AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+              AND status = 'Оплачено'
               AND DATE(created_at) BETWEEN %s AND %s
         """, (
             company_id,
@@ -1192,7 +1192,7 @@ def analytics():
         average_check = float(main_stats.get("average_check") or 0)
 
         # =========================================================
-        # РџР РР‘Р«Р›Р¬
+        # ПРИБЫЛЬ
         # =========================================================
 
         cur.execute("""
@@ -1202,7 +1202,7 @@ def analytics():
             JOIN sales s
                 ON s.id = si.sale_id
             WHERE s.company_id = %s
-              AND s.status = 'РћРїР»Р°С‡РµРЅРѕ'
+              AND s.status = 'Оплачено'
               AND DATE(s.created_at) BETWEEN %s AND %s
         """, (
             company_id,
@@ -1213,7 +1213,7 @@ def analytics():
         profit_row = cur.fetchone() or {}
         profit = float(profit_row.get("profit") or 0)
 
-        # РџРѕРєР° РѕС‚РґРµР»СЊРЅС‹Рµ СЂР°СЃС…РѕРґС‹ РІ СЌС‚РѕРј СЂРѕСѓС‚Рµ РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹
+        # Пока отдельные расходы в этом роуте не подключены
         purchase_total = 0
         salary_total = 0
         taxes_total = 0
@@ -1228,7 +1228,7 @@ def analytics():
         )
 
         # =========================================================
-        # Р’РћР—Р’Р РђРўР«
+        # ВОЗВРАТЫ
         # =========================================================
 
         cur.execute("""
@@ -1238,7 +1238,7 @@ def analytics():
             FROM sales
             WHERE company_id = %s
               AND (
-                    status = 'Р’РѕР·РІСЂР°С‚'
+                    status = 'Возврат'
                     OR COALESCE(is_refunded, FALSE) = TRUE
                   )
               AND DATE(created_at) BETWEEN %s AND %s
@@ -1259,7 +1259,7 @@ def analytics():
         )
 
         # =========================================================
-        # РЎРџРћРЎРћР‘Р« РћРџР›РђРўР«
+        # СПОСОБЫ ОПЛАТЫ
         # =========================================================
 
         cur.execute("""
@@ -1269,7 +1269,7 @@ def analytics():
                 COALESCE(SUM(kaspi_amount), 0) AS kaspi
             FROM sales
             WHERE company_id = %s
-              AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+              AND status = 'Оплачено'
               AND DATE(created_at) BETWEEN %s AND %s
         """, (
             company_id,
@@ -1286,7 +1286,7 @@ def analytics():
         }
 
         # =========================================================
-        # Р“Р РђР¤РРљ Р’Р«Р РЈР§РљР
+        # ГРАФИК ВЫРУЧКИ
         # =========================================================
 
         cur.execute("""
@@ -1295,7 +1295,7 @@ def analytics():
                 COALESCE(SUM(total_amount), 0) AS total
             FROM sales
             WHERE company_id = %s
-              AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+              AND status = 'Оплачено'
               AND DATE(created_at) BETWEEN %s AND %s
             GROUP BY DATE(created_at)
             ORDER BY DATE(created_at)
@@ -1318,7 +1318,7 @@ def analytics():
         ]
 
         # =========================================================
-        # Р“Р РђР¤РРљ РџР РР‘Р«Р›Р
+        # ГРАФИК ПРИБЫЛИ
         # =========================================================
 
         cur.execute("""
@@ -1329,7 +1329,7 @@ def analytics():
             LEFT JOIN sale_items si
                 ON si.sale_id = s.id
             WHERE s.company_id = %s
-              AND s.status = 'РћРїР»Р°С‡РµРЅРѕ'
+              AND s.status = 'Оплачено'
               AND DATE(s.created_at) BETWEEN %s AND %s
             GROUP BY DATE(s.created_at)
             ORDER BY DATE(s.created_at)
@@ -1356,13 +1356,13 @@ def analytics():
             for date in revenue_dates
         ]
 
-        # РџРѕРєР° СЂР°СЃС…РѕРґС‹ РїРѕ РґРЅСЏРј РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹
+        # Пока расходы по дням не подключены
         expense_chart_values = [
             0 for _ in revenue_dates
         ]
 
         # =========================================================
-        # РўРћРџ РўРћР’РђР РћР’
+        # ТОП ТОВАРОВ
         # =========================================================
 
         cur.execute("""
@@ -1374,7 +1374,7 @@ def analytics():
             JOIN sales s
                 ON s.id = si.sale_id
             WHERE s.company_id = %s
-              AND s.status = 'РћРїР»Р°С‡РµРЅРѕ'
+              AND s.status = 'Оплачено'
               AND DATE(s.created_at) BETWEEN %s AND %s
             GROUP BY si.name
             ORDER BY total DESC
@@ -1389,7 +1389,7 @@ def analytics():
 
         top_items = [
             {
-                "name": row.get("name") or "Р‘РµР· РЅР°Р·РІР°РЅРёСЏ",
+                "name": row.get("name") or "Без названия",
                 "quantity": float(row.get("quantity") or 0),
                 "total": float(row.get("total") or 0)
             }
@@ -1397,19 +1397,19 @@ def analytics():
         ]
 
         # =========================================================
-        # РўРћРџ РљР›РР•РќРўРћР’
+        # ТОП КЛИЕНТОВ
         # =========================================================
 
         cur.execute("""
             SELECT
-                COALESCE(c.full_name, 'Р§Р°СЃС‚РЅРѕРµ Р»РёС†Рѕ') AS full_name,
+                COALESCE(c.full_name, 'Частное лицо') AS full_name,
                 COUNT(s.id) AS sales_count,
                 COALESCE(SUM(s.total_amount), 0) AS total
             FROM sales s
             LEFT JOIN clients c
                 ON c.id = s.client_id
             WHERE s.company_id = %s
-              AND s.status = 'РћРїР»Р°С‡РµРЅРѕ'
+              AND s.status = 'Оплачено'
               AND DATE(s.created_at) BETWEEN %s AND %s
             GROUP BY
                 c.id,
@@ -1426,7 +1426,7 @@ def analytics():
 
         top_clients = [
             {
-                "full_name": row.get("full_name") or "Р§Р°СЃС‚РЅРѕРµ Р»РёС†Рѕ",
+                "full_name": row.get("full_name") or "Частное лицо",
                 "sales_count": int(row.get("sales_count") or 0),
                 "total": float(row.get("total") or 0)
             }
@@ -1434,7 +1434,7 @@ def analytics():
         ]
 
         # =========================================================
-        # РљРћР›РР§Р•РЎРўР’Рћ РљР›РР•РќРўРћР’
+        # КОЛИЧЕСТВО КЛИЕНТОВ
         # =========================================================
 
         cur.execute("""
@@ -1449,11 +1449,11 @@ def analytics():
             clients_row.get("clients_count") or 0
         )
 
-        # Р’СЂРµРјРµРЅРЅРѕ, РїРѕРєР° РґР°С‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё РєР»РёРµРЅС‚Р° РѕС‚РґРµР»СЊРЅРѕ РЅРµ СЃС‡РёС‚Р°РµС‚СЃСЏ
+        # Временно, пока дата регистрации клиента отдельно не считается
         new_clients = 0
 
         # =========================================================
-        # РђРќРђР›РРўРРљРђ РЎРћРўР РЈР”РќРРљРћР’
+        # АНАЛИТИКА СОТРУДНИКОВ
         # =========================================================
 
         cur.execute("""
@@ -1465,25 +1465,25 @@ def analytics():
                 COALESCE(u.percent_rate, 0) AS percent_rate,
 
                 COUNT(s.id) FILTER (
-                    WHERE s.status = 'РћРїР»Р°С‡РµРЅРѕ'
+                    WHERE s.status = 'Оплачено'
                 ) AS sales_count,
 
                 COALESCE(
                     SUM(s.total_amount) FILTER (
-                        WHERE s.status = 'РћРїР»Р°С‡РµРЅРѕ'
+                        WHERE s.status = 'Оплачено'
                     ),
                     0
                 ) AS revenue,
 
                 COALESCE(
                     AVG(s.total_amount) FILTER (
-                        WHERE s.status = 'РћРїР»Р°С‡РµРЅРѕ'
+                        WHERE s.status = 'Оплачено'
                     ),
                     0
                 ) AS average_check,
 
                 COUNT(s.id) FILTER (
-                    WHERE s.status = 'Р’РѕР·РІСЂР°С‚'
+                    WHERE s.status = 'Возврат'
                        OR COALESCE(s.is_refunded, FALSE) = TRUE
                 ) AS refund_count
 
@@ -1570,7 +1570,7 @@ def analytics():
             })
 
         # =========================================================
-        # Р’Р«Р РЈР§РљРђ Р—Рђ РЎР•Р“РћР”РќРЇ
+        # ВЫРУЧКА ЗА СЕГОДНЯ
         # =========================================================
 
         today_str = now_kz().strftime("%Y-%m-%d")
@@ -1580,7 +1580,7 @@ def analytics():
                 COALESCE(SUM(total_amount), 0) AS total
             FROM sales
             WHERE company_id = %s
-              AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+              AND status = 'Оплачено'
               AND DATE(created_at) = %s
         """, (
             company_id,
@@ -1637,7 +1637,7 @@ def analytics():
         import traceback
         traceback.print_exc()
 
-        return "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р°РЅР°Р»РёС‚РёРєСѓ", 500
+        return "Не удалось загрузить аналитику", 500
 
     finally:
         cur.close()
@@ -1665,7 +1665,7 @@ def employee_analytics(user_id):
 
     try:
 
-        # Р”Р°РЅРЅС‹Рµ СЃРѕС‚СЂСѓРґРЅРёРєР°
+        # Данные сотрудника
         cur.execute("""
             SELECT
                 id,
@@ -1686,38 +1686,38 @@ def employee_analytics(user_id):
         employee = cur.fetchone()
 
         if not employee:
-            return "РЎРѕС‚СЂСѓРґРЅРёРє РЅРµ РЅР°Р№РґРµРЅ", 404
+            return "Сотрудник не найден", 404
 
-        # РћР±С‰РёРµ РїРѕРєР°Р·Р°С‚РµР»Рё СЃРѕС‚СЂСѓРґРЅРёРєР°
+        # Общие показатели сотрудника
         cur.execute("""
             SELECT
 
                 COUNT(*) FILTER (
-                    WHERE status = 'РћРїР»Р°С‡РµРЅРѕ'
+                    WHERE status = 'Оплачено'
                 ) AS sales_count,
 
                 COALESCE(
                     SUM(total_amount) FILTER (
-                        WHERE status = 'РћРїР»Р°С‡РµРЅРѕ'
+                        WHERE status = 'Оплачено'
                     ),
                     0
                 ) AS revenue,
 
                 COALESCE(
                     AVG(total_amount) FILTER (
-                        WHERE status = 'РћРїР»Р°С‡РµРЅРѕ'
+                        WHERE status = 'Оплачено'
                     ),
                     0
                 ) AS average_check,
 
                 COUNT(*) FILTER (
-                    WHERE status = 'Р’РѕР·РІСЂР°С‚'
+                    WHERE status = 'Возврат'
                     OR COALESCE(is_refunded, FALSE) = TRUE
                 ) AS refund_count,
 
                 COALESCE(
                     SUM(total_amount) FILTER (
-                        WHERE status = 'Р’РѕР·РІСЂР°С‚'
+                        WHERE status = 'Возврат'
                         OR COALESCE(is_refunded, FALSE) = TRUE
                     ),
                     0
@@ -1742,7 +1742,7 @@ def employee_analytics(user_id):
 
         reward = revenue * percent_rate / 100
 
-        # Р“СЂР°С„РёРє СЃРѕС‚СЂСѓРґРЅРёРєР°
+        # График сотрудника
         cur.execute("""
             SELECT
                 DATE(created_at) AS date,
@@ -1750,7 +1750,7 @@ def employee_analytics(user_id):
             FROM sales
             WHERE company_id = %s
             AND user_id = %s
-            AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+            AND status = 'Оплачено'
             AND DATE(created_at) BETWEEN %s AND %s
             GROUP BY DATE(created_at)
             ORDER BY date
@@ -1773,7 +1773,7 @@ def employee_analytics(user_id):
             for row in chart_rows
         ]
 
-        # Р›СѓС‡С€РёРµ С‚РѕРІР°СЂС‹
+        # Лучшие товары
         cur.execute("""
             SELECT
                 sale_items.name,
@@ -1786,7 +1786,7 @@ def employee_analytics(user_id):
 
             WHERE sales.company_id = %s
             AND sales.user_id = %s
-            AND sales.status = 'РћРїР»Р°С‡РµРЅРѕ'
+            AND sales.status = 'Оплачено'
             AND DATE(sales.created_at) BETWEEN %s AND %s
 
             GROUP BY sale_items.name
@@ -1803,7 +1803,7 @@ def employee_analytics(user_id):
 
         top_employee_items = cur.fetchall()
 
-        # РџРѕСЃР»РµРґРЅРёРµ РїСЂРѕРґР°Р¶Рё
+        # Последние продажи
         cur.execute("""
             SELECT
                 id,
@@ -1871,7 +1871,7 @@ def analytics_api():
             COALESCE(SUM(total_amount),0) as total
         FROM sales
         WHERE company_id = %s
-        AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+        AND status = 'Оплачено'
         AND DATE(created_at)
             BETWEEN %s AND %s
     """, (
@@ -1891,7 +1891,7 @@ def analytics_api():
             SELECT id
             FROM sales
             WHERE company_id = %s
-            AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+            AND status = 'Оплачено'
             AND DATE(created_at)
                 BETWEEN %s AND %s
 
@@ -1908,7 +1908,7 @@ def analytics_api():
         SELECT COUNT(*) as count
         FROM sales
         WHERE company_id = %s
-        AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+        AND status = 'Оплачено'
         AND DATE(created_at)
             BETWEEN %s AND %s
     """, (
@@ -1927,7 +1927,7 @@ def analytics_api():
             ) as avg_check
         FROM sales
         WHERE company_id = %s
-        AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+        AND status = 'Оплачено'
         AND DATE(created_at)
             BETWEEN %s AND %s
     """, (
@@ -1947,7 +1947,7 @@ def analytics_api():
             COALESCE(SUM(kaspi_amount),0) as kaspi
         FROM sales
         WHERE company_id = %s
-        AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+        AND status = 'Оплачено'
         AND DATE(created_at)
             BETWEEN %s AND %s
     """, (
@@ -1967,7 +1967,7 @@ def analytics_api():
             SELECT id
             FROM sales
             WHERE company_id = %s
-            AND status = 'РћРїР»Р°С‡РµРЅРѕ'
+            AND status = 'Оплачено'
             AND DATE(created_at)
                 BETWEEN %s AND %s
         )
@@ -1990,7 +1990,7 @@ def analytics_api():
         JOIN clients
             ON sales.client_id = clients.id
         WHERE sales.company_id = %s
-        AND sales.status = 'РћРїР»Р°С‡РµРЅРѕ'
+        AND sales.status = 'Оплачено'
         AND DATE(sales.created_at)
             BETWEEN %s AND %s
         GROUP BY clients.id
@@ -2103,7 +2103,7 @@ def add_item_api():
         "price": item["retail_price"]
     }
     
-# рџ‘‰ С…СЂР°РЅРµРЅРёРµ РїРѕСЃР»РµРґРЅРµРіРѕ СЃРєР°РЅР°
+# 👉 хранение последнего скана
 last_barcode = None
 
 @sales_bp.route("/api/scan", methods=["POST"])
@@ -2229,7 +2229,7 @@ def quick_add_item():
         data.get("purchase_price", 0),
         data.get("barcode"),
         0,
-        data.get("unit", "С€С‚"),
+        data.get("unit", "шт"),
         data.get("category"),
         data.get("gtin", ""),
         data.get("ntin", ""),
@@ -2290,13 +2290,13 @@ def refund_sale(sale_id):
         if not sale:
             return jsonify({
                 "success": False,
-                "error": "РџСЂРѕРґР°Р¶Р° РЅРµ РЅР°Р№РґРµРЅР°"
+                "error": "Продажа не найдена"
             })
 
         if sale.get("is_refunded"):
             return jsonify({
                 "success": False,
-                "error": "РџСЂРѕРґР°Р¶Р° СѓР¶Рµ РІРѕР·РІСЂР°С‰РµРЅР°"
+                "error": "Продажа уже возвращена"
             })
 
         refund_transaction_id = None
@@ -2310,7 +2310,7 @@ def refund_sale(sale_id):
             if not transaction_id:
                 return jsonify({
                     "success": False,
-                    "error": "РќРµС‚ transactionId"
+                    "error": "Нет transactionId"
                 })
 
             amount = int(sale["total_amount"])
@@ -2376,14 +2376,14 @@ def refund_sale(sale_id):
 
                     return jsonify({
                         "success": False,
-                        "error": "Р’РѕР·РІСЂР°С‚ РѕС‚РјРµРЅС‘РЅ РёР»Рё РѕС‚РєР»РѕРЅС‘РЅ"
+                        "error": "Возврат отменён или отклонён"
                     })
 
             if not refund_ok:
 
                 return jsonify({
                     "success": False,
-                    "error": "РСЃС‚РµРєР»Рѕ РІСЂРµРјСЏ РѕР¶РёРґР°РЅРёСЏ РІРѕР·РІСЂР°С‚Р°"
+                    "error": "Истекло время ожидания возврата"
                 })
                 
         if sale.get("rekassa_ticket_id"):
@@ -2407,7 +2407,7 @@ def refund_sale(sale_id):
                     "error": str(rekassa_refund_result)
                 })
 
-        # РІРѕР·РІСЂР°С‰Р°РµРј С‚РѕРІР°СЂ РЅР° СЃРєР»Р°Рґ
+        # возвращаем товар на склад
 
         cur.execute("""
             SELECT *
@@ -2464,7 +2464,7 @@ def refund_sale(sale_id):
                     now_kz().isoformat()
                 ))
 
-        # РѕР±РЅРѕРІР»СЏРµРј РїСЂРѕРґР°Р¶Сѓ
+        # обновляем продажу
 
         cur.execute("""
             UPDATE sales
@@ -2473,7 +2473,7 @@ def refund_sale(sale_id):
                 is_refunded = TRUE
             WHERE id = %s
         """, (
-            "Р’РѕР·РІСЂР°С‚",
+            "Возврат",
             sale_id
         ))
 

@@ -34,12 +34,24 @@ AI_TABLES_LOCK = threading.Lock()
 _ai_tables_ready = False
 
 
+CATALOG_STOP_WORDS = {
+    "а", "без", "бы", "в", "вам", "вас", "ваш", "ваша", "ваши", "вашу",
+    "вы", "где", "да", "для", "до", "есть", "и", "из", "или", "как", "ли",
+    "мне", "можно", "на", "надо", "не", "нужен", "нужна", "нужно", "о", "об",
+    "обо", "от", "по", "пожалуйста", "подскажи", "подскажите", "про", "расскажи",
+    "расскажите", "сколько", "стоит", "стоимость", "такой", "такая", "такое",
+    "товар", "товара", "товаре", "товары", "у", "услуга", "услуге", "услуги",
+    "услугу", "хочу", "цена", "цену", "что", "это", "этот", "эта",
+}
+
+
 AI_INSTRUCTIONS = """
 Ты Nika AI — встроенный бизнес-ассистент Nika Business.
 Отвечай на языке пользователя, по умолчанию на русском. Общайся естественно, тепло и уверенно, как внимательный живой помощник, а не как справочник или робот.
 Пиши кратко, понятно и по делу. Используй короткие предложения, естественные запятые и точки: ответ должен хорошо звучать вслух без спешки. Не перегружай одну фразу множеством цифр и фактов.
 Отвечай только обычным текстом: не используй Markdown, звёздочки, решётки, обратные кавычки, ссылки в скобках и служебные символы. Для перечислений используй короткие строки без маркеров.
 Для любых актуальных данных о продажах, прибыли, товарах, остатках, клиентах, задачах, расходах, бухгалтерии, пользователях или организациях обязательно используй доступные функции.
+На любой вопрос о товаре или услуге, её цене, описании или наличии сначала обязательно вызови search_items. Каталог организации — единственный источник этих данных. Если позиция найдена, назови точное название и розничную цену из результата. Не заменяй услугу инструкцией, как выполнить её самостоятельно, и не придумывай состав услуги, которого нет в описании.
 Не выдумывай цифры и не утверждай, что действие выполнено, если функция его не выполняла.
 Когда пользователь просит создать, изменить, удалить, оплатить, списать или провести запись, обязательно вызови prepare_action. В action укажи точное действие, а в data_json передай JSON-объект с реальными полями. Не говори, что действие выполнено: prepare_action только готовит подтверждение.
 Если для действия нужен id, сначала найди запись функцией поиска. Не угадывай id.
@@ -353,7 +365,7 @@ AI_TOOLS = [
     {
         "type": "function",
         "name": "search_items",
-        "description": "Найти товар или услугу по названию, штрих-коду, GTIN или NTIN.",
+        "description": "Найти актуальный товар или услугу по названию, категории, описанию, штрих-коду, GTIN или NTIN и получить цену из каталога организации.",
         "strict": True,
         "parameters": {
             "type": "object",
@@ -593,7 +605,7 @@ def _paid_sales_condition(alias="s"):
         AND (
             {alias}.paid_at IS NOT NULL
             OR COALESCE({alias}.paid_amount, 0) > 0
-            OR COALESCE({alias}.status, '') IN ('Оплачено', 'РћРїР»Р°С‡РµРЅРѕ', 'paid')
+            OR COALESCE({alias}.status, '') IN ('Оплачено', 'paid')
         )
     """
 
@@ -735,12 +747,15 @@ def _search_items(company_id, query, limit):
     query = str(query).strip()[:150]
     rows = _query_rows(
         """
-        SELECT id, name, retail_price, purchase_price, quantity, unit, barcode,
-               gtin, ntin, COALESCE(item_type, 'product') AS item_type
+        SELECT id, name, category, description, retail_price, purchase_price,
+               quantity, unit, barcode, gtin, ntin,
+               COALESCE(item_type, 'product') AS item_type
         FROM items
         WHERE company_id = %s
           AND (
               COALESCE(name, '') ILIKE %s
+              OR COALESCE(category, '') ILIKE %s
+              OR COALESCE(description, '') ILIKE %s
               OR COALESCE(barcode, '') LIKE %s
               OR COALESCE(gtin, '') LIKE %s
               OR COALESCE(ntin, '') LIKE %s
@@ -756,12 +771,62 @@ def _search_items(company_id, query, limit):
             f"%{query}%",
             f"%{query}%",
             f"%{query}%",
+            f"%{query}%",
+            f"%{query}%",
             query,
             query,
             query,
             min(20, max(1, int(limit))),
         ),
     )
+
+    if not rows:
+        tokens = []
+        for token in re.findall(r"[0-9A-Za-zА-Яа-яЁё-]+", query.lower()):
+            token = token.strip("-")
+            if len(token) < 2 or token in CATALOG_STOP_WORDS or token in tokens:
+                continue
+            tokens.append(token)
+            if len(tokens) >= 8:
+                break
+
+        if tokens:
+            conditions = []
+            where_params = []
+            score_parts = []
+            score_params = []
+            for token in tokens:
+                pattern = f"%{token}%"
+                conditions.append(
+                    "(COALESCE(name, '') ILIKE %s OR COALESCE(category, '') ILIKE %s "
+                    "OR COALESCE(description, '') ILIKE %s)"
+                )
+                where_params.extend((pattern, pattern, pattern))
+                score_parts.append(
+                    "(CASE WHEN COALESCE(name, '') ILIKE %s THEN 5 ELSE 0 END + "
+                    "CASE WHEN COALESCE(category, '') ILIKE %s THEN 2 ELSE 0 END + "
+                    "CASE WHEN COALESCE(description, '') ILIKE %s THEN 1 ELSE 0 END)"
+                )
+                score_params.extend((pattern, pattern, pattern))
+
+            rows = _query_rows(
+                f"""
+                SELECT id, name, category, description, retail_price, purchase_price,
+                       quantity, unit, barcode, gtin, ntin,
+                       COALESCE(item_type, 'product') AS item_type
+                FROM items
+                WHERE company_id = %s
+                  AND ({' OR '.join(conditions)})
+                ORDER BY ({' + '.join(score_parts)}) DESC, name
+                LIMIT %s
+                """,
+                (
+                    company_id,
+                    *where_params,
+                    *score_params,
+                    min(20, max(1, int(limit))),
+                ),
+            )
     return {"query": query, "count": len(rows), "items": [dict(row) for row in rows]}
 
 
@@ -1404,8 +1469,21 @@ def _generate_reply(
 ):
 
     input_items = [*history, {"role": "user", "content": message}]
+    normalized_message = _normalize_command(message)
+    mutation_markers = (
+        "добав", "созда", "измени", "обнов", "удали", "спиши", "проведи",
+        "поставь цену", "поменяй цену",
+    )
+    catalog_markers = (
+        "товар", "услуг", "каталог", "прайс", "цен", "стоим", "сколько стоит",
+        "налич", "продаете", "продаёте",
+    )
+    force_catalog_search = (
+        any(marker in normalized_message for marker in catalog_markers)
+        and not any(marker in normalized_message for marker in mutation_markers)
+    )
 
-    for _ in range(AI_MAX_TOOL_ROUNDS):
+    for tool_round in range(AI_MAX_TOOL_ROUNDS):
         instructions = AI_INSTRUCTIONS
         if additional_instructions:
             instructions += "\n\n" + str(additional_instructions).strip()[:3000]
@@ -1419,6 +1497,8 @@ def _generate_reply(
             "max_output_tokens": 900,
             "parallel_tool_calls": False,
         }
+        if force_catalog_search and tool_round == 0:
+            request_options["tool_choice"] = {"type": "function", "name": "search_items"}
         if AI_MODEL.startswith("gpt-5.6"):
             request_options["reasoning"] = {"effort": "none"}
 
