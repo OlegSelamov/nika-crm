@@ -603,7 +603,14 @@ def _get_or_create_internal_conversation(company_id, user_id, chat_id):
         release_db(conn)
 
 
-def _generate_internal_whatsapp_reply(app, company_id, chat_id, user, message):
+def _generate_internal_whatsapp_reply(
+    app,
+    company_id,
+    chat_id,
+    user,
+    message,
+    button_action=None,
+):
     """Reuse Nika's business assistant with an ephemeral authenticated session."""
     with app.test_request_context("/whatsapp/internal-ai", method="POST"):
         session["user_id"] = int(user["id"])
@@ -619,6 +626,27 @@ def _generate_internal_whatsapp_reply(app, company_id, chat_id, user, message):
         conversation_id = _get_or_create_internal_conversation(
             company_id, user["id"], chat_id
         )
+
+        # A button carries the exact pending action id. The database claim below
+        # still checks company, user, status and expiry, so another employee (or
+        # a repeated click) cannot execute it.
+        if button_action:
+            button_intent, action_id = button_action
+            if button_intent == "cancel":
+                cancelled = _cancel_internal_pending_action(
+                    action_id, company_id, user["id"]
+                )
+                reply = f"Отменила действие: {cancelled['summary']}."
+            else:
+                result = _execute_internal_pending_action(
+                    action_id, company_id, user["id"]
+                )
+                reply = result["message"]
+            _save_internal_exchange(
+                conversation_id, company_id, user["id"], message, reply
+            )
+            return _plain_customer_reply(reply), None
+
         intent = _internal_confirmation_intent(message)
         if intent:
             pending = _latest_internal_pending_action(company_id, user["id"])
@@ -635,7 +663,7 @@ def _generate_internal_whatsapp_reply(app, company_id, chat_id, user, message):
             _save_internal_exchange(
                 conversation_id, company_id, user["id"], message, reply
             )
-            return _plain_customer_reply(reply)
+            return _plain_customer_reply(reply), None
 
         history = _load_internal_messages(conversation_id, company_id, user["id"])
         modules = ", ".join(user.get("employee_modules") or []) or "только профиль"
@@ -661,12 +689,10 @@ def _generate_internal_whatsapp_reply(app, company_id, chat_id, user, message):
             if pending and pending.get("sensitive")
             else message
         )
-        if pending:
-            reply += "\n\nДля выполнения напишите «Подтверждаю». Для отказа — «Отмена»."
         _save_internal_exchange(
             conversation_id, company_id, user["id"], saved_message, reply
         )
-        return _plain_customer_reply(reply)
+        return _plain_customer_reply(reply), pending
 
 
 def _plain_customer_reply(text):
@@ -1156,23 +1182,70 @@ def _send_ai_whatsapp_message(
     message,
     handoff_reason="",
     resume_ai=False,
+    pending_action=None,
 ):
-    url = (
+    base_url = (
         f"https://api.green-api.com/"
         f"waInstance{integration['instance_id']}/"
-        f"sendMessage/{integration['api_token']}"
     )
-    response = requests.post(
-        url,
-        json={
-            "chatId": chat["external_chat_id"],
-            "message": message,
-            "typingTime": min(5000, max(1000, len(message) * 20)),
-        },
-        timeout=25,
-    )
-    response.raise_for_status()
-    external_message_id = response.json().get("idMessage")
+    stored_message = message
+    stored_message_type = "textMessage"
+    external_message_id = None
+
+    if pending_action and pending_action.get("id"):
+        action_id = str(pending_action["id"])
+        try:
+            response = requests.post(
+                f"{base_url}sendInteractiveButtonsReply/{integration['api_token']}",
+                json={
+                    "chatId": chat["external_chat_id"],
+                    "header": "Подтверждение действия",
+                    "body": message,
+                    "footer": "Кнопки активны 10 минут",
+                    "buttons": [
+                        {
+                            "buttonId": f"nika:confirm:{action_id}",
+                            "buttonText": "✅ Подтвердить",
+                        },
+                        {
+                            "buttonId": f"nika:cancel:{action_id}",
+                            "buttonText": "❌ Отклонить",
+                        },
+                    ],
+                },
+                timeout=25,
+            )
+            response.raise_for_status()
+            external_message_id = response.json().get("idMessage")
+            if not external_message_id:
+                raise requests.RequestException(
+                    "GREEN-API returned no interactive message id"
+                )
+            stored_message_type = "interactiveButtonsReply"
+        except requests.RequestException as error:
+            # GREEN-API currently marks reply buttons as beta. Keep the existing
+            # text confirmation path available if their endpoint is unavailable.
+            app.logger.warning(
+                "WhatsApp action buttons unavailable; using text fallback: %s",
+                error,
+            )
+            stored_message = (
+                f"{message}\n\n"
+                "Для выполнения напишите «Подтверждаю». Для отказа — «Отмена»."
+            )
+
+    if not external_message_id:
+        response = requests.post(
+            f"{base_url}sendMessage/{integration['api_token']}",
+            json={
+                "chatId": chat["external_chat_id"],
+                "message": stored_message,
+                "typingTime": min(5000, max(1000, len(stored_message) * 20)),
+            },
+            timeout=25,
+        )
+        response.raise_for_status()
+        external_message_id = response.json().get("idMessage")
 
     conn = get_db()
     cur = conn.cursor()
@@ -1184,7 +1257,7 @@ def _send_ai_whatsapp_message(
                 direction, message_type, message_text, sender_phone,
                 status, is_ai, created_at
             )
-            VALUES (%s, %s, %s, %s, 'outgoing', 'textMessage', %s, %s,
+            VALUES (%s, %s, %s, %s, 'outgoing', %s, %s, %s,
                     'sent', TRUE, NOW())
             ON CONFLICT DO NOTHING
             """,
@@ -1193,7 +1266,8 @@ def _send_ai_whatsapp_message(
                 integration["id"],
                 chat["id"],
                 external_message_id,
-                message,
+                stored_message_type,
+                stored_message,
                 integration.get("phone") or "",
             ),
         )
@@ -1205,7 +1279,7 @@ def _send_ai_whatsapp_message(
                     ai_paused = FALSE, ai_paused_at = NULL, ai_pause_reason = NULL
                 WHERE id = %s AND company_id = %s
                 """,
-                (message, chat["id"], company_id),
+                (stored_message, chat["id"], company_id),
             )
         elif handoff_reason:
             cur.execute(
@@ -1215,7 +1289,7 @@ def _send_ai_whatsapp_message(
                     ai_paused = TRUE, ai_paused_at = NOW(), ai_pause_reason = %s
                 WHERE id = %s AND company_id = %s
                 """,
-                (message, handoff_reason, chat["id"], company_id),
+                (stored_message, handoff_reason, chat["id"], company_id),
             )
         else:
             cur.execute(
@@ -1224,7 +1298,7 @@ def _send_ai_whatsapp_message(
                 SET last_message = %s, last_message_at = NOW(), updated_at = NOW()
                 WHERE id = %s AND company_id = %s
                 """,
-                (message, chat["id"], company_id),
+                (stored_message, chat["id"], company_id),
             )
         conn.commit()
     except Exception:
@@ -1286,6 +1360,7 @@ def _process_whatsapp_ai_reply(
     chat_id,
     incoming_db_id,
     authenticated_webhook=False,
+    button_action=None,
 ):
     """Runs after webhook acknowledgement; only the newest rapid message is answered."""
     with app.app_context():
@@ -1399,15 +1474,17 @@ def _process_whatsapp_ai_reply(
         try:
             if internal_user:
                 try:
-                    reply = _generate_internal_whatsapp_reply(
+                    reply, pending_action = _generate_internal_whatsapp_reply(
                         app,
                         company_id,
                         chat_id,
                         internal_user,
                         history[-1]["content"],
+                        button_action=button_action,
                     )
                 except (InternalAIActionError, InternalAIPermissionDenied) as error:
                     reply = _plain_customer_reply(str(error))
+                    pending_action = None
                 handoff_reason = ""
             else:
                 reply, handoff_reason = _generate_customer_reply(
@@ -1417,6 +1494,7 @@ def _process_whatsapp_ai_reply(
                     history,
                     integration.get("ai_instructions") or "",
                 )
+                pending_action = None
             if not _can_send_ai_reply(
                 company_id,
                 chat_id,
@@ -1432,6 +1510,7 @@ def _process_whatsapp_ai_reply(
                 reply,
                 handoff_reason,
                 resume_ai=bool(internal_user),
+                pending_action=pending_action,
             )
         except Exception as error:
             app.logger.exception("WhatsApp AI reply failed")
@@ -2154,6 +2233,7 @@ def green_api_webhook():
             )
 
             text = ""
+            button_action = None
 
             if message_type == "textMessage":
 
@@ -2170,6 +2250,24 @@ def green_api_webhook():
                     .get("extendedTextMessageData", {})
                     .get("text", "")
                 )
+
+            elif message_type == "interactiveButtonsResponse":
+                button_response = (
+                    message_data.get("interactiveButtonsResponse") or {}
+                )
+                selected_id = str(button_response.get("selectedId") or "")
+                text = str(
+                    button_response.get("selectedDisplayText")
+                    or "Выбрано действие"
+                )
+                match = re.fullmatch(
+                    r"nika:(confirm|cancel):"
+                    r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+                    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",
+                    selected_id,
+                )
+                if match:
+                    button_action = (match.group(1), match.group(2).lower())
 
             external_message_id = payload.get("idMessage")
 
@@ -2319,6 +2417,7 @@ def green_api_webhook():
                     chat_db_id,
                     inserted_message["id"],
                     authenticated_webhook,
+                    button_action,
                 )
 
         except Exception:
