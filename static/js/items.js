@@ -1,7 +1,7 @@
 (function () {
     document.addEventListener('DOMContentLoaded', function () {
         var input = document.getElementById('catalogSearch');
-        if (input) input.addEventListener('input', filterCatalogItems);
+        if (input) input.addEventListener('input', scheduleCatalogSearch);
     });
 
     var categorySelect = document.getElementById('itemCategoryId');
@@ -42,6 +42,21 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 var activeCatalogTypeFilter = "all";
+var catalogSearchTimer = null;
+var catalogRequestController = null;
+var catalogCurrentPage = 1;
+var catalogLoadedCount = 0;
+var catalogItemsById = Object.create(null);
+
+document.addEventListener('DOMContentLoaded', function () {
+    var section = document.getElementById('catalogSection');
+    var body = document.getElementById('catalogTableBody');
+    catalogLoadedCount = body ? body.querySelectorAll('.catalog-item').length : 0;
+    updateCatalogPagination(
+        Number(section ? section.dataset.total : catalogLoadedCount) || 0,
+        catalogLoadedCount < (Number(section ? section.dataset.total : 0) || 0)
+    );
+});
 
 function setCatalogTypeFilter(type, button) {
     activeCatalogTypeFilter = type || "all";
@@ -51,25 +66,197 @@ function setCatalogTypeFilter(type, button) {
     filterCatalogItems();
 }
 
+function scheduleCatalogSearch() {
+    clearTimeout(catalogSearchTimer);
+    catalogSearchTimer = setTimeout(function () {
+        filterCatalogItems();
+    }, 300);
+}
+
 function filterCatalogItems() {
+    loadCatalogItems(1, false);
+}
+
+function loadMoreCatalogItems() {
+    loadCatalogItems(catalogCurrentPage + 1, true);
+}
+
+function escapeCatalogHtml(value) {
+    return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function formatCatalogPrice(value) {
+    return Math.round(Number(value) || 0).toLocaleString('ru-RU') + ' ₸';
+}
+
+function catalogItemData(item) {
+    return {
+        id: item.id,
+        name: item.name || '',
+        description: item.description || '',
+        category: item.category_name || item.category || 'Без категории',
+        category_id: item.category_id || '',
+        barcode: item.barcode || '',
+        gtin: item.gtin || '',
+        ntin: item.ntin || '',
+        retail_price: item.retail_price || 0,
+        purchase_price: item.purchase_price || 0,
+        unit: item.unit || 'шт',
+        is_marked: Boolean(item.is_marked),
+        image: item.image || '',
+        item_type: item.item_type || 'product',
+        service_sale_mode: item.service_sale_mode || 'order'
+    };
+}
+
+function catalogDesktopRow(item) {
+    var data = catalogItemData(item);
+    var id = encodeURIComponent(data.id);
+    var category = escapeCatalogHtml(data.category);
+    var itemType = data.item_type === 'service' ? 'service' : 'product';
+    var typeLabel = itemType === 'service' ? 'Услуга' : 'Товар';
+    var secondary = data.gtin ? 'GTIN: ' + escapeCatalogHtml(data.gtin)
+        : data.ntin ? 'NTIN: ' + escapeCatalogHtml(data.ntin)
+        : 'ID: ' + escapeCatalogHtml(data.id);
+    var image = escapeCatalogHtml(data.image || '/static/img/no-photo.png');
+
+    return '<tr class="catalog-item" data-item-type="' + itemType + '">' +
+        '<td><div class="catalog-product">' +
+            '<img class="catalog-product__image" src="' + image + '" alt="" onerror="this.onerror=null;this.src=\'/static/img/no-photo.png\'">' +
+            '<div class="catalog-product__info"><strong>' + escapeCatalogHtml(data.name) +
+            ' <span class="catalog-item-type catalog-item-type--' + itemType + '">' + typeLabel + '</span></strong>' +
+            '<small>' + secondary + '</small></div></div></td>' +
+        '<td><span class="catalog-category">' + category + '</span></td>' +
+        '<td><div class="catalog-code"><strong>' + escapeCatalogHtml(data.barcode || '—') + '</strong>' +
+            '<small>' + (data.barcode ? 'Основной штрихкод' : 'Не указан') + '</small></div></td>' +
+        '<td><span class="catalog-price">' + formatCatalogPrice(data.retail_price) + '</span></td>' +
+        '<td><span class="catalog-unit">' + escapeCatalogHtml(data.unit) + '</span></td>' +
+        '<td><div class="catalog-actions">' +
+            '<button class="catalog-icon-btn" type="button" title="Редактировать" data-catalog-edit-id="' + id + '">' +
+                '<img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>' +
+            '<a class="catalog-danger-btn" href="/items/' + id + '/delete" title="Удалить" data-catalog-delete-id="' + id + '">' +
+                '<img src="/static/icons/delete-item.png" class="catalog-action-icon" alt=""></a>' +
+        '</div></td></tr>';
+}
+
+function catalogMobileCard(item) {
+    var data = catalogItemData(item);
+    var id = encodeURIComponent(data.id);
+    var itemType = data.item_type === 'service' ? 'service' : 'product';
+    var typeLabel = itemType === 'service' ? 'Услуга' : 'Товар';
+    var image = escapeCatalogHtml(data.image || '/static/img/no-photo.png');
+
+    return '<article class="catalog-mobile-card catalog-item" data-item-type="' + itemType + '">' +
+        '<div class="catalog-mobile-card__top"><div class="catalog-product">' +
+            '<img class="catalog-product__image" src="' + image + '" alt="" onerror="this.onerror=null;this.src=\'/static/img/no-photo.png\'">' +
+            '<div class="catalog-product__info"><strong>' + escapeCatalogHtml(data.name) +
+            ' <span class="catalog-item-type catalog-item-type--' + itemType + '">' + typeLabel + '</span></strong>' +
+            '<small>' + escapeCatalogHtml(data.category) + '</small></div></div>' +
+            '<span class="catalog-price">' + formatCatalogPrice(data.retail_price) + '</span></div>' +
+        '<div class="catalog-mobile-card__meta">' +
+            '<div><small>Штрихкод</small>' + escapeCatalogHtml(data.barcode || '—') + '</div>' +
+            '<div><small>Единица</small>' + escapeCatalogHtml(data.unit) + '</div>' +
+            '<div><small>GTIN</small>' + escapeCatalogHtml(data.gtin || '—') + '</div>' +
+            '<div><small>NTIN</small>' + escapeCatalogHtml(data.ntin || '—') + '</div></div>' +
+        '<div class="catalog-mobile-card__actions">' +
+            '<button type="button" data-catalog-edit-id="' + id + '">Изменить</button>' +
+            '<a href="/items/' + id + '/delete" data-catalog-delete-id="' + id + '">Удалить</a>' +
+        '</div></article>';
+}
+
+function bindCatalogItemActions(root) {
+    (root || document).querySelectorAll('[data-catalog-edit-id]').forEach(function (button) {
+        button.onclick = function () {
+            var item = catalogItemsById[decodeURIComponent(button.dataset.catalogEditId)];
+            if (item) openEditItemModal(item);
+        };
+    });
+    (root || document).querySelectorAll('[data-catalog-delete-id]').forEach(function (link) {
+        link.onclick = function (event) {
+            var item = catalogItemsById[decodeURIComponent(link.dataset.catalogDeleteId)];
+            var label = item && item.item_type === 'service' ? 'услугу' : 'товар';
+            var name = item ? item.name : '';
+            if (!window.confirm('Удалить ' + label + ' «' + name + '»?')) event.preventDefault();
+        };
+    });
+}
+
+function updateCatalogPagination(total, hasMore) {
+    var count = document.getElementById('catalogResultCount');
+    var button = document.getElementById('catalogLoadMore');
+    var pagination = document.getElementById('catalogPagination');
+    if (count) count.textContent = 'Показано ' + Math.min(catalogLoadedCount, total) + ' из ' + total;
+    if (button) button.style.display = hasMore ? '' : 'none';
+    if (pagination) pagination.style.display = total ? 'flex' : 'none';
+}
+
+async function loadCatalogItems(page, append) {
     var search = document.getElementById('catalogSearch');
     var category = document.getElementById('catalogCategoryFilter');
-    var query = search ? search.value.trim().toLowerCase() : '';
-    var selectedCategory = category ? category.value.toLowerCase() : 'all';
-    var rows = document.querySelectorAll('.catalog-item');
-    var visible = 0;
-
-    rows.forEach(function (row) {
-        var matchesSearch = !query || (row.dataset.search || '').includes(query);
-        var matchesCategory = selectedCategory === 'all' || (row.dataset.category || '') === selectedCategory;
-        var matchesType = activeCatalogTypeFilter === 'all' || (row.dataset.itemType || 'product') === activeCatalogTypeFilter;
-        var show = matchesSearch && matchesCategory && matchesType;
-        row.style.display = show ? '' : 'none';
-        if (show) visible += 1;
+    var tableBody = document.getElementById('catalogTableBody');
+    var mobileList = document.getElementById('catalogMobileList');
+    var loadMoreButton = document.getElementById('catalogLoadMore');
+    var empty = document.getElementById('catalogNoResults');
+    var params = new URLSearchParams({
+        q: search ? search.value.trim() : '',
+        category: category ? category.value : 'all',
+        type: activeCatalogTypeFilter,
+        page: String(page || 1),
+        limit: '50'
     });
 
-    var empty = document.getElementById('catalogNoResults');
-    if (empty) empty.style.display = visible === 0 ? 'grid' : 'none';
+    if (catalogRequestController) catalogRequestController.abort();
+    catalogRequestController = new AbortController();
+    if (loadMoreButton) {
+        loadMoreButton.disabled = true;
+        loadMoreButton.textContent = 'Загрузка…';
+    }
+
+    try {
+        var response = await fetch('/api/catalog/items?' + params.toString(), {
+            headers: { 'Accept': 'application/json' },
+            signal: catalogRequestController.signal
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        var data = await response.json();
+        var items = Array.isArray(data.items) ? data.items : [];
+
+        if (!append) {
+            tableBody.innerHTML = '';
+            mobileList.innerHTML = '';
+            catalogItemsById = Object.create(null);
+            catalogLoadedCount = 0;
+        }
+
+        items.forEach(function (item) {
+            var normalized = catalogItemData(item);
+            catalogItemsById[String(normalized.id)] = normalized;
+            tableBody.insertAdjacentHTML('beforeend', catalogDesktopRow(item));
+            mobileList.insertAdjacentHTML('beforeend', catalogMobileCard(item));
+        });
+
+        catalogCurrentPage = Number(data.page) || 1;
+        catalogLoadedCount += items.length;
+        bindCatalogItemActions(tableBody);
+        bindCatalogItemActions(mobileList);
+        if (empty) empty.style.display = Number(data.total) === 0 ? 'grid' : 'none';
+        updateCatalogPagination(Number(data.total) || 0, Boolean(data.has_more));
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            var count = document.getElementById('catalogResultCount');
+            if (count) count.textContent = 'Не удалось загрузить каталог. Попробуйте ещё раз.';
+        }
+    } finally {
+        if (loadMoreButton) {
+            loadMoreButton.disabled = false;
+            loadMoreButton.textContent = 'Показать ещё';
+        }
+    }
 }
 
 function getSelectedCategoryMarkup() {

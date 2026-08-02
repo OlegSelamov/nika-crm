@@ -41,8 +41,17 @@ def items():
          LIMIT 1) as image
     FROM items
     WHERE items.company_id = %s
+    ORDER BY items.id DESC
+    LIMIT 50
     """, (session.get("company_id"),))
     items = cur.fetchall()
+
+    cur.execute("""
+        SELECT COUNT(*) AS total
+        FROM items
+        WHERE company_id = %s
+    """, (session.get("company_id"),))
+    catalog_total = cur.fetchone()["total"]
 
     cur.execute("""
         SELECT *
@@ -53,7 +62,100 @@ def items():
     categories = cur.fetchall()
 
     pool.putconn(conn)
-    return render_template("items.html", items=items, categories=categories)
+    return render_template(
+        "items.html",
+        items=items,
+        categories=categories,
+        catalog_total=catalog_total,
+        catalog_page_size=50,
+    )
+
+
+def _catalog_item_payload(item):
+    """Convert a database row into a compact JSON-safe catalog item."""
+    data = dict(item)
+    for field in ("retail_price", "purchase_price", "wholesale_price"):
+        value = data.get(field)
+        if isinstance(value, Decimal):
+            data[field] = float(value)
+    if isinstance(data.get("is_marked"), Decimal):
+        data["is_marked"] = bool(data["is_marked"])
+    return data
+
+
+@items_bp.route("/api/catalog/items")
+def api_catalog_items():
+    company_id = session.get("company_id")
+    query = (request.args.get("q") or "").strip()
+    item_type = (request.args.get("type") or "all").strip().lower()
+    category = (request.args.get("category") or "all").strip()
+
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        limit = min(100, max(1, int(request.args.get("limit", 50))))
+    except (TypeError, ValueError):
+        limit = 50
+
+    where = ["items.company_id = %s"]
+    params = [company_id]
+
+    if item_type in ("product", "service"):
+        where.append("COALESCE(items.item_type, 'product') = %s")
+        params.append(item_type)
+
+    if category and category.lower() != "all":
+        where.append("LOWER(COALESCE(items.category, '')) = LOWER(%s)")
+        params.append(category)
+
+    if query:
+        pattern = f"%{query}%"
+        where.append("""(
+            items.name ILIKE %s
+            OR COALESCE(items.barcode, '') ILIKE %s
+            OR COALESCE(items.gtin, '') ILIKE %s
+            OR COALESCE(items.ntin, '') ILIKE %s
+        )""")
+        params.extend([pattern, pattern, pattern, pattern])
+
+    where_sql = " AND ".join(where)
+    offset = (page - 1) * limit
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+        cur.execute(
+            f"SELECT COUNT(*) AS total FROM items WHERE {where_sql}",
+            tuple(params),
+        )
+        total = cur.fetchone()["total"]
+
+        cur.execute(f"""
+            SELECT
+                items.*,
+                (SELECT image FROM item_images
+                 WHERE item_id = items.id
+                 LIMIT 1) AS image
+            FROM items
+            WHERE {where_sql}
+            ORDER BY items.id DESC
+            LIMIT %s OFFSET %s
+        """, tuple(params + [limit, offset]))
+        rows = [_catalog_item_payload(row) for row in cur.fetchall()]
+    finally:
+        pool.putconn(conn)
+
+    return jsonify({
+        "success": True,
+        "items": rows,
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "has_more": offset + len(rows) < total,
+    })
 
 @items_bp.route("/items/add", methods=["GET", "POST"])
 def add_item():
@@ -962,20 +1064,54 @@ def import_items_xlsx():
                     continue
 
                 if existing:
-                    cur.execute("""
-                        UPDATE items SET
-                            name=%s, category=%s, unit=%s, description=%s,
-                            retail_price=%s, wholesale_price=%s, purchase_price=%s,
-                            discount_percent=%s, barcode=%s, gtin=%s, ntin=%s,
-                            item_type=%s, quantity=%s,
-                            is_marked=CASE WHEN %s='service' THEN FALSE ELSE COALESCE(is_marked, FALSE) END
-                        WHERE id=%s AND company_id=%s
-                    """, (
-                        name, category, unit, description, retail_price,
-                        wholesale_price, purchase_price, discount_percent,
-                        barcode, gtin, ntin, item_type, quantity,
-                        item_type, existing["id"], company_id
-                    ))
+                    # При обновлении меняем только действительно заполненные
+                    # колонки Excel. Пустые ячейки не должны стирать штрихкод,
+                    # цены, остаток и остальные данные существующего товара.
+                    updates = ["name=%s"]
+                    update_values = [name]
+
+                    text_fields = {
+                        "category": category,
+                        "unit": unit,
+                        "description": description,
+                        "barcode": barcode,
+                        "gtin": gtin,
+                        "ntin": ntin,
+                    }
+                    for field, field_value in text_fields.items():
+                        if field in header_map and _catalog_text(value(row, field)):
+                            updates.append(f"{field}=%s")
+                            update_values.append(field_value)
+
+                    numeric_fields = {
+                        "retail_price": retail_price,
+                        "wholesale_price": wholesale_price,
+                        "purchase_price": purchase_price,
+                        "discount_percent": discount_percent,
+                    }
+                    for field, field_value in numeric_fields.items():
+                        raw_value = value(row, field)
+                        if field in header_map and raw_value not in (None, ""):
+                            updates.append(f"{field}=%s")
+                            update_values.append(field_value)
+
+                    if "quantity" in header_map and value(row, "quantity") not in (None, ""):
+                        updates.append("quantity=%s")
+                        update_values.append(quantity)
+
+                    if "item_type" in header_map and raw_type:
+                        updates.extend([
+                            "item_type=%s",
+                            "is_marked=CASE WHEN %s='service' THEN FALSE ELSE COALESCE(is_marked, FALSE) END",
+                        ])
+                        update_values.extend([item_type, item_type])
+
+                    update_values.extend([existing["id"], company_id])
+                    cur.execute(
+                        f"UPDATE items SET {', '.join(updates)} "
+                        "WHERE id=%s AND company_id=%s",
+                        tuple(update_values),
+                    )
                     stats["updated"] += 1
                 else:
                     cur.execute("""

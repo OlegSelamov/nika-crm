@@ -2050,14 +2050,17 @@
 			top: 54px;
 			right: 18px;
 			z-index: 10025;
-			width: min(520px, calc(100vw - 28px));
-			padding: 22px;
+			width: min(560px, calc(100vw - 28px));
+			height: min(720px, calc(100vh - 76px));
+			display: flex;
+			flex-direction: column;
 			border: 1px solid rgba(255,255,255,.55);
 			border-radius: 22px;
-			background: rgba(255,255,255,.97);
+			background: rgba(248,250,252,.98);
 			backdrop-filter: blur(20px);
 			-webkit-backdrop-filter: blur(20px);
 			box-shadow: 0 18px 50px rgba(15,23,42,.18);
+			overflow: hidden;
 			opacity: 0;
 			visibility: hidden;
 			pointer-events: none;
@@ -2077,7 +2080,9 @@
 			align-items: center;
 			justify-content: space-between;
 			gap: 14px;
-			margin-bottom: 18px;
+			padding: 16px 18px;
+			border-bottom: 1px solid #e7ebf2;
+			background: rgba(255,255,255,.94);
 		}
 
 		.ai-assistant-panel__title {
@@ -2100,10 +2105,21 @@
 		}
 
 		.ai-assistant-panel__title span {
-			display: block;
-			margin-top: 2px;
-			color: #8a94a6;
-			font-size: 12px;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			margin-top: 3px;
+			color: #667085;
+			font-size: 11px;
+		}
+
+		.ai-assistant-panel__title span::before {
+			content: "";
+			width: 7px;
+			height: 7px;
+			border-radius: 50%;
+			background: #22c55e;
+			box-shadow: 0 0 0 3px rgba(34,197,94,.12);
 		}
 
 		.ai-assistant-panel__close {
@@ -2117,84 +2133,233 @@
 			font-size: 17px;
 		}
 
-		.ai-command-box {
+		.ai-assistant-messages {
+			flex: 1;
+			min-height: 0;
 			display: flex;
+			flex-direction: column;
 			gap: 10px;
-			align-items: center;
+			overflow-y: auto;
+			padding: 16px;
+			scroll-behavior: smooth;
 		}
 
-		.ai-command-box input {
-			flex: 1;
-			min-width: 0;
-			height: 54px;
-			margin: 0;
-			padding: 0 16px;
-			border-radius: 14px;
-			background: #f6f7fb;
+		.ai-welcome {
+			padding: 16px;
+			border: 1px solid #e4e0ff;
+			border-radius: 17px;
+			background: linear-gradient(135deg,#f6f3ff,#f0f9ff);
+			color: #354052;
+		}
+
+		.ai-welcome b {
+			display: block;
+			margin-bottom: 5px;
+			color: #312e81;
 			font-size: 14px;
 		}
 
-		.ai-command-btn {
-			width: 54px;
-			height: 54px;
-			flex: 0 0 54px;
-			display: grid;
-			place-items: center;
-			border: 0;
-			border-radius: 12px;
-			background: linear-gradient(135deg,#6366f1,#8b5cf6);
-			cursor: pointer;
-			box-shadow: 0 8px 18px rgba(99,102,241,.18);
-		}
-
-		.ai-command-btn img {
-			width: 27px;
-			height: 27px;
-			object-fit: contain;
-		}
-
-		.ai-assistant-controls {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 10px;
-			margin-top: 14px;
-		}
-
-		.ai-control-btn {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			gap: 7px;
-			min-height: 48px;
-			border: 1px solid #e5e9f1;
-			border-radius: 11px;
-			background: #f8f9fc;
-			color: #566176;
+		.ai-welcome p {
+			margin: 0;
 			font-size: 12px;
+			line-height: 1.5;
+		}
+
+		.ai-suggestions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 7px;
+			margin-top: 12px;
+		}
+
+		.ai-suggestion {
+			padding: 8px 10px;
+			border: 1px solid #ddd8ff;
+			border-radius: 999px;
+			background: rgba(255,255,255,.78);
+			color: #5b52cf;
+			font-size: 10px;
+			font-weight: 700;
+			cursor: pointer;
+		}
+
+		.ai-suggestion:hover {
+			border-color: #aaa0f5;
+			background: #fff;
+		}
+
+		.ai-message {
+			max-width: 86%;
+			padding: 11px 13px;
+			border: 1px solid #e2e7ef;
+			border-radius: 16px 16px 16px 5px;
+			background: #fff;
+			color: #273147;
+			font-size: 12px;
+			line-height: 1.5;
+			white-space: pre-wrap;
+			overflow-wrap: anywhere;
+			box-shadow: 0 5px 14px rgba(15,23,42,.035);
+		}
+
+		.ai-message--user {
+			align-self: flex-end;
+			border-color: #d7d1ff;
+			border-radius: 16px 16px 5px 16px;
+			background: linear-gradient(135deg,#6d63ed,#8b5cf6);
+			color: #fff;
+		}
+
+		.ai-message--typing {
+			color: #7b8495;
+			font-style: italic;
+		}
+
+		.ai-confirmation {
+			width: min(92%, 430px);
+			padding: 14px;
+			border: 1px solid #d9d4ff;
+			border-radius: 16px;
+			background: linear-gradient(135deg, #ffffff, #f5f3ff);
+			box-shadow: 0 8px 22px rgba(79,70,229,.08);
+		}
+
+		.ai-confirmation__label {
+			margin-bottom: 5px;
+			color: #6d63ed;
+			font-size: 10px;
+			font-weight: 800;
+			letter-spacing: .08em;
+			text-transform: uppercase;
+		}
+
+		.ai-confirmation__summary {
+			color: #273147;
+			font-size: 12px;
+			line-height: 1.5;
+		}
+
+		.ai-confirmation__actions {
+			display: flex;
+			gap: 8px;
+			margin-top: 12px;
+		}
+
+		.ai-confirmation__button {
+			padding: 9px 13px;
+			border: 0;
+			border-radius: 10px;
+			font-size: 11px;
 			font-weight: 800;
 			cursor: pointer;
 		}
 
-		.ai-control-btn.active {
-			border-color: #d7d2ff;
-			background: #f0edff;
-			color: #5d50e6;
+		.ai-confirmation__button--confirm { background: #6d63ed; color: #fff; }
+		.ai-confirmation__button--cancel { background: #eceef3; color: #4b5565; }
+		.ai-confirmation__button:disabled { opacity: .55; cursor: wait; }
+
+		.ai-composer {
+			padding: 12px 14px 10px;
+			border-top: 1px solid #e5eaf1;
+			background: #fff;
 		}
 
-		.ai-control-btn img {
-			width: 24px;
-			height: 24px;
+		.ai-command-box {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+
+		.ai-command-box textarea {
+			flex: 1;
+			min-width: 0;
+			min-height: 46px;
+			max-height: 120px;
+			margin: 0;
+			padding: 13px 14px;
+			resize: none;
+			border: 1px solid #e1e6ef;
+			border-radius: 14px;
+			background: #f7f8fb;
+			font: inherit;
+			font-size: 12px;
+			line-height: 1.4;
+		}
+
+		.ai-command-box textarea:focus {
+			outline: none;
+			border-color: #aaa2f6;
+			box-shadow: 0 0 0 3px rgba(99,102,241,.10);
+		}
+
+		.ai-command-btn,
+		.ai-mic-btn {
+			width: 46px;
+			height: 46px;
+			flex: 0 0 46px;
+			display: grid;
+			place-items: center;
+			border: 0;
+			border-radius: 13px;
+			cursor: pointer;
+		}
+
+		.ai-command-btn {
+			background: linear-gradient(135deg,#6366f1,#8b5cf6);
+			color: #fff;
+			box-shadow: 0 8px 18px rgba(99,102,241,.20);
+		}
+
+		.ai-command-btn:disabled {
+			opacity: .55;
+			cursor: wait;
+		}
+
+		.ai-command-btn img,
+		.ai-mic-btn img {
+			width: 23px;
+			height: 23px;
 			object-fit: contain;
 		}
 
-		.ai-assistant-hint {
-			margin-top: 14px;
-			padding: 13px 14px;
-			border-radius: 10px;
-			background: #f8fafc;
-			color: #8a94a6;
-			font-size: 12px;
-			line-height: 1.55;
+		.ai-mic-btn {
+			border: 1px solid #e2e7ef;
+			background: #f7f8fb;
+			color: #667085;
+		}
+
+		.ai-mic-btn.active {
+			border-color: #d4cdfd;
+			background: #eeeaff;
+			box-shadow: 0 0 0 4px rgba(99,102,241,.10);
+		}
+
+		.ai-composer__foot {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			margin-top: 8px;
+			color: #98a2b3;
+			font-size: 9px;
+		}
+
+		.ai-sound-toggle {
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+			padding: 0;
+			border: 0;
+			background: transparent;
+			color: #667085;
+			font-size: 9px;
+			cursor: pointer;
+		}
+
+		.ai-sound-toggle img {
+			width: 17px;
+			height: 17px;
+			object-fit: contain;
 		}
 
 		@media (max-width: 768px) {
@@ -2202,7 +2367,7 @@
 				top: 50px;
 				right: 10px;
 				width: calc(100vw - 20px);
-				padding: 17px;
+				height: calc(100vh - 62px);
 			}
 
 			.ai-assistant-panel__title span {
@@ -2596,6 +2761,14 @@
 .wa-empty-client{padding:30px 10px;text-align:center;color:#929caf;font-size:10px;line-height:1.5;}
 .whatsapp-chat-header__actions{display:flex;gap:7px;align-items:center;}
 .wa-icon-btn{width:34px;height:34px;border:1px solid #e5eaf1;border-radius:10px;background:#f8fafc;cursor:pointer;color:#64748b;}
+.wa-sidebar-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.wa-ai-toggle{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:6px 10px;border:1px solid #e1e6ee;border-radius:999px;background:#f8fafc;color:#667085;font-size:9px;font-weight:850;white-space:nowrap;cursor:pointer;transition:.18s ease;}
+.wa-ai-toggle::before{content:"";width:7px;height:7px;border-radius:50%;background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.13);}
+.wa-ai-toggle.active{border-color:#b9f2ca;background:#effdf4;color:#15803d;}
+.wa-ai-toggle.active::before{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.14);}
+.wa-ai-toggle.paused{border-color:#fed7aa;background:#fff7ed;color:#c2410c;}
+.wa-ai-toggle.paused::before{background:#f97316;box-shadow:0 0 0 3px rgba(249,115,22,.14);}
+.wa-ai-toggle:disabled{opacity:.48;cursor:not-allowed;}
 @media (max-width: 920px) {
     #whatsappChatPanel .chat-layout {
         grid-template-columns: 220px minmax(0, 1fr);
@@ -3155,7 +3328,15 @@ body.wa-modal-open {
                 <div class="whatsapp-search">
                     <input id="whatsappChatSearch" type="search" placeholder="Поиск клиента или номера…" oninput="debouncedWhatsappSearch()">
                 </div>
-                <div class="chat-sidebar__caption">Клиенты WhatsApp</div>
+                <div class="chat-sidebar__caption wa-sidebar-caption">
+                    <span>Клиенты WhatsApp</span>
+                    <button id="whatsappGlobalAiButton"
+                            class="wa-ai-toggle"
+                            type="button"
+                            onclick="toggleWhatsappGlobalAi()">
+                        AI выключен
+                    </button>
+                </div>
                 <div id="whatsappChatContacts" class="chat-contacts">
                     <div class="drawer-empty">Загрузка WhatsApp-чатов…</div>
                 </div>
@@ -3168,6 +3349,13 @@ body.wa-modal-open {
                         <small id="whatsappActivePhone">Переписка с клиентом</small>
                     </div>
                     <div class="whatsapp-chat-header__actions">
+                        <button id="whatsappChatAiButton"
+                                class="wa-ai-toggle"
+                                type="button"
+                                onclick="toggleActiveWhatsappAi()"
+                                disabled>
+                            AI выключен
+                        </button>
                         <button id="whatsappClientCardButton"
                                 class="wa-card-btn"
                                 type="button"
@@ -3224,27 +3412,42 @@ body.wa-modal-open {
     <div class="ai-assistant-panel__head">
         <div class="ai-assistant-panel__title">
             <img src="/static/icons/assistant-top.png" alt="" onerror="this.onerror=null;this.src='/static/icons/assistant-icon.png';">
-            <div><b>Nika AI</b><span>Команды для работы с системой</span></div>
+            <div><b>Nika AI</b><span>Ассистент вашей компании</span></div>
         </div>
         <button class="ai-assistant-panel__close" type="button" onclick="closeAiAssistant()">×</button>
     </div>
-    <div class="ai-command-box">
-        <input type="text" id="agent-input" placeholder="Например: покажи выручку за сегодня">
-        <button class="ai-command-btn" type="button" onclick="sendCommand()" title="Отправить">
-            <img src="/static/icons/ai-send.png" alt="" onerror="this.style.display='none'; this.parentElement.textContent='➤';">
-        </button>
+    <div id="aiMessages" class="ai-assistant-messages" aria-live="polite">
+        <div id="aiWelcome" class="ai-welcome">
+            <b>Чем помочь?</b>
+            <p>Я могу читать и изменять данные Nika в пределах ваших прав. Перед любым изменением я попрошу подтверждение.</p>
+            <div class="ai-suggestions">
+                <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Какая выручка и прибыль сегодня?')">Выручка сегодня</button>
+                <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Покажи товары с низким остатком')">Низкие остатки</button>
+                <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Какие товары продаются лучше всего?')">Лучшие товары</button>
+                <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Найди клиента по номеру телефона')">Найти клиента</button>
+                <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Создай новую задачу')">Создать задачу</button>
+                <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Покажи задолженности')">Бухгалтерия</button>
+            </div>
+        </div>
     </div>
-    <div class="ai-assistant-controls">
-        <button id="aiMicButton" class="ai-control-btn" type="button" onclick="startVoice()">
-            <img src="/static/icons/ai-mic.png" alt="" onerror="this.style.display='none';">
-            <span>Микрофон</span>
-        </button>
-        <button id="aiSoundButton" class="ai-control-btn active" type="button" onclick="toggleVoice()">
-            <img id="aiSoundIcon" src="/static/icons/ai-sound-on.png" alt="" onerror="this.style.display='none';">
-            <span id="aiSoundText">Звук включён</span>
-        </button>
+    <div class="ai-composer">
+        <div class="ai-command-box">
+            <button id="aiMicButton" class="ai-mic-btn" type="button" onclick="startVoice()" title="Голосовой ввод">
+                <img src="/static/icons/ai-mic.png" alt="" onerror="this.style.display='none'; this.parentElement.textContent='🎙';">
+            </button>
+            <textarea id="agent-input" rows="1" maxlength="4000" placeholder="Спросите Nika AI…"></textarea>
+            <button id="aiSendButton" class="ai-command-btn" type="button" onclick="sendCommand()" title="Отправить">
+                <img src="/static/icons/ai-send.png" alt="" onerror="this.style.display='none'; this.parentElement.textContent='➤';">
+            </button>
+        </div>
+        <div class="ai-composer__foot">
+            <button id="aiSoundButton" class="ai-sound-toggle active" type="button" onclick="toggleVoice()">
+                <img id="aiSoundIcon" src="/static/icons/ai-sound-on.png" alt="" onerror="this.style.display='none';">
+                <span id="aiSoundText">Озвучивание включено</span>
+            </button>
+            <span>Действия ограничены вашей ролью и организацией</span>
+        </div>
     </div>
-    <div class="ai-assistant-hint">Можно писать обычным языком: «найди клиента», «покажи выручку», «создай клиента», «открой склад».</div>
 </div>
 
 <script>
@@ -3319,6 +3522,8 @@ let activeWhatsappChatPhone = "";
 let activeWhatsappCustomerId = null;
 let lastWhatsappMessageId = 0;
 let whatsappSearchTimer = null;
+let whatsappGlobalAiEnabled = false;
+let activeWhatsappAiEnabled = false;
 
 function normalizePath(path) {
     if (!path) return "/";
@@ -3698,6 +3903,90 @@ function debouncedWhatsappSearch() {
     whatsappSearchTimer = setTimeout(() => loadWhatsappChats(false), 250);
 }
 
+function renderWhatsappAiControls() {
+    const globalButton = document.getElementById("whatsappGlobalAiButton");
+    if (globalButton) {
+        globalButton.textContent = whatsappGlobalAiEnabled ? "AI включен" : "AI выключен";
+        globalButton.classList.toggle("active", whatsappGlobalAiEnabled);
+        globalButton.classList.remove("paused");
+    }
+
+    const chatButton = document.getElementById("whatsappChatAiButton");
+    if (!chatButton) return;
+    chatButton.disabled = !activeWhatsappChatId || !whatsappGlobalAiEnabled;
+    chatButton.classList.toggle("active", Boolean(activeWhatsappChatId && activeWhatsappAiEnabled));
+    chatButton.classList.toggle("paused", Boolean(activeWhatsappChatId && whatsappGlobalAiEnabled && !activeWhatsappAiEnabled));
+
+    if (!whatsappGlobalAiEnabled) chatButton.textContent = "AI выключен";
+    else if (activeWhatsappAiEnabled) chatButton.textContent = "AI отвечает";
+    else chatButton.textContent = "Менеджер отвечает";
+}
+
+async function loadWhatsappAiStatus() {
+    try {
+        const response = await fetch("/whatsapp/api/ai/status", {headers: {"Accept": "application/json"}});
+        const data = await response.json();
+        if (!response.ok || !data.ok) return;
+        whatsappGlobalAiEnabled = Boolean(data.ai_enabled);
+        if (!whatsappGlobalAiEnabled) activeWhatsappAiEnabled = false;
+        renderWhatsappAiControls();
+    } catch (error) {
+        console.error("WhatsApp AI status error:", error);
+    }
+}
+
+async function toggleWhatsappGlobalAi() {
+    const button = document.getElementById("whatsappGlobalAiButton");
+    if (button) button.disabled = true;
+    try {
+        const response = await fetch("/whatsapp/api/ai/status", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({enabled: !whatsappGlobalAiEnabled})
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            alert(data.error || "Не удалось изменить режим AI");
+            return;
+        }
+        whatsappGlobalAiEnabled = Boolean(data.ai_enabled);
+        if (!whatsappGlobalAiEnabled) activeWhatsappAiEnabled = false;
+        renderWhatsappAiControls();
+        await loadWhatsappChats(Boolean(activeWhatsappChatId));
+        showSystemToast("WhatsApp AI", whatsappGlobalAiEnabled ? "AI-менеджер включён" : "AI-менеджер выключен");
+    } catch (error) {
+        alert("Не удалось изменить режим AI");
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+async function toggleActiveWhatsappAi() {
+    if (!activeWhatsappChatId || !whatsappGlobalAiEnabled) return;
+    const button = document.getElementById("whatsappChatAiButton");
+    if (button) button.disabled = true;
+    try {
+        const response = await fetch(`/whatsapp/api/chats/${activeWhatsappChatId}/ai`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({enabled: !activeWhatsappAiEnabled})
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+            alert(data.error || "Не удалось изменить режим чата");
+            return;
+        }
+        activeWhatsappAiEnabled = Boolean(data.ai_active);
+        renderWhatsappAiControls();
+        await loadWhatsappChats(false);
+        showSystemToast("WhatsApp AI", activeWhatsappAiEnabled ? "Nika снова отвечает клиенту" : "Диалог передан менеджеру");
+    } catch (error) {
+        alert("Не удалось изменить режим чата");
+    } finally {
+        renderWhatsappAiControls();
+    }
+}
+
 async function loadWhatsappChats(loadMessagesAfter = false) {
     try {
         const search = document.getElementById("whatsappChatSearch")?.value.trim() || "";
@@ -3726,7 +4015,7 @@ async function loadWhatsappChats(loadMessagesAfter = false) {
         contacts.innerHTML = data.items.map(chat => `
             <button class="chat-contact ${Number(activeWhatsappChatId) === Number(chat.id) ? "active" : ""}"
                     type="button"
-                    onclick='selectWhatsappChat(${JSON.stringify(chat.id)}, ${JSON.stringify(chat.display_name)}, ${JSON.stringify(chat.phone)}, ${JSON.stringify(chat.customer_id)})'>
+                    onclick='selectWhatsappChat(${JSON.stringify(chat.id)}, ${JSON.stringify(chat.display_name)}, ${JSON.stringify(chat.phone)}, ${JSON.stringify(chat.customer_id)}, ${JSON.stringify(chat.ai_active)})'>
                 <span class="chat-contact__avatar whatsapp-avatar">
                     ${escapeHtml((chat.display_name || "WA").slice(0, 2).toUpperCase())}
                 </span>
@@ -3749,11 +4038,12 @@ async function loadWhatsappChats(loadMessagesAfter = false) {
     }
 }
 
-function selectWhatsappChat(chatId, chatName = "", phone = "", customerId = null) {
+function selectWhatsappChat(chatId, chatName = "", phone = "", customerId = null, aiActive = false) {
     activeWhatsappChatId = Number(chatId);
     activeWhatsappChatName = chatName || phone || "Клиент";
     activeWhatsappChatPhone = phone || "";
     activeWhatsappCustomerId = customerId || null;
+    activeWhatsappAiEnabled = Boolean(aiActive);
 
     const name = document.getElementById("whatsappActiveName");
     const phoneBox = document.getElementById("whatsappActivePhone");
@@ -3768,6 +4058,7 @@ function selectWhatsappChat(chatId, chatName = "", phone = "", customerId = null
 
     const cardButton = document.getElementById("whatsappClientCardButton");
     if (cardButton) cardButton.disabled = false;
+    renderWhatsappAiControls();
 
     if (link) {
         if (activeWhatsappCustomerId) {
@@ -3795,6 +4086,10 @@ async function loadWhatsappMessages(scrollToBottom = false) {
 
         const data = await response.json();
         if (!data.ok) return;
+
+        whatsappGlobalAiEnabled = Boolean(data.chat?.integration_ai_enabled);
+        activeWhatsappAiEnabled = Boolean(data.chat?.ai_active);
+        renderWhatsappAiControls();
 
         const box = document.getElementById("whatsappMessages");
         if (!box) return;
@@ -3862,6 +4157,8 @@ async function sendWhatsappChatMessage() {
         }
 
         input.value = "";
+        activeWhatsappAiEnabled = false;
+        renderWhatsappAiControls();
         await loadWhatsappMessages(true);
     } catch (error) {
         alert("Не удалось отправить сообщение");
@@ -3886,7 +4183,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setActiveMenuItem();
 
     document.getElementById("agent-input")?.addEventListener("keydown", event => {
-        if (event.key === "Enter") {
+        if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             sendCommand();
         }
@@ -3908,6 +4205,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     loadNotifications();
     loadChatConversations(true);
+    loadWhatsappAiStatus();
     loadWhatsappChats(false);
     pingPresence();
 
@@ -4022,6 +4320,7 @@ async function loadWhatsappClientContext(){
 document.addEventListener("keydown", event => {
     if (event.key === "Escape") {
         closeWhatsappClientModal();
+        closeAiAssistant();
     }
 });
 
@@ -4042,6 +4341,10 @@ function refreshActiveWhatsappChat(){loadWhatsappChats(false);loadWhatsappMessag
 // ================== ГОЛОС ==================
 let voiceEnabled = true;
 let selectedVoice = null;
+let currentAiAudio = null;
+let currentAiAudioUrl = null;
+let currentVoiceAbortController = null;
+let voicePlaybackToken = 0;
 
 const phrases = {
     open: ["Открываю", "Сейчас покажу", "Перехожу", "Уже открываю"],
@@ -4059,36 +4362,205 @@ function loadVoices() {
 
     if (!voices.length) return;
 
-    selectedVoice =
-        voices.find(v => v.name.includes("Google") && v.lang.includes("ru")) ||
-        voices.find(v => v.lang.includes("ru")) ||
-        voices[0];
+    const russianVoices = voices.filter(voice => /^ru(?:-|_)/i.test(voice.lang));
+    const voiceScore = voice => {
+        const name = String(voice.name || "").toLowerCase();
+        let score = 0;
+        if (/natural|нейрон|neural|online/.test(name)) score += 100;
+        if (/svetlana|светлана|daria|дарья|irina|ирина/.test(name)) score += 50;
+        if (/google/.test(name)) score += 35;
+        if (/microsoft/.test(name)) score += 25;
+        if (voice.localService === false) score += 10;
+        return score;
+    };
+
+    selectedVoice = [...russianVoices].sort((a, b) => voiceScore(b) - voiceScore(a))[0]
+        || voices[0];
 
     console.log("Голос:", selectedVoice.name);
 }
 
 window.speechSynthesis.onvoiceschanged = loadVoices;
 
-function speak(text, callback = null) {
+function prepareSpeechText(text) {
+    return String(text || "")
+        .replace(/```[\s\S]*?```/g, " ")
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+        .replace(/https?:\/\/\S+|www\.\S+/gi, " ")
+        .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+        .replace(/^\s*>\s?/gm, "")
+        .replace(/^\s*[-+*•]\s+/gm, "")
+        .replace(/\*\*|__|~~|`/g, "")
+        .replace(/(\d)\s*\/\s*(\d)/g, "$1 из $2")
+        .replace(/[\\/|]+/g, " ")
+        .replace(/[_*#<>\[\]{}]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function stopVoicePlayback() {
+    voicePlaybackToken += 1;
+    speechSynthesis.cancel();
+
+    if (currentVoiceAbortController) {
+        currentVoiceAbortController.abort();
+        currentVoiceAbortController = null;
+    }
+
+    if (currentAiAudio) {
+        currentAiAudio.pause();
+        currentAiAudio.src = "";
+        currentAiAudio = null;
+    }
+    if (currentAiAudioUrl) {
+        URL.revokeObjectURL(currentAiAudioUrl);
+        currentAiAudioUrl = null;
+    }
+    return voicePlaybackToken;
+}
+
+function splitSpeechText(text, maxLength = 260) {
+    const sentences = String(text || "").match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [];
+    const chunks = [];
+
+    sentences.forEach(sentence => {
+        const cleanSentence = sentence.trim();
+        if (!cleanSentence) return;
+
+        if (cleanSentence.length <= maxLength) {
+            chunks.push(cleanSentence);
+            return;
+        }
+
+        let part = "";
+        cleanSentence.split(/\s+/).forEach(word => {
+            if (part && `${part} ${word}`.length > maxLength) {
+                chunks.push(part);
+                part = word;
+            } else {
+                part = part ? `${part} ${word}` : word;
+            }
+        });
+        if (part) chunks.push(part);
+    });
+
+    return chunks;
+}
+
+function waitForVoiceRetry(delay, signal) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, delay);
+        signal.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new DOMException("Voice request cancelled", "AbortError"));
+        }, {once: true});
+    });
+}
+
+async function fetchAiVoiceChunk(text, signal) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+            const response = await fetch("/api/ai/voice", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "Accept": "audio/mpeg"},
+                body: JSON.stringify({text}),
+                signal
+            });
+
+            if (!response.ok) {
+                const details = await parseJsonResponse(response);
+                const error = new Error(details.error || "AI voice is unavailable");
+                error.status = response.status;
+                throw error;
+            }
+            return await response.blob();
+        } catch (error) {
+            if (error.name === "AbortError") throw error;
+            lastError = error;
+            const canRetry = !error.status || error.status === 408 || error.status === 429 || error.status >= 500;
+            if (!canRetry || attempt === 1) break;
+            await waitForVoiceRetry(350, signal);
+        }
+    }
+
+    throw lastError || new Error("AI voice is unavailable");
+}
+
+function playAiVoiceChunk(audioBlob, token, signal) {
+    return new Promise((resolve, reject) => {
+        if (token !== voicePlaybackToken || !voiceEnabled) {
+            resolve();
+            return;
+        }
+
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        currentAiAudioUrl = audioUrl;
+        currentAiAudio = audio;
+        audio.preload = "auto";
+
+        let finished = false;
+        const finish = error => {
+            if (finished) return;
+            finished = true;
+            signal.removeEventListener("abort", cancelPlayback);
+            URL.revokeObjectURL(audioUrl);
+            if (currentAiAudio === audio) currentAiAudio = null;
+            if (currentAiAudioUrl === audioUrl) currentAiAudioUrl = null;
+            error ? reject(error) : resolve();
+        };
+        const cancelPlayback = () => {
+            audio.pause();
+            finish();
+        };
+
+        audio.onended = () => finish();
+        audio.onerror = () => finish(new Error("Не удалось воспроизвести голос"));
+        signal.addEventListener("abort", cancelPlayback, {once: true});
+        audio.play().catch(finish);
+    });
+}
+
+async function speak(text, callback = null) {
 
     // 🔥 останавливаем микрофон
     if (recognition) {
-        recognition.stop();
+        try { recognition.stop(); } catch (error) {}
     }
 
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "ru-RU";
+    const speechText = prepareSpeechText(text);
+    if (!speechText || !voiceEnabled) return;
 
-    utter.onend = () => {
-        console.log("Ассистент договорил");
+    const token = stopVoicePlayback();
+    const controller = new AbortController();
+    currentVoiceAbortController = controller;
+    const chunks = splitSpeechText(speechText);
+    if (!chunks.length) return;
 
-        // 👉 после ответа можно снова включить микрофон
-        if (callback) {
-            callback();
+    try {
+        let nextAudio = fetchAiVoiceChunk(chunks[0], controller.signal);
+
+        for (let index = 0; index < chunks.length; index += 1) {
+            const audioBlob = await nextAudio;
+            if (token !== voicePlaybackToken || !voiceEnabled) return;
+
+            nextAudio = index + 1 < chunks.length
+                ? fetchAiVoiceChunk(chunks[index + 1], controller.signal)
+                : null;
+            await playAiVoiceChunk(audioBlob, token, controller.signal);
         }
-    };
 
-    speechSynthesis.speak(utter);
+        if (token === voicePlaybackToken && callback) callback();
+    } catch (error) {
+        if (error.name !== "AbortError" && token === voicePlaybackToken && voiceEnabled) {
+            console.error("Nika AI voice error:", error);
+        }
+    } finally {
+        if (currentVoiceAbortController === controller) currentVoiceAbortController = null;
+    }
 }
 
 function toggleVoice() {
@@ -4101,125 +4573,240 @@ function toggleVoice() {
     if (button) button.classList.toggle("active", voiceEnabled);
 
     if (voiceEnabled) {
-        if (label) label.textContent = "Звук включён";
+        if (label) label.textContent = "Озвучивание включено";
         if (icon) icon.src = "/static/icons/ai-sound-on.png";
         speak("Голос включен");
     } else {
-        if (label) label.textContent = "Звук выключен";
+        if (label) label.textContent = "Озвучивание выключено";
         if (icon) icon.src = "/static/icons/ai-sound-off.png";
-        speechSynthesis.cancel();
+        stopVoicePlayback();
     }
 }
 
-// ================== АГЕНТ ==================
-function sendCommand() {
-    const input = document.getElementById("agent-input");
-    const text = input.value.trim();
+// ================== NIKA AI ==================
+let aiConversationId = null;
+let aiSending = false;
+let aiHistoryLoaded = false;
 
-    if (!text) {
-        speak("Скажи команду");
-        return;
+function appendAiMessage(role, text, options = {}) {
+    const messages = document.getElementById("aiMessages");
+    if (!messages || !text) return null;
+
+    const message = document.createElement("div");
+    message.className = `ai-message ai-message--${role === "user" ? "user" : "assistant"}`;
+    if (options.typing) message.classList.add("ai-message--typing");
+    if (options.id) message.id = options.id;
+    message.textContent = text;
+    messages.appendChild(message);
+    messages.scrollTop = messages.scrollHeight;
+    return message;
+}
+
+function appendAiConfirmation(confirmation) {
+    const messages = document.getElementById("aiMessages");
+    if (!messages || !confirmation?.id) return null;
+    messages.querySelectorAll(".ai-confirmation").forEach(existing => existing.remove());
+
+    const card = document.createElement("div");
+    card.className = "ai-confirmation";
+    card.dataset.actionId = confirmation.id;
+
+    const label = document.createElement("div");
+    label.className = "ai-confirmation__label";
+    label.textContent = "Требуется подтверждение";
+
+    const summary = document.createElement("div");
+    summary.className = "ai-confirmation__summary";
+    summary.textContent = confirmation.summary || "Выполнить подготовленное действие?";
+
+    const actions = document.createElement("div");
+    actions.className = "ai-confirmation__actions";
+
+    const confirmButton = document.createElement("button");
+    confirmButton.type = "button";
+    confirmButton.className = "ai-confirmation__button ai-confirmation__button--confirm";
+    confirmButton.textContent = "Подтвердить";
+    confirmButton.onclick = () => decideAiAction(confirmation.id, "confirm", card);
+
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "ai-confirmation__button ai-confirmation__button--cancel";
+    cancelButton.textContent = "Отменить";
+    cancelButton.onclick = () => decideAiAction(confirmation.id, "cancel", card);
+
+    actions.append(confirmButton, cancelButton);
+    card.append(label, summary, actions);
+    messages.appendChild(card);
+    messages.scrollTop = messages.scrollHeight;
+    return card;
+}
+
+async function decideAiAction(actionId, decision, card) {
+    const buttons = card?.querySelectorAll("button") || [];
+    buttons.forEach(button => button.disabled = true);
+
+    try {
+        const response = await fetch(`/api/ai/action/${encodeURIComponent(actionId)}`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json", "Accept": "application/json"},
+            body: JSON.stringify({decision})
+        });
+        const data = await parseJsonResponse(response);
+        if (!response.ok) throw new Error(data.error || "Не удалось выполнить действие");
+
+        card?.remove();
+        const reply = data.reply || (decision === "confirm" ? "Действие выполнено." : "Действие отменено.");
+        appendAiMessage("assistant", reply);
+        if (voiceEnabled) speak(reply);
+    } catch (error) {
+        buttons.forEach(button => button.disabled = false);
+        appendAiMessage("assistant", error.message || "Не удалось выполнить действие.");
+    }
+}
+
+function setAiSending(sending) {
+    aiSending = sending;
+    const button = document.getElementById("aiSendButton");
+    if (button) button.disabled = sending;
+}
+
+function useAiSuggestion(text) {
+    const input = document.getElementById("agent-input");
+    if (!input) return;
+    input.value = text;
+    sendCommand();
+}
+
+async function parseJsonResponse(response) {
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) return {};
+    return await response.json();
+}
+
+async function runLegacyAgentAction(data) {
+    if (data.action === "redirect" && data.url) {
+        setTimeout(() => { window.location.href = data.url; }, 700);
+        return data.reply || data.message || "Открываю нужный раздел.";
     }
 
-    fetch("/api/agent/command", {
+    if (data.action === "search_client") {
+        setTimeout(() => {
+            window.location.href = "/clients?search=" + encodeURIComponent(data.query || "");
+        }, 700);
+        return `Ищу клиента: ${data.query || ""}`;
+    }
+
+    if (data.action === "open_drawer") {
+        closeAiAssistant();
+        openSystemDrawer(data.target === "notifications" ? "notifications" : "chat");
+        return data.reply || data.message || "Открываю.";
+    }
+
+    if (data.action === "access_denied") {
+        return data.reply || data.message || "Этот раздел недоступен для вашей учётной записи.";
+    }
+
+    if (data.action === "get_revenue") {
+        const response = await fetch("/api/revenue", {headers: {"Accept": "application/json"}});
+        const revenue = await parseJsonResponse(response);
+        return `Сегодня выручка ${formatMoneyKzt(revenue.total)}.`;
+    }
+
+    if (data.action === "create_sale_smart") {
+        if (typeof openClientSheet === "function") openClientSheet();
+        setTimeout(() => {
+            const clientInput = document.getElementById("clientSearchInput");
+            if (!clientInput) return;
+            clientInput.value = data.client_name || "";
+            if (typeof filterClients === "function") filterClients();
+        }, 300);
+        return `Подготовила поиск клиента ${data.client_name || ""} для новой продажи.`;
+    }
+
+    if (data.action === "create_client") {
+        return `Могу создать клиента ${data.name || ""}. Подтвердите это действие в следующем сообщении.`;
+    }
+
+    return data.reply || data.answer || data.message || data.error || "Команда обработана.";
+}
+
+async function requestAiReply(text) {
+    let response = await fetch("/api/ai/chat", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({text: text})
-    })
-    .then(res => res.json())
-	.then(data => {
+        headers: {"Content-Type": "application/json", "Accept": "application/json"},
+        body: JSON.stringify({message: text, conversation_id: aiConversationId})
+    });
 
-		console.log("ASSISTANT:", data);
+    // Пока серверный AI-маршрут не добавлен, старые голосовые команды продолжают работать.
+    if (response.status === 404 || response.status === 405) {
+        response = await fetch("/api/agent/command", {
+            method: "POST",
+            headers: {"Content-Type": "application/json", "Accept": "application/json"},
+            body: JSON.stringify({text})
+        });
+    }
 
-		// 👉 диалог (вопрос ассистента)
-		if (data.reply) {
-			speak(data.reply, () => {
-				setTimeout(() => {
-					startVoice();
-				}, 500);
-			});
-			return;
-		}
+    const data = await parseJsonResponse(response);
+    if (!response.ok) {
+        throw new Error(data.error || data.message || "Не удалось получить ответ AI");
+    }
 
-		// 👉 ошибка
-		if (data.error) {
-			speak("Ошибка: " + data.error);
-			return;
-		}
+    aiConversationId = data.conversation_id || aiConversationId;
+    if (data.action) {
+        return {reply: await runLegacyAgentAction(data), confirmation: null};
+    }
+    return {
+        reply: data.reply || data.answer || data.message || data.output_text || "Готово.",
+        confirmation: data.confirmation || null,
+        actionStatus: data.action_status || null
+    };
+}
 
-		// 👉 успех (конец диалога)
-		if (data.success) {
-			speak(data.message || "Готово");
-
-			// 🔥 микрофон НЕ включаем обратно
-			location.reload();
-			return;
-		}
-
-		if (data.action === "redirect") {
-			speak(say("open") + " раздел", () => {
-				window.location.href = data.url;
-			});
-		}
-
-		if (data.action === "search_client") {
-			speak(say("search") + " " + data.query, () => {
-				window.location.href = "/clients?search=" + encodeURIComponent(data.query);
-			});
-		}
-
-		if (data.action === "error") {
-			speak(say("error"));
-			alert(data.message);
-		}
-
-		if (data.action === "create_client") {
-			speak("Создаю клиента " + data.name);
-
-			fetch("/clients/add", {
-				method: "POST",
-				body: new URLSearchParams({
-					full_name: data.name,
-					phone: data.phone,
-					status: "Новый",
-					payment: "Не оплачено"
-				})
-			})
-			.then(res => {
-				if (res.ok) {
-					speak("Клиент создан");
-				} else {
-					speak("Не удалось создать клиента");
-				}
-			})
-			.catch(() => {
-				speak("Ошибка при создании клиента");
-			});
-		}
-
-		if (data.action === "create_sale_smart") {
-			speak("Ищу клиента " + data.client_name);
-
-			openClientSheet();
-
-			setTimeout(() => {
-				const input = document.getElementById("clientSearchInput");
-				input.value = data.client_name;
-				filterClients();
-			}, 300);
-		}
-
-		if (data.action === "get_revenue") {
-			fetch("/api/revenue")
-			.then(res => res.json())
-			.then(res => {
-				speak("Сегодня выручка " + res.total + " тенге");
-			});
-		}
-
-	});
+async function sendCommand() {
+    const input = document.getElementById("agent-input");
+    const text = input?.value.trim();
+    if (!text || aiSending) return;
 
     input.value = "";
+    appendAiMessage("user", text);
+    setAiSending(true);
+    appendAiMessage("assistant", "Nika AI думает…", {typing: true, id: "aiTypingMessage"});
+
+    try {
+        const result = await requestAiReply(text);
+        const reply = result.reply;
+        document.getElementById("aiTypingMessage")?.remove();
+        if (result.actionStatus) {
+            document.querySelectorAll("#aiMessages .ai-confirmation").forEach(card => card.remove());
+        }
+        appendAiMessage("assistant", reply);
+        if (result.confirmation) appendAiConfirmation(result.confirmation);
+        if (voiceEnabled) speak(reply);
+    } catch (error) {
+        document.getElementById("aiTypingMessage")?.remove();
+        appendAiMessage("assistant", "Не удалось связаться с AI. Проверьте подключение сервера и попробуйте ещё раз.");
+        console.error("Nika AI error:", error);
+    } finally {
+        setAiSending(false);
+        input.focus();
+    }
+}
+
+async function loadAiHistory() {
+    if (aiHistoryLoaded) return;
+    aiHistoryLoaded = true;
+
+    try {
+        const response = await fetch("/api/ai/history?limit=50", {headers: {"Accept": "application/json"}});
+        if (!response.ok) return;
+        const data = await parseJsonResponse(response);
+        aiConversationId = data.conversation_id || aiConversationId;
+        const items = data.items || data.messages || [];
+        items.forEach(item => appendAiMessage(item.role === "user" ? "user" : "assistant", item.content || item.text || ""));
+        if (data.confirmation) appendAiConfirmation(data.confirmation);
+    } catch (error) {
+        console.debug("AI history is not available yet");
+    }
 }
 
 // ================== ГОЛОС (НЕ ОБРЫВАЕТ РЕЧЬ) ==================
@@ -4238,14 +4825,9 @@ function startVoice() {
     recognition.lang = "ru-RU";
     recognition.continuous = true; // 🔥 ВАЖНО
     recognition.interimResults = false;
+    document.getElementById("aiMicButton")?.classList.add("active");
 
     let finalText = "";
-
-	if (!window.voiceStarted) {
-		speak("Говори");
-		window.voiceStarted = true;
-	}
-
     recognition.start();
 
     recognition.onresult = function(event) {
@@ -4278,10 +4860,12 @@ function startVoice() {
     };
 
     recognition.onerror = function(e) {
+        document.getElementById("aiMicButton")?.classList.remove("active");
         console.log("Ошибка:", e);
     };
 
     recognition.onend = function() {
+        document.getElementById("aiMicButton")?.classList.remove("active");
         console.log("Микрофон выключен");
     };
 }
@@ -4294,12 +4878,14 @@ function toggleAiAssistant() {
 
     if (isOpen) {
         closeSystemDrawers();
+        loadAiHistory();
         setTimeout(() => document.getElementById("agent-input")?.focus(), 80);
     }
 }
 
 function closeAiAssistant() {
     document.getElementById("aiAssistantPanel")?.classList.remove("open");
+    if (recognition) recognition.stop();
 }
 
 document.addEventListener("click", function(event) {

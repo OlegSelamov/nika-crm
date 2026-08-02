@@ -103,46 +103,6 @@ def stock_income():
 
         return redirect("/stock/income")
 
-    cur.execute("""
-        SELECT
-            items.*,
-
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN stock_movements.movement_type = 'income'
-                            THEN stock_movements.quantity
-
-                        WHEN stock_movements.movement_type = 'refund'
-                            THEN stock_movements.quantity
-
-                        WHEN stock_movements.movement_type = 'sale'
-                            THEN -stock_movements.quantity
-
-                        WHEN stock_movements.movement_type = 'writeoff'
-                            THEN -stock_movements.quantity
-                    END
-                ),
-                0
-            ) AS stock
-
-        FROM items
-
-        LEFT JOIN stock_movements
-            ON items.id = stock_movements.item_id
-
-        WHERE items.company_id = %s
-          AND COALESCE(items.item_type, 'product') = 'product'
-
-        GROUP BY items.id
-
-        ORDER BY items.name
-    """, (
-        session.get("company_id"),
-    ))
-
-    items = cur.fetchall()
-
     # Получаем последние приходы товара
     cur.execute("""
         SELECT
@@ -172,62 +132,91 @@ def stock_income():
 
     return render_template(
         "stock_income.html",
-        items=items,
         income_rows=income_rows
     )
     
 @stock_bp.route("/stock")
 def stock():
-
+    company_id = session.get("company_id")
     conn = get_db()
-    
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT
-            items.*,
-
-            COALESCE(
-                SUM(
+        WITH stock_rows AS (
+            SELECT
+                i.*,
+                COALESCE(SUM(
                     CASE
-                        WHEN stock_movements.movement_type='income'
-                        THEN stock_movements.quantity
-                        
-                        WHEN stock_movements.movement_type='refund'
-                        THEN stock_movements.quantity
-
-                        WHEN stock_movements.movement_type='sale'
-                        THEN -stock_movements.quantity
-
-                        WHEN stock_movements.movement_type='writeoff'
-                        THEN -stock_movements.quantity
+                        WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
+                        WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
+                        ELSE 0
                     END
-                ),
-                0
-            ) as stock
-
-        FROM items
-
-        LEFT JOIN stock_movements
-        ON items.id = stock_movements.item_id
-
-        WHERE items.company_id = %s
-          AND COALESCE(items.item_type, 'product') = 'product'
-
-        GROUP BY items.id
-
-        ORDER BY items.name
-    """, (
-        session.get("company_id"),
-    ))
-    
+                ), 0) AS stock
+            FROM items i
+            LEFT JOIN stock_movements sm
+                ON i.id = sm.item_id
+               AND i.company_id = sm.company_id
+            WHERE i.company_id = %s
+              AND COALESCE(i.item_type, 'product') = 'product'
+            GROUP BY i.id
+        )
+        SELECT *
+        FROM stock_rows
+        ORDER BY LOWER(COALESCE(name, '')), id
+        LIMIT 50
+    """, (company_id,))
     items = cur.fetchall()
+
+    cur.execute("""
+        WITH stock_rows AS (
+            SELECT
+                i.id,
+                COALESCE(i.purchase_price, 0) AS purchase_price,
+                COALESCE(i.retail_price, 0) AS retail_price,
+                COALESCE(SUM(
+                    CASE
+                        WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
+                        WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
+                        ELSE 0
+                    END
+                ), 0) AS stock
+            FROM items i
+            LEFT JOIN stock_movements sm
+                ON i.id = sm.item_id
+               AND i.company_id = sm.company_id
+            WHERE i.company_id = %s
+              AND COALESCE(i.item_type, 'product') = 'product'
+            GROUP BY i.id
+        )
+        SELECT
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE stock > 5) AS normal,
+            COUNT(*) FILTER (WHERE stock > 0 AND stock <= 5) AS low,
+            COUNT(*) FILTER (WHERE stock <= 0) AS out,
+            COALESCE(SUM(stock * purchase_price), 0) AS purchase_sum,
+            COALESCE(SUM(stock * retail_price), 0) AS retail_sum
+        FROM stock_rows
+    """, (company_id,))
+    stock_stats = cur.fetchone()
+
+    cur.execute("""
+        SELECT DISTINCT category
+        FROM items
+        WHERE company_id = %s
+          AND COALESCE(item_type, 'product') = 'product'
+          AND NULLIF(TRIM(category), '') IS NOT NULL
+        ORDER BY category
+    """, (company_id,))
+    categories = [row["category"] for row in cur.fetchall()]
 
     pool.putconn(conn)
 
     return render_template(
         "stock.html",
-        items=items
+        items=items,
+        stock_stats=stock_stats,
+        categories=categories,
+        page_size=50
     )
     
 @stock_bp.route("/stock/movements")
@@ -335,102 +324,119 @@ def stock_writeoff():
 
         return redirect("/stock/writeoff")
 
-    cur.execute("""
-        SELECT
-            items.*,
-
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN stock_movements.movement_type = 'income'
-                            THEN stock_movements.quantity
-
-                        WHEN stock_movements.movement_type = 'refund'
-                            THEN stock_movements.quantity
-
-                        WHEN stock_movements.movement_type = 'sale'
-                            THEN -stock_movements.quantity
-
-                        WHEN stock_movements.movement_type = 'writeoff'
-                            THEN -stock_movements.quantity
-                    END
-                ),
-                0
-            ) AS stock
-
-        FROM items
-
-        LEFT JOIN stock_movements
-            ON items.id = stock_movements.item_id
-
-        WHERE items.company_id = %s
-          AND COALESCE(items.item_type, 'product') = 'product'
-
-        GROUP BY items.id
-
-        ORDER BY items.name
-    """, (
-        session.get("company_id"),
-    ))
-    
-    items = cur.fetchall()
-
     pool.putconn(conn)
 
-    return render_template(
-        "stock_writeoff.html",
-        items=items
-    )
+    return render_template("stock_writeoff.html")
     
 @stock_bp.route("/api/stock")
 def api_stock():
+    company_id = session.get("company_id")
+    legacy_mode = not bool(request.args)
+    query = (request.args.get("q") or "").strip()
+    category = (request.args.get("category") or "").strip()
+    status = (request.args.get("status") or "all").strip().lower()
+    sort = (request.args.get("sort") or "name").strip().lower()
 
+    if legacy_mode:
+        limit, offset = 1000000, 0
+    else:
+        try:
+            limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+            offset = max(int(request.args.get("offset", 0)), 0)
+        except (TypeError, ValueError):
+            limit, offset = 50, 0
+
+    order_by = {
+        "name": "LOWER(COALESCE(name, '')) ASC, id ASC",
+        "stock-asc": "stock ASC, LOWER(COALESCE(name, '')) ASC",
+        "stock-desc": "stock DESC, LOWER(COALESCE(name, '')) ASC",
+        "retail-desc": "COALESCE(retail_price, 0) DESC, LOWER(COALESCE(name, '')) ASC",
+        "retail-asc": "COALESCE(retail_price, 0) ASC, LOWER(COALESCE(name, '')) ASC",
+    }.get(sort, "LOWER(COALESCE(name, '')) ASC, id ASC")
+
+    where_parts = []
+    params = [company_id]
+
+    if query:
+        where_parts.append("""
+            (
+                COALESCE(name, '') ILIKE %s OR
+                COALESCE(category, '') ILIKE %s OR
+                COALESCE(unit, '') ILIKE %s OR
+                COALESCE(barcode, '') ILIKE %s OR
+                COALESCE(gtin, '') ILIKE %s OR
+                COALESCE(ntin, '') ILIKE %s
+            )
+        """)
+        pattern = f"%{query}%"
+        params.extend([pattern, pattern, pattern, pattern, pattern, pattern])
+
+    if category:
+        where_parts.append("LOWER(COALESCE(category, '')) = LOWER(%s)")
+        params.append(category)
+
+    if status == "normal":
+        where_parts.append("stock > 5")
+    elif status == "low":
+        where_parts.append("stock > 0 AND stock <= 5")
+    elif status == "out":
+        where_parts.append("stock <= 0")
+
+    filtered_where = "WHERE " + " AND ".join(where_parts) if where_parts else ""
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT
-            items.*,
-
-            COALESCE(
-                SUM(
+    sql = f"""
+        WITH stock_rows AS (
+            SELECT
+                i.*,
+                COALESCE(SUM(
                     CASE
-                        WHEN stock_movements.movement_type='income'
-                        THEN stock_movements.quantity
-                        
-                        WHEN stock_movements.movement_type='refund'
-                        THEN stock_movements.quantity
-
-                        WHEN stock_movements.movement_type='sale'
-                        THEN -stock_movements.quantity
-
-                        WHEN stock_movements.movement_type='writeoff'
-                        THEN -stock_movements.quantity
+                        WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
+                        WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
+                        ELSE 0
                     END
-                ),
-                0
-            ) as stock
-
-        FROM items
-
-        LEFT JOIN stock_movements
-        ON items.id = stock_movements.item_id
-
-        WHERE items.company_id = %s
-          AND COALESCE(items.item_type, 'product') = 'product'
-
-        GROUP BY items.id
-
-        ORDER BY items.name
-    """, (
-        session.get("company_id"),
-    ))
+                ), 0) AS stock
+            FROM items i
+            LEFT JOIN stock_movements sm
+                ON i.id = sm.item_id
+               AND i.company_id = sm.company_id
+            WHERE i.company_id = %s
+              AND COALESCE(i.item_type, 'product') = 'product'
+            GROUP BY i.id
+        ), filtered_rows AS (
+            SELECT *
+            FROM stock_rows
+            {filtered_where}
+        )
+        SELECT *, COUNT(*) OVER() AS filtered_total
+        FROM filtered_rows
+        ORDER BY {order_by}
+        LIMIT %s OFFSET %s
+    """
+    params.extend([limit, offset])
+    cur.execute(sql, params)
 
     rows = cur.fetchall()
-
     pool.putconn(conn)
 
-    return jsonify(rows)
+    total = int(rows[0]["filtered_total"]) if rows else 0
+    clean_rows = []
+    for row in rows:
+        item = dict(row)
+        item.pop("filtered_total", None)
+        clean_rows.append(item)
+
+    if legacy_mode:
+        return jsonify(clean_rows)
+
+    return jsonify({
+        "items": clean_rows,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(clean_rows) < total
+    })
     
 @stock_bp.route("/api/stock/movements")
 def api_stock_movements():

@@ -1,10 +1,11 @@
 document.addEventListener("DOMContentLoaded", function () {
+    const SEARCH_DELAY = 300;
+    const SEARCH_LIMIT = 30;
+
     const form = document.getElementById("writeoffForm");
     const searchInput = document.getElementById("writeoffProductSearch");
     const itemIdInput = document.getElementById("writeoffItemId");
     const dropdown = document.getElementById("writeoffProductList");
-    const options = Array.from(document.querySelectorAll(".product-option"));
-    const noProducts = document.getElementById("writeoffNoProducts");
 
     const selectedBox = document.getElementById("selectedWriteoffProduct");
     const selectedAvatar = document.getElementById("selectedWriteoffAvatar");
@@ -27,6 +28,8 @@ document.addEventListener("DOMContentLoaded", function () {
     let currentStock = 0;
     let currentUnit = "";
     let highlightedIndex = -1;
+    let searchTimer = null;
+    let searchController = null;
 
     function formatNumber(value) {
         return new Intl.NumberFormat("ru-RU", {
@@ -41,11 +44,11 @@ document.addEventListener("DOMContentLoaded", function () {
     function closeDropdown() {
         dropdown?.classList.remove("open");
         highlightedIndex = -1;
-        options.forEach(option => option.classList.remove("is-highlighted"));
+        getOptions().forEach(option => option.classList.remove("is-highlighted"));
     }
 
-    function getVisibleOptions() {
-        return options.filter(option => option.style.display !== "none");
+    function getOptions() {
+        return Array.from(dropdown?.querySelectorAll(".product-option") || []);
     }
 
     function updateSummary() {
@@ -66,9 +69,9 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    function clearProduct() {
+    function clearProduct({clearSearch = true} = {}) {
         itemIdInput.value = "";
-        searchInput.value = "";
+        if (clearSearch) searchInput.value = "";
         searchInput.setCustomValidity("");
         selectedBox.hidden = true;
         currentStock = 0;
@@ -115,70 +118,164 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    function filterProducts() {
-        const query = searchInput.value.trim().toLowerCase();
-        let visibleCount = 0;
-        let exactCodeOption = null;
-        let exactNameOption = null;
-
-        itemIdInput.value = "";
-        selectedBox.hidden = true;
-
-        options.forEach(option => {
-            const haystack = (option.dataset.search || "").toLowerCase();
-            const name = (option.dataset.nameSearch || "").trim();
-            const barcode = (option.dataset.barcode || "").trim().toLowerCase();
-            const gtin = (option.dataset.gtin || "").trim().toLowerCase();
-            const ntin = (option.dataset.ntin || "").trim().toLowerCase();
-
-            const visible = !query || haystack.includes(query);
-            option.style.display = visible ? "grid" : "none";
-
-            if (visible) visibleCount++;
-
-            if (query && (query === barcode || query === gtin || query === ntin)) {
-                exactCodeOption = option;
-            }
-
-            if (query && query === name) {
-                exactNameOption = option;
-            }
-        });
-
-        noProducts.style.display = visibleCount === 0 ? "block" : "none";
+    function showMessage(title, text) {
+        dropdown.replaceChildren();
+        const message = document.createElement("div");
+        message.className = "product-empty";
+        const strong = document.createElement("strong");
+        strong.textContent = title;
+        const span = document.createElement("span");
+        span.textContent = text;
+        message.append(strong, span);
+        dropdown.appendChild(message);
         highlightedIndex = -1;
         openDropdown();
+    }
 
-        if (exactCodeOption) {
-            selectProduct(exactCodeOption);
-            return exactCodeOption;
+    function createProductOption(item) {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "product-option";
+        option.dataset.id = item.id ?? "";
+        option.dataset.name = item.name || "";
+        option.dataset.barcode = item.barcode || "";
+        option.dataset.gtin = item.gtin || "";
+        option.dataset.ntin = item.ntin || "";
+        option.dataset.unit = item.unit || "";
+        option.dataset.stock = item.stock ?? 0;
+
+        const avatar = document.createElement("span");
+        avatar.className = "product-option-avatar";
+        avatar.textContent = (item.name || "Т").slice(0, 1).toUpperCase();
+
+        const main = document.createElement("span");
+        main.className = "product-option-main";
+        const name = document.createElement("strong");
+        name.textContent = item.name || "Без названия";
+        const code = document.createElement("small");
+        const productCode = item.barcode || item.gtin || item.ntin;
+        code.textContent = productCode ? `Код: ${productCode}` : "Без штрихкода";
+        main.append(name, code);
+
+        const stock = document.createElement("span");
+        const stockValue = Number(item.stock || 0);
+        stock.className = "product-option-stock";
+        stock.classList.add(stockValue <= 0 ? "is-empty" : stockValue <= 5 ? "is-low" : "is-ok");
+        stock.textContent = `${formatNumber(stockValue)} ${item.unit || ""}`.trim();
+
+        option.append(avatar, main, stock);
+        option.addEventListener("click", () => selectProduct(option));
+        return option;
+    }
+
+    function renderProducts(items, total) {
+        dropdown.replaceChildren();
+        items.forEach(item => dropdown.appendChild(createProductOption(item)));
+
+        if (total > items.length) {
+            const hint = document.createElement("div");
+            hint.className = "product-empty";
+            const strong = document.createElement("strong");
+            strong.textContent = `Показано ${items.length} из ${total}`;
+            const span = document.createElement("span");
+            span.textContent = "Уточните название или код товара";
+            hint.append(strong, span);
+            dropdown.appendChild(hint);
         }
 
-        if (exactNameOption && visibleCount === 1) {
-            selectProduct(exactNameOption);
-            return exactNameOption;
+        highlightedIndex = -1;
+        openDropdown();
+    }
+
+    function findExactOption(query) {
+        const normalized = query.trim().toLowerCase();
+        return getOptions().find(option =>
+            [option.dataset.barcode, option.dataset.gtin, option.dataset.ntin]
+                .some(value => (value || "").trim().toLowerCase() === normalized)
+        );
+    }
+
+    async function loadProducts(query, {selectExact = false, selectFirst = false} = {}) {
+        const normalized = query.trim();
+        if (normalized.length < 2) {
+            showMessage("Введите ещё один символ", "Поиск начнётся после 2 символов");
+            return [];
         }
 
-        return null;
+        searchController?.abort();
+        searchController = new AbortController();
+        showMessage("Поиск товара…", "Пожалуйста, подождите");
+
+        const params = new URLSearchParams({q: normalized, limit: String(SEARCH_LIMIT), offset: "0", sort: "name"});
+
+        try {
+            const response = await fetch(`/api/stock?${params.toString()}`, {
+                signal: searchController.signal,
+                headers: {"Accept": "application/json"}
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            const items = Array.isArray(data.items) ? data.items : [];
+            const total = Number(data.total) || items.length;
+
+            if (!items.length) {
+                showMessage("Товар не найден", "Проверьте название или код");
+                return [];
+            }
+
+            renderProducts(items, total);
+            const exact = findExactOption(normalized);
+            if (selectExact && exact) selectProduct(exact);
+            else if (selectFirst && getOptions()[0]) selectProduct(getOptions()[0]);
+            return items;
+        } catch (error) {
+            if (error.name !== "AbortError") {
+                console.error("Не удалось найти товар:", error);
+                showMessage("Не удалось выполнить поиск", "Попробуйте ещё раз");
+            }
+            return [];
+        }
+    }
+
+    function scheduleSearch() {
+        clearTimeout(searchTimer);
+        clearProduct({clearSearch: false});
+        const query = searchInput.value.trim();
+
+        if (query.length < 2) {
+            searchController?.abort();
+            showMessage(
+                query.length ? "Введите ещё один символ" : "Начните вводить название",
+                query.length ? "Поиск начнётся после 2 символов" : "Введите не менее 2 символов или отсканируйте штрихкод"
+            );
+            return;
+        }
+
+        searchTimer = setTimeout(() => loadProducts(query, {selectExact: true}), SEARCH_DELAY);
     }
 
     function highlightOption(index) {
-        const visible = getVisibleOptions();
-        if (!visible.length) return;
+        const options = getOptions();
+        if (!options.length) return;
 
-        highlightedIndex = Math.max(0, Math.min(index, visible.length - 1));
+        highlightedIndex = Math.max(0, Math.min(index, options.length - 1));
 
         options.forEach(option => option.classList.remove("is-highlighted"));
-        visible[highlightedIndex].classList.add("is-highlighted");
-        visible[highlightedIndex].scrollIntoView({block:"nearest"});
+        options[highlightedIndex].classList.add("is-highlighted");
+        options[highlightedIndex].scrollIntoView({block: "nearest"});
     }
 
-    searchInput.addEventListener("focus", filterProducts);
-    searchInput.addEventListener("click", filterProducts);
-    searchInput.addEventListener("input", filterProducts);
+    searchInput.addEventListener("focus", function () {
+        if (itemIdInput.value) return;
+        const query = searchInput.value.trim();
+        if (query.length >= 2) scheduleSearch();
+        else showMessage("Начните вводить название", "Введите не менее 2 символов или отсканируйте штрихкод");
+    });
+    searchInput.addEventListener("input", scheduleSearch);
 
     searchInput.addEventListener("keydown", function (event) {
-        const visible = getVisibleOptions();
+        const options = getOptions();
 
         if (event.key === "Escape") {
             closeDropdown();
@@ -193,7 +290,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (event.key === "ArrowUp") {
             event.preventDefault();
-            highlightOption(highlightedIndex <= 0 ? visible.length - 1 : highlightedIndex - 1);
+            highlightOption(highlightedIndex <= 0 ? options.length - 1 : highlightedIndex - 1);
             return;
         }
 
@@ -201,22 +298,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         event.preventDefault();
 
-        if (highlightedIndex >= 0 && visible[highlightedIndex]) {
-            selectProduct(visible[highlightedIndex]);
+        if (highlightedIndex >= 0 && options[highlightedIndex]) {
+            selectProduct(options[highlightedIndex]);
             return;
         }
 
-        const exact = filterProducts();
-
-        if (exact) {
-            selectProduct(exact);
-        } else if (visible[0]) {
-            selectProduct(visible[0]);
-        }
-    });
-
-    options.forEach(option => {
-        option.addEventListener("click", () => selectProduct(option));
+        clearTimeout(searchTimer);
+        loadProducts(searchInput.value, {selectExact: true, selectFirst: true});
     });
 
     document.addEventListener("click", function (event) {
@@ -228,7 +316,6 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("clearWriteoffProduct").addEventListener("click", () => {
         clearProduct();
         searchInput.focus();
-        filterProducts();
     });
 
     document.querySelectorAll(".number-step").forEach(button => {

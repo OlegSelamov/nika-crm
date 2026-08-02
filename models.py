@@ -1276,6 +1276,7 @@ def init_db():
             outgoing_enabled BOOLEAN DEFAULT TRUE,
 
             ai_enabled BOOLEAN DEFAULT FALSE,
+            ai_instructions TEXT,
 
             status TEXT DEFAULT 'unknown',
 
@@ -1309,6 +1310,10 @@ def init_db():
 
             unread_count INTEGER DEFAULT 0,
 
+            ai_paused BOOLEAN DEFAULT FALSE,
+            ai_paused_at TIMESTAMP,
+            ai_pause_reason TEXT,
+
             created_at TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW(),
 
@@ -1337,6 +1342,9 @@ def init_db():
             status TEXT DEFAULT 'received',
 
             is_ai BOOLEAN DEFAULT FALSE,
+
+            ai_processed_at TIMESTAMP,
+            ai_error TEXT,
 
             created_at TIMESTAMP DEFAULT NOW()
         )
@@ -1380,6 +1388,48 @@ def init_db():
     cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS caption TEXT")
     cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP")
     cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMP")
+
+    # Customer-facing Nika AI for WhatsApp. ALTERs also upgrade existing databases.
+    cur.execute("ALTER TABLE whatsapp_integrations ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN DEFAULT FALSE")
+    cur.execute("ALTER TABLE whatsapp_integrations ADD COLUMN IF NOT EXISTS ai_instructions TEXT")
+    cur.execute("ALTER TABLE whatsapp_chats ADD COLUMN IF NOT EXISTS ai_paused BOOLEAN DEFAULT FALSE")
+    cur.execute("ALTER TABLE whatsapp_chats ADD COLUMN IF NOT EXISTS ai_paused_at TIMESTAMP")
+    cur.execute("ALTER TABLE whatsapp_chats ADD COLUMN IF NOT EXISTS ai_pause_reason TEXT")
+    cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS ai_processed_at TIMESTAMP")
+    cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS ai_error TEXT")
+
+    # Nika AI: история диалогов хранится отдельно для каждой компании и пользователя.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ai_conversations (
+            id TEXT PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ai_messages (
+            id BIGSERIAL PRIMARY KEY,
+            conversation_id TEXT NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ai_conversations_owner
+        ON ai_conversations(company_id, user_id, updated_at DESC)
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation
+        ON ai_messages(conversation_id, id)
+    """)
 
     # 🔥 INDEXES
 

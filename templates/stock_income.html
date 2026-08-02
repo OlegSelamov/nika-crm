@@ -98,46 +98,9 @@
                                 >
 
                                 <div id="incomeProductList" class="product-dropdown">
-                                    {% for item in items %}
-                                    <button
-                                        type="button"
-                                        class="product-option"
-                                        data-id="{{ item.id }}"
-                                        data-name="{{ item.name }}"
-                                        data-search="{{ (item.name or '')|lower }} {{ item.barcode or '' }} {{ item.gtin or '' }} {{ item.ntin or '' }}"
-                                        data-name-search="{{ (item.name or '')|lower }}"
-                                        data-barcode="{{ item.barcode or '' }}"
-                                        data-gtin="{{ item.gtin or '' }}"
-                                        data-ntin="{{ item.ntin or '' }}"
-                                        data-unit="{{ item.unit or '' }}"
-                                        data-stock="{{ item.stock or 0 }}"
-                                        data-price="{{ item.purchase_price or 0 }}"
-                                    >
-                                        <span class="product-option-avatar">
-                                            {{ (item.name or "Т")[:1]|upper }}
-                                        </span>
-
-                                        <span class="product-option-main">
-                                            <strong>{{ item.name }}</strong>
-
-                                            <small>
-                                                {% if item.barcode or item.gtin or item.ntin %}
-                                                    Код: {{ item.barcode or item.gtin or item.ntin }}
-                                                {% else %}
-                                                    Без штрихкода
-                                                {% endif %}
-                                            </small>
-                                        </span>
-
-                                        <span class="product-option-stock">
-                                            {{ item.stock or 0 }} {{ item.unit or "" }}
-                                        </span>
-                                    </button>
-                                    {% endfor %}
-
-                                    <div id="incomeNoProducts" class="product-empty">
-                                        <strong>Товар не найден</strong>
-                                        <span>Проверьте название или код</span>
+                                    <div id="incomeProductMessage" class="product-empty">
+                                        <strong>Начните вводить название</strong>
+                                        <span>Введите не менее 2 символов или отсканируйте штрихкод</span>
                                     </div>
                                 </div>
                             </div>
@@ -403,7 +366,7 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{{ url_for('static', filename='js/stock_income.js') }}"></script>
+<script charset="UTF-8" src="{{ url_for('static', filename='js/stock_income.js') }}"></script>
 {% endblock %}
 
 

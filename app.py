@@ -18,6 +18,7 @@ from models import init_db
 from routes.sales import sales_api
 from routes.companies import companies_bp
 from routes.agent import agent_bp
+from routes.ai import ai_bp
 from routes.voice import voice_bp
 from routes.auth import auth_bp
 from models import get_db, pool
@@ -63,6 +64,7 @@ app.register_blueprint(kaspi_pos_bp)
 app.register_blueprint(sales_api)
 app.register_blueprint(companies_bp)
 app.register_blueprint(agent_bp)
+app.register_blueprint(ai_bp)
 app.register_blueprint(voice_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(stock_bp)

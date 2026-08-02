@@ -2,21 +2,12 @@
 
 {% block content %}
 
-{% set ns = namespace(total=0, out=0, low=0, normal=0, purchase_sum=0, retail_sum=0) %}
-{% for item in items %}
-    {% set stock_value = item.stock or 0 %}
-    {% set ns.total = ns.total + 1 %}
-    {% set ns.purchase_sum = ns.purchase_sum + (stock_value * (item.purchase_price or 0)) %}
-    {% set ns.retail_sum = ns.retail_sum + (stock_value * (item.retail_price or 0)) %}
-
-    {% if stock_value <= 0 %}
-        {% set ns.out = ns.out + 1 %}
-    {% elif stock_value <= 5 %}
-        {% set ns.low = ns.low + 1 %}
-    {% else %}
-        {% set ns.normal = ns.normal + 1 %}
-    {% endif %}
-{% endfor %}
+{% set total_count = stock_stats.total or 0 %}
+{% set normal_count = stock_stats.normal or 0 %}
+{% set low_count = stock_stats.low or 0 %}
+{% set out_count = stock_stats.out or 0 %}
+{% set purchase_sum = stock_stats.purchase_sum or 0 %}
+{% set retail_sum = stock_stats.retail_sum or 0 %}
 
 <div class="stock-page">
 
@@ -43,7 +34,7 @@
             <div class="stock-stat-icon">▦</div>
             <div>
                 <span>Всего позиций</span>
-                <strong>{{ ns.total }}</strong>
+                <strong>{{ total_count }}</strong>
                 <small>товаров в каталоге</small>
             </div>
         </article>
@@ -52,7 +43,7 @@
             <div class="stock-stat-icon">✓</div>
             <div>
                 <span>В наличии</span>
-                <strong>{{ ns.normal }}</strong>
+                <strong>{{ normal_count }}</strong>
                 <small>остаток больше 5</small>
             </div>
         </article>
@@ -61,7 +52,7 @@
             <div class="stock-stat-icon">!</div>
             <div>
                 <span>Заканчиваются</span>
-                <strong>{{ ns.low }}</strong>
+                <strong>{{ low_count }}</strong>
                 <small>остаток от 1 до 5</small>
             </div>
         </article>
@@ -70,7 +61,7 @@
             <div class="stock-stat-icon">×</div>
             <div>
                 <span>Нет в наличии</span>
-                <strong>{{ ns.out }}</strong>
+                <strong>{{ out_count }}</strong>
                 <small>нулевой или минусовой остаток</small>
             </div>
         </article>
@@ -79,17 +70,17 @@
     <section class="stock-value-panel">
         <div>
             <span>Закупочная стоимость остатков</span>
-            <strong>{{ "{:,.0f}".format(ns.purchase_sum).replace(",", " ") }} ₸</strong>
+            <strong>{{ "{:,.0f}".format(purchase_sum).replace(",", " ") }} ₸</strong>
         </div>
 
         <div>
             <span>Розничная стоимость остатков</span>
-            <strong>{{ "{:,.0f}".format(ns.retail_sum).replace(",", " ") }} ₸</strong>
+            <strong>{{ "{:,.0f}".format(retail_sum).replace(",", " ") }} ₸</strong>
         </div>
 
         <div>
             <span>Потенциальная валовая прибыль</span>
-            <strong>{{ "{:,.0f}".format(ns.retail_sum - ns.purchase_sum).replace(",", " ") }} ₸</strong>
+            <strong>{{ "{:,.0f}".format(retail_sum - purchase_sum).replace(",", " ") }} ₸</strong>
         </div>
     </section>
 
@@ -97,22 +88,22 @@
         <div class="stock-tabs" role="tablist">
             <button class="stock-tab is-active" type="button" data-filter="all">
                 Все
-                <span>{{ ns.total }}</span>
+                <span>{{ total_count }}</span>
             </button>
 
             <button class="stock-tab" type="button" data-filter="normal">
                 В наличии
-                <span>{{ ns.normal }}</span>
+                <span>{{ normal_count }}</span>
             </button>
 
             <button class="stock-tab" type="button" data-filter="low">
                 Заканчиваются
-                <span>{{ ns.low }}</span>
+                <span>{{ low_count }}</span>
             </button>
 
             <button class="stock-tab" type="button" data-filter="out">
                 Нет в наличии
-                <span>{{ ns.out }}</span>
+                <span>{{ out_count }}</span>
             </button>
         </div>
 
@@ -131,14 +122,8 @@
                 <span>Категория</span>
                 <select id="stockCategory">
                     <option value="">Все категории</option>
-                    {% set categories = [] %}
-                    {% for item in items %}
-                        {% if item.category and item.category not in categories %}
-                            {% set _ = categories.append(item.category) %}
-                        {% endif %}
-                    {% endfor %}
-                    {% for category in categories|sort %}
-                        <option value="{{ category|lower }}">{{ category }}</option>
+                    {% for category in categories %}
+                        <option value="{{ category }}">{{ category }}</option>
                     {% endfor %}
                 </select>
             </label>
@@ -156,7 +141,8 @@
         </div>
 
         <div class="stock-toolbar-result">
-            Показано: <strong id="stockVisibleCount">{{ ns.total }}</strong>
+            Показано: <strong id="stockVisibleCount">{{ items|length }}</strong>
+            <span id="stockResultTotal">из {{ total_count }}</span>
         </div>
     </section>
 
@@ -322,6 +308,12 @@
             <p>Измените поиск или выбранные фильтры.</p>
         </div>
 
+        <div id="stockLoadMoreWrap" style="text-align:center; margin-top:20px;"{% if total_count <= page_size %} hidden{% endif %}>
+            <button class="stock-btn stock-btn--light" id="stockLoadMore" type="button">
+                Показать ещё
+            </button>
+        </div>
+
         {% else %}
         <div class="stock-empty">
             <div>▦</div>
@@ -339,7 +331,7 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{{ url_for('static', filename='js/stock.js') }}"></script>
+<script charset="UTF-8" src="{{ url_for('static', filename='js/stock.js') }}"></script>
 {% endblock %}
 
 

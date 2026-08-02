@@ -1,4 +1,4 @@
-let cart = [];
+﻿let cart = [];
 let selectedClientData = null;
 let selectedClient = null;
 let currentBarcodeData = {};
@@ -13,53 +13,14 @@ fetch("/api/company/active")
     company = data;
 });
 
+// Товары больше не загружаются целиком. При большом каталоге поиск
+// выполняется на сервере и возвращает не более 30 подходящих позиций.
 function loadItems() {
-
-// загрузка товаров
-fetch("/api/items")
-.then(res => res.json())
-.then(data => {
-    let html = "";
-
-    data.forEach(i => {
-        html += `
-            <div class="item-card" onclick="selectItemForSale(${i.id}, '${i.name}', ${i.retail_price || 0}, '${i.unit || 'шт'}', '${i.gtin || ""}', '${i.ntin || ""}')">
-
-                <div class="item-image">
-                    <img src="${i.image || '/static/img/no-image.png'}">
-
-                    ${i.discount_percent ? `
-                        <div class="discount-badge">-${i.discount_percent}%</div>
-                    ` : ""}
-                </div>
-
-                <div class="item-info">
-
-                    <div class="item-name">
-                        ${i.name}
-                    </div>
-
-                    <div class="item-price-block">
-
-                        ${i.old_price ? `
-                            <div class="old-price">${i.old_price} ₸</div>
-                        ` : ""}
-
-                        <div class="new-price">
-                            ${i.retail_price || 0} ₸
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </div>
-        `;
-    });
-
-    document.getElementById("itemsList").innerHTML = html;
-});
-
+    const itemsList = document.getElementById("itemsList");
+    if (itemsList) {
+        itemsList.innerHTML = "";
+        itemsList.style.display = "none";
+    }
 }
 
 // единицы, для которых количество вводится перед добавлением
@@ -369,56 +330,122 @@ function pay() {
     });
 }
 
-function searchItems(query) {
-    fetch("/api/items")
-    .then(res => res.json())
-    .then(data => {
-        let html = "";
+let itemSearchController = null;
 
-        data.forEach(i => {
-            if (
-                i.name.toLowerCase().includes(query.toLowerCase()) ||
-                (i.barcode && i.barcode.includes(query))
-            ) {
-				html += `
-					<div class="item-card" onclick="selectItemForSale(${i.id}, '${i.name}', ${i.retail_price || 0}, '${i.unit || 'шт'}', '${i.gtin || ""}', '${i.ntin || ""}')">
+function renderItemSearchResults(items, hasMore) {
+    const itemsList = document.getElementById("itemsList");
+    itemsList.innerHTML = "";
 
-						<div class="item-image">
-							<img src="${i.image || '/static/img/no-image.png'}">
-							
-							${i.discount_percent ? `
-								<div class="discount-badge">-${i.discount_percent}%</div>
-							` : ""}
-						</div>
+    if (!items.length) {
+        itemsList.innerHTML = '<div class="items-search-message">Товары не найдены</div>';
+        itemsList.style.display = "block";
+        return;
+    }
 
-						<div class="item-info">
+    items.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "item-card";
 
-							<div class="item-name">
-								${i.name}
-							</div>
+        const imageBlock = document.createElement("div");
+        imageBlock.className = "item-image";
 
-							<div class="item-price-block">
+        const showImagePlaceholder = () => {
+            imageBlock.innerHTML = "";
+            const placeholder = document.createElement("span");
+            placeholder.className = "item-image-placeholder";
+            placeholder.textContent = "Нет фото";
+            imageBlock.appendChild(placeholder);
+        };
 
-								${i.old_price ? `
-									<div class="old-price">${i.old_price} ₸</div>
-								` : ""}
+        if (item.image) {
+            const image = document.createElement("img");
+            image.src = item.image;
+            image.alt = "";
+            image.addEventListener("error", showImagePlaceholder, { once: true });
+            imageBlock.appendChild(image);
+        } else {
+            showImagePlaceholder();
+        }
 
-								<div class="new-price">
-									${i.retail_price || 0} ₸
-								</div>
+        if (Number(item.discount_percent || 0) > 0) {
+            const badge = document.createElement("div");
+            badge.className = "discount-badge";
+            badge.textContent = `-${item.discount_percent}%`;
+            imageBlock.appendChild(badge);
+        }
 
-							</div>
+        const info = document.createElement("div");
+        info.className = "item-info";
 
-						</div>
+        const name = document.createElement("div");
+        name.className = "item-name";
+        name.textContent = item.name || "Без названия";
 
-					</div>
-				`;
-            }
+        const priceBlock = document.createElement("div");
+        priceBlock.className = "item-price-block";
+
+        if (item.old_price) {
+            const oldPrice = document.createElement("div");
+            oldPrice.className = "old-price";
+            oldPrice.textContent = `${item.old_price} ₸`;
+            priceBlock.appendChild(oldPrice);
+        }
+
+        const price = document.createElement("div");
+        price.className = "new-price";
+        price.textContent = `${item.retail_price || 0} ₸`;
+        priceBlock.appendChild(price);
+
+        info.appendChild(name);
+        info.appendChild(priceBlock);
+        card.appendChild(imageBlock);
+        card.appendChild(info);
+
+        card.addEventListener("click", () => {
+            selectItemForSale(
+                item.id,
+                item.name,
+                Number(item.retail_price || 0),
+                item.unit || "шт",
+                item.gtin || "",
+                item.ntin || ""
+            );
         });
 
-        document.getElementById("itemsList").innerHTML = html;
-        document.getElementById("itemsList").style.display = "block";
+        itemsList.appendChild(card);
     });
+
+    if (hasMore) {
+        const hint = document.createElement("div");
+        hint.className = "items-search-message";
+        hint.textContent = "Показаны первые 30 товаров. Уточните запрос.";
+        itemsList.appendChild(hint);
+    }
+
+    itemsList.style.display = "grid";
+}
+
+async function searchItems(query) {
+    if (itemSearchController) itemSearchController.abort();
+    itemSearchController = new AbortController();
+
+    try {
+        const response = await fetch(
+            `/api/items/search?q=${encodeURIComponent(query)}`,
+            { signal: itemSearchController.signal }
+        );
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        renderItemSearchResults(data.items || [], Boolean(data.has_more));
+    } catch (error) {
+        if (error.name === "AbortError") return;
+        console.error("ITEM SEARCH ERROR:", error);
+        const itemsList = document.getElementById("itemsList");
+        itemsList.innerHTML = '<div class="items-search-message">Не удалось выполнить поиск</div>';
+        itemsList.style.display = "block";
+    }
 }
 
 // шторка выбора клиента
@@ -557,41 +584,34 @@ function confirmClient() {
 
 const searchInput = document.getElementById("search");
 const itemsBox = document.getElementById("itemsList");
+let itemSearchTimer = null;
 
 if (searchInput) {
 
     searchInput.addEventListener("input", function () {
+        clearTimeout(itemSearchTimer);
+        const query = this.value.trim();
 
-        const query = this.value.toLowerCase().trim();
-
-        if (!query) {
-            itemsBox.style.display = "none";
+        if (query.length < 2) {
+            if (itemSearchController) itemSearchController.abort();
+            itemsBox.innerHTML = query
+                ? '<div class="items-search-message">Введите ещё один символ</div>'
+                : "";
+            itemsBox.style.display = query ? "block" : "none";
             return;
         }
 
-        itemsBox.style.display = "grid";
+        itemSearchTimer = setTimeout(() => {
+            searchItems(query);
+        }, 300);
+    });
 
-        let hasVisible = false;
-
-        document.querySelectorAll("#itemsList .item-card").forEach(el => {
-
-            const text = el.innerText.toLowerCase();
-            const match = text.includes(query);
-
-            el.style.display = match ? "" : "none";
-
-            if (match) hasVisible = true;
-        });
-
-		if (hasVisible) {
-
-			itemsBox.style.display = "grid";
-
-		} else {
-
-			itemsBox.style.display = "none";
-
-		}
+    searchInput.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            clearTimeout(itemSearchTimer);
+            if (itemSearchController) itemSearchController.abort();
+            itemsBox.style.display = "none";
+        }
     });
 
     // 🔥 клик вне — закрывает
@@ -1397,6 +1417,10 @@ document.addEventListener("keydown", function(e) {
         if (barcodeBuffer.length >= 8) {
 
             console.log("USB Скан:", barcodeBuffer);
+
+            // Сканер уже передал полный код: отменяем отложенный ручной поиск.
+            clearTimeout(itemSearchTimer);
+            if (itemSearchController) itemSearchController.abort();
 
             // 🔊 пик
             const beep = document.getElementById("beepSound");

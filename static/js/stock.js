@@ -1,111 +1,187 @@
+﻿const STOCK_PAGE_SIZE = 50;
 let activeStockFilter = "all";
+let stockOffset = document.querySelectorAll("#stockTableBody .stock-record").length;
+let stockTotal = Number((document.getElementById("stockResultTotal")?.textContent || "").replace(/\D/g, "")) || stockOffset;
+let stockSearchTimer = null;
+let stockRequestController = null;
 
-function getStockRecords() {
-    const desktopVisible = window.innerWidth > 768;
-    const selector = desktopVisible
-        ? "#stockTableBody .stock-record"
-        : "#stockMobileList .stock-record";
-
-    return Array.from(document.querySelectorAll(selector));
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
-function applyStockFilters() {
-    const query = (document.getElementById("stockSearch")?.value || "").trim().toLowerCase();
-    const category = (document.getElementById("stockCategory")?.value || "").toLowerCase();
-    const records = document.querySelectorAll(".stock-record");
-    const visibleKeys = new Set();
+function formatMoney(value) {
+    return new Intl.NumberFormat("ru-RU", {maximumFractionDigits: 0}).format(Number(value) || 0);
+}
 
-    records.forEach(record => {
-        const searchText = [
-            record.dataset.name || "",
-            record.dataset.category || "",
-            record.dataset.unit || ""
-        ].join(" ");
+function formatQuantity(value) {
+    return new Intl.NumberFormat("ru-RU", {maximumFractionDigits: 3}).format(Number(value) || 0);
+}
 
-        const matchesSearch = !query || searchText.includes(query);
-        const matchesCategory = !category || record.dataset.category === category;
-        const matchesStatus = activeStockFilter === "all" || record.dataset.status === activeStockFilter;
-        const visible = matchesSearch && matchesCategory && matchesStatus;
+function stockStatus(stock) {
+    const value = Number(stock) || 0;
+    if (value <= 0) return {key: "out", text: "Нет в наличии"};
+    if (value <= 5) return {key: "low", text: "Заканчивается"};
+    return {key: "normal", text: "В наличии"};
+}
 
-        record.style.display = visible ? "" : "none";
+function buildDesktopRow(item) {
+    const stock = Number(item.stock) || 0;
+    const purchase = Number(item.purchase_price) || 0;
+    const retail = Number(item.retail_price) || 0;
+    const status = stockStatus(stock);
+    const name = escapeHtml(item.name || "Без названия");
+    const category = escapeHtml(item.category || "Без категории");
+    const unit = escapeHtml(item.unit || "—");
+    const initial = escapeHtml((item.name || "Т").trim().charAt(0).toUpperCase() || "Т");
 
-        if (visible) {
-            const key = [
-                record.dataset.name,
-                record.dataset.category,
-                record.dataset.stock,
-                record.dataset.retail
-            ].join("|");
-            visibleKeys.add(key);
-        }
-    });
+    return `
+        <tr class="stock-record">
+            <td>
+                <div class="stock-product">
+                    <div class="stock-product-icon">${initial}</div>
+                    <div><strong>${name}</strong><small>${status.text}</small></div>
+                </div>
+            </td>
+            <td><span class="stock-category-badge">${category}</span></td>
+            <td>${unit}</td>
+            <td>
+                <div class="stock-balance">
+                    <strong class="stock-balance-value stock-balance-value--${status.key}">${formatQuantity(stock)}</strong>
+                    <span class="stock-status stock-status--${status.key}">${status.text}</span>
+                </div>
+            </td>
+            <td>${formatMoney(purchase)} ₸</td>
+            <td><strong class="stock-price">${formatMoney(retail)} ₸</strong></td>
+            <td>${formatMoney(stock * purchase)} ₸</td>
+        </tr>`;
+}
 
-    const count = visibleKeys.size;
+function buildMobileCard(item) {
+    const stock = Number(item.stock) || 0;
+    const purchase = Number(item.purchase_price) || 0;
+    const retail = Number(item.retail_price) || 0;
+    const status = stockStatus(stock);
+    const name = escapeHtml(item.name || "Без названия");
+    const category = escapeHtml(item.category || "Без категории");
+    const unit = escapeHtml(item.unit || "");
+    const initial = escapeHtml((item.name || "Т").trim().charAt(0).toUpperCase() || "Т");
+
+    return `
+        <article class="stock-mobile-card stock-record">
+            <div class="stock-mobile-top">
+                <div class="stock-product">
+                    <div class="stock-product-icon">${initial}</div>
+                    <div><strong>${name}</strong><small>${category}</small></div>
+                </div>
+                <span class="stock-status stock-status--${status.key}">${status.text}</span>
+            </div>
+            <div class="stock-mobile-grid">
+                <div><span>Остаток</span><strong class="stock-balance-value stock-balance-value--${status.key}">${formatQuantity(stock)} ${unit}</strong></div>
+                <div><span>Закуп</span><strong>${formatMoney(purchase)} ₸</strong></div>
+                <div><span>Розница</span><strong>${formatMoney(retail)} ₸</strong></div>
+                <div><span>Стоимость остатка</span><strong>${formatMoney(stock * purchase)} ₸</strong></div>
+            </div>
+        </article>`;
+}
+
+function updateStockState(loadedCount, total, hasMore) {
+    stockOffset = loadedCount;
+    stockTotal = total;
+
     const countNode = document.getElementById("stockVisibleCount");
+    const totalNode = document.getElementById("stockResultTotal");
     const emptyNode = document.getElementById("stockSearchEmpty");
+    const moreWrap = document.getElementById("stockLoadMoreWrap");
 
-    if (countNode) countNode.textContent = count;
-    if (emptyNode) emptyNode.hidden = count !== 0;
+    if (countNode) countNode.textContent = String(loadedCount);
+    if (totalNode) totalNode.textContent = `из ${total}`;
+    if (emptyNode) emptyNode.hidden = total !== 0;
+    if (moreWrap) moreWrap.hidden = !hasMore;
 }
 
-function sortStockRecords() {
-    const sortValue = document.getElementById("stockSort")?.value || "name";
-    const containers = [
-        document.getElementById("stockTableBody"),
-        document.getElementById("stockMobileList")
-    ].filter(Boolean);
+async function loadStock({append = false} = {}) {
+    if (stockRequestController) stockRequestController.abort();
+    stockRequestController = new AbortController();
 
-    containers.forEach(container => {
-        const records = Array.from(container.querySelectorAll(".stock-record"));
+    const query = (document.getElementById("stockSearch")?.value || "").trim();
+    const category = document.getElementById("stockCategory")?.value || "";
+    const sort = document.getElementById("stockSort")?.value || "name";
+    const offset = append ? stockOffset : 0;
+    const moreButton = document.getElementById("stockLoadMore");
 
-        records.sort((a, b) => {
-            if (sortValue === "stock-asc") {
-                return Number(a.dataset.stock || 0) - Number(b.dataset.stock || 0);
-            }
-
-            if (sortValue === "stock-desc") {
-                return Number(b.dataset.stock || 0) - Number(a.dataset.stock || 0);
-            }
-
-            if (sortValue === "retail-desc") {
-                return Number(b.dataset.retail || 0) - Number(a.dataset.retail || 0);
-            }
-
-            if (sortValue === "retail-asc") {
-                return Number(a.dataset.retail || 0) - Number(b.dataset.retail || 0);
-            }
-
-            return (a.dataset.name || "").localeCompare(
-                b.dataset.name || "",
-                "ru",
-                {sensitivity: "base"}
-            );
-        });
-
-        records.forEach(record => container.appendChild(record));
+    const params = new URLSearchParams({
+        q: query,
+        category,
+        status: activeStockFilter,
+        sort,
+        offset: String(offset),
+        limit: String(STOCK_PAGE_SIZE)
     });
 
-    applyStockFilters();
+    if (moreButton) {
+        moreButton.disabled = true;
+        moreButton.textContent = "Загрузка…";
+    }
+
+    try {
+        const response = await fetch(`/api/stock?${params.toString()}`, {
+            signal: stockRequestController.signal,
+            headers: {"Accept": "application/json"}
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const tableBody = document.getElementById("stockTableBody");
+        const mobileList = document.getElementById("stockMobileList");
+
+        if (!append) {
+            if (tableBody) tableBody.innerHTML = "";
+            if (mobileList) mobileList.innerHTML = "";
+        }
+
+        if (tableBody) tableBody.insertAdjacentHTML("beforeend", items.map(buildDesktopRow).join(""));
+        if (mobileList) mobileList.insertAdjacentHTML("beforeend", items.map(buildMobileCard).join(""));
+
+        const loadedCount = (append ? stockOffset : 0) + items.length;
+        updateStockState(loadedCount, Number(data.total) || 0, Boolean(data.has_more));
+    } catch (error) {
+        if (error.name !== "AbortError") {
+            console.error("Не удалось загрузить остатки:", error);
+        }
+    } finally {
+        if (moreButton) {
+            moreButton.disabled = false;
+            moreButton.textContent = "Показать ещё";
+        }
+    }
+}
+
+function scheduleStockReload() {
+    clearTimeout(stockSearchTimer);
+    stockSearchTimer = setTimeout(() => loadStock(), 300);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".stock-tab").forEach(button => {
         button.addEventListener("click", () => {
             activeStockFilter = button.dataset.filter || "all";
-
             document.querySelectorAll(".stock-tab").forEach(tab => {
                 tab.classList.toggle("is-active", tab === button);
             });
-
-            applyStockFilters();
+            loadStock();
         });
     });
 
-    document.getElementById("stockSearch")?.addEventListener("input", applyStockFilters);
-    document.getElementById("stockCategory")?.addEventListener("change", applyStockFilters);
-    document.getElementById("stockSort")?.addEventListener("change", sortStockRecords);
+    document.getElementById("stockSearch")?.addEventListener("input", scheduleStockReload);
+    document.getElementById("stockCategory")?.addEventListener("change", () => loadStock());
+    document.getElementById("stockSort")?.addEventListener("change", () => loadStock());
+    document.getElementById("stockLoadMore")?.addEventListener("click", () => loadStock({append: true}));
 
-    window.addEventListener("resize", applyStockFilters);
-
-    sortStockRecords();
+    updateStockState(stockOffset, stockTotal, stockOffset < stockTotal);
 });
