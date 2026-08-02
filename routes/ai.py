@@ -1394,14 +1394,25 @@ def _create_ai_response(request_options):
             time.sleep(delay)
 
 
-def _generate_reply(message, history, company_id, user_id, conversation_id):
+def _generate_reply(
+    message,
+    history,
+    company_id,
+    user_id,
+    conversation_id,
+    additional_instructions="",
+):
 
     input_items = [*history, {"role": "user", "content": message}]
 
     for _ in range(AI_MAX_TOOL_ROUNDS):
+        instructions = AI_INSTRUCTIONS
+        if additional_instructions:
+            instructions += "\n\n" + str(additional_instructions).strip()[:3000]
+
         request_options = {
             "model": AI_MODEL,
-            "instructions": AI_INSTRUCTIONS,
+            "instructions": instructions,
             "input": input_items,
             "tools": AI_TOOLS,
             "store": False,

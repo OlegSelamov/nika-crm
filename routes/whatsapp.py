@@ -1,6 +1,8 @@
 import json
+import hmac
 import os
 import re
+import secrets
 import threading
 import time
 from decimal import Decimal
@@ -10,6 +12,18 @@ from flask import Blueprint, current_app, request, jsonify, session
 from openai import APIConnectionError, APIStatusError, OpenAI
 
 from models import get_db, pool
+from routes.ai import (
+    ActionError as InternalAIActionError,
+    PermissionDenied as InternalAIPermissionDenied,
+    _cancel_pending_action as _cancel_internal_pending_action,
+    _confirmation_intent as _internal_confirmation_intent,
+    _ensure_ai_tables as _ensure_internal_ai_tables,
+    _execute_pending_action as _execute_internal_pending_action,
+    _generate_reply as _generate_internal_reply,
+    _latest_pending_action as _latest_internal_pending_action,
+    _load_messages as _load_internal_messages,
+    _save_exchange as _save_internal_exchange,
+)
 from utils.timezone import now_kz
 
 
@@ -143,6 +157,7 @@ def save_integration():
         }), 400
 
     conn = get_db()
+    webhook_token = secrets.token_urlsafe(32)
 
     try:
         cur = conn.cursor()
@@ -154,25 +169,33 @@ def save_integration():
                 phone,
                 instance_id,
                 api_token,
+                webhook_token,
                 enabled,
                 status,
                 updated_at
             )
-            VALUES (%s, 'green_api', %s, %s, %s, TRUE, 'connected', NOW())
+            VALUES (%s, 'green_api', %s, %s, %s, %s, TRUE, 'connected', NOW())
 
             ON CONFLICT (company_id)
             DO UPDATE SET
                 phone = EXCLUDED.phone,
                 instance_id = EXCLUDED.instance_id,
                 api_token = EXCLUDED.api_token,
+                webhook_token = COALESCE(whatsapp_integrations.webhook_token, EXCLUDED.webhook_token),
                 enabled = TRUE,
                 updated_at = NOW()
+            RETURNING *
         """, (
             company_id,
             phone,
             instance_id,
-            api_token
+            api_token,
+            webhook_token,
         ))
+
+        saved_integration = dict(cur.fetchone())
+        webhook_token = saved_integration["webhook_token"]
+        _configure_authenticated_webhook(saved_integration, webhook_token)
 
         conn.commit()
 
@@ -393,6 +416,7 @@ def _ensure_whatsapp_ai_schema():
         try:
             cur.execute("ALTER TABLE whatsapp_integrations ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE whatsapp_integrations ADD COLUMN IF NOT EXISTS ai_instructions TEXT")
+            cur.execute("ALTER TABLE whatsapp_integrations ADD COLUMN IF NOT EXISTS webhook_token TEXT")
             cur.execute("ALTER TABLE whatsapp_chats ADD COLUMN IF NOT EXISTS ai_paused BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE whatsapp_chats ADD COLUMN IF NOT EXISTS ai_paused_at TIMESTAMP")
             cur.execute("ALTER TABLE whatsapp_chats ADD COLUMN IF NOT EXISTS ai_pause_reason TEXT")
@@ -422,6 +446,211 @@ def _json_default(value):
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _normalized_phone(phone):
+    digits = "".join(character for character in str(phone or "") if character.isdigit())
+    if len(digits) == 11 and digits.startswith("8"):
+        digits = "7" + digits[1:]
+    return digits
+
+
+def _phone_match_key(phone):
+    digits = _normalized_phone(phone)
+    return digits[-10:] if len(digits) >= 10 else ""
+
+
+def _load_user_module_codes(cur, user):
+    if bool(user.get("is_super_admin")):
+        cur.execute("SELECT code FROM modules WHERE is_active = TRUE ORDER BY sort_order, id")
+        return [row["code"] for row in cur.fetchall()]
+
+    company_id = user.get("company_id")
+    if not company_id:
+        return ["profile"]
+
+    if str(user.get("role") or "").lower() in {"owner", "admin"}:
+        cur.execute(
+            """
+            SELECT m.code
+            FROM modules m
+            JOIN company_modules cm ON cm.module_id = m.id
+            WHERE cm.company_id = %s AND cm.enabled = TRUE AND m.is_active = TRUE
+            ORDER BY m.sort_order, m.id
+            """,
+            (company_id,),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT m.code
+            FROM modules m
+            JOIN company_modules cm
+              ON cm.module_id = m.id AND cm.company_id = %s AND cm.enabled = TRUE
+            JOIN employee_module_permissions emp
+              ON emp.module_id = m.id AND emp.employee_id = %s AND emp.allowed = TRUE
+            WHERE m.is_active = TRUE
+            ORDER BY m.sort_order, m.id
+            """,
+            (company_id, user["id"]),
+        )
+
+    codes = [row["code"] for row in cur.fetchall()]
+    if "profile" not in codes:
+        codes.insert(0, "profile")
+    return codes
+
+
+def _find_internal_user(cur, company_id, sender_phone):
+    """A phone identifies a user only inside the integration's own company."""
+    phone_key = _phone_match_key(sender_phone)
+    if not phone_key:
+        return None
+
+    cur.execute(
+        """
+        SELECT id, username, full_name, phone, role, company_id, is_super_admin
+        FROM users
+        WHERE company_id = %s
+          AND LENGTH(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')) >= 10
+          AND RIGHT(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 10) = %s
+        ORDER BY id
+        LIMIT 2
+        """,
+        (company_id, phone_key),
+    )
+    matches = [dict(row) for row in cur.fetchall()]
+    if len(matches) != 1:
+        return None
+
+    user = matches[0]
+    user["employee_modules"] = _load_user_module_codes(cur, user)
+    return user
+
+
+def _webhook_is_authenticated(integration):
+    expected = str(integration.get("webhook_token") or "").strip()
+    if not expected:
+        return False
+    supplied = str(request.headers.get("Authorization") or "").strip()
+    return hmac.compare_digest(supplied, f"Bearer {expected}")
+
+
+def _configure_authenticated_webhook(integration, webhook_token):
+    public_base_url = os.getenv("PUBLIC_BASE_URL", "https://nikabusiness.com").rstrip("/")
+    url = (
+        f"https://api.green-api.com/waInstance{integration['instance_id']}/"
+        f"setSettings/{integration['api_token']}"
+    )
+    response = requests.post(
+        url,
+        json={
+            "webhookUrl": f"{public_base_url}/whatsapp/webhook",
+            "webhookUrlToken": f"Bearer {webhook_token}",
+            "incomingWebhook": "yes",
+            "outgoingWebhook": "yes",
+            "outgoingAPIMessageWebhook": "yes",
+        },
+        timeout=25,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not bool(data.get("saveSettings")):
+        raise RuntimeError("GREEN-API did not save webhook settings")
+
+
+def _get_or_create_internal_conversation(company_id, user_id, chat_id):
+    conversation_id = f"whatsapp:{int(company_id)}:{int(user_id)}:{int(chat_id)}"
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO ai_conversations (id, company_id, user_id, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE SET updated_at = EXCLUDED.updated_at
+            RETURNING id
+            """,
+            (conversation_id, company_id, user_id, now_kz(), now_kz()),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return row["id"]
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        release_db(conn)
+
+
+def _generate_internal_whatsapp_reply(app, company_id, chat_id, user, message):
+    """Reuse Nika's business assistant with an ephemeral authenticated session."""
+    with app.test_request_context("/whatsapp/internal-ai", method="POST"):
+        session["user_id"] = int(user["id"])
+        session["username"] = user.get("username") or ""
+        session["full_name"] = user.get("full_name") or user.get("username") or "Пользователь"
+        session["phone"] = user.get("phone") or ""
+        session["role"] = user.get("role") or "employee"
+        session["company_id"] = int(company_id)
+        session["is_super_admin"] = bool(user.get("is_super_admin"))
+        session["employee_modules"] = list(user.get("employee_modules") or ["profile"])
+
+        _ensure_internal_ai_tables()
+        conversation_id = _get_or_create_internal_conversation(
+            company_id, user["id"], chat_id
+        )
+        intent = _internal_confirmation_intent(message)
+        if intent:
+            pending = _latest_internal_pending_action(company_id, user["id"])
+            if not pending:
+                reply = "У вас нет действия, ожидающего подтверждения."
+            elif intent == "cancel":
+                _cancel_internal_pending_action(pending["id"], company_id, user["id"])
+                reply = f"Отменила действие: {pending['summary']}."
+            else:
+                result = _execute_internal_pending_action(
+                    pending["id"], company_id, user["id"]
+                )
+                reply = result["message"]
+            _save_internal_exchange(
+                conversation_id, company_id, user["id"], message, reply
+            )
+            return _plain_customer_reply(reply)
+
+        history = _load_internal_messages(conversation_id, company_id, user["id"])
+        modules = ", ".join(user.get("employee_modules") or []) or "только профиль"
+        additional_instructions = (
+            "Пользователь обращается к тебе через личный WhatsApp, подтверждённый Nika. "
+            f"Его имя: {session.get('full_name')}. Роль: {session.get('role')}. "
+            f"Разрешённые разделы: {modules}. "
+            "Это внутренний бизнес-режим, а не клиентская консультация. Отвечай по данным "
+            "его организации и выполняй команды только через доступные функции. Права всё "
+            "равно повторно проверяет сервер. Если права запрещают запрос, спокойно сообщи об этом. "
+            "В WhatsApp нельзя открыть страницу интерфейса, поэтому не говори, что открываешь раздел."
+        )
+        reply, pending = _generate_internal_reply(
+            message,
+            history,
+            company_id,
+            user["id"],
+            conversation_id,
+            additional_instructions=additional_instructions,
+        )
+        saved_message = (
+            "[команда с паролем скрыта]"
+            if pending and pending.get("sensitive")
+            else message
+        )
+        if pending:
+            reply += "\n\nДля выполнения напишите «Подтверждаю». Для отказа — «Отмена»."
+        _save_internal_exchange(
+            conversation_id, company_id, user["id"], saved_message, reply
+        )
+        return _plain_customer_reply(reply)
 
 
 def _plain_customer_reply(text):
@@ -783,7 +1012,15 @@ def _generate_customer_reply(app, company_id, chat_id, history, extra_instructio
     )
 
 
-def _send_ai_whatsapp_message(app, company_id, integration, chat, message, handoff_reason=""):
+def _send_ai_whatsapp_message(
+    app,
+    company_id,
+    integration,
+    chat,
+    message,
+    handoff_reason="",
+    resume_ai=False,
+):
     url = (
         f"https://api.green-api.com/"
         f"waInstance{integration['instance_id']}/"
@@ -824,7 +1061,17 @@ def _send_ai_whatsapp_message(app, company_id, integration, chat, message, hando
                 integration.get("phone") or "",
             ),
         )
-        if handoff_reason:
+        if resume_ai:
+            cur.execute(
+                """
+                UPDATE whatsapp_chats
+                SET last_message = %s, last_message_at = NOW(), updated_at = NOW(),
+                    ai_paused = FALSE, ai_paused_at = NULL, ai_pause_reason = NULL
+                WHERE id = %s AND company_id = %s
+                """,
+                (message, chat["id"], company_id),
+            )
+        elif handoff_reason:
             cur.execute(
                 """
                 UPDATE whatsapp_chats
@@ -855,7 +1102,7 @@ def _send_ai_whatsapp_message(app, company_id, integration, chat, message, hando
         release_db(conn)
 
 
-def _can_send_ai_reply(company_id, chat_id, incoming_db_id):
+def _can_send_ai_reply(company_id, chat_id, incoming_db_id, allow_paused=False):
     """Recheck after generation so a manager/new client message can cancel a stale reply."""
     conn = get_db()
     cur = conn.cursor()
@@ -885,7 +1132,7 @@ def _can_send_ai_reply(company_id, chat_id, incoming_db_id):
         return bool(
             row
             and row["ai_enabled"]
-            and not row["ai_paused"]
+            and (allow_paused or not row["ai_paused"])
             and int(row["latest_incoming_id"] or 0) == int(incoming_db_id)
         )
     finally:
@@ -896,7 +1143,14 @@ def _can_send_ai_reply(company_id, chat_id, incoming_db_id):
         release_db(conn)
 
 
-def _process_whatsapp_ai_reply(app, company_id, integration_id, chat_id, incoming_db_id):
+def _process_whatsapp_ai_reply(
+    app,
+    company_id,
+    integration_id,
+    chat_id,
+    incoming_db_id,
+    authenticated_webhook=False,
+):
     """Runs after webhook acknowledgement; only the newest rapid message is answered."""
     with app.app_context():
         time.sleep(WHATSAPP_AI_REPLY_DELAY)
@@ -905,7 +1159,8 @@ def _process_whatsapp_ai_reply(app, company_id, integration_id, chat_id, incomin
         try:
             cur.execute(
                 """
-                SELECT wi.*, wc.id AS chat_db_id, wc.external_chat_id, wc.ai_paused
+                SELECT wi.*, wc.id AS chat_db_id, wc.external_chat_id,
+                       wc.phone AS sender_phone, wc.ai_paused
                 FROM whatsapp_integrations wi
                 JOIN whatsapp_chats wc
                   ON wc.integration_id = wi.id AND wc.company_id = wi.company_id
@@ -916,7 +1171,16 @@ def _process_whatsapp_ai_reply(app, company_id, integration_id, chat_id, incomin
                 (integration_id, company_id, chat_id),
             )
             row = cur.fetchone()
-            if not row or bool(_safe_row_value(row, "ai_paused", False)):
+            if not row:
+                return
+
+            internal_user = None
+            if authenticated_webhook:
+                internal_user = _find_internal_user(
+                    cur, company_id, _safe_row_value(row, "sender_phone", "")
+                )
+
+            if bool(_safe_row_value(row, "ai_paused", False)) and not internal_user:
                 return
 
             # Never let the sales assistant speak in group chats.
@@ -997,14 +1261,32 @@ def _process_whatsapp_ai_reply(app, company_id, integration_id, chat_id, incomin
             release_db(conn)
 
         try:
-            reply, handoff_reason = _generate_customer_reply(
-                app,
+            if internal_user:
+                try:
+                    reply = _generate_internal_whatsapp_reply(
+                        app,
+                        company_id,
+                        chat_id,
+                        internal_user,
+                        history[-1]["content"],
+                    )
+                except (InternalAIActionError, InternalAIPermissionDenied) as error:
+                    reply = _plain_customer_reply(str(error))
+                handoff_reason = ""
+            else:
+                reply, handoff_reason = _generate_customer_reply(
+                    app,
+                    company_id,
+                    chat_id,
+                    history,
+                    integration.get("ai_instructions") or "",
+                )
+            if not _can_send_ai_reply(
                 company_id,
                 chat_id,
-                history,
-                integration.get("ai_instructions") or "",
-            )
-            if not _can_send_ai_reply(company_id, chat_id, incoming_db_id):
+                incoming_db_id,
+                allow_paused=bool(internal_user),
+            ):
                 return
             _send_ai_whatsapp_message(
                 app,
@@ -1013,6 +1295,7 @@ def _process_whatsapp_ai_reply(app, company_id, integration_id, chat_id, incomin
                 chat,
                 reply,
                 handoff_reason,
+                resume_ai=bool(internal_user),
             )
         except Exception as error:
             app.logger.exception("WhatsApp AI reply failed")
@@ -1047,31 +1330,59 @@ def whatsapp_ai_status():
             data = request.get_json(silent=True) or {}
             enabled = bool(data.get("enabled"))
             ai_instructions = data.get("ai_instructions")
+            new_webhook_token = secrets.token_urlsafe(32)
 
             if ai_instructions is None:
                 cur.execute(
                     """
                     UPDATE whatsapp_integrations
-                    SET ai_enabled = %s, updated_at = NOW()
+                    SET ai_enabled = %s,
+                        webhook_token = CASE
+                            WHEN %s THEN COALESCE(webhook_token, %s)
+                            ELSE webhook_token
+                        END,
+                        updated_at = NOW()
                     WHERE company_id = %s
-                    RETURNING id
+                    RETURNING *
                     """,
-                    (enabled, company_id),
+                    (enabled, enabled, new_webhook_token, company_id),
                 )
             else:
                 ai_instructions = str(ai_instructions).strip()[:3000]
                 cur.execute(
                     """
                     UPDATE whatsapp_integrations
-                    SET ai_enabled = %s, ai_instructions = %s, updated_at = NOW()
+                    SET ai_enabled = %s,
+                        ai_instructions = %s,
+                        webhook_token = CASE
+                            WHEN %s THEN COALESCE(webhook_token, %s)
+                            ELSE webhook_token
+                        END,
+                        updated_at = NOW()
                     WHERE company_id = %s
-                    RETURNING id
+                    RETURNING *
                     """,
-                    (enabled, ai_instructions or None, company_id),
+                    (
+                        enabled,
+                        ai_instructions or None,
+                        enabled,
+                        new_webhook_token,
+                        company_id,
+                    ),
                 )
-            if not cur.fetchone():
+            updated_integration = cur.fetchone()
+            if not updated_integration:
                 conn.rollback()
                 return jsonify({"ok": False, "error": "Сначала подключите WhatsApp"}), 404
+
+            if enabled and not _safe_row_value(updated_integration, "webhook_token"):
+                raise RuntimeError("Не удалось создать защитный токен webhook")
+
+            if enabled and _safe_row_value(updated_integration, "webhook_token") == new_webhook_token:
+                _configure_authenticated_webhook(
+                    dict(updated_integration),
+                    _safe_row_value(updated_integration, "webhook_token"),
+                )
             conn.commit()
 
         cur.execute(
@@ -1672,6 +1983,7 @@ def green_api_webhook():
                 return jsonify({"ok": True})
 
             company_id = integration["company_id"]
+            authenticated_webhook = _webhook_is_authenticated(dict(integration))
 
             webhook_type = payload.get("typeWebhook")
 
@@ -1870,6 +2182,7 @@ def green_api_webhook():
                     integration["id"],
                     chat_db_id,
                     inserted_message["id"],
+                    authenticated_webhook,
                 )
 
         except Exception:
