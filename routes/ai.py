@@ -55,11 +55,13 @@ AI_INSTRUCTIONS = """
 Если вопрос относится именно к онлайн-витрине, опубликованным позициям, доставке, самовывозу или ссылке сайта, обязательно вызови search_storefront. Не считай весь внутренний каталог опубликованным: источник публичных позиций — только результат search_storefront.
 Не выдумывай цифры и не утверждай, что действие выполнено, если функция его не выполняла.
 Когда пользователь просит создать, изменить, удалить, оплатить, списать или провести запись, обязательно вызови prepare_action. В action укажи точное действие, а в data_json передай JSON-объект с реальными полями. Не говори, что действие выполнено: prepare_action только готовит подтверждение.
+Когда владелец или сотрудник просит написать клиенту или отправить ему WhatsApp, сначала обязательно вызови search_clients. Нельзя выбирать первого клиента из нескольких похожих. Если найдено несколько — перечисли имена и последние цифры номеров и попроси уточнить получателя. Если найден ровно один клиент, подготовь send_client_whatsapp через prepare_action с полями client_id, recipient_query и message. recipient_query должен повторять имя, компанию или номер, которыми пользователь однозначно указал клиента. Сообщение отправляется только после подтверждения.
 Если для действия нужен id, сначала найди запись функцией поиска. Не угадывай id.
 Одно подтверждение относится только к одному подготовленному действию. Права определяет сервер. Никогда не обещай обход прав, не проси пароль существующей учётной записи и не повторяй пароль в ответе. Для нового пользователя используй только временный пароль, который явно задал текущий владелец или администратор.
 Черновик продажи не является оплатой и не создаёт фискальный чек. Для оплаты направляй пользователя в раздел Продажи.
 Основные поля действий:
 клиент: client_id, full_name, phone, iin, company_name, status, category, payment, comment, address, contract_number, contract_date;
+сообщение клиенту в WhatsApp: client_id, recipient_query, message;
 позиция: item_id, name, category, unit, description, retail_price, wholesale_price, purchase_price, discount_percent, barcode, gtin, ntin, is_marked, item_type product или service, service_sale_mode;
 категория: category_id, name, markup_percent, category_type product или service;
 склад: item_id, quantity, price для прихода, payment_method, comment;
@@ -1244,6 +1246,11 @@ def _create_pending_action(conversation_id, company_id, user_id, action, data_js
         "summary": prepared["summary"],
         "expires_in_seconds": 600,
         "sensitive": "password" in prepared["arguments"],
+        "kind": (
+            "client_message"
+            if action == "send_client_whatsapp"
+            else "business_action"
+        ),
     }
 
 
@@ -1586,7 +1593,8 @@ def _generate_reply(
     normalized_message = _normalize_command(message)
     mutation_markers = (
         "добав", "созда", "измени", "обнов", "удали", "спиши", "проведи",
-        "поставь цену", "поменяй цену",
+        "поставь цену", "поменяй цену", "отправь сообщение", "напиши клиент",
+        "сообщи клиент", "отправь в whatsapp", "отправь в ватсап", "отправь в вотсап",
     )
     catalog_markers = (
         "товар", "услуг", "каталог", "прайс", "цен", "стоим", "сколько стоит",
@@ -1604,6 +1612,14 @@ def _generate_reply(
         and not force_storefront_search
         and not any(marker in normalized_message for marker in mutation_markers)
     )
+    client_message_markers = (
+        "отправь сообщение клиент", "напиши клиент", "сообщи клиент",
+        "отправь клиенту", "отправь в whatsapp клиент", "отправь в ватсап клиент",
+        "отправь в вотсап клиент",
+    )
+    force_client_search = any(
+        marker in normalized_message for marker in client_message_markers
+    )
 
     for tool_round in range(AI_MAX_TOOL_ROUNDS):
         instructions = AI_INSTRUCTIONS
@@ -1619,7 +1635,9 @@ def _generate_reply(
             "max_output_tokens": 900,
             "parallel_tool_calls": False,
         }
-        if force_storefront_search and tool_round == 0:
+        if force_client_search and tool_round == 0:
+            request_options["tool_choice"] = {"type": "function", "name": "search_clients"}
+        elif force_storefront_search and tool_round == 0:
             request_options["tool_choice"] = {"type": "function", "name": "search_storefront"}
         elif force_catalog_search and tool_round == 0:
             request_options["tool_choice"] = {"type": "function", "name": "search_items"}
@@ -1722,6 +1740,11 @@ def ai_history():
                 "confirmation": {
                     "id": pending["id"],
                     "summary": pending["summary"],
+                    "kind": (
+                        "client_message"
+                        if pending["action_name"] == "send_client_whatsapp"
+                        else "business_action"
+                    ),
                 } if pending else None,
             }
         )

@@ -4613,7 +4613,8 @@ function appendAiConfirmation(confirmation) {
 
     const label = document.createElement("div");
     label.className = "ai-confirmation__label";
-    label.textContent = "Требуется подтверждение";
+    const isClientMessage = confirmation.kind === "client_message";
+    label.textContent = isClientMessage ? "Проверьте сообщение" : "Требуется подтверждение";
 
     const summary = document.createElement("div");
     summary.className = "ai-confirmation__summary";
@@ -4625,7 +4626,7 @@ function appendAiConfirmation(confirmation) {
     const confirmButton = document.createElement("button");
     confirmButton.type = "button";
     confirmButton.className = "ai-confirmation__button ai-confirmation__button--confirm";
-    confirmButton.textContent = "Подтвердить";
+    confirmButton.textContent = isClientMessage ? "Отправить" : "Подтвердить";
     confirmButton.onclick = () => decideAiAction(confirmation.id, "confirm", card);
 
     const cancelButton = document.createElement("button");

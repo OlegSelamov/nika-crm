@@ -1851,6 +1851,7 @@ def _send_ai_whatsapp_message(
     if pending_action and pending_action.get("id"):
         action_id = str(pending_action["id"])
         is_storefront_order = pending_action.get("kind") == "storefront_order"
+        is_client_message = pending_action.get("kind") == "client_message"
         confirm_id = (
             f"nika:order-confirm:{action_id}"
             if is_storefront_order
@@ -1869,7 +1870,11 @@ def _send_ai_whatsapp_message(
                     "header": (
                         "Подтверждение заказа"
                         if is_storefront_order
-                        else "Подтверждение действия"
+                        else (
+                            "Отправка сообщения"
+                            if is_client_message
+                            else "Подтверждение действия"
+                        )
                     ),
                     "body": message,
                     "footer": "Кнопки активны 10 минут",
@@ -1879,7 +1884,11 @@ def _send_ai_whatsapp_message(
                             "buttonText": (
                                 "✅ Оформить"
                                 if is_storefront_order
-                                else "✅ Подтвердить"
+                                else (
+                                    "✅ Отправить"
+                                    if is_client_message
+                                    else "✅ Подтвердить"
+                                )
                             ),
                         },
                         {
@@ -1906,7 +1915,11 @@ def _send_ai_whatsapp_message(
             )
             stored_message = (
                 f"{message}\n\n"
-                "Для выполнения напишите «Подтверждаю». Для отказа — «Отмена»."
+                + (
+                    "Для отправки напишите «Подтверждаю». Для отказа — «Отмена»."
+                    if is_client_message
+                    else "Для выполнения напишите «Подтверждаю». Для отказа — «Отмена»."
+                )
             )
 
     if not external_message_id:
