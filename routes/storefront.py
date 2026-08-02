@@ -87,8 +87,13 @@ def _cart_payload(store):
     data = session.get(key, {})
     ids = [int(x) for x in data.keys() if str(x).isdigit()]
 
+    store_config = {
+        "delivery_price": float(_money(store.get("delivery_price"))),
+        "brand_color": store.get("brand_color") or "#6366f1",
+    }
+
     if not ids:
-        return {"items": [], "count": 0, "total": 0}
+        return {"items": [], "count": 0, "total": 0, **store_config}
 
     conn = get_db()
     cur = conn.cursor()
@@ -134,6 +139,7 @@ def _cart_payload(store):
             "items": result,
             "count": float(count),
             "total": float(total),
+            **store_config,
         }
     finally:
         cur.close()

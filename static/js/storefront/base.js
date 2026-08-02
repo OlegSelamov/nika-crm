@@ -1,9 +1,17 @@
-const SF_SLUG = {{ store.slug|tojson }};
+const SF_PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
+const SF_SLUG = decodeURIComponent(SF_PATH_PARTS[0] === 's' ? (SF_PATH_PARTS[1] || '') : '');
 const sfState = {
     cart: {items:[], count:0, total:0},
     product: null,
     modalQty: 1
 };
+
+function sfApplyStoreConfig(data={}){
+    const brand = String(data.brand_color || '').trim();
+    if(/^#[0-9a-f]{6}$/i.test(brand)){
+        document.documentElement.style.setProperty('--brand', brand);
+    }
+}
 
 function sfMoney(value){
     return new Intl.NumberFormat('ru-RU',{
@@ -64,6 +72,7 @@ async function sfLoadCart(){
         {headers:{'X-Requested-With':'XMLHttpRequest'}}
     );
     sfState.cart = data;
+    sfApplyStoreConfig(data);
     sfRenderCart();
     sfSyncProductCards();
     return data;
@@ -365,7 +374,7 @@ function sfRefreshCheckoutTotal(){
     const subtotal = Number(sfState.cart.total || 0);
     const deliveryPrice =
         method === 'delivery'
-            ? Number({{ (store.delivery_price or 0)|tojson }})
+            ? Number(sfState.cart.delivery_price || 0)
             : 0;
 
     document.getElementById('sfCheckoutSubtotal').textContent =
@@ -608,10 +617,10 @@ document.addEventListener('click', async event=>{
     }
 });
 
-document.getElementById('sfPmMinus').addEventListener('click',()=>sfModalStep(-1));
-document.getElementById('sfPmPlus').addEventListener('click',()=>sfModalStep(1));
+document.getElementById('sfPmMinus')?.addEventListener('click',()=>sfModalStep(-1));
+document.getElementById('sfPmPlus')?.addEventListener('click',()=>sfModalStep(1));
 
-document.getElementById('sfPmAdd').addEventListener('click', async()=>{
+document.getElementById('sfPmAdd')?.addEventListener('click', async()=>{
     if(!sfState.product) return;
     try{
         await sfAddToCart(sfState.product.id, sfState.modalQty);
@@ -622,7 +631,7 @@ document.getElementById('sfPmAdd').addEventListener('click', async()=>{
     }
 });
 
-document.getElementById('sfPmBuy').addEventListener('click', async()=>{
+document.getElementById('sfPmBuy')?.addEventListener('click', async()=>{
     if(!sfState.product) return;
     try{
         await sfAddToCart(sfState.product.id, sfState.modalQty);
@@ -632,18 +641,18 @@ document.getElementById('sfPmBuy').addEventListener('click', async()=>{
     }
 });
 
-document.getElementById('sfProductOverlay').addEventListener('click',event=>{
+document.getElementById('sfProductOverlay')?.addEventListener('click',event=>{
     if(event.target === event.currentTarget) sfCloseProduct();
 });
-document.getElementById('sfCartOverlay').addEventListener('click',event=>{
+document.getElementById('sfCartOverlay')?.addEventListener('click',event=>{
     if(event.target === event.currentTarget) sfCloseCart();
 });
 
 const sfSearch = document.getElementById('sfLiveSearch');
 const sfClear = document.getElementById('sfSearchClear');
 
-sfSearch.addEventListener('input', sfApplySearch);
-sfClear.addEventListener('click',()=>{
+sfSearch?.addEventListener('input', sfApplySearch);
+sfClear?.addEventListener('click',()=>{
     sfSearch.value = '';
     sfSearch.focus();
     sfApplySearch();

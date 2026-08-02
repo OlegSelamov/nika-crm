@@ -1,5 +1,5 @@
 :root{
-    --brand:{{ store.brand_color or '#6366f1' }};
+    --brand:#6366f1;
     --brand-soft:color-mix(in srgb,var(--brand) 12%,white);
     --brand-soft-2:color-mix(in srgb,var(--brand) 7%,white);
     --brand-dark:color-mix(in srgb,var(--brand) 72%,#111827);

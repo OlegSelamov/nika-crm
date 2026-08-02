@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}{{ store.title or store.company_name }}{% endblock %}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/storefront/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/storefront/base.css', v='20260802-1') }}">
 {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -239,6 +239,6 @@
 
 <div id="sfToast" class="sf-toast"></div>
 
-<script src="{{ url_for('static', filename='js/storefront/base.js') }}"></script>
+<script src="{{ url_for('static', filename='js/storefront/base.js', v='20260802-1') }}"></script>
 </body>
 </html>
