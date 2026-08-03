@@ -202,7 +202,7 @@
         <!-- HEADER -->
         <div class="modal-header">
             <b id="saleTitle">Чек</b>
-            <button onclick="closeSaleModal()" class="icon-only-btn" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button>
+            <button type="button" onclick="closeSaleModal()" class="icon-only-btn" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button>
         </div>
 
         <!-- BODY -->
@@ -211,10 +211,17 @@
         </div>
 
         <!-- FOOTER -->
-        <div class="modal-footer">
-            <button onclick="printCurrentDocument()" class="btn document-action-btn"><img src="/static/icons/print.png" alt="">Печать</button>
-			<button id="saveDocumentBtn" onclick="downloadPDF()" class="btn document-action-btn"><img src="/static/icons/download.png" alt="">Сохранить</button>
-            <button onclick="closeSaleModal()" class="btn modal-close-action">Закрыть</button>
+		<div class="modal-footer">
+			<button type="button" id="printDocumentBtn" onclick="printCurrentDocument(event)" class="btn document-action-btn" aria-label="Печать">
+				<img src="/static/icons/print.png" alt="" aria-hidden="true">
+				<span class="document-action-label">Печать</span>
+			</button>
+			<button type="button" id="saveDocumentBtn" onclick="downloadPDF()" class="btn document-action-btn"><img src="/static/icons/download.png" alt=""><span class="document-action-label">Сохранить</span></button>
+            <button type="button" id="shareDocumentBtn" onclick="shareCurrentDocument()" class="btn document-action-btn">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 15 5c0 .18.02.35.05.52L8.91 8.59A3 3 0 0 0 7 8a3 3 0 1 0 1.91 5.41l6.14 3.07A3 3 0 0 0 15 17a3 3 0 1 0 .83-2.07L9.69 11.86c.2-.55.2-1.17 0-1.72l6.14-3.07A3 3 0 0 0 18 8Z"/></svg>
+                <span class="document-action-label">Поделиться</span>
+            </button>
+            <button type="button" onclick="closeSaleModal()" class="btn modal-close-action">Закрыть</button>
         </div>
 
     </div>
@@ -336,7 +343,6 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/sales.js') }}"></script>
 {% endblock %}

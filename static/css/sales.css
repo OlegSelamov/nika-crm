@@ -1022,6 +1022,17 @@
 	}
 }
 
+/* Кнопка печати документов: текст должен оставаться видимым на белом фоне. */
+#saleModal #printDocumentBtn,
+#saleModal #printDocumentBtn .document-action-label {
+    color: #1f2937 !important;
+}
+
+#saleModal #printDocumentBtn {
+    background: #fff !important;
+    border: 1px solid #d9e0e8 !important;
+}
+
 :root {
     --pos-blue: #2864e8;
     --pos-blue-dark: #1f55cc;
@@ -1451,7 +1462,7 @@
 
 .modal-footer .modal-close-action { margin-left: auto; }
 
-#invoiceFrame {
+#documentFrame {
     border: 1px solid #d8dee8 !important;
     border-radius: 6px;
 }
@@ -1820,7 +1831,7 @@
     background: #eef0f6 !important;
 }
 
-#saleModal.invoice-mode #invoiceFrame {
+#saleModal.invoice-mode #documentFrame {
     display: block !important;
     width: 100% !important;
     height: 100% !important;
@@ -2064,11 +2075,38 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
+    white-space: nowrap;
+    font-size: 14px !important;
+    line-height: 1.2;
+}
+
+.document-action-label {
+    display: inline-flex !important;
+    align-items: center !important;
+    width: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    text-indent: 0 !important;
+    white-space: nowrap !important;
 }
 
 .document-action-btn img {
     width: 22px;
     height: 22px;
+}
+
+.document-action-btn svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+    flex: 0 0 22px;
 }
 
 .modal-header > .icon-only-btn {
@@ -2198,5 +2236,21 @@
     .document-action-btn img {
         width: 20px;
         height: 20px;
+    }
+
+    .document-action-btn svg {
+        width: 20px;
+        height: 20px;
+        flex-basis: 20px;
+    }
+
+    #saleModal .modal-footer {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    #saleModal .modal-footer .modal-close-action {
+        grid-column: 1 / -1;
+        margin-left: 0;
     }
 }

@@ -3,7 +3,41 @@ let selectedClientData = null;
 let selectedClient = null;
 let currentBarcodeData = {};
 let currentDocumentType = "check";
+let currentDocumentId = null;
 let pendingQuantityItem = null;
+
+const documentConfig = {
+    check: {
+        title: "Чек",
+        url: id => `/docs/check/${id}`,
+        pdfUrl: id => `/docs/pdf/check/${id}`,
+        filename: id => `check-${id}.pdf`
+    },
+    invoice: {
+        title: "Счёт на оплату",
+        url: id => `/docs/invoice/${id}`,
+        pdfUrl: id => `/docs/pdf/invoice/${id}`,
+        filename: id => `schet-na-oplatu-${id}.pdf`
+    },
+    nakladnaya: {
+        title: "Накладная",
+        url: id => `/docs/nakladnaya/${id}`,
+        pdfUrl: id => `/docs/pdf/nakladnaya/${id}`,
+        filename: id => `nakladnaya-${id}.pdf`
+    },
+    schetFactura: {
+        title: "Счёт-фактура",
+        url: id => `/docs/schet-factura/${id}`,
+        pdfUrl: id => `/docs/pdf/schet-factura/${id}`,
+        filename: id => `schet-factura-${id}.pdf`
+    },
+    act: {
+        title: "Акт выполненных работ",
+        url: id => `/docs/act/${id}`,
+        pdfUrl: id => `/docs/pdf/act/${id}`,
+        filename: id => `akt-vypolnennyh-rabot-${id}.pdf`
+    }
+};
 
 let company = {}; // 👈 вот сюда
 
@@ -686,6 +720,7 @@ function sendAssistant(text) {
 function openSaleModal(id) {
 
     currentDocumentType = "check";
+    currentDocumentId = id;
     const saveBtn = document.getElementById("saveDocumentBtn");
     if (saveBtn) saveBtn.style.display = "";
 
@@ -741,33 +776,46 @@ function openSaleModal(id) {
 
 
 function openInvoiceModal(id) {
+    openDocumentModal(id, "invoice");
+}
 
-    currentDocumentType = "invoice";
+function openDocumentModal(id, type) {
+    const config = documentConfig[type];
+    if (!config || type === "check") {
+        openSaleModal(id);
+        return;
+    }
+
+    currentDocumentType = type;
+    currentDocumentId = id;
 
     const modal = document.getElementById("saleModal");
     const body = document.getElementById("saleBody");
     const title = document.getElementById("saleTitle");
-    const saveBtn = document.getElementById("saveDocumentBtn");
 
-    title.innerText = "Счёт на оплату";
+    title.innerText = config.title;
     title.dataset.saleId = id;
-
-    if (saveBtn) saveBtn.style.display = "none";
 
     modal.classList.add("invoice-mode");
     modal.style.display = "flex";
     body.innerHTML = `
         <iframe
-            id="invoiceFrame"
-            src="/docs/invoice/${id}"
-            style="width:100%;height:100%;min-height:65vh;border:0;background:white;"
+            id="documentFrame"
+            title="${config.title}"
+            src="${config.url(id)}"
+            onload="this.dataset.loaded='true'"
         ></iframe>
     `;
 }
 
-function printCurrentDocument() {
-    if (currentDocumentType === "invoice") {
-        const frame = document.getElementById("invoiceFrame");
+function printCurrentDocument(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    if (currentDocumentType !== "check") {
+        const frame = document.getElementById("documentFrame");
         if (frame && frame.contentWindow) {
             frame.contentWindow.focus();
             frame.contentWindow.print();
@@ -782,6 +830,7 @@ function closeSaleModal() {
     const modal = document.getElementById("saleModal");
     modal.style.display = "none";
     modal.classList.remove("invoice-mode");
+    document.getElementById("saleBody").innerHTML = "Загрузка...";
 }
 
 function formatDate(dateStr) {
@@ -801,89 +850,244 @@ function formatDate(dateStr) {
 }
 
 function printCheck() {
+	const saleBody = document.getElementById("saleBody");
 
-    const printContents =
-        document.getElementById(
-            "saleBody"
-        ).innerHTML;
-
-    const original =
-        document.body.innerHTML;
-
-    document.body.innerHTML = `
-        <div style="
-            width:58mm;
-            margin:0 auto;
-            font-family:Arial;
-            font-size:13px;
-        ">
-            ${printContents}
-        </div>
-    `;
-
-	if (window.require) {
-
-		const { ipcRenderer } = require('electron');
-
-		setTimeout(() => {
-
-			ipcRenderer.send('print-receipt');
-
-		}, 500);
-
-		setTimeout(() => {
-
-			document.body.innerHTML = original;
-			location.reload();
-
-		}, 1500);
-
-	} else {
-
-		window.print();
-
-		document.body.innerHTML = original;
-
-		location.reload();
+	if (!saleBody || !saleBody.textContent.trim()) {
+		alert("Чек ещё не загрузился");
+		return;
 	}
-}	
 
-function downloadPDF() {
+	// В Electron сохраняем штатную печать на настроенный чековый принтер.
+	if (window.require) {
+		try {
+			const { ipcRenderer } = require("electron");
+			ipcRenderer.send("print-receipt");
+			return;
+		} catch (error) {
+			console.error("Electron print is unavailable", error);
+		}
+	}
 
-    const element = document.getElementById("saleBody");
+	printCheckInIsolatedFrame(saleBody);
+}
 
-    // 🔥 делаем чек узким и центрируем
-    element.style.width = "302px";
-    element.style.margin = "0 auto";
-    element.style.fontFamily = "Courier New, monospace";
-    element.style.fontSize = "12px";
-    element.style.display = "block";
+function printCheckInIsolatedFrame(saleBody) {
+	if (document.getElementById("checkPrintFrame")) return;
 
-    const opt = {
-        margin: 0, // 🔥 убираем боковые отступы
-        filename: 'check.pdf',
-        image: { type: 'jpeg', quality: 1 },
-        html2canvas: { 
-            scale: 2,
-            useCORS: true
-        },
-        jsPDF: {
-            unit: 'mm',
-            format: [80, 200],
-            orientation: 'portrait'
-        }
-    };
+	const printFrame = document.createElement("iframe");
+	printFrame.id = "checkPrintFrame";
+	printFrame.setAttribute("title", "Печать чека");
+	printFrame.style.cssText = [
+		"position:fixed",
+		"right:0",
+		"bottom:0",
+		"width:1px",
+		"height:1px",
+		"border:0",
+		"opacity:0",
+		"pointer-events:none"
+	].join(";");
 
-    html2pdf().set(opt).from(element).save().then(() => {
+	const stylesheetLinks = Array.from(
+		document.querySelectorAll('link[rel="stylesheet"]')
+	).map(link => `<link rel="stylesheet" href="${link.href}">`).join("");
 
-        // возвращаем как было
-        element.style.width = "";
-        element.style.margin = "";
-        element.style.fontFamily = "";
-        element.style.fontSize = "";
-        element.style.display = "";
+	printFrame.srcdoc = `
+		<!doctype html>
+		<html lang="ru">
+		<head>
+			<meta charset="utf-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			${stylesheetLinks}
+			<style>
+				@page {
+					size: A4 portrait;
+					margin: 0;
+				}
+				html, body {
+					margin: 0 !important;
+					width: 100% !important;
+					height: auto !important;
+					min-height: 0 !important;
+					overflow: visible !important;
+					background: #fff !important;
+				}
+				body {
+					display: flex !important;
+					justify-content: center !important;
+					align-items: flex-start !important;
+					box-sizing: border-box !important;
+					padding: 12mm 0 0 !important;
+				}
+				body *, #saleBody, #saleBody * {
+					visibility: visible !important;
+				}
+				#saleBody {
+					display: block !important;
+					position: static !important;
+					inset: auto !important;
+					box-sizing: border-box !important;
+					width: 280px !important;
+					max-width: calc(100% - 20mm) !important;
+					flex: 0 0 280px !important;
+					height: auto !important;
+					min-height: 0 !important;
+					margin: 0 auto !important;
+					padding: 8px !important;
+					overflow: visible !important;
+					font-family: "Courier New", monospace !important;
+					font-size: 12px !important;
+				}
+				.receipt {
+					position: static !important;
+					width: 100% !important;
+					max-width: 100% !important;
+					height: auto !important;
+					min-height: 0 !important;
+					margin: 0 auto !important;
+					break-inside: avoid !important;
+					page-break-inside: avoid !important;
+				}
+			</style>
+		</head>
+		<body><main id="saleBody">${saleBody.innerHTML}</main></body>
+		</html>
+	`;
 
+	const cleanup = () => {
+		if (printFrame.parentNode) printFrame.remove();
+	};
+
+	printFrame.onload = async () => {
+		const printWindow = printFrame.contentWindow;
+		const printDocument = printFrame.contentDocument;
+
+		if (!printWindow || !printDocument) {
+			cleanup();
+			alert("Не удалось подготовить чек к печати");
+			return;
+		}
+
+		try {
+			if (printDocument.fonts && printDocument.fonts.ready) {
+				await printDocument.fonts.ready;
+			}
+
+			const images = Array.from(printDocument.images);
+			await Promise.all(images.map(image => {
+				if (image.complete) return Promise.resolve();
+				return new Promise(resolve => {
+					image.onload = resolve;
+					image.onerror = resolve;
+				});
+			}));
+
+			printWindow.addEventListener("afterprint", cleanup, { once: true });
+			printWindow.focus();
+			printWindow.print();
+			setTimeout(cleanup, 1000);
+		} catch (error) {
+			console.error("Check print failed", error);
+			cleanup();
+			alert("Не удалось открыть печать чека");
+		}
+	};
+
+	document.body.appendChild(printFrame);
+}
+
+async function downloadPDF() {
+    try {
+        const { blob, filename } = await createCurrentDocumentPdf();
+        downloadBlob(blob, filename);
+    } catch (error) {
+        showDocumentError(error);
+    }
+}
+
+function getCurrentDocumentFilename() {
+    const config = documentConfig[currentDocumentType] || documentConfig.check;
+    return config.filename(currentDocumentId || "document");
+}
+
+async function createCurrentDocumentPdf() {
+    const config = documentConfig[currentDocumentType] || documentConfig.check;
+    if (!currentDocumentId) {
+        throw new Error("Документ не выбран");
+    }
+
+    const response = await fetch(config.pdfUrl(currentDocumentId), {
+        credentials: "same-origin",
+        headers: { "Accept": "application/pdf" }
     });
+
+    if (!response.ok) {
+        let message = "Не удалось сформировать PDF";
+        const responseCopy = response.clone();
+        try {
+            const errorData = await response.json();
+            if (errorData.error) message = errorData.error;
+        } catch (_) {
+            const errorText = await responseCopy.text();
+            if (errorText && errorText.length < 300) message = errorText;
+        }
+        throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    if (blob.type && blob.type !== "application/pdf") {
+        throw new Error("Сервер вернул файл неверного формата");
+    }
+
+    return { blob, filename: getCurrentDocumentFilename() };
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function shareCurrentDocument() {
+    try {
+        const { blob, filename } = await createCurrentDocumentPdf();
+        const canShareFiles =
+            navigator.share &&
+            navigator.canShare &&
+            typeof File !== "undefined";
+
+        if (canShareFiles) {
+            const file = new File([blob], filename, { type: "application/pdf" });
+
+            if (!navigator.canShare({ files: [file] })) {
+                downloadBlob(blob, filename);
+                alert("На этом устройстве системная отправка недоступна. PDF сохранён — его можно отправить вручную.");
+                return;
+            }
+
+            await navigator.share({
+                title: (documentConfig[currentDocumentType] || documentConfig.check).title,
+                files: [file]
+            });
+            return;
+        }
+
+        downloadBlob(blob, filename);
+        alert("На этом устройстве системная отправка недоступна. PDF сохранён — его можно отправить вручную.");
+    } catch (error) {
+        if (error && error.name === "AbortError") return;
+        showDocumentError(error);
+    }
+}
+
+function showDocumentError(error) {
+    console.error(error);
+    alert(error && error.message ? error.message : "Не удалось подготовить документ");
 }
 
 function createInvoiceSale() {
@@ -1522,7 +1726,7 @@ function loadSalesHistory() {
                     <td>${sale.sale_number || sale.id}</td>
 
                     <td>
-                        ${formatDate(sale.created_at)}
+                        ${sale.created_at_display || formatDate(sale.created_at)}
                     </td>
 
                     <td>
@@ -1549,21 +1753,21 @@ function loadSalesHistory() {
                             </button>
 
                             <button
-                                onclick="window.open('/docs/nakladnaya/${sale.id}', '_blank')"
+                                onclick="openDocumentModal(${sale.id}, 'nakladnaya')"
                                 class="mini-doc-btn"
                             aria-label="Накладная">
                                 <img src="/static/icons/invoice-waybill.png" alt="">
                             </button>
 
                             <button
-                                onclick="window.open('/docs/schet-factura/${sale.id}', '_blank')"
+                                onclick="openDocumentModal(${sale.id}, 'schetFactura')"
                                 class="mini-doc-btn"
                             aria-label="Счёт-фактура">
                                 <img src="/static/icons/invoice.png" alt="">
                             </button>
 
                             <button
-                                onclick="window.open('/docs/act/${sale.id}', '_blank')"
+                                onclick="openDocumentModal(${sale.id}, 'act')"
                                 class="mini-doc-btn"
                             aria-label="Акт">
                                 <img src="/static/icons/act.png" alt="">
@@ -1600,7 +1804,7 @@ function loadSalesHistory() {
 				</div>
 
 				<div class="mobile-sale-date">
-					${formatDate(sale.created_at)}
+					${sale.created_at_display || formatDate(sale.created_at)}
 				</div>
 
 				<div class="mobile-sale-actions">
@@ -1613,21 +1817,21 @@ function loadSalesHistory() {
 					</button>
 
 					<button
-						onclick="window.open('/docs/nakladnaya/${sale.id}', '_blank')"
+						onclick="openDocumentModal(${sale.id}, 'nakladnaya')"
 						class="mini-doc-btn"
 					aria-label="Накладная">
 						<img src="/static/icons/invoice-waybill.png" alt="">
 					</button>
 
 					<button
-						onclick="window.open('/docs/schet-factura/${sale.id}', '_blank')"
+						onclick="openDocumentModal(${sale.id}, 'schetFactura')"
 						class="mini-doc-btn"
 					aria-label="Счёт-фактура">
 						<img src="/static/icons/invoice.png" alt="">
 					</button>
 
 					<button
-						onclick="window.open('/docs/act/${sale.id}', '_blank')"
+						onclick="openDocumentModal(${sale.id}, 'act')"
 						class="mini-doc-btn"
 					aria-label="Акт">
 						<img src="/static/icons/act.png" alt="">

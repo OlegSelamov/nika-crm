@@ -1,5 +1,5 @@
 from routes.clients import format_date_ru
-from flask import Blueprint, render_template, request, jsonify, redirect
+from flask import Blueprint, render_template, request, jsonify, redirect, make_response, send_file, current_app
 from models import get_db, pool
 from datetime import datetime, timedelta
 from utils.timezone import now_kz
@@ -9,6 +9,7 @@ from flask import session
 import uuid
 import pytz
 import requests
+from io import BytesIO
 
 sales_bp = Blueprint("sales", __name__)
 sales_api = Blueprint("sales_api", __name__)
@@ -324,8 +325,7 @@ def get_sale(sale_id):
         "card": sale["card_amount"] if "card_amount" in sale.keys() else 0,
         "kaspi": sale["kaspi_amount"] if "kaspi_amount" in sale.keys() else 0,
         "check_date":
-            (sale["created_at"] + timedelta(hours=5))
-                .strftime("%d.%m.%Y %H:%M"),
+            sale["created_at"].strftime("%d.%m.%Y %H:%M"),
         "kaspi_method": sale.get("kaspi_method"),
         "kaspi_transaction_id": sale.get("kaspi_transaction_id"),
         "rekassa_ticket_id": sale.get("rekassa_ticket_id"),
@@ -422,6 +422,12 @@ def sales_history():
             "sale_number": sale["sale_number"],
 
             "created_at": sale["created_at"],
+
+            # created_at уже хранится по времени Казахстана. Отдаём готовую
+            # строку, чтобы браузер не воспринял локальное время как UTC и не
+            # прибавил ещё пять часов.
+            "created_at_display":
+                sale["created_at"].strftime("%d.%m.%Y, %H:%M"),
 
             "client_name":
                 sale["full_name"],
@@ -954,7 +960,7 @@ def check(sale_id):
     if not company:
         return "Нет компании"
 
-    date_obj = sale["created_at"] + timedelta(hours=5)
+    date_obj = sale["created_at"]
 
     check_date = date_obj.strftime("%d.%m.%Y %H:%M")
     
@@ -2197,6 +2203,58 @@ def act(sale_id):
         date=now_kz().strftime("%d.%m.%Y"),
         format_date_ru=format_date_ru
     )
+
+
+@sales_bp.route("/docs/pdf/<document_type>/<int:sale_id>")
+def document_pdf(document_type, sale_id):
+    """Сформировать PDF из того же серверного шаблона, что открыт в модалке."""
+    documents = {
+        "check": (check, "check"),
+        "invoice": (invoice, "schet-na-oplatu"),
+        "nakladnaya": (nakladnaya, "nakladnaya"),
+        "schet-factura": (schet_factura, "schet-factura"),
+        "act": (act, "akt-vypolnennyh-rabot"),
+    }
+
+    document = documents.get(document_type)
+    if not document:
+        return jsonify({"error": "Неизвестный тип документа"}), 404
+
+    try:
+        from weasyprint import HTML
+    except ImportError:
+        return jsonify({
+            "error": "На сервере не установлен модуль формирования PDF (WeasyPrint)"
+        }), 503
+
+    render_document, filename_prefix = document
+
+    try:
+        rendered = make_response(render_document(sale_id))
+        if rendered.status_code >= 400:
+            return rendered
+
+        html = rendered.get_data(as_text=True)
+        pdf = HTML(
+            string=html,
+            base_url=request.url_root,
+            media_type="print",
+        ).write_pdf()
+
+        return send_file(
+            BytesIO(pdf),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"{filename_prefix}-{sale_id}.pdf",
+            max_age=0,
+        )
+    except Exception:
+        current_app.logger.exception(
+            "Не удалось сформировать PDF %s для продажи %s",
+            document_type,
+            sale_id,
+        )
+        return jsonify({"error": "Не удалось сформировать PDF документа"}), 500
     
 @sales_bp.route("/quick-add-item", methods=["POST"])
 def quick_add_item():
