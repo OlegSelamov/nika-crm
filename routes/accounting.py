@@ -1,9 +1,12 @@
 from datetime import datetime, date
 from calendar import monthrange
 from decimal import Decimal, InvalidOperation
+import hashlib
 import json
 from io import BytesIO
 from pathlib import Path
+from urllib import error as urlerror
+from urllib import request as urlrequest
 from uuid import uuid4
 
 from flask import (
@@ -215,6 +218,57 @@ def _ensure_accounting_tables(cur):
     cur.execute("""
         CREATE INDEX IF NOT EXISTS idx_accounting_operations_company_date
         ON accounting_operations (company_id, operation_date DESC, id DESC)
+    """)
+
+    # Реестр ФНО и неизменяемый журнал обмена с интеграционным шлюзом ИСНА.
+    # Сам ключ ЭЦП здесь не хранится: браузер передаёт только подпись документа.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS accounting_filings (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER,
+            form_type VARCHAR(10) NOT NULL,
+            report_year INTEGER NOT NULL,
+            report_period VARCHAR(10) NOT NULL,
+            form_version VARCHAR(40),
+            form_revision VARCHAR(40),
+            payload JSONB NOT NULL,
+            payload_hash VARCHAR(64) NOT NULL,
+            signature TEXT,
+            certificate_subject TEXT,
+            status VARCHAR(30) NOT NULL DEFAULT 'prepared',
+            external_id TEXT,
+            registration_number TEXT,
+            response_payload JSONB,
+            error_message TEXT,
+            prepared_at TIMESTAMP NOT NULL,
+            signed_at TIMESTAMP,
+            sent_at TIMESTAMP,
+            accepted_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            UNIQUE (company_id, form_type, report_year, report_period)
+        )
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_accounting_filings_company_status
+        ON accounting_filings (company_id, status, prepared_at DESC)
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS accounting_filing_events (
+            id SERIAL PRIMARY KEY,
+            filing_id INTEGER NOT NULL REFERENCES accounting_filings(id) ON DELETE CASCADE,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER,
+            event_type VARCHAR(40) NOT NULL,
+            from_status VARCHAR(30),
+            to_status VARCHAR(30) NOT NULL,
+            details JSONB,
+            created_at TIMESTAMP NOT NULL
+        )
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_accounting_filing_events_filing
+        ON accounting_filing_events (filing_id, created_at DESC, id DESC)
     """)
 
 
@@ -914,6 +968,13 @@ def accounting():
         """, (company_id,))
         documents_count = cur.fetchone()["documents_count"] or 0
 
+        cur.execute("""
+            SELECT * FROM accounting_filings
+            WHERE company_id=%s
+            ORDER BY prepared_at DESC,id DESC LIMIT 12
+        """, (company_id,))
+        filings = cur.fetchall()
+
         selected_tax_period = request.args.get("tax_period") or now_kz().strftime("%Y-%m")
         tax_calculation = _calculate_taxes(cur, company_id, selected_tax_period)
         cur.execute("""
@@ -945,6 +1006,7 @@ def accounting():
             documents=documents,
             tax_calculation=tax_calculation,
             tax_users=tax_users,
+            filings=filings,
         )
 
     except Exception as exc:
@@ -1920,12 +1982,28 @@ def accounting_report():
         else:
             report = _build_200_report(cur, company_id, year, period)
 
+        cur.execute("""
+            SELECT * FROM accounting_filings
+            WHERE company_id=%s AND form_type=%s AND report_year=%s AND report_period=%s
+        """, (company_id, form_type, year, str(period)))
+        filing = cur.fetchone()
+        filing_events = []
+        if filing:
+            cur.execute("""
+                SELECT * FROM accounting_filing_events
+                WHERE filing_id=%s ORDER BY created_at DESC,id DESC LIMIT 20
+            """, (filing["id"],))
+            filing_events = cur.fetchall()
+
         return render_template(
             "accounting_report.html",
             report=report,
             company=company,
             selected_year=year,
             selected_period=str(period),
+            filing=filing,
+            filing_events=filing_events,
+            isna_gateway_ready=bool(current_app.config.get("ISNA_GATEWAY_URL")),
         )
     finally:
         cur.close()
@@ -1993,6 +2071,190 @@ def _build_isna_draft_json(report, company, selected_year, selected_period):
         }
 
     return base
+
+
+def _filing_event(cur, filing_id, company_id, event_type, from_status,
+                  to_status, details=None):
+    cur.execute("""
+        INSERT INTO accounting_filing_events (
+            filing_id, company_id, user_id, event_type, from_status,
+            to_status, details, created_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        filing_id, company_id, session.get("user_id"), event_type,
+        from_status, to_status, json.dumps(details or {}, ensure_ascii=False),
+        now_kz(),
+    ))
+
+
+def _filing_redirect(filing, message=None):
+    suffix = (
+        f"form_type={filing['form_type']}&year={filing['report_year']}"
+        f"&period={filing['report_period']}"
+    )
+    if message:
+        suffix += f"&filing_message={message}"
+    return redirect(f"/accounting/report?{suffix}#isnaWorkflow")
+
+
+@accounting_bp.route("/accounting/report/prepare", methods=["POST"])
+def prepare_accounting_filing():
+    if not session.get("user_id"):
+        return redirect("/login")
+    company_id = _require_company()
+    if not company_id:
+        return "Активная компания не выбрана", 400
+
+    form_type = request.form.get("form_type", "").strip()
+    period = request.form.get("period", "1").strip()
+    try:
+        year = int(request.form.get("year") or now_kz().year)
+    except ValueError:
+        return "Неверный год", 400
+    if form_type not in {"200", "910"}:
+        return "Неизвестная форма", 400
+
+    conn = get_db(); cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur); _ensure_tax_tables(cur)
+        cur.execute("SELECT id,name,bin,address,director FROM companies WHERE id=%s", (company_id,))
+        company = cur.fetchone()
+        report = (_build_910_report(cur, company_id, year, period)
+                  if form_type == "910" else _build_200_report(cur, company_id, year, period))
+        if not report.get("ready"):
+            conn.rollback()
+            return "Форма не прошла проверку готовности", 409
+        payload = _build_isna_draft_json(report, company, year, period)
+        canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+        payload_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        cur.execute("""
+            SELECT * FROM accounting_filings
+            WHERE company_id=%s AND form_type=%s AND report_year=%s AND report_period=%s
+            FOR UPDATE
+        """, (company_id, form_type, year, period))
+        existing = cur.fetchone()
+        if existing and existing["status"] in {"sent", "accepted"}:
+            conn.rollback()
+            return "Эта форма уже отправлена; повторная отправка заблокирована", 409
+        previous_status = existing["status"] if existing else None
+        cur.execute("""
+            INSERT INTO accounting_filings (
+                company_id,user_id,form_type,report_year,report_period,
+                form_version,form_revision,payload,payload_hash,status,prepared_at,updated_at
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'prepared',%s,%s)
+            ON CONFLICT (company_id,form_type,report_year,report_period) DO UPDATE SET
+                user_id=EXCLUDED.user_id, form_version=EXCLUDED.form_version,
+                form_revision=EXCLUDED.form_revision, payload=EXCLUDED.payload,
+                payload_hash=EXCLUDED.payload_hash, signature=NULL,
+                certificate_subject=NULL, status='prepared', error_message=NULL,
+                prepared_at=EXCLUDED.prepared_at, signed_at=NULL, updated_at=EXCLUDED.updated_at
+            RETURNING *
+        """, (company_id, session.get("user_id"), form_type, year, period,
+              report.get("form_version"), report.get("form_revision"),
+              canonical, payload_hash, now_kz(), now_kz()))
+        filing = cur.fetchone()
+        _filing_event(cur, filing["id"], company_id, "prepared", previous_status,
+                      "prepared", {"payload_hash": payload_hash})
+        conn.commit()
+        return _filing_redirect(filing, "prepared")
+    except Exception as exc:
+        conn.rollback(); print("PREPARE FILING ERROR:", exc)
+        return "Не удалось подготовить форму", 500
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@accounting_bp.route("/accounting/filings/<int:filing_id>/signature", methods=["POST"])
+def save_accounting_filing_signature(filing_id):
+    if not session.get("user_id"):
+        return redirect("/login")
+    company_id = _require_company()
+    signature = (request.form.get("signature") or "").strip()
+    subject = (request.form.get("certificate_subject") or "").strip()
+    if len(signature) < 32:
+        return "Подпись отсутствует или имеет неверный формат", 400
+    conn = get_db(); cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        cur.execute("SELECT * FROM accounting_filings WHERE id=%s AND company_id=%s FOR UPDATE", (filing_id, company_id))
+        filing = cur.fetchone()
+        if not filing:
+            return "Форма не найдена", 404
+        if filing["status"] not in {"prepared", "signed", "failed"}:
+            return "Форму нельзя подписать в текущем статусе", 409
+        previous_status = filing["status"]
+        cur.execute("""
+            UPDATE accounting_filings SET signature=%s,certificate_subject=%s,
+                status='signed',signed_at=%s,error_message=NULL,updated_at=%s
+            WHERE id=%s RETURNING *
+        """, (signature, subject or None, now_kz(), now_kz(), filing_id))
+        filing = cur.fetchone()
+        _filing_event(cur, filing_id, company_id, "signed", previous_status, "signed",
+                      {"certificate_subject": subject})
+        conn.commit()
+        return _filing_redirect(filing, "signed")
+    except Exception as exc:
+        conn.rollback(); print("SIGN FILING ERROR:", exc)
+        return "Не удалось сохранить подпись", 500
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@accounting_bp.route("/accounting/filings/<int:filing_id>/send", methods=["POST"])
+def send_accounting_filing(filing_id):
+    if not session.get("user_id"):
+        return redirect("/login")
+    company_id = _require_company()
+    gateway_url = (current_app.config.get("ISNA_GATEWAY_URL") or "").strip()
+    if not gateway_url:
+        return "Шлюз ИСНА ещё не настроен. Укажите ISNA_GATEWAY_URL.", 503
+    conn = get_db(); cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        cur.execute("SELECT * FROM accounting_filings WHERE id=%s AND company_id=%s FOR UPDATE", (filing_id, company_id))
+        filing = cur.fetchone()
+        if not filing:
+            return "Форма не найдена", 404
+        if filing["status"] != "signed" or not filing["signature"]:
+            return "Сначала подпишите форму ЭЦП", 409
+        envelope = json.dumps({
+            "idempotencyKey": filing["payload_hash"],
+            "document": filing["payload"],
+            "signature": filing["signature"],
+        }, ensure_ascii=False, default=str).encode("utf-8")
+        headers = {"Content-Type": "application/json", "Idempotency-Key": filing["payload_hash"]}
+        token = current_app.config.get("ISNA_GATEWAY_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        try:
+            response = urlrequest.urlopen(urlrequest.Request(gateway_url, data=envelope, headers=headers, method="POST"), timeout=30)
+            response_data = json.loads(response.read().decode("utf-8") or "{}")
+        except (urlerror.URLError, TimeoutError, ValueError) as exc:
+            cur.execute("UPDATE accounting_filings SET status='failed',error_message=%s,updated_at=%s WHERE id=%s RETURNING *",
+                        (str(exc), now_kz(), filing_id))
+            failed = cur.fetchone()
+            _filing_event(cur, filing_id, company_id, "send_failed", "signed", "failed", {"error": str(exc)})
+            conn.commit()
+            return _filing_redirect(failed, "failed")
+        gateway_status = str(response_data.get("status") or "sent").lower()
+        new_status = "accepted" if gateway_status == "accepted" else "sent"
+        cur.execute("""
+            UPDATE accounting_filings SET status=%s,external_id=%s,registration_number=%s,
+                response_payload=%s,error_message=NULL,sent_at=%s,
+                accepted_at=CASE WHEN %s='accepted' THEN %s ELSE accepted_at END,updated_at=%s
+            WHERE id=%s RETURNING *
+        """, (new_status, response_data.get("id"), response_data.get("registrationNumber"),
+              json.dumps(response_data, ensure_ascii=False), now_kz(), new_status,
+              now_kz(), now_kz(), filing_id))
+        filing = cur.fetchone()
+        _filing_event(cur, filing_id, company_id, "sent", "signed", new_status, response_data)
+        conn.commit()
+        return _filing_redirect(filing, new_status)
+    except Exception as exc:
+        conn.rollback(); print("SEND FILING ERROR:", exc)
+        return "Не удалось отправить форму", 500
+    finally:
+        cur.close(); pool.putconn(conn)
 
 
 @accounting_bp.route("/accounting/report/export-json")

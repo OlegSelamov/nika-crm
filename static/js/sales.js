@@ -13,6 +13,12 @@ const documentConfig = {
         pdfUrl: id => `/docs/pdf/check/${id}`,
         filename: id => `check-${id}.pdf`
     },
+    refundCheck: {
+        title: "Чек возврата",
+        url: id => `/docs/refund-check/${id}`,
+        pdfUrl: id => `/docs/pdf/refund-check/${id}`,
+        filename: id => `refund-check-${id}.pdf`
+    },
     invoice: {
         title: "Счёт на оплату",
         url: id => `/docs/invoice/${id}`,
@@ -779,6 +785,10 @@ function openInvoiceModal(id) {
     openDocumentModal(id, "invoice");
 }
 
+function openRefundCheckModal(id) {
+    openDocumentModal(id, "refundCheck");
+}
+
 function openDocumentModal(id, type) {
     const config = documentConfig[type];
     if (!config || type === "check") {
@@ -1097,6 +1107,11 @@ function createInvoiceSale() {
         return;
     }
 
+    if (cart.length === 0) {
+        alert("Корзина пустая");
+        return;
+    }
+
     fetch("/sales/create-invoice", {
         method: "POST",
         headers: {
@@ -1107,11 +1122,19 @@ function createInvoiceSale() {
             cart: cart,
         })
     })
-    .then(res => res.json())
+    .then(async res => {
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            throw new Error(data.error || "Не удалось выставить счёт");
+        }
+
+        return data;
+    })
     .then(data => {
 
         if (!data.success) {
-            alert("Ошибка");
+            alert(data.error || "Не удалось выставить счёт");
             return;
         }
 
@@ -1123,6 +1146,10 @@ function createInvoiceSale() {
         renderCart();
         resetSaleAmounts();
 
+    })
+    .catch(error => {
+        console.error("CREATE INVOICE ERROR:", error);
+        alert(error.message || "Не удалось выставить счёт");
     });
 }
 
@@ -1709,7 +1736,7 @@ function switchSalesTab(tab) {
 
 function loadSalesHistory() {
 
-    fetch("/api/sales/history")
+    return fetch("/api/sales/history")
 
     .then(res => res.json())
 
@@ -1720,17 +1747,121 @@ function loadSalesHistory() {
 
         data.forEach(sale => {
 
-            html += `
-                <tr>
+            const isInvoice = sale.sale_type === "invoice";
+            const isPaid = sale.status === "Оплачено";
+            const isRefunded = Boolean(sale.is_refunded) || sale.status === "Возврат";
+            const canConfirmPayment = isInvoice && sale.status === "Счёт выставлен";
+            const statusClass = getSaleStatusClass(sale.status);
+            const saleNumber = sale.sale_number || sale.id;
+            const clientName = escapeHtml(sale.client_name || "-");
+            const paymentType = escapeHtml(sale.payment_type || "-");
+            const status = escapeHtml(sale.status || "-");
+            const createdAt = escapeHtml(
+                sale.created_at_display || formatDate(sale.created_at)
+            );
 
-                    <td>${sale.sale_number || sale.id}</td>
+            const primaryDocumentButton = isInvoice
+                ? `
+                    <button
+                        onclick="openInvoiceModal(${sale.id})"
+                        class="mini-doc-btn invoice-history-btn"
+                        aria-label="Счёт на оплату"
+                        title="Счёт на оплату">
+                        <img src="/static/icons/invoice.png" alt="">
+                    </button>
+                `
+                : `
+                    <button
+                        onclick="openSaleModal(${sale.id})"
+                        class="mini-doc-btn"
+                        aria-label="Чек"
+                        title="Чек">
+                        <img src="/static/icons/receipt.png" alt="">
+                    </button>
+                `;
+
+            const refundCheckButton = isRefunded && !isInvoice
+                ? `
+                    <button
+                        onclick="openRefundCheckModal(${sale.id})"
+                        class="mini-doc-btn refund-check-btn"
+                        aria-label="Чек возврата"
+                        title="Чек возврата">
+                        <img src="/static/icons/refund.png" alt="">
+                    </button>
+                    ${sale.refund_fiscal_url ? `
+                        <button
+                            onclick="openFiscalRefundCheck('${escapeHtml(sale.refund_fiscal_url)}')"
+                            class="mini-doc-btn refund-check-btn"
+                            aria-label="Фискальный чек возврата reKassa"
+                            title="Фискальный чек возврата reKassa">
+                            <img src="/static/icons/receipt.png" alt="">
+                        </button>
+                    ` : ""}
+                `
+                : "";
+
+            const paidDocumentButtons = (isPaid || isRefunded)
+                ? `
+                    <button
+                        onclick="openDocumentModal(${sale.id}, 'nakladnaya')"
+                        class="mini-doc-btn"
+                        aria-label="Накладная"
+                        title="Накладная">
+                        <img src="/static/icons/invoice-waybill.png" alt="">
+                    </button>
+
+                    <button
+                        onclick="openDocumentModal(${sale.id}, 'schetFactura')"
+                        class="mini-doc-btn"
+                        aria-label="Счёт-фактура"
+                        title="Счёт-фактура">
+                        <img src="/static/icons/invoice.png" alt="">
+                    </button>
+
+                    <button
+                        onclick="openDocumentModal(${sale.id}, 'act')"
+                        class="mini-doc-btn"
+                        aria-label="Акт"
+                        title="Акт">
+                        <img src="/static/icons/act.png" alt="">
+                    </button>
+
+                    ${isPaid ? `
+                        <button
+                            onclick="refundSale(${sale.id})"
+                            class="mini-doc-btn"
+                            aria-label="Оформить возврат"
+                            title="Оформить возврат">
+                            <img src="/static/icons/refund.png" alt="">
+                        </button>
+                    ` : refundCheckButton}
+                `
+                : "";
+
+            const confirmPaymentButton = canConfirmPayment
+                ? `
+                    <button
+                        type="button"
+                        onclick="confirmInvoicePayment(${sale.id}, this)"
+                        class="confirm-payment-btn"
+                        title="Подтвердить поступление оплаты">
+                        Подтвердить оплату
+                    </button>
+                `
+                : "";
+
+            html += `
+                <tr class="${isInvoice ? "invoice-history-row" : ""}">
+
+                    <td>${saleNumber}</td>
 
                     <td>
-                        ${sale.created_at_display || formatDate(sale.created_at)}
+                        ${createdAt}
                     </td>
 
                     <td>
-                        ${sale.client_name || "-"}
+                        ${clientName}
                     </td>
 
                     <td>
@@ -1738,47 +1869,20 @@ function loadSalesHistory() {
                     </td>
 
                     <td>
-                        ${sale.payment_type || "-"}
+                        ${paymentType}
+                    </td>
+
+                    <td>
+                        <span class="sale-status-badge ${statusClass}">${status}</span>
                     </td>
 
                     <td>
 
                         <div class="history-actions">
 
-                            <button
-                                onclick="openSaleModal(${sale.id})"
-                                class="mini-doc-btn"
-                            aria-label="Чек">
-                                <img src="/static/icons/receipt.png" alt="">
-                            </button>
-
-                            <button
-                                onclick="openDocumentModal(${sale.id}, 'nakladnaya')"
-                                class="mini-doc-btn"
-                            aria-label="Накладная">
-                                <img src="/static/icons/invoice-waybill.png" alt="">
-                            </button>
-
-                            <button
-                                onclick="openDocumentModal(${sale.id}, 'schetFactura')"
-                                class="mini-doc-btn"
-                            aria-label="Счёт-фактура">
-                                <img src="/static/icons/invoice.png" alt="">
-                            </button>
-
-                            <button
-                                onclick="openDocumentModal(${sale.id}, 'act')"
-                                class="mini-doc-btn"
-                            aria-label="Акт">
-                                <img src="/static/icons/act.png" alt="">
-                            </button>
-							
-							<button
-								onclick="refundSale(${sale.id})"
-								class="mini-doc-btn"
-                            aria-label="Возврат">
-                                <img src="/static/icons/refund (1).png" alt="">
-                            </button>
+                            ${primaryDocumentButton}
+                            ${paidDocumentButtons}
+                            ${confirmPaymentButton}
 
                         </div>
 
@@ -1789,12 +1893,12 @@ function loadSalesHistory() {
 			
 			mobileHtml += `
 
-			<div class="mobile-sale-card">
+			<div class="mobile-sale-card ${isInvoice ? "invoice-history-card" : ""}">
 
 				<div class="mobile-sale-top">
 
 					<div class="mobile-sale-client">
-						${sale.client_name || "-"}
+						${clientName}
 					</div>
 
 					<div class="mobile-sale-sum">
@@ -1804,45 +1908,19 @@ function loadSalesHistory() {
 				</div>
 
 				<div class="mobile-sale-date">
-					${sale.created_at_display || formatDate(sale.created_at)}
+					${createdAt}
+				</div>
+
+				<div class="mobile-sale-meta">
+					<span>${paymentType}</span>
+					<span class="sale-status-badge ${statusClass}">${status}</span>
 				</div>
 
 				<div class="mobile-sale-actions">
 
-					<button
-						onclick="openSaleModal(${sale.id})"
-						class="mini-doc-btn"
-					aria-label="Чек">
-						<img src="/static/icons/receipt.png" alt="">
-					</button>
-
-					<button
-						onclick="openDocumentModal(${sale.id}, 'nakladnaya')"
-						class="mini-doc-btn"
-					aria-label="Накладная">
-						<img src="/static/icons/invoice-waybill.png" alt="">
-					</button>
-
-					<button
-						onclick="openDocumentModal(${sale.id}, 'schetFactura')"
-						class="mini-doc-btn"
-					aria-label="Счёт-фактура">
-						<img src="/static/icons/invoice.png" alt="">
-					</button>
-
-					<button
-						onclick="openDocumentModal(${sale.id}, 'act')"
-						class="mini-doc-btn"
-					aria-label="Акт">
-						<img src="/static/icons/act.png" alt="">
-					</button>
-					
-					<button
-						onclick="refundSale(${sale.id})"
-						class="mini-doc-btn"
-					aria-label="Возврат">
-						<img src="/static/icons/refund.png" alt="">
-					</button>
+					${primaryDocumentButton}
+					${paidDocumentButtons}
+					${confirmPaymentButton}
 
 				</div>
 
@@ -1858,7 +1936,71 @@ function loadSalesHistory() {
 			"mobileSalesHistory"
 		).innerHTML = mobileHtml;
 
+    })
+    .catch(error => {
+        console.error("HISTORY ERROR:", error);
+        document.getElementById("salesHistory").innerHTML = `
+            <tr><td colspan="7" class="history-error">Не удалось загрузить историю продаж</td></tr>
+        `;
+        document.getElementById("mobileSalesHistory").innerHTML = `
+            <div class="history-error">Не удалось загрузить историю продаж</div>
+        `;
     });
+}
+
+function getSaleStatusClass(status) {
+    if (status === "Оплачено") return "is-paid";
+    if (status === "Счёт выставлен") return "is-pending";
+    if (status === "Возврат") return "is-refunded";
+    return "is-neutral";
+}
+
+function escapeHtml(value) {
+    return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+async function confirmInvoicePayment(saleId, button) {
+    if (!window.confirm("Подтвердить поступление оплаты по этому счёту?")) {
+        return;
+    }
+
+    const originalText = button ? button.textContent : "";
+
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Подтверждаем…";
+    }
+
+    try {
+        const response = await fetch("/sales/mark-paid", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ sale_id: saleId })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || "Не удалось подтвердить оплату");
+        }
+
+        await loadSalesHistory();
+    } catch (error) {
+        console.error("MARK PAID ERROR:", error);
+        alert(error.message || "Не удалось подтвердить оплату");
+
+        if (button && document.body.contains(button)) {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
 }
 
 function payKaspiPOS() {
@@ -1969,7 +2111,7 @@ function monitorKaspiPayment(processId) {
 
 function refundSale(id){
 
-    if(!confirm("Сделать возврат через Kaspi POS?")){
+    if(!confirm("Оформить возврат продажи? Товар будет возвращён на склад.")){
         return;
     }
 
@@ -1984,6 +2126,10 @@ function refundSale(id){
             alert("Возврат выполнен");
 
             loadSalesHistory();
+
+            if(data.refund_check_available){
+                openRefundCheckModal(id);
+            }
 
         }else{
 
@@ -2001,4 +2147,9 @@ function refundSale(id){
         alert("Ошибка связи");
 
     });
+}
+
+function openFiscalRefundCheck(url) {
+    if (!url) return;
+    window.open(url, "_blank", "noopener");
 }

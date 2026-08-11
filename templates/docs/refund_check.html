@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Чек возврата №{{ sale.sale_number or sale.id }}</title>
+    <style>
+        @page { size: 80mm auto; margin: 4mm; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; background: #fff; color: #111; }
+        body { font: 12px/1.35 "Courier New", monospace; }
+        .receipt { width: 72mm; max-width: 100%; margin: 0 auto; padding: 3mm; }
+        .center { text-align: center; }
+        .title { margin: 8px 0 2px; font-size: 17px; font-weight: 700; }
+        .subtitle { font-size: 13px; font-weight: 700; }
+        .divider { margin: 8px 0; border-top: 1px dashed #111; }
+        .row { display: flex; justify-content: space-between; gap: 10px; }
+        .row span:last-child { text-align: right; }
+        .item { margin: 7px 0; }
+        .item-name { font-weight: 700; overflow-wrap: anywhere; }
+        .total { margin-top: 8px; font-size: 15px; font-weight: 700; }
+        .meta { margin-top: 5px; overflow-wrap: anywhere; }
+        .muted { color: #444; }
+        @media print {
+            .receipt { width: 72mm; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+<main class="receipt">
+    <div class="center">
+        <div><strong>{{ company.name or "Организация" }}</strong></div>
+        {% if company.bin %}<div>БИН {{ company.bin }}</div>{% endif %}
+        {% if company.address %}<div>{{ company.address }}</div>{% endif %}
+        <div class="title">ЧЕК ВОЗВРАТА</div>
+        <div class="subtitle">ВОЗВРАТ ПРИХОДА</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="row"><span>Продажа №</span><span>{{ sale.sale_number or sale.id }}</span></div>
+    <div class="row"><span>Дата продажи</span><span>{{ original_check_date }}</span></div>
+    <div class="row"><span>Дата возврата</span><span>{{ refund_date }}</span></div>
+    {% if client %}
+        <div class="row"><span>Покупатель</span><span>{{ client.full_name or client.company_name or "Частное лицо" }}</span></div>
+    {% endif %}
+
+    <div class="divider"></div>
+    {% for item in items %}
+        <section class="item">
+            <div class="item-name">{{ loop.index }}. {{ item.name }}</div>
+            <div class="row">
+                <span>{{ item.quantity }} {{ item.unit or "шт" }} × {{ "%.2f"|format(item.price or 0) }}</span>
+                <span>{{ "%.2f"|format(item.total or 0) }} ₸</span>
+            </div>
+        </section>
+    {% endfor %}
+
+    <div class="divider"></div>
+    <div class="row total"><span>ВОЗВРАТ</span><span>{{ "%.2f"|format(sale.total_amount or 0) }} ₸</span></div>
+    <div class="row">
+        <span>Способ</span>
+        <span>
+            {% if sale.sale_type == "cash" %}Наличные
+            {% elif sale.sale_type == "card" %}Карта
+            {% elif sale.sale_type == "kaspi" %}Kaspi POS
+            {% else %}{{ sale.sale_type }}{% endif %}
+        </span>
+    </div>
+
+    {% if refund.ticket_number or refund.document_number or refund.ticket_id %}
+        <div class="divider"></div>
+        {% if refund.ticket_number %}<div class="row"><span>Чек №</span><span>{{ refund.ticket_number }}</span></div>{% endif %}
+        {% if refund.document_number %}<div class="row"><span>Фискальный документ</span><span>{{ refund.document_number }}</span></div>{% endif %}
+        {% if refund.shift_number %}<div class="row"><span>Смена</span><span>{{ refund.shift_number }}</span></div>{% endif %}
+        {% if refund.rnm %}<div class="row"><span>РНМ</span><span>{{ refund.rnm }}</span></div>{% endif %}
+        {% if refund.znm %}<div class="row"><span>ЗНМ</span><span>{{ refund.znm }}</span></div>{% endif %}
+        {% if refund.ticket_id %}<div class="meta muted">ID: {{ refund.ticket_id }}</div>{% endif %}
+    {% endif %}
+
+    {% if refund.payment_transaction_id %}
+        <div class="meta">Транзакция возврата: {{ refund.payment_transaction_id }}</div>
+    {% endif %}
+    {% if refund.qr %}<div class="meta muted">ФДО QR: {{ refund.qr }}</div>{% endif %}
+    {% if refund.print_url %}
+        <div class="meta center">
+            <a href="{{ refund.print_url }}" target="_blank" rel="noopener">
+                Открыть фискальный чек в reKassa
+            </a>
+        </div>
+    {% endif %}
+
+    <div class="divider"></div>
+    <div class="center">Возврат выполнен</div>
+</main>
+</body>
+</html>

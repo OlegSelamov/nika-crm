@@ -214,6 +214,42 @@
     </section>
 
 
+    <section class="accounting-section" id="filingsBlock">
+        <div class="accounting-section__head">
+            <div>
+                <h2>Отчётность и ИСНА</h2>
+                <p>Подготовленные, подписанные и отправленные налоговые формы</p>
+            </div>
+        </div>
+
+        {% if filings %}
+        {% set filing_labels = {'prepared':'Подготовлен','signed':'Подписан','sent':'Отправлен','accepted':'Принят','failed':'Ошибка'} %}
+        <div class="accounting-doc-table-wrap">
+            <table class="accounting-doc-table">
+                <thead><tr><th>Форма</th><th>Период</th><th>Версия</th><th>Статус</th><th>Регистрация</th><th></th></tr></thead>
+                <tbody>
+                {% for filing in filings %}
+                <tr>
+                    <td><strong>ФНО {{ filing.form_type }}.00</strong></td>
+                    <td>{{ filing.report_period }} / {{ filing.report_year }}</td>
+                    <td>{{ filing.form_version or '—' }}.{{ filing.form_revision or '—' }}</td>
+                    <td><span class="status-badge status-badge--{{ 'paid' if filing.status == 'accepted' else 'planned' }}">{{ filing_labels.get(filing.status, filing.status) }}</span></td>
+                    <td>{{ filing.registration_number or filing.external_id or '—' }}</td>
+                    <td><a class="operation-open-link" href="/accounting/report?form_type={{ filing.form_type }}&year={{ filing.report_year }}&period={{ filing.report_period }}#isnaWorkflow">Открыть</a></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="accounting-empty accounting-empty--compact">
+            <span>⇧</span><strong>Формы ещё не подготовлены</strong>
+            <p>Откройте 200.00 или 910.00, проверьте расчёт и зафиксируйте пакет для подписи.</p>
+        </div>
+        {% endif %}
+    </section>
+
+
     <section class="accounting-section tax-workspace" id="taxesBlock">
         <div class="accounting-section__head tax-workspace__head">
             <div>

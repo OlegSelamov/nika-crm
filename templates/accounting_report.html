@@ -107,6 +107,35 @@
     font-size:11px;
 }
 
+.isna-workflow {
+    margin:16px 0;
+    padding:20px;
+    border:1px solid #d9d2ff;
+    border-radius:17px;
+    background:linear-gradient(135deg,#fbfaff,#f4f1ff);
+    box-shadow:var(--r-shadow);
+}
+
+.isna-workflow__head,
+.isna-workflow__actions {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+}
+
+.isna-workflow h2 { margin:0 0 4px; font-size:16px; }
+.isna-workflow p { margin:0; color:var(--r-muted); font-size:11px; }
+.isna-state { padding:7px 11px; border-radius:999px; background:#fff; color:var(--r-purple); font-size:10px; font-weight:800; }
+.isna-steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:16px 0; }
+.isna-step { padding:11px; border:1px solid var(--r-border); border-radius:12px; background:rgba(255,255,255,.75); color:var(--r-muted); font-size:10px; font-weight:700; }
+.isna-step.is-done { border-color:#a9dfcd; background:var(--r-green-soft); color:var(--r-green); }
+.isna-signature-form { display:grid; grid-template-columns:1fr 1fr auto; gap:8px; width:100%; margin-top:12px; }
+.isna-signature-form input,.isna-signature-form textarea { min-width:0; padding:10px; border:1px solid var(--r-border); border-radius:10px; font:inherit; font-size:10px; resize:vertical; }
+.isna-warning { margin-top:10px !important; color:var(--r-red) !important; }
+@media(max-width:760px){ .isna-steps{grid-template-columns:1fr 1fr}.isna-signature-form{grid-template-columns:1fr} }
+
 .report-status-grid,
 .report-summary-grid {
     display:grid;
@@ -475,6 +504,69 @@
             <small>По данным расчёта</small>
         </article>
     </div>
+
+    {% set filing_status = filing.status if filing else 'draft' %}
+    {% set status_labels = {
+        'draft':'Черновик', 'prepared':'Подготовлен', 'signed':'Подписан',
+        'sent':'Отправлен', 'accepted':'Принят ИСНА', 'failed':'Ошибка отправки'
+    } %}
+    <section class="isna-workflow" id="isnaWorkflow">
+        <div class="isna-workflow__head">
+            <div>
+                <h2>Отправка в ИСНА</h2>
+                <p>Проверка → фиксация версии → локальная ЭЦП → защищённая отправка</p>
+            </div>
+            <span class="isna-state">{{ status_labels.get(filing_status, filing_status) }}</span>
+        </div>
+
+        <div class="isna-steps">
+            <div class="isna-step is-done">1. Данные рассчитаны</div>
+            <div class="isna-step {% if filing %}is-done{% endif %}">2. Версия зафиксирована</div>
+            <div class="isna-step {% if filing_status in ['signed','sent','accepted'] %}is-done{% endif %}">3. Подписано ЭЦП</div>
+            <div class="isna-step {% if filing_status in ['sent','accepted'] %}is-done{% endif %}">4. Передано в ИСНА</div>
+        </div>
+
+        <div class="isna-workflow__actions">
+            {% if not filing or filing_status in ['prepared','failed'] %}
+            <form method="post" action="/accounting/report/prepare">
+                <input type="hidden" name="form_type" value="{{ report.form_type }}">
+                <input type="hidden" name="year" value="{{ selected_year }}">
+                <input type="hidden" name="period" value="{{ selected_period }}">
+                <button class="report-btn report-btn--primary" type="submit" {% if not report.ready %}disabled{% endif %}>
+                    {{ 'Обновить пакет' if filing else 'Подготовить к подписи' }}
+                </button>
+            </form>
+            {% endif %}
+
+            {% if filing_status == 'signed' %}
+            <form method="post" action="/accounting/filings/{{ filing.id }}/send">
+                <button class="report-btn report-btn--primary" type="submit" {% if not isna_gateway_ready %}disabled title="Шлюз ИСНА не настроен"{% endif %}
+                        onclick="return confirm('Отправить подписанную форму в ИСНА? Повторная отправка будет заблокирована.')">
+                    Отправить в ИСНА
+                </button>
+            </form>
+            {% endif %}
+
+            {% if filing_status in ['sent','accepted'] %}
+            <div>
+                <strong>{{ filing.registration_number or filing.external_id or 'Ожидается регистрационный номер' }}</strong>
+                <p>{{ 'Форма принята системой' if filing_status == 'accepted' else 'Форма передана, ожидается результат обработки' }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if filing and filing_status in ['prepared','failed'] %}
+        <form class="isna-signature-form" method="post" action="/accounting/filings/{{ filing.id }}/signature">
+            <textarea name="signature" rows="2" required minlength="32" placeholder="Подпись, полученная локально через NCALayer / Nika Sign"></textarea>
+            <input name="certificate_subject" placeholder="Владелец сертификата (необязательно)">
+            <button class="report-btn report-btn--light" type="submit">Сохранить подпись</button>
+        </form>
+        <p>Закрытый ключ ЭЦП не отправляется и не хранится в Nika — сохраняется только подпись зафиксированного пакета.</p>
+        {% endif %}
+
+        {% if filing and filing.error_message %}<p class="isna-warning">{{ filing.error_message }}</p>{% endif %}
+        {% if filing_status == 'signed' and not isna_gateway_ready %}<p class="isna-warning">Подпись сохранена. Для отправки администратору нужно настроить шлюз ИСНА.</p>{% endif %}
+    </section>
 
     <section class="official-form-sheet">\n        <div class="official-form-title">\n            <strong>{{ report.title }}</strong>\n            <span>{{ report.period_label }} · версия {{ report.form_version }} · ревизия {{ report.form_revision }}</span>\n        </div>\n\n        <div class="official-form-grid">\n            <div class="official-cell"><label>ИИН / БИН</label><b>{{ company.bin or "—" }}</b></div>\n            <div class="official-cell"><label>Наименование</label><b>{{ company.name or "—" }}</b></div>\n            <div class="official-cell"><label>Налоговый период</label><b>{{ report.period_label }}</b></div>\n            <div class="official-cell"><label>Вид декларации</label><b>Первоначальная</b></div>\n            <div class="official-cell"><label>Адрес</label><b>{{ company.address or "—" }}</b></div>\n            <div class="official-cell"><label>Руководитель</label><b>{{ company.director or "—" }}</b></div>\n            <div class="official-cell"><label>Срок сдачи</label><b>{{ report.submit_due.strftime("%d.%m.%Y") }}</b></div>\n            <div class="official-cell"><label>Срок оплаты</label><b>{{ report.payment_due.strftime("%d.%m.%Y") }}</b></div>\n        </div>\n\n        <div class="official-section-title">Основные показатели формы</div>\n        <table class="official-lines">\n            <thead>\n                <tr><th>Код строки</th><th>Наименование показателя</th><th>Значение</th></tr>\n            </thead>\n            <tbody>\n                {% for line in report.official_lines %}\n                <tr>\n                    <td class="code">{{ line.code }}</td>\n                    <td>{{ line.name }}</td>\n                    <td class="value">{{ "{:,.0f}".format(line.amount or 0).replace(",", " ") }} ₸</td>\n                </tr>\n                {% endfor %}\n            </tbody>\n        </table>\n\n        {% if report.form_type == "200" %}\n        <div class="official-section-title">Приложение 200.01 — сведения по физическим лицам</div>\n        <table class="official-lines">\n            <thead>\n                <tr><th>Работник</th><th>Доход</th><th>ОПВ</th><th>ВОСМС</th><th>ИПН</th></tr>\n            </thead>\n            <tbody>\n                {% for employee in report.employees %}\n                <tr>\n                    <td>{{ employee.name }}</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.salary or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.opv or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.vosms or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.ipn or 0).replace(",", " ") }} ₸</td>\n                </tr>\n                {% endfor %}\n            </tbody>\n        </table>\n        {% endif %}\n    </section>\n\n    <section class="report-card">
         <div class="report-card__head">

@@ -2221,6 +2221,103 @@
     flex: 0 0 21px;
 }
 
+/* Счета в истории продаж */
+.invoice-history-row td {
+    background: #fcfbff !important;
+}
+
+.invoice-history-btn {
+    border-color: #cfc8ff !important;
+    background: #f1eeff !important;
+}
+
+.sale-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.sale-status-badge.is-paid {
+    color: #087443;
+    background: #e8f8f0;
+}
+
+.sale-status-badge.is-pending {
+    color: #8a5a00;
+    background: #fff4d6;
+}
+
+.sale-status-badge.is-refunded {
+    color: #b42318;
+    background: #feeceb;
+}
+
+.sale-status-badge.is-neutral {
+    color: #536174;
+    background: #eef2f6;
+}
+
+.confirm-payment-btn {
+    min-height: 40px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 12px;
+    color: #fff;
+    background: linear-gradient(135deg, #28a879, #1b8f68);
+    box-shadow: 0 6px 15px rgba(27, 143, 104, .2);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.confirm-payment-btn:hover {
+    transform: translateY(-1px);
+}
+
+.confirm-payment-btn:disabled {
+    opacity: .65;
+    cursor: wait;
+    transform: none;
+}
+
+.mobile-sale-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 9px;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.history-error {
+    padding: 24px !important;
+    color: #b42318;
+    text-align: center;
+}
+
+@media (min-width: 769px) {
+    .history-table {
+        min-width: 1040px;
+    }
+
+    .history-table th:nth-child(1), .history-table td:nth-child(1) { width: 6%; }
+    .history-table th:nth-child(2), .history-table td:nth-child(2) { width: 14%; }
+    .history-table th:nth-child(3), .history-table td:nth-child(3) { width: 18%; }
+    .history-table th:nth-child(4), .history-table td:nth-child(4) { width: 11%; }
+    .history-table th:nth-child(5), .history-table td:nth-child(5) { width: 11%; }
+    .history-table th:nth-child(6), .history-table td:nth-child(6) { width: 15%; }
+    .history-table th:nth-child(7), .history-table td:nth-child(7) { width: 25%; }
+}
+
 @media (max-width: 768px) {
     .mini-doc-btn {
         width: 42px !important;
@@ -2252,5 +2349,15 @@
     #saleModal .modal-footer .modal-close-action {
         grid-column: 1 / -1;
         margin-left: 0;
+    }
+
+    .mobile-sale-actions {
+        flex-wrap: wrap;
+    }
+
+    .mobile-sale-actions .confirm-payment-btn {
+        flex: 1 0 100%;
+        min-height: 44px;
+        margin-top: 4px;
     }
 }

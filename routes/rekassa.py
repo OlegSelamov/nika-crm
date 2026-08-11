@@ -4,11 +4,20 @@ import requests
 import os
 import uuid
 import json
+from urllib.parse import urlsplit
 
 rekassa_bp = Blueprint("rekassa", __name__)
 
 REKASSA_API_KEY = os.getenv("REKASSA_API_KEY")
 REKASSA_URL = os.getenv("REKASSA_URL")
+
+
+def _rekassa_print_url(crs_id, ticket_id):
+    """Return the human-readable fiscal ticket URL for test or production."""
+    parsed = urlsplit(REKASSA_URL or "")
+    if not parsed.scheme or not parsed.netloc or not crs_id or not ticket_id:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}/print/{crs_id}/{ticket_id}"
 
 @rekassa_bp.route("/api/rekassa/login", methods=["POST"])
 def rekassa_login():
@@ -182,34 +191,84 @@ def save_rekassa():
 
     from models import get_db
 
-    data = request.json
+    data = request.get_json(silent=True) or {}
+    company_id = session.get("company_id")
+
+    if not company_id:
+        return jsonify({
+            "success": False,
+            "error": "Активная организация не выбрана"
+        }), 403
+
+    number = data.get("number")
+    password = data.get("password")
+    crs_id = data.get("id")
+    serial_number = data.get("serialNumber")
+
+    if not number or not password or not crs_id:
+        return jsonify({
+            "success": False,
+            "error": "ReKassa вернула неполные данные кассы"
+        }), 400
 
     conn = get_db()
     cur = conn.cursor()
 
-    company_id = session.get("company_id")
+    try:
+        # У старых организаций строка integrations обычно уже существует.
+        # Для новой организации её может ещё не быть, поэтому одного UPDATE
+        # недостаточно: он молча обновляет 0 строк.
+        cur.execute("""
+            UPDATE integrations
+            SET
+                rekassa_enabled = TRUE,
+                rekassa_number = %s,
+                rekassa_password = %s,
+                rekassa_crs_id = %s,
+                rekassa_serial_number = %s
+            WHERE company_id = %s
+        """, (
+            number,
+            password,
+            crs_id,
+            serial_number,
+            company_id
+        ))
 
-    cur.execute("""
-        UPDATE integrations
-        SET
-            rekassa_enabled = TRUE,
-            rekassa_number = %s,
-            rekassa_password = %s,
-            rekassa_crs_id = %s,
-            rekassa_serial_number = %s
-        WHERE company_id = %s
-    """, (
-        data["number"],
-        data["password"],
-        data["id"],
-        data["serialNumber"],
-        company_id
-    ))
+        created = cur.rowcount == 0
 
-    conn.commit()
+        if created:
+            cur.execute("""
+                INSERT INTO integrations (
+                    company_id,
+                    rekassa_enabled,
+                    rekassa_number,
+                    rekassa_password,
+                    rekassa_crs_id,
+                    rekassa_serial_number,
+                    created_at
+                )
+                VALUES (%s, TRUE, %s, %s, %s, %s, NOW())
+            """, (
+                company_id,
+                number,
+                password,
+                crs_id,
+                serial_number
+            ))
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        return jsonify({
+            "success": False,
+            "error": "Не удалось сохранить настройки ReKassa для организации"
+        }), 500
 
     return jsonify({
-        "success": True
+        "success": True,
+        "company_id": company_id,
+        "created": created
     })
     
 def rekassa_sell(conn, sale_id):
@@ -502,6 +561,70 @@ def rekassa_refund(conn, sale_id):
     token = auth_data["token"]
     crs_id = integration["rekassa_crs_id"]
 
+    # A fiscal return must reference the original fiscal ticket.  The sales
+    # table keeps its id, but not the exact fiscal date/time, total and offline
+    # flag, so obtain the complete original ticket from reKassa first.
+    original_response = requests.get(
+        f"{REKASSA_URL}/api/crs/{crs_id}/tickets/{sale['rekassa_ticket_id']}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        },
+        timeout=30
+    )
+
+    try:
+        original_result = original_response.json()
+    except ValueError:
+        original_result = {}
+
+    if original_response.status_code >= 400 or original_result.get("status") != "OK":
+        return {
+            "status": "ERROR",
+            "message": "Не удалось получить исходный фискальный чек reKassa",
+            "details": original_result or original_response.text
+        }
+
+    original_ticket = (
+        (original_result.get("data") or {}).get("ticket") or {}
+    )
+    original_kkm = (
+        (((original_result.get("data") or {}).get("service") or {})
+         .get("regInfo") or {}).get("kkm") or {}
+    )
+
+    parent_ticket_number = (
+        original_result.get("ticketNumber")
+        or sale.get("rekassa_ticket_number")
+    )
+    parent_ticket_datetime = original_ticket.get("dateTime")
+    parent_kgd_kkm_id = (
+        original_kkm.get("fnsKkmId")
+        or sale.get("rekassa_rnm")
+    )
+    parent_ticket_total = (
+        (original_ticket.get("amounts") or {}).get("total")
+    )
+
+    if not all((
+        parent_ticket_number,
+        parent_ticket_datetime,
+        parent_kgd_kkm_id,
+        parent_ticket_total
+    )):
+        return {
+            "status": "ERROR",
+            "message": "В исходном чеке reKassa не хватает реквизитов для возврата"
+        }
+
+    parent_ticket = {
+        "parentTicketNumber": str(parent_ticket_number),
+        "parentTicketDataTime": parent_ticket_datetime,
+        "kgdKkmId": str(parent_kgd_kkm_id),
+        "parentTicketTotal": parent_ticket_total,
+        "parentTicketIsOffline": bool(original_result.get("offline", False))
+    }
+
     now = datetime.now()
 
     ticket_items = []
@@ -555,6 +678,19 @@ def rekassa_refund(conn, sale_id):
         }
     }
 
+    # Для наличного возврата поле taken обязательно, но должно быть равно нулю:
+    # деньги выдаются покупателю, а не принимаются от него. Возвращаемая сумма
+    # уже указана в payments[].sum.
+    if payment_type == "PAYMENT_CASH":
+        amounts["taken"] = {
+            "bills": "0",
+            "coins": 0
+        }
+        amounts["change"] = {
+            "bills": "0",
+            "coins": 0
+        }
+
     ticket = {
         "operation": "OPERATION_SELL_RETURN",
 
@@ -588,6 +724,8 @@ def rekassa_refund(conn, sale_id):
         ],
 
         "amounts": amounts,
+
+        "parentTicket": parent_ticket,
 
         "operator": {
             "code": 0
@@ -627,7 +765,19 @@ def rekassa_refund(conn, sale_id):
     )
     print("=" * 50)
 
-    return response.json()
+    result = response.json()
+
+    # Keep local metadata next to the immutable fiscal response.  sales.py
+    # stores this JSON so the completed refund can always be opened again from
+    # history without confusing the original sale ticket with the return one.
+    if result.get("status") == "OK":
+        result["_nika"] = {
+            "crs_id": crs_id,
+            "source_ticket_id": sale.get("rekassa_ticket_id"),
+            "print_url": _rekassa_print_url(crs_id, result.get("id"))
+        }
+
+    return result
     
 
     

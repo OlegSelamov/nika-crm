@@ -278,7 +278,11 @@
         <form id="clientForm" method="POST" action="/clients/add" enctype="multipart/form-data" class="client-form-grid">
             <label><span>Наименование ИП / Организации</span><input name="company_name" placeholder="Название компании"></label>
             <label><span>ФИО *</span><input name="full_name" placeholder="ФИО клиента" required></label>
-            <label><span>ИИН</span><input name="iin" placeholder="12 цифр" inputmode="numeric"></label>
+            <label class="client-identifier-field">
+                <span>ИИН / БИН</span>
+                <input name="iin" placeholder="12 цифр" inputmode="numeric" autocomplete="off" maxlength="12" data-client-identifier="form">
+                <small class="client-lookup-status" id="clientLookupStatus" aria-live="polite"></small>
+            </label>
             <label><span>Телефон</span><input name="phone" placeholder="+7 ..."></label>
             <label><span>Номер договора</span><input name="contract_number" placeholder="Например, 15/2026"></label>
             <label><span>Дата договора</span><input type="date" name="contract_date"></label>
@@ -334,7 +338,11 @@
                 <div class="client-card-fields" id="clientCardFields">
                     <label><span>ФИО *</span><input data-client-field="full_name" disabled></label>
                     <label><span>Организация</span><input data-client-field="company_name" disabled></label>
-                    <label><span>ИИН / БИН</span><input data-client-field="iin" disabled></label>
+                    <label class="client-identifier-field">
+                        <span>ИИН / БИН</span>
+                        <input data-client-field="iin" inputmode="numeric" autocomplete="off" maxlength="12" data-client-identifier="card" disabled>
+                        <small class="client-lookup-status" id="clientCardLookupStatus" aria-live="polite"></small>
+                    </label>
                     <label><span>Телефон</span><input data-client-field="phone" disabled></label>
                     <label><span>Статус</span><select data-client-field="status" disabled><option>Новый</option><option>В работе</option><option>Ожидание</option><option>Завершен</option></select></label>
                     <label><span>Категория</span><select data-client-field="category" disabled><option>Клиент</option><option>Предприниматель</option><option>Партнер</option><option>Другое</option></select></label>

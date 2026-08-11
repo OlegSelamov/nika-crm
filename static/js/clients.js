@@ -1,4 +1,6 @@
 let currentClientsTab = 'active';
+let clientLookupTimer = null;
+let clientLookupController = null;
 
 function switchClientsTab(tab) {
     currentClientsTab = tab;
@@ -35,10 +37,89 @@ function filterClients() {
     empty.hidden = !(query && visibleCount === 0);
 }
 
+function identifierDigits(value) {
+    return String(value || '').replace(/\D/g, '').slice(0, 12);
+}
+
+function lookupStatusElement(context) {
+    return document.getElementById(context === 'card' ? 'clientCardLookupStatus' : 'clientLookupStatus');
+}
+
+function setClientLookupStatus(context, message = '', state = '') {
+    const element = lookupStatusElement(context);
+    if (!element) return;
+    element.textContent = message;
+    element.className = `client-lookup-status${state ? ` is-${state}` : ''}`;
+}
+
+function clientLookupTarget(context, field) {
+    if (context === 'card') return document.querySelector(`[data-client-field="${field}"]`);
+    return document.getElementById('clientForm')?.elements?.[field] || null;
+}
+
+function applyClientLookupData(context, data) {
+    const fields = ['company_name', 'full_name', 'address', 'phone'];
+    let changed = false;
+    fields.forEach(field => {
+        const target = clientLookupTarget(context, field);
+        const value = String(data?.[field] || '').trim();
+        if (target && value && !String(target.value || '').trim()) {
+            target.value = value;
+            changed = true;
+        }
+    });
+    if (context === 'card' && changed) scheduleClientCardSave();
+}
+
+async function runClientIdentifierLookup(input, context) {
+    const identifier = identifierDigits(input.value);
+    input.value = identifier;
+
+    clearTimeout(clientLookupTimer);
+    if (clientLookupController) clientLookupController.abort();
+    if (!identifier) {
+        setClientLookupStatus(context);
+        return;
+    }
+    if (identifier.length < 12) {
+        setClientLookupStatus(context, `Введите ещё ${12 - identifier.length} цифр`);
+        return;
+    }
+
+    clientLookupTimer = setTimeout(async () => {
+        clientLookupController = new AbortController();
+        setClientLookupStatus(context, 'Ищем данные…', 'loading');
+        try {
+            const response = await fetch('/api/clients/lookup', {
+                method: 'POST',
+                headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+                body: JSON.stringify({identifier}),
+                signal: clientLookupController.signal,
+            });
+            const payload = await response.json();
+            if (identifierDigits(input.value) !== identifier) return;
+            if (!response.ok) throw new Error(payload.message || 'Не удалось проверить ИИН/БИН');
+
+            if (payload.found) {
+                applyClientLookupData(context, payload.data || {});
+                const state = payload.source === 'local' ? 'warning' : 'success';
+                setClientLookupStatus(context, payload.message || 'Данные подставлены', state);
+            } else {
+                setClientLookupStatus(context, payload.message || 'Данные не найдены', 'warning');
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                setClientLookupStatus(context, error.message || 'Ошибка поиска', 'error');
+            }
+        }
+    }, 450);
+}
+
 function openClientModal(record = null) {
     const modal = document.getElementById('clientModal');
     const form = document.getElementById('clientForm');
     form.reset();
+    setClientLookupStatus('form');
 
     if (record) {
         const d = record.dataset;
@@ -71,7 +152,7 @@ function openClientModal(record = null) {
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('client-modal-open');
-    setTimeout(() => form.elements.full_name.focus(), 80);
+    setTimeout(() => (record ? form.elements.full_name : form.elements.iin).focus(), 80);
 }
 
 function normalizeDateValue(value) {
@@ -272,6 +353,7 @@ function moneyKz(value){ return new Intl.NumberFormat('ru-RU',{maximumFractionDi
 
 async function openClientCard(clientId, editMode = false){
     if (!clientId) return;
+    setClientLookupStatus('card');
     clientCardId = Number(clientId);
     clientCardEditMode = false;
     const modal = document.getElementById('clientCardModal');
@@ -382,5 +464,6 @@ function formatClientSaleDate(value){if(!value)return '';const d=new Date(value)
 document.addEventListener('DOMContentLoaded',()=>{
     const modal=document.getElementById('clientCardModal'); if(modal&&modal.parentElement!==document.body)document.body.appendChild(modal);
     document.querySelectorAll('[data-client-field]').forEach(el=>el.addEventListener(el.tagName==='SELECT'?'change':'input',scheduleClientCardSave));
+    document.querySelectorAll('[data-client-identifier]').forEach(input=>input.addEventListener('input',()=>runClientIdentifierLookup(input,input.dataset.clientIdentifier)));
 });
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.getElementById('clientCardModal')?.classList.contains('is-open'))closeClientCard();});

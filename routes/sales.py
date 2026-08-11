@@ -9,10 +9,58 @@ from flask import session
 import uuid
 import pytz
 import requests
+import json
+import os
+from urllib.parse import urlsplit
 from io import BytesIO
 
 sales_bp = Blueprint("sales", __name__)
 sales_api = Blueprint("sales_api", __name__)
+refund_receipt_schema_ready = False
+
+
+def ensure_refund_receipt_schema(conn):
+    """Добавить хранение данных возвратного чека без отдельной миграции."""
+    global refund_receipt_schema_ready
+
+    if refund_receipt_schema_ready:
+        return
+
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMP WITH TIME ZONE
+        """)
+        cur.execute("""
+            ALTER TABLE sales
+            ADD COLUMN IF NOT EXISTS refund_receipt_data JSONB
+        """)
+        refund_receipt_schema_ready = True
+    finally:
+        cur.close()
+
+
+def nested_value(data, *paths):
+    """Вернуть первое непустое значение из нескольких путей JSON."""
+    for path in paths:
+        value = data
+        for key in path:
+            if not isinstance(value, dict):
+                value = None
+                break
+            value = value.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def rekassa_print_url(crs_id, ticket_id):
+    """Build a human-readable reKassa ticket URL for test or production."""
+    parsed = urlsplit(os.getenv("REKASSA_URL") or "")
+    if not parsed.scheme or not parsed.netloc or not crs_id or not ticket_id:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}/print/{crs_id}/{ticket_id}"
 
 @sales_bp.route("/sales")
 def sales():
@@ -376,6 +424,9 @@ def sales_history():
 
     cur = conn.cursor()
 
+    ensure_refund_receipt_schema(conn)
+    conn.commit()
+
     cur.execute("""
         SELECT
             sales.id,
@@ -384,10 +435,15 @@ def sales_history():
             sales.total_amount,
             sales.sale_type,
             sales.status,
+            COALESCE(sales.is_refunded, FALSE) AS is_refunded,
+            sales.refund_receipt_data,
+            integrations.rekassa_crs_id,
             clients.full_name
         FROM sales
         LEFT JOIN clients
             ON sales.client_id = clients.id
+        LEFT JOIN integrations
+            ON integrations.company_id = sales.company_id
         WHERE sales.company_id = %s
         ORDER BY sales.id DESC
         LIMIT 100
@@ -415,6 +471,22 @@ def sales_history():
         elif sale["sale_type"] == "invoice":
             payment_type = "Счёт"
 
+        raw_refund_data = sale.get("refund_receipt_data") or {}
+        if isinstance(raw_refund_data, str):
+            try:
+                raw_refund_data = json.loads(raw_refund_data)
+            except (TypeError, ValueError):
+                raw_refund_data = {}
+
+        refund_rekassa = raw_refund_data.get("rekassa") or {}
+        refund_fiscal_url = nested_value(
+            refund_rekassa,
+            ("_nika", "print_url")
+        ) or rekassa_print_url(
+            sale.get("rekassa_crs_id"),
+            nested_value(refund_rekassa, ("id",))
+        )
+
         result.append({
 
             "id": sale["id"],
@@ -438,8 +510,23 @@ def sales_history():
             "payment_type":
                 payment_type,
 
+            "sale_type":
+                sale["sale_type"],
+
             "status":
-                sale["status"]
+                sale["status"],
+
+            "is_refunded":
+                bool(sale["is_refunded"]),
+
+            "refund_check_available":
+                bool(sale["is_refunded"] and sale["sale_type"] != "invoice"),
+
+            "refund_check_url":
+                f"/docs/refund-check/{sale['id']}",
+
+            "refund_fiscal_url":
+                refund_fiscal_url
 
         })
 
@@ -575,11 +662,29 @@ def smart_sale(payload=None):
     
 @sales_bp.route("/sales/create-invoice", methods=["POST"])
 def create_invoice():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     client_id = data.get("client_id")
     cart = data.get("cart", [])
     company_id = session.get("company_id")
+
+    if not company_id:
+        return jsonify({
+            "success": False,
+            "error": "Активная организация не выбрана"
+        }), 403
+
+    if not client_id:
+        return jsonify({
+            "success": False,
+            "error": "Выберите клиента"
+        }), 400
+
+    if not cart:
+        return jsonify({
+            "success": False,
+            "error": "Корзина пустая"
+        }), 400
 
     conn = get_db()
     
@@ -889,45 +994,111 @@ def invoice(sale_id):
     
 @sales_bp.route("/sales/mark-paid", methods=["POST"])
 def mark_paid():
-    data = request.get_json()
-    sale_id = data.get("sale_id")
+    data = request.get_json(silent=True) or {}
+
+    try:
+        sale_id = int(data.get("sale_id"))
+    except (TypeError, ValueError):
+        return jsonify({
+            "success": False,
+            "error": "Некорректный номер продажи"
+        }), 400
+
+    company_id = session.get("company_id")
+
+    if not company_id:
+        return jsonify({
+            "success": False,
+            "error": "Активная организация не выбрана"
+        }), 403
 
     conn = get_db()
-    
-    cur = conn.cursor()
 
-    cur.execute(
-        "SELECT * FROM sales WHERE id = %s AND company_id = %s",
-        (sale_id, session.get("company_id"))
-    )
-    
-    sale = cur.fetchone()
+    try:
+        cur = conn.cursor()
 
-    if not sale:
+        # Блокируем строку на время подтверждения, чтобы двойной клик или
+        # два открытых окна не провели один и тот же счёт дважды.
+        cur.execute(
+            """
+            SELECT id, sale_type, status
+            FROM sales
+            WHERE id = %s AND company_id = %s
+            FOR UPDATE
+            """,
+            (sale_id, company_id)
+        )
+
+        sale = cur.fetchone()
+
+        if not sale:
+            conn.rollback()
+            return jsonify({
+                "success": False,
+                "error": "Продажа не найдена"
+            }), 404
+
+        if sale["sale_type"] != "invoice":
+            conn.rollback()
+            return jsonify({
+                "success": False,
+                "error": "Подтвердить оплату можно только для выставленного счёта"
+            }), 409
+
+        if sale["status"] == "Возврат":
+            conn.rollback()
+            return jsonify({
+                "success": False,
+                "error": "Возвращённый счёт нельзя отметить оплаченным"
+            }), 409
+
+        if sale["status"] == "Оплачено":
+            conn.rollback()
+            return jsonify({
+                "success": True,
+                "already_paid": True,
+                "status": "Оплачено"
+            })
+
+        cur.execute("""
+            UPDATE sales
+            SET
+                status = 'Оплачено',
+                paid_amount = total_amount,
+                paid_at = %s,
+                card_amount = total_amount
+            WHERE id = %s
+              AND company_id = %s
+              AND sale_type = 'invoice'
+        """, (
+            now_kz(),
+            sale_id,
+            company_id
+        ))
+
+        # Склад и прибыль проводятся только после фактической оплаты счёта.
+        process_sale(conn, sale_id)
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "status": "Оплачено"
+        })
+
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception(
+            "Не удалось подтвердить оплату счёта %s",
+            sale_id
+        )
+        return jsonify({
+            "success": False,
+            "error": "Не удалось подтвердить оплату"
+        }), 500
+
+    finally:
         pool.putconn(conn)
-        return {"success": False, "error": "Продажа не найдена"}, 404
-
-    cur.execute("""
-        UPDATE sales
-        SET 
-            status = 'Оплачено',
-            paid_amount = total_amount,
-            paid_at = %s,
-            sale_type = 'invoice',
-            card_amount = total_amount
-        WHERE id = %s AND company_id = %s
-    """, (
-        now_kz(),
-        sale_id,
-        session.get("company_id")
-    ))
-    
-    process_sale(conn, sale_id)
-
-    conn.commit()
-    pool.putconn(conn)
-
-    return {"success": True}
     
 @sales_bp.route("/docs/check/<int:sale_id>")
 def check(sale_id):
@@ -1021,6 +1192,143 @@ def check(sale_id):
             if "kaspi_amount" in sale.keys()
             else 0,
     )
+
+
+@sales_bp.route("/docs/refund-check/<int:sale_id>")
+def refund_check(sale_id):
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+        ensure_refund_receipt_schema(conn)
+        conn.commit()
+
+        cur.execute("""
+            SELECT *
+            FROM sales
+            WHERE id = %s AND company_id = %s
+        """, (sale_id, session.get("company_id")))
+        sale = cur.fetchone()
+
+        if not sale:
+            return "Продажа не найдена", 404
+
+        if sale["sale_type"] == "invoice":
+            return "Для продажи по счёту чек возврата не формируется", 409
+
+        if not sale.get("is_refunded"):
+            return "Сначала оформите возврат продажи", 409
+
+        cur.execute("""
+            SELECT *
+            FROM sale_items
+            WHERE sale_id = %s
+            ORDER BY id
+        """, (sale_id,))
+        items = cur.fetchall()
+
+        cur.execute("""
+            SELECT *
+            FROM clients
+            WHERE id = %s AND company_id = %s
+        """, (sale["client_id"], session.get("company_id")))
+        client = cur.fetchone()
+
+        cur.execute(
+            "SELECT * FROM companies WHERE id = %s",
+            (session.get("company_id"),)
+        )
+        company = cur.fetchone()
+
+        if not company:
+            return "Нет компании", 404
+
+        raw_refund_data = sale.get("refund_receipt_data") or {}
+        if isinstance(raw_refund_data, str):
+            try:
+                raw_refund_data = json.loads(raw_refund_data)
+            except (TypeError, ValueError):
+                raw_refund_data = {}
+
+        rekassa_data = raw_refund_data.get("rekassa") or {}
+        refunded_at = sale.get("refunded_at") or now_kz()
+
+        cur.execute(
+            "SELECT rekassa_crs_id FROM integrations WHERE company_id = %s",
+            (session.get("company_id"),)
+        )
+        integration = cur.fetchone()
+        refund_print_url = nested_value(
+            rekassa_data,
+            ("_nika", "print_url")
+        ) or rekassa_print_url(
+            integration.get("rekassa_crs_id") if integration else None,
+            nested_value(rekassa_data, ("id",))
+        )
+
+        refund = {
+            "ticket_id": nested_value(
+                rekassa_data,
+                ("id",),
+                ("data", "ticket", "id")
+            ),
+            "ticket_number": nested_value(
+                rekassa_data,
+                ("ticketNumber",),
+                ("data", "ticket", "ticketNumber")
+            ),
+            "document_number": nested_value(
+                rekassa_data,
+                ("printedDocumentNumber",),
+                ("data", "ticket", "printedDocumentNumber")
+            ),
+            "shift_number": nested_value(
+                rekassa_data,
+                ("shiftNumber",),
+                ("data", "ticket", "shiftNumber")
+            ),
+            "qr": nested_value(
+                rekassa_data,
+                ("fdoQrCode",),
+                ("data", "ticket", "fdoQrCode")
+            ),
+            "print_url": refund_print_url,
+            "rnm": nested_value(
+                rekassa_data,
+                ("rnm",),
+                ("data", "service", "regInfo", "kkm", "fnsKkmId")
+            ) or sale.get("rekassa_rnm"),
+            "znm": nested_value(
+                rekassa_data,
+                ("znm",),
+                ("data", "service", "regInfo", "kkm", "serialNumber")
+            ) or sale.get("rekassa_znm"),
+            "payment_transaction_id": raw_refund_data.get(
+                "payment_refund_transaction_id"
+            )
+        }
+
+        conn.commit()
+
+        return render_template(
+            "docs/refund_check.html",
+            sale=sale,
+            items=items,
+            client=client,
+            company=company,
+            refund=refund,
+            refund_date=refunded_at.strftime("%d.%m.%Y %H:%M"),
+            original_check_date=sale["created_at"].strftime("%d.%m.%Y %H:%M")
+        )
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception(
+            "Не удалось сформировать чек возврата для продажи %s",
+            sale_id
+        )
+        return "Не удалось сформировать чек возврата", 500
+    finally:
+        pool.putconn(conn)
     
 @sales_bp.route("/docs/nakladnaya/<int:sale_id>")
 def nakladnaya(sale_id):
@@ -2210,6 +2518,7 @@ def document_pdf(document_type, sale_id):
     """Сформировать PDF из того же серверного шаблона, что открыт в модалке."""
     documents = {
         "check": (check, "check"),
+        "refund-check": (refund_check, "refund-check"),
         "invoice": (invoice, "schet-na-oplatu"),
         "nakladnaya": (nakladnaya, "nakladnaya"),
         "schet-factura": (schet_factura, "schet-factura"),
@@ -2333,11 +2642,15 @@ def refund_sale(sale_id):
 
     try:
 
+        ensure_refund_receipt_schema(conn)
+        conn.commit()
+
         cur.execute("""
             SELECT *
             FROM sales
             WHERE id = %s
             AND company_id = %s
+            FOR UPDATE
         """, (
             sale_id,
             session.get("company_id")
@@ -2358,6 +2671,7 @@ def refund_sale(sale_id):
             })
 
         refund_transaction_id = None
+        rekassa_refund_result = None
 
         if sale["sale_type"] == "kaspi":
 
@@ -2524,14 +2838,24 @@ def refund_sale(sale_id):
 
         # обновляем продажу
 
+        refund_receipt_data = {
+            "payment_refund_transaction_id": refund_transaction_id,
+            "rekassa": rekassa_refund_result or {}
+        }
+        refunded_at = now_kz()
+
         cur.execute("""
             UPDATE sales
             SET
                 status = %s,
-                is_refunded = TRUE
+                is_refunded = TRUE,
+                refunded_at = %s,
+                refund_receipt_data = %s::jsonb
             WHERE id = %s
         """, (
             "Возврат",
+            refunded_at,
+            json.dumps(refund_receipt_data, ensure_ascii=False, default=str),
             sale_id
         ))
 
@@ -2539,8 +2863,18 @@ def refund_sale(sale_id):
 
         return jsonify({
             "success": True,
+            "refund_check_available": sale["sale_type"] != "invoice",
+            "refund_check_url": (
+                f"/docs/refund-check/{sale_id}"
+                if sale["sale_type"] != "invoice"
+                else None
+            ),
             "refund_transaction_id":
-                refund_transaction_id
+                refund_transaction_id,
+            "refund_fiscal_url": nested_value(
+                rekassa_refund_result or {},
+                ("_nika", "print_url")
+            )
         })
 
     except Exception as e:

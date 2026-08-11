@@ -1,9 +1,15 @@
 from datetime import datetime, timedelta
 from io import BytesIO
+import json
 import os
+import re
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from flask import (
     Blueprint,
+    current_app,
     jsonify,
     redirect,
     render_template,
@@ -72,6 +78,158 @@ def _serialize_row(row):
     if not row:
         return {}
     return {key: _serialize_value(value) for key, value in dict(row).items()}
+
+
+_IDENTIFIER_WEIGHTS_PRIMARY = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+_IDENTIFIER_WEIGHTS_SECONDARY = (3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2)
+
+
+def _normalize_identifier(value):
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def _valid_kz_identifier(value):
+    """Validate the checksum shared by Kazakhstan IIN and BIN values."""
+    identifier = _normalize_identifier(value)
+    if len(identifier) != 12:
+        return False
+
+    digits = [int(char) for char in identifier]
+    checksum = sum(
+        digit * weight
+        for digit, weight in zip(digits[:11], _IDENTIFIER_WEIGHTS_PRIMARY)
+    ) % 11
+    if checksum == 10:
+        checksum = sum(
+            digit * weight
+            for digit, weight in zip(digits[:11], _IDENTIFIER_WEIGHTS_SECONDARY)
+        ) % 11
+    return checksum != 10 and checksum == digits[11]
+
+
+def _first_value(data, *keys):
+    if not isinstance(data, dict):
+        return ""
+
+    normalized = {
+        re.sub(r"[^a-zа-я0-9]", "", str(key).lower()): value
+        for key, value in data.items()
+    }
+    for key in keys:
+        value = normalized.get(re.sub(r"[^a-zа-я0-9]", "", key.lower()))
+        if value not in (None, "", [], {}):
+            return str(value).strip()
+    return ""
+
+
+def _unwrap_lookup_records(payload):
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+
+    for key in ("data", "result", "results", "items", "records", "taxpayer"):
+        nested = payload.get(key)
+        if isinstance(nested, list):
+            return nested
+        if isinstance(nested, dict):
+            return [nested]
+    return [payload]
+
+
+def _map_lookup_record(record, identifier):
+    if not isinstance(record, dict):
+        return None
+    if isinstance(record.get("_source"), dict):
+        record = record["_source"]
+
+    record_identifier = _normalize_identifier(
+        _first_value(record, "bin", "iin", "iinbin", "identifier", "taxpayerCode")
+    )
+    if record_identifier and record_identifier != identifier:
+        return None
+
+    company_name = _first_value(
+        record,
+        "nameru", "name_ru", "company_name", "companyName", "organizationName",
+        "taxpayerName", "name", "namekz", "name_kz",
+    )
+    full_name = _first_value(
+        record,
+        "headru", "head_name", "headName", "leaderFio", "directorFio",
+        "director", "fio", "full_name", "fullName",
+    )
+    address = _first_value(
+        record,
+        "addressru", "address_ru", "legal_address", "legalAddress", "address",
+        "location", "addresskz", "address_kz",
+    )
+    phone = _first_value(record, "phone", "telephone", "mobile", "phoneNumber")
+
+    if not any((company_name, full_name, address, phone)):
+        return None
+
+    return {
+        "iin": identifier,
+        "company_name": company_name,
+        "full_name": full_name or company_name,
+        "address": address,
+        "phone": phone,
+    }
+
+
+def _fetch_json(url, headers=None, timeout=8):
+    request_object = Request(
+        url,
+        headers={"Accept": "application/json", "User-Agent": "NikaBusiness/1.0", **(headers or {})},
+    )
+    with urlopen(request_object, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _lookup_configured_provider(identifier):
+    url_template = os.getenv("CLIENT_LOOKUP_API_URL", "").strip()
+    if not url_template:
+        return None
+
+    separator = "&" if "?" in url_template else "?"
+    if "{identifier}" in url_template:
+        url = url_template.replace("{identifier}", identifier)
+    else:
+        url = f"{url_template}{separator}{urlencode({'identifier': identifier})}"
+
+    headers = {}
+    token = os.getenv("CLIENT_LOOKUP_API_TOKEN", "").strip()
+    if token:
+        header_name = os.getenv("CLIENT_LOOKUP_API_TOKEN_HEADER", "X-Portal-Token").strip()
+        headers[header_name or "X-Portal-Token"] = token
+
+    payload = _fetch_json(url, headers=headers)
+    for record in _unwrap_lookup_records(payload):
+        mapped = _map_lookup_record(record, identifier)
+        if mapped:
+            return mapped
+    return None
+
+
+def _lookup_egov_open_data(identifier):
+    api_key = os.getenv("EGOV_OPEN_DATA_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    source = {
+        "size": 5,
+        "query": {"bool": {"must": [{"match": {"bin": identifier}}]}},
+    }
+    url = "https://data.egov.kz/api/v4/gbd_ul/v1?" + urlencode(
+        {"apiKey": api_key, "source": json.dumps(source, separators=(",", ":"))}
+    )
+    payload = _fetch_json(url)
+    for record in _unwrap_lookup_records(payload):
+        mapped = _map_lookup_record(record, identifier)
+        if mapped:
+            return mapped
+    return None
 
 
 @clients_bp.route("/clients")
@@ -765,6 +923,76 @@ def get_client_by_iin(iin):
         return jsonify({"found": False})
     finally:
         pool.putconn(conn)
+
+
+@clients_bp.route("/api/clients/lookup", methods=["POST"])
+def lookup_client_identifier():
+    company_id = _company_id()
+    if not company_id:
+        return jsonify({"found": False, "message": "Компания не выбрана"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    identifier = _normalize_identifier(payload.get("identifier"))
+    if not _valid_kz_identifier(identifier):
+        return jsonify({
+            "found": False,
+            "message": "Проверьте ИИН/БИН: нужен корректный номер из 12 цифр",
+        }), 400
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT *
+            FROM clients
+            WHERE company_id = %s
+              AND REGEXP_REPLACE(COALESCE(iin, ''), '\\D', '', 'g') = %s
+              AND COALESCE(is_deleted, FALSE) = FALSE
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (company_id, identifier),
+        )
+        client = cur.fetchone()
+        if client:
+            return jsonify({
+                "found": True,
+                "source": "local",
+                "client_id": client["id"],
+                "data": _serialize_row(client),
+                "message": "Клиент уже есть в базе — данные подставлены",
+            })
+    finally:
+        pool.putconn(conn)
+
+    provider_configured = bool(
+        os.getenv("CLIENT_LOOKUP_API_URL", "").strip()
+        or os.getenv("EGOV_OPEN_DATA_API_KEY", "").strip()
+    )
+    try:
+        data = _lookup_configured_provider(identifier)
+        if not data:
+            data = _lookup_egov_open_data(identifier)
+    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        current_app.logger.exception("Client lookup provider failed")
+        return jsonify({
+            "found": False,
+            "message": "Справочник временно недоступен. Данные можно заполнить вручную",
+        }), 502
+
+    if data:
+        return jsonify({
+            "found": True,
+            "source": "registry",
+            "data": data,
+            "message": "Данные найдены в справочнике",
+        })
+
+    message = "По этому ИИН/БИН данные не найдены"
+    if not provider_configured:
+        message = "В базе клиента нет. Внешний справочник ещё не подключён"
+    return jsonify({"found": False, "message": message})
 
 # ================== ИМПОРТ / ЭКСПОРТ КЛИЕНТОВ ==================
 
