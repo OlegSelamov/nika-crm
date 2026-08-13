@@ -7,31 +7,36 @@
 .auto-close-back{display:inline-flex;margin-bottom:8px;color:var(--ac-muted);font-size:12px;font-weight:750;text-decoration:none}
 .auto-close-page h1{margin:0;font-size:29px;font-weight:900;letter-spacing:-.035em}.auto-close-subtitle{margin:6px 0 18px;color:var(--ac-muted);font-size:12px;line-height:1.5}
 .auto-close-card{overflow:hidden;border:1px solid var(--ac-border);border-radius:20px;background:#fff;box-shadow:0 12px 34px rgba(39,43,72,.07)}
-.auto-close-head{padding:18px 19px;border-bottom:1px solid var(--ac-border)}.auto-close-head strong{display:block;font-size:15px}.auto-close-head span{display:block;margin-top:4px;color:var(--ac-muted);font-size:10.5px}
-.auto-close-body{padding:19px}.auto-close-row{display:flex;align-items:center;justify-content:space-between;gap:18px}.auto-close-copy strong{display:block;font-size:13px}.auto-close-copy span{display:block;margin-top:4px;color:var(--ac-muted);font-size:10px;line-height:1.45}
-.auto-close-switch{position:relative;width:45px;height:25px;flex:0 0 auto}.auto-close-switch input{position:absolute;opacity:0}.auto-close-switch i{position:absolute;inset:0;border-radius:999px;background:#d8dbe4;cursor:pointer;transition:.2s}.auto-close-switch i:after{content:"";position:absolute;width:19px;height:19px;left:3px;top:3px;border-radius:50%;background:#fff;box-shadow:0 2px 7px rgba(0,0,0,.17);transition:.2s}.auto-close-switch input:checked+i{background:var(--ac-green)}.auto-close-switch input:checked+i:after{transform:translateX(20px)}
-.auto-close-field{display:grid;gap:7px;margin-top:18px}.auto-close-field label{color:#596174;font-size:10px;font-weight:850}.auto-close-field input{width:100%;min-height:44px;box-sizing:border-box;border:1px solid var(--ac-border);border-radius:12px;padding:0 12px;color:var(--ac-text);font-size:13px;outline:none}.auto-close-field input:focus{border-color:#bcb1ff;box-shadow:0 0 0 3px rgba(114,87,255,.09)}.auto-close-field input:disabled{background:#f4f5f8;color:#9aa0ad}
-.auto-close-note{margin:14px 0;padding:11px 12px;border-radius:11px;background:#f0edff;color:#6552c3;font-size:9.5px;line-height:1.5}.auto-close-note.warn{background:#fff1f2;color:var(--ac-red)}
-.auto-close-save{width:100%;min-height:45px;border:0;border-radius:13px;background:var(--ac-purple);color:#fff;font-size:12px;font-weight:900;cursor:pointer}.auto-close-save:disabled{opacity:.45;cursor:not-allowed}
+.auto-close-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 19px;border-bottom:1px solid var(--ac-border)}.auto-close-head strong{display:block;font-size:15px}.auto-close-head span{display:block;margin-top:4px;color:var(--ac-muted);font-size:10.5px}
+.auto-close-badge{display:inline-flex!important;align-items:center;gap:7px;min-height:29px;margin:0!important;padding:0 10px;border-radius:999px;color:#8b6419!important;background:#fff6dd;font-size:9px!important;font-weight:850;white-space:nowrap}.auto-close-badge:before{content:"";width:7px;height:7px;border-radius:50%;background:#e0a528}.auto-close-badge.on{color:#13774f!important;background:#e8f8f0}.auto-close-badge.on:before{background:var(--ac-green)}
+.auto-close-body{padding:19px}.auto-close-summary{display:grid;grid-template-columns:1fr auto;align-items:center;gap:18px;padding:16px;border:1px solid #ebeaf3;border-radius:15px;background:#faf9ff}.auto-close-copy strong{display:block;font-size:13px}.auto-close-copy span{display:block;margin-top:4px;color:var(--ac-muted);font-size:10px;line-height:1.45}
+.auto-close-time{min-width:104px;text-align:right}.auto-close-time small{display:block;color:var(--ac-muted);font-size:9px;font-weight:750}.auto-close-time strong{display:block;margin-top:3px;color:var(--ac-purple);font-size:28px;line-height:1;font-variant-numeric:tabular-nums}
+.auto-close-note{margin:14px 0;padding:11px 12px;border-radius:11px;background:#f0edff;color:#6552c3;font-size:9.5px;line-height:1.5}.auto-close-note.error{background:#fff1f2;color:var(--ac-red)}
+.auto-close-actions{display:grid;grid-template-columns:1fr auto;gap:9px}.auto-close-btn{min-height:45px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 16px;border-radius:13px;font:inherit;font-size:11px;font-weight:900;cursor:pointer;text-decoration:none}.auto-close-btn.primary{border:0;color:#fff;background:linear-gradient(135deg,#7257ff,#8d55e9);box-shadow:0 8px 18px rgba(114,87,255,.2)}.auto-close-btn.secondary{border:1px solid #dedaf0;color:#6552c3;background:#f7f5ff}.auto-close-btn:disabled{opacity:.55;cursor:wait}
 .auto-close-toast{position:fixed;right:22px;bottom:22px;z-index:10020;max-width:360px;padding:12px 15px;border-radius:12px;background:#252938;color:#fff;font-size:11px;opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s}.auto-close-toast.show{opacity:1;transform:none}.auto-close-toast.error{background:#b93f4b}
-@media(max-width:600px){.auto-close-page h1{font-size:24px}.auto-close-card{border-radius:17px}.auto-close-row{align-items:flex-start}}
+@media(max-width:600px){.auto-close-page h1{font-size:24px}.auto-close-card{border-radius:17px}.auto-close-head{align-items:flex-start}.auto-close-summary{grid-template-columns:1fr}.auto-close-time{text-align:left}.auto-close-actions{grid-template-columns:1fr}.auto-close-btn.secondary{order:2}}
 </style>
 
 <div class="auto-close-page">
   <a class="auto-close-back" href="/settings">‹ Настройки</a>
   <h1>Автозакрытие смены</h1>
-  <p class="auto-close-subtitle">Укажите время Алматы, когда reKassa должна автоматически закрывать открытую смену.</p>
+  <p class="auto-close-subtitle">Расписание хранится и выполняется самой reKassa, даже когда Nika Business выключена.</p>
 
   <section class="auto-close-card">
-    <div class="auto-close-head"><strong>Расписание reKassa</strong><span id="autoCloseStatus">Загрузка текущей настройки…</span></div>
+    <div class="auto-close-head">
+      <div><strong>Расписание reKassa</strong><span id="autoCloseStatus">Получаем настройку кассы…</span></div>
+      <span class="auto-close-badge" id="autoCloseBadge">Проверка</span>
+    </div>
     <div class="auto-close-body">
-      <div class="auto-close-row">
-        <div class="auto-close-copy"><strong>Включить автозакрытие</strong><span>Срабатывает на стороне reKassa, даже если Nika Business выключена.</span></div>
-        <label class="auto-close-switch"><input id="autoCloseEnabled" type="checkbox"><i></i></label>
+      <div class="auto-close-summary">
+        <div class="auto-close-copy"><strong id="autoCloseTitle">Автоматическое закрытие</strong><span id="autoCloseShift">Проверяем состояние текущей смены…</span></div>
+        <div class="auto-close-time"><small>Время Алматы</small><strong id="autoCloseTime">—</strong></div>
       </div>
-      <div class="auto-close-field"><label for="autoCloseTime">Время закрытия · Алматы (UTC+5)</label><input id="autoCloseTime" type="time" value="23:50" step="60"></div>
-      <div class="auto-close-note" id="autoCloseNote">Получаем состояние кассы…</div>
-      <button class="auto-close-save" id="saveAutoCloseBtn" type="button">Сохранить время</button>
+      <div class="auto-close-note" id="autoCloseNote">Изменение времени выполняется в настройках кассы reKassa. После сохранения вернитесь сюда и нажмите «Обновить статус».</div>
+      <div class="auto-close-actions">
+        <a class="auto-close-btn primary" id="openRekassaBtn" href="https://app.rekassa.kz" target="_blank" rel="noopener">Настроить в reKassa ↗</a>
+        <button class="auto-close-btn secondary" id="refreshAutoCloseBtn" type="button">Обновить статус</button>
+      </div>
     </div>
   </section>
 </div>
@@ -40,10 +45,9 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  let shiftOpen = false;
 
-  async function api(url, options = {}) {
-    const response = await fetch(url, {credentials:"same-origin", headers:{"Content-Type":"application/json"}, ...options});
+  async function api(url) {
+    const response = await fetch(url, {credentials:"same-origin"});
     const data = await response.json().catch(() => ({error:"Некорректный ответ сервера"}));
     if (!response.ok || data.success === false) throw new Error(data.error || data.message || "Ошибка reKassa");
     return data;
@@ -57,59 +61,44 @@
     toast.timer = setTimeout(() => node.className = "auto-close-toast", 4000);
   }
 
-  function applyLock() {
-    const enabled = $("autoCloseEnabled").checked;
-    $("autoCloseTime").disabled = !enabled;
-    $("autoCloseEnabled").disabled = false;
-    $("saveAutoCloseBtn").disabled = false;
-    $("autoCloseNote").classList.remove("warn");
-    $("autoCloseNote").textContent = shiftOpen
-      ? "Смена сейчас открыта. Сохранённое расписание применяется на стороне reKassa автоматически."
-      : "Часовой пояс: Алматы (UTC+5). Автозакрытие выполняет сама reKassa.";
-  }
-
-  async function load() {
+  async function load(showToast = false) {
+    const button = $("refreshAutoCloseBtn");
+    button.disabled = true;
+    button.textContent = "Обновляем…";
+    $("autoCloseStatus").textContent = "Получаем настройку кассы…";
     try {
       const data = await api("/api/rekassa/shift/status");
-      shiftOpen = Boolean(data.shift_open);
-      $("autoCloseEnabled").checked = Boolean(data.auto_close?.enabled);
-      $("autoCloseTime").value = data.auto_close?.time || "23:50";
-      $("autoCloseStatus").textContent = data.auto_close?.enabled
-        ? `Установлено на ${data.auto_close.time}`
-        : "Автозакрытие отключено";
-      applyLock();
+      const enabled = Boolean(data.auto_close?.enabled);
+      const time = data.auto_close?.time || "—";
+      $("autoCloseTime").textContent = time;
+      $("autoCloseStatus").textContent = enabled
+        ? `Автозакрытие установлено на ${time}`
+        : "Автозакрытие пока не настроено";
+      $("autoCloseBadge").textContent = enabled ? "Включено" : "Отключено";
+      $("autoCloseBadge").classList.toggle("on", enabled);
+      $("autoCloseTitle").textContent = enabled ? "Автозакрытие включено" : "Автозакрытие отключено";
+      $("autoCloseShift").textContent = data.shift_open
+        ? `Смена №${data.shift_number || "—"} сейчас открыта`
+        : "Смена сейчас закрыта";
+      $("openRekassaBtn").href = data.settings_url || "https://app.rekassa.kz";
+      $("autoCloseNote").classList.remove("error");
+      if (showToast) toast("Статус reKassa обновлён");
     } catch (error) {
       $("autoCloseStatus").textContent = error.message;
-      $("saveAutoCloseBtn").disabled = true;
-      toast(error.message, true);
-    }
-  }
-
-  async function save() {
-    const enabled = $("autoCloseEnabled").checked;
-    const time = $("autoCloseTime").value;
-    if (enabled && !time) { toast("Укажите время автозакрытия", true); return; }
-    const button = $("saveAutoCloseBtn");
-    button.disabled = true;
-    button.textContent = "Сохраняем…";
-    try {
-      const data = await api("/api/rekassa/auto-close", {
-        method:"PUT",
-        body:JSON.stringify({enabled, time})
-      });
-      toast(data.message || "Время сохранено");
-      await load();
-    } catch (error) {
+      $("autoCloseBadge").textContent = "Ошибка";
+      $("autoCloseBadge").classList.remove("on");
+      $("autoCloseNote").textContent = error.message;
+      $("autoCloseNote").classList.add("error");
       toast(error.message, true);
     } finally {
-      button.textContent = "Сохранить время";
       button.disabled = false;
+      button.textContent = "Обновить статус";
     }
   }
 
-  $("autoCloseEnabled").addEventListener("change", applyLock);
-  $("saveAutoCloseBtn").addEventListener("click", save);
-  load();
+  $("refreshAutoCloseBtn").addEventListener("click", () => load(true));
+  window.addEventListener("focus", () => load(false));
+  load(false);
 })();
 </script>
 {% endblock %}

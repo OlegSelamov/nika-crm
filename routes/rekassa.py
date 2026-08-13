@@ -212,6 +212,14 @@ def _close_shift_schedule(value):
     return f"{match.group('hour')}:{match.group('minute')}"
 
 
+def _rekassa_web_url():
+    """Return the matching test/production reKassa web cabinet root."""
+    parsed = urlsplit(REKASSA_URL or "")
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return "https://app.rekassa.kz"
+
+
 def _register_state(context):
     """Read current shift/configuration, with partner API fallbacks."""
     attempts = [
@@ -276,6 +284,7 @@ def _safe_shift_state(state, context):
             "locale": configuration.get("closeShiftLocale") or "ru",
             "withdraw_money": bool(configuration.get("withdrawMoney"))
         },
+        "settings_url": _rekassa_web_url(),
         "timezone": "Asia/Almaty"
     }
 
@@ -1380,112 +1389,14 @@ def rekassa_z_report(shift_number):
 
 @rekassa_bp.route("/api/rekassa/auto-close", methods=["PUT"])
 def rekassa_save_auto_close():
-    context, error = _load_company_rekassa()
-    if error:
-        return error
-
-    data = request.get_json(silent=True) or {}
-    enabled = bool(data.get("enabled"))
-    schedule = (data.get("time") or "").strip() if enabled else None
-
-    if enabled and not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", schedule):
-        return jsonify({
-            "success": False,
-            "error": "Укажите время в формате ЧЧ:ММ"
-        }), 400
-
-    try:
-        state, error = _register_state(context)
-        if error:
-            return error
-
-        configuration = dict(state["configuration"])
-        if not configuration:
-            return jsonify({
-                "success": False,
-                "error": "reKassa не вернула текущую конфигурацию кассы"
-            }), 502
-
-        configuration["closeShiftSchedule"] = schedule
-        configuration["closeShiftScheduleWithdrawMoney"] = bool(
-            configuration.get(
-                "closeShiftScheduleWithdrawMoney",
-                configuration.get("withdrawMoney", False)
-            )
-        )
-
-        if "email" in data:
-            email = (data.get("email") or "").strip() or None
-            configuration["closeShiftEmail"] = email
-            configuration["closeShiftLocale"] = "ru" if email else None
-
-        response, payload = _rekassa_api(
-            context,
-            "PUT",
-            f"/api/crs/{context['crs_id']}/configuration",
-            json_body=configuration,
-            password=True,
-            request_id=True
-        )
-    except requests.RequestException:
-        return jsonify({
-            "success": False,
-            "error": "reKassa не ответила при сохранении автозакрытия"
-        }), 502
-
-    if response.status_code >= 400 or _is_api_error(payload):
-        return jsonify({
-            "success": False,
-            "error": _api_error_message(
-                payload,
-                "Не удалось сохранить настройку автозакрытия"
-            )
-        }), response.status_code if response.status_code >= 400 else 400
-
-    # A successful HTTP response is not enough: read the cash-register
-    # configuration again and make sure reKassa actually persisted the value.
-    saved_schedule = None
-    verification_error = None
-    for attempt in range(3):
-        if attempt:
-            time.sleep(0.35)
-        verified_state, verification_error = _register_state(context)
-        if verification_error:
-            continue
-        saved_schedule = _close_shift_schedule(
-            verified_state["configuration"].get("closeShiftSchedule")
-        )
-        if (enabled and saved_schedule == schedule) or (
-            not enabled and saved_schedule is None
-        ):
-            break
-
-    if verification_error or (
-        enabled and saved_schedule != schedule
-    ) or (not enabled and saved_schedule is not None):
-        return jsonify({
-            "success": False,
-            "error": (
-                "reKassa ответила на сохранение, но не подтвердила новое "
-                "расписание. Обновите страницу и повторите попытку"
-            )
-        }), 502
-
     return jsonify({
-        "success": True,
-        "message": (
-            f"Автозакрытие установлено на {schedule}"
-            if enabled
-            else "Автозакрытие отключено"
+        "success": False,
+        "error": (
+            "Сторонний API reKassa не разрешает изменять настройки кассы. "
+            "Откройте кабинет reKassa и задайте время там"
         ),
-        "auto_close": {
-            "enabled": enabled,
-            "time": saved_schedule,
-            "email": configuration.get("closeShiftEmail"),
-            "timezone": "Asia/Almaty"
-        },
-        "shift_open": bool(state["register"].get("shiftOpen"))
-    })
+        "settings_url": _rekassa_web_url()
+    }), 501
     
 
     
