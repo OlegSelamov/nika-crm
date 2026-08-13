@@ -2600,3 +2600,72 @@
         margin-top: 4px;
     }
 }
+
+/* История текущей смены: все документы видны без горизонтального сдвига. */
+@media (min-width: 769px) {
+    #salesHistoryBox .table-wrapper {
+        overflow-x: hidden !important;
+    }
+
+    #salesHistoryBox .history-table {
+        width: 100%;
+        min-width: 660px;
+        table-layout: fixed;
+    }
+
+    #salesHistoryBox .history-table thead th,
+    #salesHistoryBox .history-table tbody td {
+        padding-left: 7px;
+        padding-right: 7px;
+        font-size: 11px;
+    }
+
+    #salesHistoryBox .history-table th:nth-child(1),
+    #salesHistoryBox .history-table td:nth-child(1) { width: 5%; }
+    #salesHistoryBox .history-table th:nth-child(2),
+    #salesHistoryBox .history-table td:nth-child(2) { width: 14%; }
+    #salesHistoryBox .history-table th:nth-child(3),
+    #salesHistoryBox .history-table td:nth-child(3) { width: 17%; }
+    #salesHistoryBox .history-table th:nth-child(4),
+    #salesHistoryBox .history-table td:nth-child(4) { width: 11%; }
+    #salesHistoryBox .history-table th:nth-child(5),
+    #salesHistoryBox .history-table td:nth-child(5) { width: 11%; }
+    #salesHistoryBox .history-table th:nth-child(6),
+    #salesHistoryBox .history-table td:nth-child(6) { width: 14%; }
+    #salesHistoryBox .history-table th:nth-child(7),
+    #salesHistoryBox .history-table td:nth-child(7) { width: 28%; }
+
+    #salesHistoryBox .history-table td:nth-child(3) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #salesHistoryBox .history-table td:nth-child(4),
+    #salesHistoryBox .history-table td:nth-child(5) {
+        white-space: nowrap;
+    }
+
+    #salesHistoryBox .history-actions {
+        gap: 3px;
+        justify-content: flex-start;
+    }
+
+    #salesHistoryBox .mini-doc-btn {
+        width: 32px !important;
+        height: 32px !important;
+        flex: 0 0 32px !important;
+        border-radius: 9px !important;
+    }
+
+    #salesHistoryBox .mini-doc-btn img {
+        width: 19px;
+        height: 19px;
+    }
+
+    #salesHistoryBox .sale-status-badge {
+        min-height: 25px;
+        padding: 4px 7px;
+        font-size: 10px;
+    }
+}

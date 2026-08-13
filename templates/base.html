@@ -2969,6 +2969,62 @@ body.wa-modal-open {
     }
 }
 
+/* ===== COMPACT, TALL COMMUNICATIONS WINDOW ===== */
+@media (min-width: 769px) {
+    #chatDrawer {
+        width: min(860px, calc(100vw - 28px));
+        top: 64px;
+        bottom: 18px;
+        height: auto;
+        border-radius: 20px 0 0 20px;
+    }
+
+    #chatDrawer .system-drawer__head {
+        padding: 14px 16px;
+    }
+
+    #chatDrawer .chat-channel-tabs {
+        padding: 7px 10px;
+    }
+
+    #chatDrawer .chat-channel-tab {
+        padding: 8px 12px;
+    }
+
+    #whatsappChatPanel .chat-layout {
+        grid-template-columns: 240px minmax(0, 1fr);
+    }
+
+    #chatDrawer .chat-sidebar {
+        padding: 8px;
+    }
+
+    #chatDrawer .whatsapp-chat-header {
+        min-height: 54px;
+        padding: 9px 11px;
+    }
+
+    #chatDrawer .whatsapp-chat-header > div:first-child {
+        min-width: 0;
+    }
+
+    #chatDrawer .whatsapp-chat-header b,
+    #chatDrawer .whatsapp-chat-header small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #chatDrawer .whatsapp-chat-header__actions {
+        flex: 0 0 auto;
+        gap: 5px;
+    }
+
+    #chatDrawer .chat-composer {
+        padding: 10px;
+    }
+}
+
 </style>
 
 	{% block page_css %}{% endblock %}
