@@ -190,6 +190,28 @@ def _configuration_from(register, payload=None):
     return dict(configuration) if isinstance(configuration, dict) else {}
 
 
+def _close_shift_schedule(value):
+    """Return a browser-friendly HH:MM value from reKassa configuration."""
+    if value in (None, "", False):
+        return None
+
+    if isinstance(value, dict):
+        hour = value.get("hour")
+        minute = value.get("minute")
+        try:
+            return f"{int(hour):02d}:{int(minute):02d}"
+        except (TypeError, ValueError):
+            return None
+
+    match = re.fullmatch(
+        r"(?:[T\s])?(?P<hour>[01]\d|2[0-3]):(?P<minute>[0-5]\d)(?::[0-5]\d)?",
+        str(value).strip()
+    )
+    if not match:
+        return None
+    return f"{match.group('hour')}:{match.group('minute')}"
+
+
 def _register_state(context):
     """Read current shift/configuration, with partner API fallbacks."""
     attempts = [
@@ -233,7 +255,7 @@ def _safe_shift_state(state, context):
     register = state["register"]
     configuration = state["configuration"]
     shift = register.get("shift") if isinstance(register.get("shift"), dict) else {}
-    schedule = configuration.get("closeShiftSchedule")
+    schedule = _close_shift_schedule(configuration.get("closeShiftSchedule"))
     return {
         "connected": True,
         "crs_id": context["crs_id"],
@@ -1376,14 +1398,6 @@ def rekassa_save_auto_close():
         state, error = _register_state(context)
         if error:
             return error
-        if state["register"].get("shiftOpen"):
-            return jsonify({
-                "success": False,
-                "error": (
-                    "reKassa разрешает менять автозакрытие только при закрытой смене. "
-                    "Сначала сформируйте Z-отчёт"
-                )
-            }), 409
 
         configuration = dict(state["configuration"])
         if not configuration:
@@ -1394,7 +1408,10 @@ def rekassa_save_auto_close():
 
         configuration["closeShiftSchedule"] = schedule
         configuration["closeShiftScheduleWithdrawMoney"] = bool(
-            configuration.get("withdrawMoney")
+            configuration.get(
+                "closeShiftScheduleWithdrawMoney",
+                configuration.get("withdrawMoney", False)
+            )
         )
 
         if "email" in data:
@@ -1425,6 +1442,35 @@ def rekassa_save_auto_close():
             )
         }), response.status_code if response.status_code >= 400 else 400
 
+    # A successful HTTP response is not enough: read the cash-register
+    # configuration again and make sure reKassa actually persisted the value.
+    saved_schedule = None
+    verification_error = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(0.35)
+        verified_state, verification_error = _register_state(context)
+        if verification_error:
+            continue
+        saved_schedule = _close_shift_schedule(
+            verified_state["configuration"].get("closeShiftSchedule")
+        )
+        if (enabled and saved_schedule == schedule) or (
+            not enabled and saved_schedule is None
+        ):
+            break
+
+    if verification_error or (
+        enabled and saved_schedule != schedule
+    ) or (not enabled and saved_schedule is not None):
+        return jsonify({
+            "success": False,
+            "error": (
+                "reKassa ответила на сохранение, но не подтвердила новое "
+                "расписание. Обновите страницу и повторите попытку"
+            )
+        }), 502
+
     return jsonify({
         "success": True,
         "message": (
@@ -1434,10 +1480,11 @@ def rekassa_save_auto_close():
         ),
         "auto_close": {
             "enabled": enabled,
-            "time": schedule,
+            "time": saved_schedule,
             "email": configuration.get("closeShiftEmail"),
             "timezone": "Asia/Almaty"
-        }
+        },
+        "shift_open": bool(state["register"].get("shiftOpen"))
     })
     
 

@@ -59,12 +59,12 @@
 
   function applyLock() {
     const enabled = $("autoCloseEnabled").checked;
-    $("autoCloseTime").disabled = !enabled || shiftOpen;
-    $("autoCloseEnabled").disabled = shiftOpen;
-    $("saveAutoCloseBtn").disabled = shiftOpen;
-    $("autoCloseNote").classList.toggle("warn", shiftOpen);
+    $("autoCloseTime").disabled = !enabled;
+    $("autoCloseEnabled").disabled = false;
+    $("saveAutoCloseBtn").disabled = false;
+    $("autoCloseNote").classList.remove("warn");
     $("autoCloseNote").textContent = shiftOpen
-      ? "reKassa разрешает менять это время только при закрытой смене. Закройте смену на странице «Продажи»."
+      ? "Смена сейчас открыта. Сохранённое расписание применяется на стороне reKassa автоматически."
       : "Часовой пояс: Алматы (UTC+5). Автозакрытие выполняет сама reKassa.";
   }
 
@@ -103,7 +103,7 @@
       toast(error.message, true);
     } finally {
       button.textContent = "Сохранить время";
-      button.disabled = shiftOpen;
+      button.disabled = false;
     }
   }
 
