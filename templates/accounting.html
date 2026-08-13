@@ -88,6 +88,41 @@
 
     <div class="accounting-stats accounting-finance-stats">
         <article class="accounting-stat accounting-stat--green">
+            <div class="accounting-stat__icon">ККМ</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Фискальные продажи</span>
+                <strong class="accounting-stat__value">{{ "{:,.0f}".format(accounting_summary.get("fiscal_sales", 0)).replace(",", " ") }} ₸</strong>
+                <small>По чекам reKassa</small>
+            </div>
+        </article>
+        <article class="accounting-stat accounting-stat--orange">
+            <div class="accounting-stat__icon">↩</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Фискальные возвраты</span>
+                <strong class="accounting-stat__value">{{ "{:,.0f}".format(accounting_summary.get("fiscal_refunds", 0)).replace(",", " ") }} ₸</strong>
+                <small>По чекам возврата</small>
+            </div>
+        </article>
+        <article class="accounting-stat accounting-stat--violet">
+            <div class="accounting-stat__icon">=</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">Чистая выручка ККМ</span>
+                <strong class="accounting-stat__value">{{ "{:,.0f}".format(accounting_summary.get("fiscal_net", 0)).replace(",", " ") }} ₸</strong>
+                <small>Продажи − возвраты</small>
+            </div>
+        </article>
+        <article class="accounting-stat accounting-stat--cyan">
+            <div class="accounting-stat__icon">₸</div>
+            <div class="accounting-stat__body">
+                <span class="accounting-stat__label">К получению</span>
+                <strong class="accounting-stat__value">{{ "{:,.0f}".format(accounting_summary.get("receivables", 0)).replace(",", " ") }} ₸</strong>
+                <small>Не входит в кассовую выручку</small>
+            </div>
+        </article>
+    </div>
+
+    <div class="accounting-stats accounting-finance-stats">
+        <article class="accounting-stat accounting-stat--green">
             <div class="accounting-stat__icon">＋</div>
             <div class="accounting-stat__body">
                 <span class="accounting-stat__label">Доходы</span>

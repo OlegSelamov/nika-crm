@@ -7,6 +7,21 @@
 {% block content %}
 
 <div class="sales-page">
+<section class="shift-strip" id="shiftStrip" aria-label="Смена reKassa">
+	<div class="shift-strip-state">
+		<span class="shift-strip-dot" id="shiftStripDot"></span>
+		<div>
+			<strong id="shiftStripTitle">Проверяем смену…</strong>
+			<span id="shiftStripMeta">reKassa</span>
+		</div>
+	</div>
+	<div class="shift-strip-actions">
+		<button type="button" class="shift-strip-btn" id="shiftXReportBtn" disabled>X‑отчёт</button>
+		<button type="button" class="shift-strip-btn" id="shiftHistoryBtn">История Z</button>
+		<button type="button" class="shift-strip-btn shift-strip-btn-danger" id="shiftCloseBtn" disabled>Закрыть смену</button>
+		<button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" title="Обновить смену" aria-label="Обновить смену">↻</button>
+	</div>
+</section>
 <div class="sales-grid">
 
     <!-- ЛЕВАЯ ЧАСТЬ -->
@@ -228,6 +243,69 @@
     </div>
 
 </div>
+
+<div id="shiftXModal" class="shift-modal" aria-hidden="true">
+	<div class="shift-modal-dialog shift-report-dialog">
+		<div class="shift-modal-head">
+			<strong id="shiftXTitle">X‑отчёт</strong>
+			<button type="button" data-shift-close="shiftXModal" aria-label="Закрыть">×</button>
+		</div>
+		<div class="shift-modal-body shift-report-scroll">
+			<div id="shiftXPaper" class="shift-report-paper"></div>
+		</div>
+		<div class="shift-modal-actions">
+			<button type="button" data-shift-action="print" data-modal="shiftXModal">Печать</button>
+			<button type="button" data-shift-action="pdf" data-modal="shiftXModal">Сохранить PDF</button>
+			<button type="button" data-shift-action="share">Поделиться</button>
+			<button type="button" data-shift-close="shiftXModal">Закрыть</button>
+		</div>
+	</div>
+</div>
+
+<div id="shiftZModal" class="shift-modal" aria-hidden="true">
+	<div class="shift-modal-dialog shift-report-dialog">
+		<div class="shift-modal-head">
+			<strong id="shiftZTitle">Закрытие смены</strong>
+			<button type="button" data-shift-close="shiftZModal" aria-label="Закрыть">×</button>
+		</div>
+		<div class="shift-modal-body shift-report-scroll">
+			<div id="shiftZConfirm" class="shift-close-confirm">
+				<div class="shift-close-icon">Z</div>
+				<h3>Закрыть текущую смену?</h3>
+				<p>reKassa сформирует Z‑отчёт. Отменить закрытие после выполнения нельзя.</p>
+				<label for="shiftPinInput">PIN ККМ</label>
+				<input id="shiftPinInput" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="Введите PIN кассы">
+				<small>Это PIN, которым подтверждается закрытие в reKassa. Он не сохраняется в Nika Business.</small>
+				<div id="shiftCloseError" class="shift-close-error" hidden></div>
+				<button type="button" id="shiftConfirmCloseBtn" class="shift-confirm-danger">Закрыть смену и создать Z‑отчёт</button>
+			</div>
+			<div id="shiftZPaper" class="shift-report-paper" hidden></div>
+		</div>
+		<div class="shift-modal-actions" id="shiftZActions" hidden>
+			<button type="button" data-shift-action="print" data-modal="shiftZModal">Печать</button>
+			<button type="button" data-shift-action="pdf" data-modal="shiftZModal">Сохранить PDF</button>
+			<button type="button" data-shift-action="share">Поделиться</button>
+			<button type="button" data-shift-close="shiftZModal">Закрыть</button>
+		</div>
+	</div>
+</div>
+
+<div id="shiftHistoryModal" class="shift-modal" aria-hidden="true">
+	<div class="shift-modal-dialog shift-history-dialog">
+		<div class="shift-modal-head">
+			<strong>История Z‑отчётов</strong>
+			<button type="button" data-shift-close="shiftHistoryModal" aria-label="Закрыть">×</button>
+		</div>
+		<div class="shift-modal-body">
+			<div id="shiftHistoryList" class="shift-history-list"></div>
+		</div>
+		<div class="shift-modal-actions">
+			<button type="button" data-shift-close="shiftHistoryModal">Закрыть</button>
+		</div>
+	</div>
+</div>
+
+<div id="shiftToast" class="shift-toast" role="status"></div>
 
 <div id="quantityModal" class="quantity-modal" style="display:none;">
     <div class="quantity-modal-box">

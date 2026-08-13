@@ -16,9 +16,11 @@ def dashboard():
 
     # 💰 ОБЩАЯ ВЫРУЧКА
     cur.execute("""
-        SELECT SUM(total_amount) as total
-        FROM sales
-        WHERE company_id = %s
+        SELECT COALESCE(SUM(total_amount) FILTER (
+                   WHERE status IN ('Оплачено', 'Возврат')), 0)
+             - COALESCE(SUM(total_amount) FILTER (
+                   WHERE status = 'Возврат' OR COALESCE(is_refunded, FALSE) = TRUE), 0) AS total
+        FROM sales WHERE company_id = %s
     """, (company_id,))
 
     total = cur.fetchone()["total"] or 0
@@ -27,11 +29,13 @@ def dashboard():
     today_str = now_kz().strftime("%Y-%m-%d")
 
     cur.execute("""
-        SELECT SUM(total_amount) as total
-        FROM sales
-        WHERE DATE(created_at) = %s
-        AND company_id = %s
-    """, (today_str, company_id))
+        SELECT COALESCE(SUM(total_amount) FILTER (
+                   WHERE status IN ('Оплачено', 'Возврат') AND DATE(created_at) = %s), 0)
+             - COALESCE(SUM(total_amount) FILTER (
+                   WHERE (status = 'Возврат' OR COALESCE(is_refunded, FALSE) = TRUE)
+                     AND DATE(COALESCE(refunded_at, created_at)) = %s), 0) AS total
+        FROM sales WHERE company_id = %s
+    """, (today_str, today_str, company_id))
 
     today = cur.fetchone()["total"] or 0
     
@@ -40,7 +44,7 @@ def dashboard():
         FROM sales
         WHERE company_id = %s
         AND DATE(created_at) = %s
-        AND status = 'Оплачено'
+        AND status IN ('Оплачено', 'Возврат')
     """, (
         company_id,
         today_str
@@ -54,7 +58,7 @@ def dashboard():
         FROM sales
         WHERE company_id=%s
         AND DATE(created_at)=%s
-        AND status='Оплачено'
+        AND status IN ('Оплачено', 'Возврат')
     """,(
         company_id,
         today_str
@@ -72,7 +76,7 @@ def dashboard():
 
     WHERE sales.company_id=%s
     AND DATE(sales.created_at)=%s
-    AND sales.status='Оплачено'
+    AND sales.status IN ('Оплачено', 'Возврат')
     """,(
     company_id,
     today_str
@@ -87,7 +91,7 @@ def dashboard():
 
     WHERE company_id=%s
 
-    AND DATE(created_at)=%s
+    AND DATE(COALESCE(refunded_at, created_at))=%s
 
     AND (
     status='Возврат'
@@ -99,6 +103,15 @@ def dashboard():
     ))
 
     refunds_today=cur.fetchone()["total"] or 0
+
+    cur.execute("""
+        SELECT COALESCE(SUM(si.profit), 0) AS refunded_profit
+        FROM sale_items si JOIN sales s ON s.id = si.sale_id
+        WHERE s.company_id = %s
+          AND (s.status = 'Возврат' OR COALESCE(s.is_refunded, FALSE) = TRUE)
+          AND DATE(COALESCE(s.refunded_at, s.created_at)) = %s
+    """, (company_id, today_str))
+    today_profit -= cur.fetchone()["refunded_profit"] or 0
     
     cur.execute("""
     SELECT
@@ -167,9 +180,25 @@ def dashboard():
             SUM(kaspi_amount) as kaspi
         FROM sales
         WHERE company_id = %s
-    """, (company_id,))
+          AND status IN ('Оплачено', 'Возврат')
+          AND DATE(created_at) = %s
+    """, (company_id, today_str))
 
     payments = cur.fetchone()
+    cur.execute("""
+        SELECT COALESCE(SUM(cash_amount), 0) cash,
+               COALESCE(SUM(card_amount), 0) card,
+               COALESCE(SUM(kaspi_amount), 0) kaspi
+        FROM sales WHERE company_id = %s
+          AND (status = 'Возврат' OR COALESCE(is_refunded, FALSE) = TRUE)
+          AND DATE(COALESCE(refunded_at, created_at)) = %s
+    """, (company_id, today_str))
+    refunded_payments = cur.fetchone()
+    payments = {
+        "cash": (payments["cash"] or 0) - (refunded_payments["cash"] or 0),
+        "card": (payments["card"] or 0) - (refunded_payments["card"] or 0),
+        "kaspi": (payments["kaspi"] or 0) - (refunded_payments["kaspi"] or 0),
+    }
 
     # 🧾 ПОСЛЕДНИЕ ПРОДАЖИ
     cur.execute("""
@@ -185,13 +214,19 @@ def dashboard():
 
     # 📈 ГРАФИК
     cur.execute("""
-        SELECT DATE(created_at) as date, SUM(total_amount) as total
-        FROM sales
-        WHERE company_id = %s
-        GROUP BY DATE(created_at)
+        WITH movements AS (
+            SELECT DATE(created_at) AS date, total_amount AS amount
+            FROM sales WHERE company_id = %s AND status IN ('Оплачено', 'Возврат')
+            UNION ALL
+            SELECT DATE(COALESCE(refunded_at, created_at)), -total_amount
+            FROM sales WHERE company_id = %s
+              AND (status = 'Возврат' OR COALESCE(is_refunded, FALSE) = TRUE)
+        )
+        SELECT date, SUM(amount) AS total FROM movements
+        GROUP BY date
         ORDER BY date DESC
         LIMIT 7
-    """, (company_id,))
+    """, (company_id, company_id))
     
     chart_data = cur.fetchall()
 
@@ -214,7 +249,7 @@ def dashboard():
         FROM sales
         JOIN clients ON sales.client_id = clients.id
         WHERE sales.company_id = %s
-        AND sales.status != 'Оплачено'
+        AND sales.status NOT IN ('Оплачено', 'Возврат')
         ORDER BY sales.id DESC
         LIMIT 5
     """, (company_id,))

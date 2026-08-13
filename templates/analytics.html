@@ -7,6 +7,7 @@
 {% block content %}
 
 {% set revenue = total or 0 %}
+{% set gross_revenue_value = gross_revenue if gross_revenue is defined else revenue %}
 {% set net_profit = profit or 0 %}
 {% set expenses_total = expenses_total or 0 %}
 {% set gross_profit = gross_profit if gross_profit is not none else (net_profit + expenses_total) %}
@@ -57,11 +58,11 @@
 
         <article class="analytics-kpi analytics-kpi--revenue">
             <div class="analytics-kpi-head">
-                <span>Выручка</span>
+                <span>Чистая выручка</span>
                 <i><img src="/static/icons/analytics-revenue.png" alt="Выручка"></i>
             </div>
             <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
-            <small>За выбранный период</small>
+            <small>Продажи {{ "{:,.0f}".format(gross_revenue_value).replace(",", " ") }} ₸ − возвраты</small>
         </article>
 
         <article class="analytics-kpi analytics-kpi--profit">
@@ -117,11 +118,11 @@
             <div class="analytics-panel-head">
                 <div>
                     <h2>Динамика бизнеса</h2>
-                    <p>Выручка, прибыль и расходы по дням</p>
+                    <p>Чистая выручка, прибыль и расходы по дням</p>
                 </div>
 
                 <div class="analytics-chart-legend">
-                    <span><i class="legend-revenue"></i>Выручка</span>
+                    <span><i class="legend-revenue"></i>Чистая выручка</span>
                     <span><i class="legend-profit"></i>Прибыль</span>
                     <span><i class="legend-expense"></i>Расходы</span>
                 </div>
@@ -136,7 +137,7 @@
             <div class="analytics-panel-head">
                 <div>
                     <h2>Способы оплаты</h2>
-                    <p>Структура выручки</p>
+                    <p>Оплаты за вычетом возвратов</p>
                 </div>
             </div>
 
@@ -193,7 +194,7 @@
 
             <div class="analytics-profit-flow">
                 <div class="analytics-profit-row">
-                    <span>Выручка</span>
+                    <span>Чистая выручка</span>
                     <strong>{{ "{:,.0f}".format(revenue).replace(",", " ") }} ₸</strong>
                 </div>
                 <div class="analytics-profit-progress"><i style="width:100%"></i></div>

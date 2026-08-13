@@ -40,6 +40,7 @@ DOCUMENT_TYPES = {
     "report": "Налоговая отчётность",
     "payment": "Платёжный документ",
     "check": "Кассовый чек",
+    "refund_check": "Чек возврата",
     "other": "Прочее",
 }
 
@@ -313,7 +314,9 @@ def _sync_sales(cur, company_id):
         return
 
     has_is_refunded = _column_exists(cur, "sales", "is_refunded")
+    has_refunded_at = _column_exists(cur, "sales", "refunded_at")
     refunded_sql = "COALESCE(s.is_refunded, FALSE)" if has_is_refunded else "FALSE"
+    refunded_at_sql = "s.refunded_at" if has_refunded_at else "s.created_at"
 
     cur.execute(f"""
         SELECT
@@ -324,6 +327,7 @@ def _sync_sales(cur, company_id):
             s.status,
             s.sale_type,
             s.created_at,
+            {refunded_at_sql} AS refunded_at,
             {refunded_sql} AS is_refunded,
             COALESCE(c.company_name, c.full_name, 'Без клиента') AS counterparty
         FROM sales s
@@ -335,13 +339,11 @@ def _sync_sales(cur, company_id):
 
     for sale in cur.fetchall():
         is_refund = sale["status"] == "Возврат" or bool(sale["is_refunded"])
-        operation_type = "refund" if is_refund else "income"
-        source_type = "sale_refund" if is_refund else "sale"
-        title = (
-            f"Возврат по продаже №{sale['sale_number'] or sale['id']}"
-            if is_refund
-            else f"Продажа №{sale['sale_number'] or sale['id']}"
-        )
+        # Продажа и возврат — две самостоятельные денежные операции. Доходная
+        # запись сохраняется, а возврат добавляется с собственной датой.
+        operation_type = "income"
+        source_type = "sale"
+        title = f"Продажа №{sale['sale_number'] or sale['id']}"
         document_url = (
             f"/docs/invoice/{sale['id']}"
             if sale["sale_type"] == "invoice"
@@ -381,13 +383,45 @@ def _sync_sales(cur, company_id):
             now_kz(),
         ))
 
+        if is_refund:
+            refund_date = sale.get("refunded_at") or sale["created_at"]
+            cur.execute("""
+                INSERT INTO accounting_operations (
+                    company_id, user_id, source_type, source_id, operation_type,
+                    title, amount, payment_method, counterparty,
+                    operation_date, document_url, status, created_at, updated_at
+                )
+                VALUES (%s, %s, 'sale_refund', %s, 'refund', %s, %s, %s, %s,
+                        DATE(%s), %s, 'completed', %s, %s)
+                ON CONFLICT (company_id, source_type, source_id)
+                DO UPDATE SET
+                    title = EXCLUDED.title,
+                    amount = EXCLUDED.amount,
+                    payment_method = EXCLUDED.payment_method,
+                    counterparty = EXCLUDED.counterparty,
+                    operation_date = EXCLUDED.operation_date,
+                    document_url = EXCLUDED.document_url,
+                    updated_at = EXCLUDED.updated_at
+            """, (
+                company_id,
+                sale.get("user_id"),
+                sale["id"],
+                f"Возврат по продаже №{sale['sale_number'] or sale['id']}",
+                sale["total_amount"] or 0,
+                _sale_payment_label(sale),
+                sale["counterparty"],
+                refund_date,
+                f"/docs/refund-check/{sale['id']}",
+                refund_date,
+                now_kz(),
+            ))
+
         # Документы продажи отображаются в бухгалтерском архиве как ссылки
         # на уже существующие автоматически формируемые шаблоны.
         documents = []
 
-        # Возврат является финансовой операцией, но обычные первичные
-        # документы продажи повторно для него не создаём.
-        if not is_refund:
+        # Исходные документы продажи сохраняются и после возврата.
+        if True:
             # Для продажи по счёту доступен счёт на оплату.
             if sale["sale_type"] == "invoice":
                 documents.append(
@@ -418,6 +452,13 @@ def _sync_sales(cur, company_id):
                     f"/docs/schet-factura/{sale['id']}",
                 ),
             ])
+
+        if is_refund and sale["sale_type"] != "invoice":
+            documents.append((
+                "refund_check",
+                "Чек возврата",
+                f"/docs/refund-check/{sale['id']}",
+            ))
 
         for document_type, document_title, file_url in documents:
             cur.execute("""
@@ -962,6 +1003,20 @@ def accounting():
         operation_summary = cur.fetchone()
 
         cur.execute("""
+            SELECT
+                COALESCE(SUM(total_amount) FILTER (
+                    WHERE rekassa_ticket_id IS NOT NULL
+                      AND status IN ('Оплачено', 'Возврат')), 0) AS fiscal_sales,
+                COALESCE(SUM(total_amount) FILTER (
+                    WHERE rekassa_ticket_id IS NOT NULL
+                      AND (status = 'Возврат' OR COALESCE(is_refunded, FALSE) = TRUE)), 0) AS fiscal_refunds,
+                COALESCE(SUM(GREATEST(total_amount - COALESCE(paid_amount, 0), 0)) FILTER (
+                    WHERE status NOT IN ('Оплачено', 'Возврат')), 0) AS receivables
+            FROM sales WHERE company_id = %s
+        """, (company_id,))
+        fiscal_summary = cur.fetchone() or {}
+
+        cur.execute("""
             SELECT COUNT(*) AS documents_count
             FROM accounting_documents
             WHERE company_id = %s
@@ -995,6 +1050,11 @@ def accounting():
             "debt_total": debt_summary["debt_total"] or 0,
             "debt_count": debt_summary["debt_count"] or 0,
             "documents_count": documents_count,
+            "fiscal_sales": fiscal_summary.get("fiscal_sales") or 0,
+            "fiscal_refunds": fiscal_summary.get("fiscal_refunds") or 0,
+            "fiscal_net": (fiscal_summary.get("fiscal_sales") or 0)
+                          - (fiscal_summary.get("fiscal_refunds") or 0),
+            "receivables": fiscal_summary.get("receivables") or 0,
         }
 
         return render_template(

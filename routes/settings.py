@@ -18,6 +18,12 @@ def integrations():
 
 @settings_bp.route("/settings/kkm")
 def kkm():
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    if not session.get("company_id"):
+        return redirect("/dashboard")
+
     return render_template("settings/kkm.html")
 
 

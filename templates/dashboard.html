@@ -22,9 +22,9 @@
         <article class="director-kpi">
             <div class="director-kpi__icon director-kpi__icon--blue"><img src="{{ url_for('static', filename='icons/revenue-today.png') }}" alt="Выручка сегодня"></div>
             <div>
-                <span>Выручка сегодня</span>
+                <span>Чистая выручка сегодня</span>
                 <strong>{{ "{:,.0f}".format(today or 0).replace(",", " ") }} ₸</strong>
-                <small>{{ sales_today or 0 }} продаж</small>
+                <small>{{ sales_today or 0 }} чеков, возвраты вычтены</small>
             </div>
         </article>
 
@@ -109,9 +109,9 @@
         <article class="director-kpi">
             <div class="director-kpi__icon director-kpi__icon--violet"><img src="{{ url_for('static', filename='icons/total-revenue.png') }}" alt="Общая выручка"></div>
             <div>
-                <span>Общая выручка</span>
+                <span>Чистая выручка</span>
                 <strong>{{ "{:,.0f}".format(total or 0).replace(",", " ") }} ₸</strong>
-                <small>За всё время</small>
+                <small>Продажи за вычетом возвратов</small>
             </div>
         </article>
     </section>
@@ -120,7 +120,7 @@
         <div class="director-section__head">
             <div>
                 <h2>Способы оплаты</h2>
-                <p>Распределение выручки за сегодня</p>
+                <p>Оплаты сегодня за вычетом возвратов</p>
             </div>
         </div>
 
@@ -161,8 +161,8 @@
     <section class="director-section">
         <div class="director-section__head">
             <div>
-                <h2>График продаж</h2>
-                <p>Динамика выручки</p>
+                <h2>График чистой выручки</h2>
+                <p>Продажи за вычетом возвратов по дням</p>
             </div>
         </div>
 

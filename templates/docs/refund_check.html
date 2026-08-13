@@ -21,6 +21,10 @@
         .total { margin-top: 8px; font-size: 15px; font-weight: 700; }
         .meta { margin-top: 5px; overflow-wrap: anywhere; }
         .muted { color: #444; }
+        .fiscal-qr { margin-top: 10px; text-align: center; }
+        .fiscal-qr a { display: inline-block; color: inherit; text-decoration: none; }
+        .fiscal-qr img { display: block; width: 38mm; height: 38mm; margin: 0 auto 4px; }
+        .fiscal-qr-label { font-size: 11px; font-weight: 700; }
         @media print {
             .receipt { width: 72mm; padding: 0; }
         }
@@ -80,11 +84,14 @@
     {% if refund.payment_transaction_id %}
         <div class="meta">Транзакция возврата: {{ refund.payment_transaction_id }}</div>
     {% endif %}
-    {% if refund.qr %}<div class="meta muted">ФДО QR: {{ refund.qr }}</div>{% endif %}
-    {% if refund.print_url %}
-        <div class="meta center">
-            <a href="{{ refund.print_url }}" target="_blank" rel="noopener">
-                Открыть фискальный чек в reKassa
+    {% set fiscal_url = refund.qr or refund.print_url %}
+    {% if fiscal_url %}
+        <div class="fiscal-qr">
+            <a href="{{ fiscal_url }}" target="_blank" rel="noopener">
+                <img
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&amp;data={{ fiscal_url|urlencode }}"
+                    alt="QR-код фискального чека возврата">
+                <div class="fiscal-qr-label">ФИСКАЛЬНЫЙ ЧЕК reKassa</div>
             </a>
         </div>
     {% endif %}

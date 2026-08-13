@@ -363,6 +363,7 @@ function pay() {
         cart = [];
         renderCart();
         resetSaleAmounts();
+        window.dispatchEvent(new CustomEvent("nika:sale-completed"));
 
     })
     .catch(err => {
@@ -1736,7 +1737,23 @@ function switchSalesTab(tab) {
 
 function loadSalesHistory() {
 
-    return fetch("/api/sales/history")
+    const shiftNumber = Number(window.currentRekassaShiftNumber || 0);
+
+    if (!shiftNumber) {
+        document.getElementById("salesHistory").innerHTML = `
+            <tr><td colspan="7" class="history-error">Текущая смена закрыта — продаж пока нет</td></tr>
+        `;
+        document.getElementById("mobileSalesHistory").innerHTML = `
+            <div class="history-error">Текущая смена закрыта — продаж пока нет</div>
+        `;
+        return Promise.resolve([]);
+    }
+
+    const serialNumber = String(window.currentRekassaSerialNumber || "");
+    const params = new URLSearchParams({ shift_number: String(shiftNumber) });
+    if (serialNumber) params.set("serial_number", serialNumber);
+
+    return fetch(`/api/sales/history?${params.toString()}`)
 
     .then(res => res.json())
 
@@ -1789,15 +1806,6 @@ function loadSalesHistory() {
                         title="Чек возврата">
                         <img src="/static/icons/refund.png" alt="">
                     </button>
-                    ${sale.refund_fiscal_url ? `
-                        <button
-                            onclick="openFiscalRefundCheck('${escapeHtml(sale.refund_fiscal_url)}')"
-                            class="mini-doc-btn refund-check-btn"
-                            aria-label="Фискальный чек возврата reKassa"
-                            title="Фискальный чек возврата reKassa">
-                            <img src="/static/icons/receipt.png" alt="">
-                        </button>
-                    ` : ""}
                 `
                 : "";
 
@@ -1927,6 +1935,11 @@ function loadSalesHistory() {
 			</div>
 			`;
         });
+
+        if (!data.length) {
+            html = `<tr><td colspan="7" class="history-error">В текущей смене продаж пока нет</td></tr>`;
+            mobileHtml = `<div class="history-error">В текущей смене продаж пока нет</div>`;
+        }
 
         document.getElementById(
             "salesHistory"
@@ -2149,7 +2162,819 @@ function refundSale(id){
     });
 }
 
-function openFiscalRefundCheck(url) {
-    if (!url) return;
-    window.open(url, "_blank", "noopener");
-}
+/* Предыдущая реализация управления сменой оставлена только для истории сборки.
+// Управление сменой reKassa поверх существующей страницы продаж.
+(() => {
+    const state = { status: null, report: null, reportType: null };
+    const $ = id => document.getElementById(id);
+    const operationNames = {
+        OPERATION_SELL: "Продажи",
+        OPERATION_SELL_RETURN: "Возвраты продаж",
+        OPERATION_BUY: "Покупки",
+        OPERATION_BUY_RETURN: "Возвраты покупок",
+        OPERATION_DEPOSIT: "Внесения",
+        OPERATION_WITHDRAWAL: "Изъятия"
+    };
+
+    if (!$('shiftStrip')) return;
+
+    function escapeHtml(value) {
+        return String(value == null ? "" : value).replace(/[&<>'"]/g, char => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
+        })[char]);
+    }
+
+    async function api(url, options = {}) {
+        const response = await fetch(url, {
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+            ...options
+        });
+        const data = await response.json().catch(() => ({ error: "Некорректный ответ сервера" }));
+        if (!response.ok || data.success === false) {
+            throw new Error(data.error || data.message || "Ошибка reKassa");
+        }
+        return data;
+    }
+
+    function toast(message, isError = false) {
+        const node = $('shiftToast');
+        node.textContent = message;
+        node.className = `shift-toast show${isError ? " error" : ""}`;
+        clearTimeout(toast.timer);
+        toast.timer = setTimeout(() => { node.className = "shift-toast"; }, 4000);
+    }
+
+    function setBusy(button, busy, busyLabel) {
+        if (!button.dataset.label) button.dataset.label = button.textContent;
+        button.disabled = busy;
+        button.textContent = busy ? busyLabel : button.dataset.label;
+    }
+
+    function money(value) {
+        if (value == null || value === "") return "—";
+        if (typeof value === "object") {
+            if (value.value != null) return money(value.value);
+            if (value.sum != null) return money(value.sum);
+            if (value.bills != null) {
+                value = Number(value.bills || 0) + Number(value.coins || 0) / 100;
+            } else {
+                return "—";
+            }
+        }
+        const number = Number(value);
+        return Number.isFinite(number)
+            ? `${new Intl.NumberFormat("ru-RU").format(number)} ₸`
+            : "—";
+    }
+
+    function dateTime(value) {
+        if (!value) return "—";
+        if (value.value) return dateTime(value.value);
+        if (value.date && value.time) {
+            const d = value.date;
+            const t = value.time;
+            return `${String(d.day).padStart(2, "0")}.${String(d.month).padStart(2, "0")}.${d.year} ` +
+                `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}:${String(t.second || 0).padStart(2, "0")}`;
+        }
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime())
+            ? String(value)
+            : parsed.toLocaleString("ru-RU", { timeZone: "Asia/Almaty" });
+    }
+
+    function coreReport(report) {
+        return report && report.data && typeof report.data === "object"
+            ? report.data
+            : (report || {});
+    }
+
+    function reportRows(report, type) {
+        const core = coreReport(report);
+        const shiftNumber = report.shiftNumber || core.shiftNumber || state.status?.shift_number || "—";
+        const opened = report.openTime || core.openShiftTime || core.openTime;
+        const closed = report.closeTime || core.closeShiftTime || core.closeTime;
+        const operations = core.ticketOperations || report.ticketOperations || [];
+        const rows = [
+            ["Смена", `№ ${shiftNumber}`],
+            ["Начало", dateTime(opened)],
+            ...(type === "Z" ? [["Закрытие", dateTime(closed)]] : []),
+            ["Выручка", money(report.revenue ?? core.revenue)],
+            ["Наличные в кассе", money(core.cashSum ?? report.cashSum)]
+        ];
+        return { core, shiftNumber, operations, rows };
+    }
+
+    function openModal() {
+        $('shiftReportModal').classList.add('open');
+        $('shiftReportModal').setAttribute('aria-hidden', 'false');
+    }
+
+    function closeModal() {
+        $('shiftReportModal').classList.remove('open');
+        $('shiftReportModal').setAttribute('aria-hidden', 'true');
+    }
+
+    function renderReport(report, type) {
+        state.report = report;
+        state.reportType = type;
+        const { core, shiftNumber, operations, rows } = reportRows(report, type);
+        const operationsHtml = operations.length ? `
+            <div class="shift-report-section">Операции</div>
+            ${operations.map(item => `
+                <div class="shift-report-operation">
+                    <span>${escapeHtml(operationNames[item.operation] || item.operation || "Операции")}</span>
+                    <strong>${escapeHtml(money(item.sum))}</strong>
+                    <small>Чеков: ${escapeHtml(item.ticketsCount ?? item.operationsCount ?? 0)}</small>
+                </div>
+            `).join("")}
+        ` : "";
+
+        $('shiftHistoryList').hidden = true;
+        $('shiftReportPaper').hidden = false;
+        $('shiftReportActions').hidden = false;
+        $('shiftReportTitle').textContent = `${type}‑отчёт · смена №${shiftNumber}`;
+        $('shiftReportPaper').innerHTML = `
+            <div class="shift-report-logo">NIKA BUSINESS</div>
+            <div class="shift-report-kind">${type}‑ОТЧЁТ · СМЕНА №${escapeHtml(shiftNumber)}</div>
+            ${rows.map(([label, value]) => `
+                <div class="shift-report-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
+            `).join("")}
+            ${operationsHtml}
+            <details class="shift-report-json"><summary>Технические данные reKassa</summary><pre>${escapeHtml(JSON.stringify(core, null, 2))}</pre></details>
+        `;
+        openModal();
+    }
+
+    function reportShareText() {
+        if (!state.report) return "";
+        const { rows } = reportRows(state.report, state.reportType);
+        return [
+            "Nika Business",
+            `${state.reportType}-отчёт reKassa`,
+            ...rows.map(([label, value]) => `${label}: ${value}`)
+        ].join("\n");
+    }
+
+    function historyItems(payload) {
+        const root = payload?.history || {};
+        const embedded = root._embedded || {};
+        const items = embedded.shifts || root.content || root.items || root.shifts || [];
+        return Array.isArray(items) ? items : [];
+    }
+
+    async function loadStatus(showMessage = false) {
+        const button = $('shiftRefreshBtn');
+        button.disabled = true;
+        try {
+            const data = await api('/api/rekassa/shift/status');
+            state.status = data;
+            const open = Boolean(data.shift_open);
+            window.currentRekassaShiftNumber = open ? data.shift_number : null;
+            window.currentRekassaSerialNumber = open ? (data.serial_number || "") : "";
+            $('shiftStripDot').classList.toggle('open', open);
+            $('shiftStripTitle').textContent = open
+                ? `Смена №${data.shift_number || "—"} открыта`
+                : "Смена закрыта";
+            $('shiftStripMeta').textContent = open
+                ? `${data.shift?.ticket_count ?? 0} чеков${data.shift?.open_time ? ` · с ${dateTime(data.shift.open_time)}` : ""}`
+                : "Первая фискальная продажа откроет новую смену";
+            $('shiftXReportBtn').disabled = !open;
+            $('shiftCloseBtn').disabled = !open;
+            if (showMessage) toast('Состояние смены обновлено');
+
+            const historyVisible = $('salesHistoryBox')?.style.display === 'block';
+            if (historyVisible) loadSalesHistory();
+        } catch (error) {
+            window.currentRekassaShiftNumber = null;
+            window.currentRekassaSerialNumber = "";
+            $('shiftStripDot').classList.remove('open');
+            $('shiftStripTitle').textContent = 'reKassa недоступна';
+            $('shiftStripMeta').textContent = error.message;
+            $('shiftXReportBtn').disabled = true;
+            $('shiftCloseBtn').disabled = true;
+            toast(error.message, true);
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function makeXReport() {
+        const button = $('shiftXReportBtn');
+        setBusy(button, true, 'Формируем…');
+        try {
+            const data = await api('/api/rekassa/reports/x', { method: 'POST', body: '{}' });
+            renderReport(data.report, 'X');
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            setBusy(button, false);
+            button.disabled = !state.status?.shift_open;
+        }
+    }
+
+    async function closeShift() {
+        if (!window.confirm('Закрыть текущую смену и сформировать Z‑отчёт? Отменить закрытие нельзя.')) return;
+        const button = $('shiftCloseBtn');
+        setBusy(button, true, 'Закрываем…');
+        try {
+            const data = await api('/api/rekassa/shifts/close', { method: 'POST', body: '{}' });
+            toast(data.message || 'Смена закрыта');
+            renderReport(data.report, 'Z');
+            await loadStatus();
+            loadSalesHistory();
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            setBusy(button, false);
+            button.disabled = !state.status?.shift_open;
+        }
+    }
+
+    async function showHistory() {
+        state.report = null;
+        state.reportType = null;
+        $('shiftReportTitle').textContent = 'История Z‑отчётов';
+        $('shiftReportPaper').hidden = true;
+        $('shiftReportActions').hidden = true;
+        $('shiftHistoryList').hidden = false;
+        $('shiftHistoryList').innerHTML = '<div class="shift-history-empty">Загрузка…</div>';
+        openModal();
+        try {
+            const data = await api('/api/rekassa/shifts?page=0&size=30');
+            const items = historyItems(data).sort((a, b) =>
+                Number(b.shiftNumber || 0) - Number(a.shiftNumber || 0)
+            );
+            $('shiftHistoryList').innerHTML = items.length
+                ? items.map(item => {
+                    const core = coreReport(item);
+                    const number = item.shiftNumber || core.shiftNumber;
+                    return `
+                        <div class="shift-history-item">
+                            <div class="shift-history-code">Z · ${escapeHtml(number)}</div>
+                            <div class="shift-history-main">
+                                <strong>Смена №${escapeHtml(number)}</strong>
+                                <span>${escapeHtml(dateTime(item.closeTime || core.closeShiftTime || core.closeTime))}</span>
+                            </div>
+                            <button type="button" class="shift-history-open" data-shift="${escapeHtml(number)}">Открыть</button>
+                        </div>
+                    `;
+                }).join("")
+                : '<div class="shift-history-empty">Закрытых смен пока нет</div>';
+        } catch (error) {
+            $('shiftHistoryList').innerHTML = `<div class="shift-history-empty">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    async function openZReport(shiftNumber) {
+        try {
+            const data = await api(`/api/rekassa/shifts/${encodeURIComponent(shiftNumber)}/report`);
+            renderReport(data.report, 'Z');
+        } catch (error) {
+            toast(error.message, true);
+        }
+    }
+
+    function printReport() {
+        document.body.classList.add('shift-report-printing');
+        const cleanup = () => document.body.classList.remove('shift-report-printing');
+        window.addEventListener('afterprint', cleanup, { once: true });
+        window.print();
+        setTimeout(cleanup, 1200);
+    }
+
+    $('shiftRefreshBtn').addEventListener('click', () => loadStatus(true));
+    $('shiftXReportBtn').addEventListener('click', makeXReport);
+    $('shiftCloseBtn').addEventListener('click', closeShift);
+    $('shiftHistoryBtn').addEventListener('click', showHistory);
+    $('shiftReportCloseBtn').addEventListener('click', closeModal);
+    $('shiftReportCancelBtn').addEventListener('click', closeModal);
+    $('shiftReportModal').addEventListener('click', event => {
+        if (event.target === $('shiftReportModal')) closeModal();
+    });
+    $('shiftHistoryList').addEventListener('click', event => {
+        const button = event.target.closest('[data-shift]');
+        if (button) openZReport(button.dataset.shift);
+    });
+    $('shiftReportPrintBtn').addEventListener('click', printReport);
+    $('shiftReportPdfBtn').addEventListener('click', () => {
+        toast('В окне печати выберите «Сохранить как PDF»');
+        setTimeout(printReport, 200);
+    });
+    $('shiftReportShareBtn').addEventListener('click', async () => {
+        const text = reportShareText();
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: `${state.reportType}-отчёт reKassa`, text });
+            } else {
+                await navigator.clipboard.writeText(text);
+                toast('Отчёт скопирован');
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') toast('Не удалось поделиться отчётом', true);
+        }
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeModal();
+    });
+    window.addEventListener('nika:sale-completed', () => {
+        setTimeout(() => loadStatus(), 350);
+    });
+
+    loadStatus();
+})();
+*/
+
+// Управление сменой reKassa: отдельные окна X, Z и истории Z.
+(() => {
+    const $ = id => document.getElementById(id);
+    if (!$('shiftStrip')) return;
+
+    const state = {
+        status: null,
+        report: null,
+        reportType: null,
+        cashRegister: null
+    };
+
+    const operationOrder = [
+        'OPERATION_SELL',
+        'OPERATION_SELL_RETURN',
+        'OPERATION_BUY',
+        'OPERATION_BUY_RETURN'
+    ];
+    const operationNames = {
+        OPERATION_SELL: 'Продажа',
+        OPERATION_SELL_RETURN: 'Возврат',
+        OPERATION_BUY: 'Покупка',
+        OPERATION_BUY_RETURN: 'Возврат покупки',
+        MONEY_PLACEMENT_DEPOSIT: 'Внесение',
+        MONEY_PLACEMENT_WITHDRAWAL: 'Изъятие'
+    };
+    const paymentNames = {
+        PAYMENT_CASH: 'Наличные',
+        PAYMENT_CARD: 'Карта',
+        PAYMENT_CREDIT: 'Кредит',
+        PAYMENT_TARE: 'Тара',
+        PAYMENT_MOBILE: 'Мобильная оплата'
+    };
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        })[char]);
+    }
+
+    function first(...values) {
+        return values.find(value => value !== undefined && value !== null && value !== '') ?? '';
+    }
+
+    async function api(url, options = {}) {
+        const response = await fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+            ...options
+        });
+        const data = await response.json().catch(() => ({ error: 'Некорректный ответ сервера' }));
+        if (!response.ok || data.success === false) {
+            throw new Error(data.error || data.message || 'Ошибка reKassa');
+        }
+        return data;
+    }
+
+    function toast(message, error = false) {
+        const node = $('shiftToast');
+        node.textContent = message;
+        node.className = `shift-toast show${error ? ' error' : ''}`;
+        clearTimeout(toast.timer);
+        toast.timer = setTimeout(() => { node.className = 'shift-toast'; }, 4500);
+    }
+
+    function openModal(id) {
+        const modal = $(id);
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeModal(id) {
+        const modal = $(id);
+        if (!modal) return;
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        if (id === 'shiftZModal' && !$('shiftZPaper').hidden) {
+            $('shiftPinInput').value = '';
+        }
+    }
+
+    function setBusy(button, busy, label) {
+        if (!button.dataset.label) button.dataset.label = button.textContent;
+        button.disabled = busy;
+        button.textContent = busy ? label : button.dataset.label;
+    }
+
+    function coreReport(report) {
+        return report && report.data && typeof report.data === 'object'
+            ? report.data
+            : (report || {});
+    }
+
+    function operationCode(value) {
+        if (typeof value === 'string') return value;
+        return ({ 0: 'OPERATION_BUY', 1: 'OPERATION_BUY_RETURN', 2: 'OPERATION_SELL', 3: 'OPERATION_SELL_RETURN' })[value] || String(value || '');
+    }
+
+    function paymentCode(value) {
+        if (typeof value === 'string') return value;
+        return ({ 0: 'PAYMENT_CASH', 1: 'PAYMENT_CARD', 2: 'PAYMENT_CREDIT', 3: 'PAYMENT_TARE', 4: 'PAYMENT_MOBILE' })[value] || String(value || '');
+    }
+
+    function placementCode(value) {
+        if (typeof value === 'string') return value;
+        return value === 1 ? 'MONEY_PLACEMENT_WITHDRAWAL' : 'MONEY_PLACEMENT_DEPOSIT';
+    }
+
+    function numberFromMoney(value) {
+        if (value == null || value === '') return 0;
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') return Number(value.replace(/\s/g, '').replace(',', '.')) || 0;
+        if (value.value != null) return numberFromMoney(value.value);
+        if (value.sum != null && value.bills == null) return numberFromMoney(value.sum);
+        if (value.bills != null) return Number(value.bills || 0) + Number(value.coins || 0) / 100;
+        return 0;
+    }
+
+    function money(value) {
+        return `${new Intl.NumberFormat('ru-RU', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(numberFromMoney(value))} ₸`;
+    }
+
+    function parseDateTime(value) {
+        if (!value) return null;
+        if (value.value) return parseDateTime(value.value);
+        if (value.date && value.time) {
+            return {
+                date: `${String(value.date.day).padStart(2, '0')}-${String(value.date.month).padStart(2, '0')}-${value.date.year}`,
+                time: `${String(value.time.hour).padStart(2, '0')}:${String(value.time.minute).padStart(2, '0')}:${String(value.time.second || 0).padStart(2, '0')}`
+            };
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return { date: String(value), time: '—' };
+        return {
+            date: parsed.toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty' }).replace(/\./g, '-'),
+            time: parsed.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Almaty', hour12: false })
+        };
+    }
+
+    function reportMeta(envelope) {
+        const cash = envelope?.cash_register || state.cashRegister || state.status?.cash_register || {};
+        const active = window.company || company || {};
+        return {
+            businessName: first(cash.business_name, active.business_name, active.name, active.title, 'Nika Business'),
+            businessId: first(cash.business_id, active.business_id, active.bin, active.inn, '—'),
+            address: first(cash.address, active.address, '—'),
+            registrationNumber: first(cash.registration_number, '—'),
+            serialNumber: first(cash.serial_number, state.status?.serial_number, '—'),
+            model: first(cash.model, 'reKassa 3.0'),
+            fdoTitle: first(cash.fdo_title, 'ОФД ТОО «COMRUN»'),
+            fdoUrl: first(cash.fdo_url, 'https://ofd.rekassa.kz')
+        };
+    }
+
+    function sumByOperation(items, code) {
+        const item = (Array.isArray(items) ? items : []).find(row => operationCode(row.operation) === code);
+        return item ? item.sum : 0;
+    }
+
+    function receiptLine(label, value, extra = '') {
+        return `<div class="shift-receipt-line ${extra}"><span>${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`;
+    }
+
+    function renderReceipt(envelope, type) {
+        const report = envelope.report || envelope;
+        const core = coreReport(report);
+        const meta = reportMeta(envelope);
+        const shiftNumber = first(report.shiftNumber, core.shiftNumber, envelope.shift_number, state.status?.shift_number, '—');
+        const open = parseDateTime(first(report.openTime, core.openShiftTime, core.openTime, state.status?.shift?.open_time));
+        const close = parseDateTime(first(report.closeTime, core.closeShiftTime, core.closeTime));
+        const operator = report.operator || core.operator || {};
+        const operatorValue = first(operator.name, operator.code, '—');
+        const startSums = core.startShiftNonNullableSums || report.startShiftNonNullableSums || [];
+        const endSums = core.nonNullableSums || report.nonNullableSums || [];
+        const ticketOperations = (core.ticketOperations || report.ticketOperations || [])
+            .filter(item => Number(item.ticketsCount || 0) > 0)
+            .sort((a, b) => operationOrder.indexOf(operationCode(a.operation)) - operationOrder.indexOf(operationCode(b.operation)));
+        const placements = (core.moneyPlacements || report.moneyPlacements || [])
+            .filter(item => Number(item.operationsCount || 0) > 0);
+        const totalCount = ticketOperations.reduce((sum, item) => sum + Number(item.ticketsCount || 0), 0)
+            + placements.reduce((sum, item) => sum + Number(item.operationsCount || 0), 0);
+
+        const periodRows = `
+            <div class="shift-receipt-grid">
+                <span>Смена:</span><span class="value">№${escapeHtml(shiftNumber)}</span>
+                <span>Кассир:</span><span class="value">${escapeHtml(operatorValue)}</span>
+                <span>Начало:</span><span class="value">${escapeHtml(open?.date || '—')}</span>
+                <span>Время:</span><span class="value">${escapeHtml(open?.time || '—')}</span>
+                ${type === 'Z' ? `
+                    <span>Конец:</span><span class="value">${escapeHtml(close?.date || '—')}</span>
+                    <span>Время:</span><span class="value">${escapeHtml(close?.time || '—')}</span>
+                ` : ''}
+            </div>
+            ${type === 'Z' && first(report.shiftDocumentNumber, core.shiftDocumentNumber)
+                ? receiptLine('Документ:', first(report.shiftDocumentNumber, core.shiftDocumentNumber))
+                : ''}
+        `;
+
+        const cumulative = items => operationOrder.map(code =>
+            receiptLine(operationNames[code], money(sumByOperation(items, code)))
+        ).join('');
+
+        const ticketHtml = ticketOperations.map(item => {
+            const code = operationCode(item.operation);
+            const payments = (item.payments || []).map(payment =>
+                receiptLine(paymentNames[paymentCode(payment.payment)] || paymentCode(payment.payment), money(payment.sum))
+            ).join('');
+            return `
+                <div class="shift-receipt-block">
+                    <div class="shift-receipt-operation-title">${escapeHtml(operationNames[code] || code)}</div>
+                    ${receiptLine('Количество чеков', Number(item.ticketsCount || 0))}
+                    ${payments}
+                    ${receiptLine('Сумма', money(item.ticketsSum))}
+                </div>
+            `;
+        }).join('');
+
+        const placementHtml = placements.map(item => `
+            <div class="shift-receipt-block">
+                <div class="shift-receipt-operation-title">${escapeHtml(operationNames[placementCode(item.operation)] || placementCode(item.operation))}</div>
+                ${receiptLine('Количество чеков', Number(item.operationsCount || 0))}
+                ${receiptLine('Сумма', money(item.operationsSum))}
+            </div>
+        `).join('');
+
+        const html = `
+            <div class="shift-receipt-center">
+                <div class="shift-receipt-name">${escapeHtml(meta.businessName)}</div>
+                <div class="shift-receipt-id">БИН (ИИН): ${escapeHtml(meta.businessId)}</div>
+                <div class="shift-receipt-address">${escapeHtml(meta.address)}</div>
+            </div>
+            <div class="shift-receipt-requisites">
+                ${receiptLine('РНМ:', meta.registrationNumber)}
+                ${receiptLine('ЗНМ:', meta.serialNumber)}
+                ${receiptLine('ККМ:', meta.model)}
+            </div>
+            <div class="shift-receipt-kind">${type}‑отчёт</div>
+            ${periodRows}
+            <div class="shift-receipt-separator"></div>
+            <div class="shift-receipt-section-title">Необнуляемая сумма на начало смены</div>
+            ${cumulative(startSums)}
+            <div class="shift-receipt-separator"></div>
+            ${ticketHtml || '<div class="shift-receipt-empty">Фискальных операций в смене нет</div>'}
+            ${placementHtml}
+            ${receiptLine('Количество чеков за смену', totalCount, 'shift-receipt-total-count')}
+            <div class="shift-receipt-separator"></div>
+            <div class="shift-receipt-section-title">Необнуляемая сумма на конец смены</div>
+            ${cumulative(endSums)}
+            <div class="shift-receipt-section-title" style="margin-top:20px">Наличных в кассе</div>
+            ${receiptLine('Сумма', money(core.cashSum || report.cashSum))}
+            <div class="shift-receipt-separator"></div>
+            <div class="shift-receipt-fdo">
+                <div>${escapeHtml(meta.fdoTitle)}</div>
+                <div>${escapeHtml(meta.fdoUrl)}</div>
+            </div>
+        `;
+
+        return { html, shiftNumber, meta };
+    }
+
+    function showReport(envelope, type) {
+        state.report = envelope;
+        state.reportType = type;
+        state.cashRegister = envelope.cash_register || state.cashRegister;
+        const rendered = renderReceipt(envelope, type);
+        const paper = type === 'X' ? $('shiftXPaper') : $('shiftZPaper');
+        paper.innerHTML = rendered.html;
+        paper.hidden = false;
+
+        if (type === 'X') {
+            $('shiftXTitle').textContent = `X‑отчёт · смена №${rendered.shiftNumber}`;
+            openModal('shiftXModal');
+        } else {
+            $('shiftZTitle').textContent = `Z‑отчёт · смена №${rendered.shiftNumber}`;
+            $('shiftZConfirm').hidden = true;
+            $('shiftZActions').hidden = false;
+            openModal('shiftZModal');
+        }
+    }
+
+    function shareText() {
+        if (!state.report) return '';
+        const report = state.report.report || state.report;
+        const core = coreReport(report);
+        const shiftNumber = first(report.shiftNumber, core.shiftNumber, state.report.shift_number, '—');
+        return [
+            `${state.reportType}‑отчёт reKassa`,
+            `Смена №${shiftNumber}`,
+            `Наличных в кассе: ${money(core.cashSum || report.cashSum)}`
+        ].join('\n');
+    }
+
+    async function loadStatus(showMessage = false) {
+        const button = $('shiftRefreshBtn');
+        button.disabled = true;
+        try {
+            const data = await api('/api/rekassa/shift/status');
+            state.status = data;
+            state.cashRegister = data.cash_register || state.cashRegister;
+            const open = Boolean(data.shift_open);
+            window.currentRekassaShiftNumber = open ? data.shift_number : null;
+            window.currentRekassaSerialNumber = open ? (data.serial_number || '') : '';
+            $('shiftStripDot').classList.toggle('open', open);
+            $('shiftStripTitle').textContent = open ? `Смена №${data.shift_number || '—'} открыта` : 'Смена закрыта';
+            $('shiftStripMeta').textContent = open
+                ? `${data.shift?.ticket_count ?? 0} чеков${data.shift?.open_time ? ` · смена активна` : ''}`
+                : 'Первая фискальная продажа откроет новую смену';
+            $('shiftXReportBtn').disabled = !open;
+            $('shiftCloseBtn').disabled = !open;
+            if (showMessage) toast('Состояние смены обновлено');
+            if ($('salesHistoryBox')?.style.display === 'block') loadSalesHistory();
+        } catch (error) {
+            window.currentRekassaShiftNumber = null;
+            window.currentRekassaSerialNumber = '';
+            $('shiftStripDot').classList.remove('open');
+            $('shiftStripTitle').textContent = 'reKassa недоступна';
+            $('shiftStripMeta').textContent = error.message;
+            $('shiftXReportBtn').disabled = true;
+            $('shiftCloseBtn').disabled = true;
+            toast(error.message, true);
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function makeXReport() {
+        const button = $('shiftXReportBtn');
+        setBusy(button, true, 'Формируем…');
+        try {
+            const data = await api('/api/rekassa/reports/x', { method: 'POST', body: '{}' });
+            showReport(data, 'X');
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            setBusy(button, false);
+            button.disabled = !state.status?.shift_open;
+        }
+    }
+
+    function askCloseShift() {
+        if (!state.status?.shift_open) return;
+        $('shiftZTitle').textContent = `Закрытие смены №${state.status.shift_number || '—'}`;
+        $('shiftZConfirm').hidden = false;
+        $('shiftZPaper').hidden = true;
+        $('shiftZActions').hidden = true;
+        $('shiftCloseError').hidden = true;
+        $('shiftCloseError').textContent = '';
+        $('shiftPinInput').value = '';
+        openModal('shiftZModal');
+        setTimeout(() => $('shiftPinInput').focus(), 80);
+    }
+
+    async function confirmCloseShift() {
+        const button = $('shiftConfirmCloseBtn');
+        const errorBox = $('shiftCloseError');
+        errorBox.hidden = true;
+        setBusy(button, true, 'Закрываем смену…');
+        try {
+            const data = await api('/api/rekassa/shifts/close', {
+                method: 'POST',
+                body: JSON.stringify({ pin: $('shiftPinInput').value })
+            });
+            $('shiftPinInput').value = '';
+            showReport(data, 'Z');
+            toast(data.message || 'Смена закрыта');
+            await loadStatus();
+            loadSalesHistory();
+        } catch (error) {
+            errorBox.textContent = error.message;
+            errorBox.hidden = false;
+            toast(error.message, true);
+            $('shiftPinInput').focus();
+        } finally {
+            setBusy(button, false);
+        }
+    }
+
+    function historyItems(payload) {
+        const root = payload?.history || {};
+        const embedded = root._embedded || {};
+        const items = embedded.shifts || root.content || root.items || root.shifts || [];
+        return Array.isArray(items) ? items : [];
+    }
+
+    async function showHistory() {
+        const list = $('shiftHistoryList');
+        list.innerHTML = '<div class="shift-history-empty">Загрузка…</div>';
+        openModal('shiftHistoryModal');
+        try {
+            const data = await api('/api/rekassa/shifts?page=0&size=30');
+            const items = historyItems(data).sort((a, b) => Number(b.shiftNumber || 0) - Number(a.shiftNumber || 0));
+            list.innerHTML = items.length ? items.map(item => {
+                const core = coreReport(item);
+                const number = first(item.shiftNumber, core.shiftNumber, '—');
+                const closed = parseDateTime(first(item.closeTime, core.closeShiftTime, core.closeTime));
+                return `
+                    <div class="shift-history-item">
+                        <div class="shift-history-code">Z · ${escapeHtml(number)}</div>
+                        <div class="shift-history-main">
+                            <strong>Смена №${escapeHtml(number)}</strong>
+                            <span>${escapeHtml(closed ? `${closed.date} ${closed.time}` : 'Закрытая смена')}</span>
+                        </div>
+                        <button type="button" class="shift-history-open" data-shift="${escapeHtml(number)}">Открыть</button>
+                    </div>
+                `;
+            }).join('') : '<div class="shift-history-empty">Закрытых смен пока нет</div>';
+        } catch (error) {
+            list.innerHTML = `<div class="shift-history-empty">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    async function openHistoryReport(number, button) {
+        setBusy(button, true, 'Открываем…');
+        try {
+            const data = await api(`/api/rekassa/shifts/${encodeURIComponent(number)}/report`);
+            closeModal('shiftHistoryModal');
+            showReport(data, 'Z');
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            setBusy(button, false);
+        }
+    }
+
+    function printReport(modalId) {
+        const modal = $(modalId);
+        modal.classList.add('print-target');
+        document.body.classList.add('shift-report-printing');
+        const cleanup = () => {
+            document.body.classList.remove('shift-report-printing');
+            modal.classList.remove('print-target');
+        };
+        window.addEventListener('afterprint', cleanup, { once: true });
+        window.print();
+        setTimeout(cleanup, 1500);
+    }
+
+    $('shiftRefreshBtn').addEventListener('click', () => loadStatus(true));
+    $('shiftXReportBtn').addEventListener('click', makeXReport);
+    $('shiftCloseBtn').addEventListener('click', askCloseShift);
+    $('shiftHistoryBtn').addEventListener('click', showHistory);
+    $('shiftConfirmCloseBtn').addEventListener('click', confirmCloseShift);
+    $('shiftPinInput').addEventListener('keydown', event => {
+        if (event.key === 'Enter') confirmCloseShift();
+    });
+    $('shiftHistoryList').addEventListener('click', event => {
+        const button = event.target.closest('[data-shift]');
+        if (button) openHistoryReport(button.dataset.shift, button);
+    });
+
+    document.addEventListener('click', async event => {
+        const closeButton = event.target.closest('[data-shift-close]');
+        if (closeButton) closeModal(closeButton.dataset.shiftClose);
+
+        const action = event.target.closest('[data-shift-action]');
+        if (!action) return;
+        if (action.dataset.shiftAction === 'print') printReport(action.dataset.modal);
+        if (action.dataset.shiftAction === 'pdf') {
+            toast('В окне печати выберите «Сохранить как PDF»');
+            setTimeout(() => printReport(action.dataset.modal), 180);
+        }
+        if (action.dataset.shiftAction === 'share') {
+            try {
+                if (navigator.share) {
+                    await navigator.share({ title: `${state.reportType}‑отчёт reKassa`, text: shareText() });
+                } else {
+                    await navigator.clipboard.writeText(shareText());
+                    toast('Отчёт скопирован');
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') toast('Не удалось поделиться отчётом', true);
+            }
+        }
+    });
+
+    ['shiftXModal', 'shiftZModal', 'shiftHistoryModal'].forEach(id => {
+        $(id).addEventListener('click', event => {
+            if (event.target === $(id)) closeModal(id);
+        });
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        ['shiftHistoryModal', 'shiftZModal', 'shiftXModal'].forEach(id => {
+            if ($(id).classList.contains('open')) closeModal(id);
+        });
+    });
+    window.addEventListener('nika:sale-completed', () => setTimeout(() => loadStatus(), 350));
+
+    loadStatus();
+})();
