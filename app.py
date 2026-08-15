@@ -7,7 +7,7 @@ load_dotenv(env_file, override=True)
 
 APP_MODE = os.getenv("APP_MODE", "test")
 
-from flask import Flask, render_template, request, redirect, session, g
+from flask import Flask, render_template, request, redirect, session, g, jsonify
 from routes.dashboard import dashboard_bp
 from routes.clients import clients_bp
 from routes.tasks import tasks_bp
@@ -39,6 +39,7 @@ from routes.storefront import storefront_bp
 from routes.storefront_settings import storefront_settings_bp
 from routes.storefront_manage import storefront_manage_bp
 from routes.whatsapp import whatsapp_bp
+from routes.mobile_api import mobile_api_bp
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
@@ -83,10 +84,15 @@ app.register_blueprint(storefront_bp)
 app.register_blueprint(storefront_settings_bp)
 app.register_blueprint(storefront_manage_bp)
 app.register_blueprint(whatsapp_bp)
+app.register_blueprint(mobile_api_bp)
     
 # Какой URL относится к какому платному модулю.
 # Более длинные пути ставим выше коротких, чтобы проверка была точной.
 MODULE_PATHS = (
+    ("/api/mobile/accounting", "accounting"),
+    ("/api/mobile/expenses", "expenses"),
+    ("/api/mobile/tasks", "tasks"),
+    ("/api/mobile/cto", "cto"),
     ("/accounting", "accounting"),
     ("/analytics", "analytics"),
     ("/reports", "reports"),
@@ -137,9 +143,13 @@ def check_company_access():
 
     # Если подписка ещё не создана или заблокирована — отправляем на управление подпиской.
     if not subscription:
+        if request.path.startswith("/api/mobile/"):
+            return jsonify({"success": False, "error": "Подписка компании не настроена"}), 403
         return redirect("/subscription")
 
     if subscription["status"] in ("expired", "suspended", "cancelled"):
+        if request.path.startswith("/api/mobile/"):
+            return jsonify({"success": False, "error": "Подписка компании приостановлена"}), 403
         return redirect("/subscription")
 
     company_modules = getattr(g, "company_modules", set())
@@ -148,6 +158,12 @@ def check_company_access():
     for path_prefix, module_code in MODULE_PATHS:
         if request.path == path_prefix or request.path.startswith(path_prefix + "/"):
             if module_code not in company_modules:
+                if request.path.startswith("/api/mobile/"):
+                    return jsonify({
+                        "success": False,
+                        "error": "Раздел не подключён в подписке компании",
+                        "module": module_code,
+                    }), 403
                 return redirect(
                     f"/subscription?required={module_code}&next={request.path}"
                 )

@@ -1,0 +1,850 @@
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+
+from flask import Blueprint, jsonify, request, session
+
+from models import get_db, pool
+from utils.timezone import now_kz
+from routes.tasks import (
+    TASK_PRIORITIES,
+    TASK_STATUSES,
+    _ensure_tasks_table,
+)
+from routes.expenses import (
+    EXPENSE_CATEGORIES,
+    PAYMENT_METHODS,
+    _delete_expense_from_accounting,
+    _ensure_expenses_table,
+    _sync_expense_to_accounting,
+)
+from routes.accounting import (
+    _debt_view,
+    _document_view,
+    _ensure_accounting_tables,
+    _operation_view,
+    _sync_accounting,
+    _tax_event_view,
+)
+
+
+mobile_api_bp = Blueprint("mobile_api", __name__, url_prefix="/api/mobile")
+
+
+def _guard(*, admin=False):
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+    if not session.get("company_id"):
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 400
+    if admin and not (
+        session.get("is_super_admin")
+        or session.get("role") in ("owner", "admin")
+    ):
+        return jsonify({"success": False, "error": "Недостаточно прав"}), 403
+    return None
+
+
+def _number(value):
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _clean(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime,)):
+        return value.isoformat()
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _clean(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_clean(item) for item in value]
+    return value
+
+
+def _payload():
+    return request.get_json(silent=True) or {}
+
+
+def _date(value, *, required=False):
+    raw = str(value or "").strip()
+    if not raw and not required:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        raise ValueError("Некорректная дата")
+
+
+def _amount(value):
+    try:
+        result = Decimal(str(value or "").replace(" ", "").replace(",", "."))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError("Введите корректную сумму")
+    if result <= 0:
+        raise ValueError("Сумма должна быть больше нуля")
+    return result.quantize(Decimal("0.01"))
+
+
+def _task_json(row):
+    due_date = row.get("due_date")
+    created_at = row.get("created_at")
+    status = row.get("status") or "new"
+    overdue = bool(
+        due_date
+        and due_date < now_kz().date()
+        and status not in ("done", "cancelled")
+    )
+    return {
+        "id": row["id"],
+        "title": row.get("title") or "",
+        "description": row.get("description") or "",
+        "priority": row.get("priority") or "medium",
+        "priority_label": TASK_PRIORITIES.get(row.get("priority"), "Средний"),
+        "status": status,
+        "status_label": TASK_STATUSES.get(status, "Новая"),
+        "due_date": due_date.isoformat() if due_date else "",
+        "due_date_label": due_date.strftime("%d.%m.%Y") if due_date else "Без срока",
+        "assignee_id": row.get("assigned_user_id"),
+        "assignee_name": row.get("assignee_name") or "Не назначен",
+        "created_at": created_at.strftime("%d.%m.%Y %H:%M") if created_at else "—",
+        "overdue": overdue,
+    }
+
+
+@mobile_api_bp.route("/health")
+def mobile_health():
+    denied = _guard()
+    if denied:
+        return denied
+    return jsonify({"success": True, "version": 3})
+
+
+@mobile_api_bp.route("/tasks", methods=["GET", "POST"])
+def mobile_tasks():
+    denied = _guard()
+    if denied:
+        return denied
+
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_tasks_table(cur)
+        if request.method == "POST":
+            data = _payload()
+            title = str(data.get("title") or "").strip()
+            description = str(data.get("description") or "").strip()
+            priority = str(data.get("priority") or "medium")
+            assigned_user_id = data.get("assigned_user_id") or None
+            due_date = _date(data.get("due_date"))
+            if not title:
+                return jsonify({"success": False, "error": "Укажите название задачи"}), 400
+            if priority not in TASK_PRIORITIES:
+                priority = "medium"
+            if assigned_user_id:
+                cur.execute(
+                    "SELECT id FROM users WHERE id=%s AND company_id=%s",
+                    (assigned_user_id, company_id),
+                )
+                if not cur.fetchone():
+                    return jsonify({"success": False, "error": "Сотрудник не найден"}), 400
+            cur.execute("""
+                INSERT INTO tasks (
+                    company_id, created_by, assigned_user_id, title,
+                    description, priority, status, due_date, created_at
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,'new',%s,%s)
+                RETURNING id
+            """, (
+                company_id,
+                session.get("user_id"),
+                assigned_user_id,
+                title,
+                description or None,
+                priority,
+                due_date,
+                now_kz(),
+            ))
+            task_id = cur.fetchone()["id"]
+            conn.commit()
+            return jsonify({"success": True, "id": task_id})
+
+        conn.commit()
+        cur.execute("""
+            SELECT t.*, COALESCE(u.full_name,u.username) AS assignee_name
+            FROM tasks t
+            LEFT JOIN users u ON u.id=t.assigned_user_id
+            WHERE t.company_id=%s
+            ORDER BY
+                CASE t.status WHEN 'in_progress' THEN 1 WHEN 'new' THEN 2
+                     WHEN 'done' THEN 3 ELSE 4 END,
+                CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2
+                     WHEN 'medium' THEN 3 ELSE 4 END,
+                t.due_date NULLS LAST, t.id DESC
+            LIMIT 300
+        """, (company_id,))
+        tasks = [_task_json(row) for row in cur.fetchall()]
+        cur.execute("""
+            SELECT id, COALESCE(full_name,username) AS name
+            FROM users WHERE company_id=%s ORDER BY name
+        """, (company_id,))
+        users = [dict(row) for row in cur.fetchall()]
+        summary = {
+            "total": len(tasks),
+            "new": sum(1 for item in tasks if item["status"] == "new"),
+            "in_progress": sum(1 for item in tasks if item["status"] == "in_progress"),
+            "done": sum(1 for item in tasks if item["status"] == "done"),
+            "overdue": sum(1 for item in tasks if item["overdue"]),
+        }
+        return jsonify({
+            "success": True,
+            "items": tasks,
+            "users": users,
+            "summary": summary,
+            "statuses": TASK_STATUSES,
+            "priorities": TASK_PRIORITIES,
+        })
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE TASKS ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось обработать задачи"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/tasks/<int:task_id>", methods=["PATCH", "DELETE"])
+def mobile_task(task_id):
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_tasks_table(cur)
+        if request.method == "DELETE":
+            cur.execute(
+                "DELETE FROM tasks WHERE id=%s AND company_id=%s RETURNING id",
+                (task_id, company_id),
+            )
+            if not cur.fetchone():
+                return jsonify({"success": False, "error": "Задача не найдена"}), 404
+            conn.commit()
+            return jsonify({"success": True})
+
+        data = _payload()
+        status = str(data.get("status") or "")
+        if status and status not in TASK_STATUSES:
+            return jsonify({"success": False, "error": "Некорректный статус"}), 400
+        cur.execute(
+            "SELECT * FROM tasks WHERE id=%s AND company_id=%s",
+            (task_id, company_id),
+        )
+        old = cur.fetchone()
+        if not old:
+            return jsonify({"success": False, "error": "Задача не найдена"}), 404
+        title = str(data.get("title", old.get("title") or "")).strip()
+        priority = str(data.get("priority", old.get("priority") or "medium"))
+        final_status = status or old.get("status") or "new"
+        if not title:
+            return jsonify({"success": False, "error": "Укажите название задачи"}), 400
+        if priority not in TASK_PRIORITIES:
+            priority = "medium"
+        due_date = _date(data.get("due_date")) if "due_date" in data else old.get("due_date")
+        cur.execute("""
+            UPDATE tasks SET title=%s, description=%s, priority=%s, status=%s,
+                assigned_user_id=%s, due_date=%s,
+                completed_at=%s, updated_at=%s
+            WHERE id=%s AND company_id=%s RETURNING id
+        """, (
+            title,
+            str(data.get("description", old.get("description") or "")).strip() or None,
+            priority,
+            final_status,
+            data.get("assigned_user_id", old.get("assigned_user_id")) or None,
+            due_date,
+            now_kz() if final_status == "done" else None,
+            now_kz(),
+            task_id,
+            company_id,
+        ))
+        conn.commit()
+        return jsonify({"success": True})
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE TASK ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось изменить задачу"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def _expense_json(row):
+    return {
+        "id": row["id"],
+        "category": row.get("category") or "",
+        "description": row.get("description") or "",
+        "amount": _number(row.get("amount")),
+        "payment_method": row.get("payment_method") or "",
+        "comment": row.get("comment") or "",
+        "date": row.get("date").isoformat() if row.get("date") else "",
+        "date_label": row.get("date").strftime("%d.%m.%Y") if row.get("date") else "—",
+        "source_type": row.get("source_type"),
+        "is_automatic": bool(row.get("source_type")),
+    }
+
+
+@mobile_api_bp.route("/expenses", methods=["GET", "POST"])
+def mobile_expenses():
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_expenses_table(cur)
+        if request.method == "POST":
+            data = _payload()
+            category = str(data.get("category") or "").strip()
+            description = str(data.get("description") or "").strip()
+            payment_method = str(data.get("payment_method") or "").strip()
+            if category not in EXPENSE_CATEGORIES:
+                raise ValueError("Выберите категорию")
+            if not description:
+                raise ValueError("Укажите описание расхода")
+            if payment_method not in PAYMENT_METHODS:
+                raise ValueError("Выберите способ оплаты")
+            cur.execute("""
+                INSERT INTO expenses (
+                    company_id,user_id,category,description,amount,
+                    payment_method,comment,date,created_at
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            """, (
+                company_id,
+                session.get("user_id"),
+                category,
+                description[:160],
+                _amount(data.get("amount")),
+                payment_method,
+                str(data.get("comment") or "")[:500],
+                _date(data.get("date"), required=True),
+                now_kz(),
+            ))
+            expense_id = cur.fetchone()["id"]
+            _sync_expense_to_accounting(cur, expense_id, company_id)
+            conn.commit()
+            return jsonify({"success": True, "id": expense_id})
+
+        conn.commit()
+        cur.execute("""
+            SELECT * FROM expenses WHERE company_id=%s
+            ORDER BY date DESC,id DESC LIMIT 300
+        """, (company_id,))
+        rows = cur.fetchall()
+        items = [_expense_json(row) for row in rows]
+        today = now_kz().date()
+        month_start = today.replace(day=1)
+        today_total = sum(item["amount"] for item in items if item["date"] == today.isoformat())
+        month_total = sum(
+            item["amount"] for item in items
+            if item["date"] and month_start.isoformat() <= item["date"] <= today.isoformat()
+        )
+        return jsonify({
+            "success": True,
+            "items": items,
+            "categories": EXPENSE_CATEGORIES,
+            "payment_methods": sorted(PAYMENT_METHODS),
+            "summary": {"today": today_total, "month": month_total, "count": len(items)},
+        })
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE EXPENSES ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось обработать расходы"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/expenses/<int:expense_id>", methods=["PATCH", "DELETE"])
+def mobile_expense(expense_id):
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_expenses_table(cur)
+        cur.execute(
+            "SELECT * FROM expenses WHERE id=%s AND company_id=%s",
+            (expense_id, company_id),
+        )
+        old = cur.fetchone()
+        if not old:
+            return jsonify({"success": False, "error": "Расход не найден"}), 404
+        if old.get("source_type"):
+            return jsonify({"success": False, "error": "Автоматический расход меняется в исходном разделе"}), 409
+        if request.method == "DELETE":
+            cur.execute("DELETE FROM expenses WHERE id=%s AND company_id=%s", (expense_id, company_id))
+            _delete_expense_from_accounting(cur, expense_id, company_id)
+            conn.commit()
+            return jsonify({"success": True})
+
+        data = _payload()
+        category = str(data.get("category", old.get("category")) or "")
+        payment_method = str(data.get("payment_method", old.get("payment_method")) or "")
+        description = str(data.get("description", old.get("description")) or "").strip()
+        if category not in EXPENSE_CATEGORIES or payment_method not in PAYMENT_METHODS or not description:
+            raise ValueError("Проверьте обязательные поля")
+        cur.execute("""
+            UPDATE expenses SET category=%s,description=%s,amount=%s,
+                payment_method=%s,comment=%s,date=%s,updated_at=%s
+            WHERE id=%s AND company_id=%s
+        """, (
+            category,
+            description[:160],
+            _amount(data.get("amount", old.get("amount"))),
+            payment_method,
+            str(data.get("comment", old.get("comment") or ""))[:500],
+            _date(data.get("date"), required=True) if "date" in data else old.get("date"),
+            now_kz(),
+            expense_id,
+            company_id,
+        ))
+        _sync_expense_to_accounting(cur, expense_id, company_id)
+        conn.commit()
+        return jsonify({"success": True})
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE EXPENSE ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось изменить расход"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/accounting", methods=["GET"])
+def mobile_accounting():
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        conn.commit()
+        today = now_kz().date()
+        cur.execute("""
+            SELECT * FROM accounting_operations WHERE company_id=%s
+            ORDER BY operation_date DESC,id DESC LIMIT 150
+        """, (company_id,))
+        operations = [_clean(_operation_view(row)) for row in cur.fetchall()]
+        cur.execute("""
+            SELECT * FROM accounting_documents WHERE company_id=%s
+            ORDER BY document_date DESC,id DESC LIMIT 150
+        """, (company_id,))
+        documents = [_clean(_document_view(row)) for row in cur.fetchall()]
+        cur.execute("""
+            SELECT * FROM accounting_tax_events WHERE company_id=%s
+            ORDER BY CASE WHEN status='paid' THEN 1 ELSE 0 END,due_date,id LIMIT 50
+        """, (company_id,))
+        taxes = [_clean(_tax_event_view(row, today)) for row in cur.fetchall()]
+        cur.execute("""
+            SELECT * FROM accounting_debts WHERE company_id=%s
+            ORDER BY CASE WHEN status='paid' THEN 1 ELSE 0 END,due_date,id DESC LIMIT 50
+        """, (company_id,))
+        debts = [_clean(_debt_view(row, today)) for row in cur.fetchall()]
+        income = sum(_number(item["amount"]) for item in operations if item["type"] == "income")
+        expense = sum(_number(item["amount"]) for item in operations if item["type"] == "expense")
+        refunds = sum(_number(item["amount"]) for item in operations if item["type"] == "refund")
+        debt_total = sum(_number(item["amount"]) for item in debts if item.get("status") != "paid")
+        return jsonify({
+            "success": True,
+            "summary": {
+                "income": income,
+                "expense": expense,
+                "refunds": refunds,
+                "balance": income - expense - refunds,
+                "debt_total": debt_total,
+                "documents": len(documents),
+            },
+            "operations": operations,
+            "documents": documents,
+            "taxes": taxes,
+            "debts": debts,
+        })
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE ACCOUNTING ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось загрузить бухгалтерию"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/accounting/sync", methods=["POST"])
+def mobile_accounting_sync():
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        _sync_accounting(cur, company_id)
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE ACCOUNTING SYNC ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось обновить бухгалтерию"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/accounting/<kind>/<int:item_id>/paid", methods=["POST"])
+def mobile_accounting_paid(kind, item_id):
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    table = {
+        "debts": "accounting_debts",
+        "taxes": "accounting_tax_events",
+    }.get(kind)
+    if not table:
+        return jsonify({"success": False, "error": "Неизвестный тип"}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"UPDATE {table} SET status='paid',paid_at=%s,updated_at=%s "
+            "WHERE id=%s AND company_id=%s RETURNING id",
+            (now_kz(), now_kz(), item_id, session["company_id"]),
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Запись не найдена"}), 404
+        conn.commit()
+        return jsonify({"success": True})
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def _employee_json(row):
+    return {
+        "id": row["id"],
+        "username": row.get("username") or "",
+        "full_name": row.get("full_name") or "",
+        "phone": row.get("phone") or "",
+        "position": row.get("position") or "",
+        "role": row.get("role") or "employee",
+        "percent_rate": _number(row.get("percent_rate")),
+        "is_online": bool(row.get("is_online")),
+        "last_seen_at": row.get("last_seen_at").isoformat() if row.get("last_seen_at") else "",
+    }
+
+
+@mobile_api_bp.route("/employees", methods=["GET", "POST"])
+def mobile_employees():
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if request.method == "POST":
+            data = _payload()
+            username = str(data.get("username") or "").strip()
+            password = str(data.get("password") or "").strip()
+            full_name = str(data.get("full_name") or "").strip()
+            role = str(data.get("role") or "employee")
+            if not username or not password or not full_name:
+                return jsonify({"success": False, "error": "Заполните ФИО, логин и пароль"}), 400
+            if role not in ("admin", "employee"):
+                role = "employee"
+            cur.execute("SELECT id FROM users WHERE username=%s", (username,))
+            if cur.fetchone():
+                return jsonify({"success": False, "error": "Такой логин уже существует"}), 409
+            cur.execute("""
+                INSERT INTO users (
+                    username,password,role,position,company_id,full_name,
+                    phone,percent_rate,is_super_admin,created_at
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,FALSE,%s) RETURNING id
+            """, (
+                username,
+                password,
+                role,
+                str(data.get("position") or "").strip(),
+                company_id,
+                full_name,
+                str(data.get("phone") or "").strip(),
+                _number(data.get("percent_rate")),
+                now_kz(),
+            ))
+            employee_id = cur.fetchone()["id"]
+            conn.commit()
+            return jsonify({"success": True, "id": employee_id})
+
+        cur.execute("""
+            SELECT u.*,
+                CASE WHEN u.last_seen_at IS NOT NULL
+                       AND u.last_seen_at >= NOW()-INTERVAL '3 minutes'
+                     THEN TRUE ELSE FALSE END AS is_online
+            FROM users u WHERE u.company_id=%s ORDER BY u.id DESC
+        """, (company_id,))
+        return jsonify({
+            "success": True,
+            "items": [_employee_json(row) for row in cur.fetchall()],
+            "can_manage": True,
+        })
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE EMPLOYEES ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось обработать сотрудников"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/employees/<int:employee_id>", methods=["PATCH", "DELETE"])
+def mobile_employee(employee_id):
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    if employee_id == session.get("user_id") and request.method == "DELETE":
+        return jsonify({"success": False, "error": "Нельзя удалить свою учётную запись"}), 409
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM users WHERE id=%s AND company_id=%s", (employee_id, company_id))
+        old = cur.fetchone()
+        if not old:
+            return jsonify({"success": False, "error": "Сотрудник не найден"}), 404
+        if old.get("role") == "owner" and employee_id != session.get("user_id"):
+            return jsonify({"success": False, "error": "Владельца нельзя изменить"}), 403
+        if request.method == "DELETE":
+            cur.execute("DELETE FROM users WHERE id=%s AND company_id=%s", (employee_id, company_id))
+            conn.commit()
+            return jsonify({"success": True})
+        data = _payload()
+        role = str(data.get("role", old.get("role") or "employee"))
+        if role not in ("admin", "employee", "owner"):
+            role = "employee"
+        password = str(data.get("password") or "").strip()
+        cur.execute("""
+            UPDATE users SET full_name=%s,phone=%s,position=%s,role=%s,
+                percent_rate=%s,password=CASE WHEN %s='' THEN password ELSE %s END
+            WHERE id=%s AND company_id=%s
+        """, (
+            str(data.get("full_name", old.get("full_name") or "")).strip(),
+            str(data.get("phone", old.get("phone") or "")).strip(),
+            str(data.get("position", old.get("position") or "")).strip(),
+            role,
+            _number(data.get("percent_rate", old.get("percent_rate"))),
+            password,
+            password,
+            employee_id,
+            company_id,
+        ))
+        conn.commit()
+        return jsonify({"success": True})
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def _order_status_label(value):
+    return {
+        "new": "Новый", "accepted": "Принят", "assembling": "Собирается",
+        "ready": "Готов", "completed": "Выполнен", "cancelled": "Отменён",
+    }.get(value, value or "Новый")
+
+
+def _booking_status_label(value):
+    return {
+        "new": "Новая", "confirmed": "Подтверждена", "completed": "Выполнена",
+        "cancelled": "Отменена", "rejected": "Отклонена",
+    }.get(value, value or "Новая")
+
+
+@mobile_api_bp.route("/storefront", methods=["GET", "PATCH"])
+def mobile_storefront():
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if request.method == "PATCH":
+            data = _payload()
+            slug = str(data.get("slug") or "").strip().lower()
+            if not slug:
+                return jsonify({"success": False, "error": "Укажите адрес витрины"}), 400
+            cur.execute("""
+                INSERT INTO storefront_settings (
+                    company_id,slug,title,description,enabled,show_products,
+                    show_services,allow_orders,allow_booking,delivery_enabled,
+                    pickup_enabled,work_start,work_end,slot_interval_minutes,
+                    delivery_price,min_order_amount,brand_color,card_style,
+                    hero_style,show_stock,show_categories,created_at,updated_at
+                ) VALUES (
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE,TRUE,'09:00','18:00',
+                    30,0,0,'#6366f1','rounded','gradient',TRUE,TRUE,NOW(),NOW()
+                )
+                ON CONFLICT(company_id) DO UPDATE SET
+                    slug=EXCLUDED.slug,title=EXCLUDED.title,
+                    description=EXCLUDED.description,enabled=EXCLUDED.enabled,
+                    show_products=EXCLUDED.show_products,
+                    show_services=EXCLUDED.show_services,
+                    allow_orders=EXCLUDED.allow_orders,
+                    allow_booking=EXCLUDED.allow_booking,updated_at=NOW()
+            """, (
+                company_id,
+                slug,
+                str(data.get("title") or "").strip() or None,
+                str(data.get("description") or "").strip() or None,
+                bool(data.get("enabled")),
+                bool(data.get("show_products", True)),
+                bool(data.get("show_services", True)),
+                bool(data.get("allow_orders", True)),
+                bool(data.get("allow_booking", True)),
+            ))
+            conn.commit()
+            return jsonify({"success": True})
+
+        cur.execute("SELECT * FROM storefront_settings WHERE company_id=%s", (company_id,))
+        settings = cur.fetchone() or {}
+        cur.execute("""
+            SELECT id,customer_name,phone,total_amount,order_status,created_at,
+                (SELECT COUNT(*) FROM online_order_items oi WHERE oi.order_id=o.id) positions_count
+            FROM online_orders o WHERE company_id=%s
+            ORDER BY CASE WHEN order_status='new' THEN 0 ELSE 1 END,id DESC LIMIT 200
+        """, (company_id,))
+        orders = [{
+            "id": row["id"], "customer_name": row.get("customer_name") or "",
+            "phone": row.get("phone") or "", "total_amount": _number(row.get("total_amount")),
+            "status": row.get("order_status") or "new",
+            "status_label": _order_status_label(row.get("order_status")),
+            "created_at": row.get("created_at").strftime("%d.%m.%Y %H:%M") if row.get("created_at") else "",
+            "positions_count": int(row.get("positions_count") or 0),
+        } for row in cur.fetchall()]
+        cur.execute("""
+            SELECT b.id,b.customer_name,b.phone,b.booking_date,b.booking_time,
+                   b.status,i.name AS service_name
+            FROM bookings b LEFT JOIN items i ON i.id=b.item_id
+            WHERE b.company_id=%s
+            ORDER BY CASE WHEN b.status='new' THEN 0 ELSE 1 END,
+                     b.booking_date,b.booking_time LIMIT 200
+        """, (company_id,))
+        bookings = [{
+            "id": row["id"], "customer_name": row.get("customer_name") or "",
+            "phone": row.get("phone") or "", "service_name": row.get("service_name") or "Услуга",
+            "date": row.get("booking_date").strftime("%d.%m.%Y") if row.get("booking_date") else "",
+            "time": row.get("booking_time").strftime("%H:%M") if row.get("booking_time") else "",
+            "status": row.get("status") or "new",
+            "status_label": _booking_status_label(row.get("status")),
+        } for row in cur.fetchall()]
+        public_url = f"/s/{settings.get('slug')}" if settings.get("slug") else ""
+        return jsonify({
+            "success": True,
+            "settings": {
+                "slug": settings.get("slug") or "",
+                "title": settings.get("title") or "",
+                "description": settings.get("description") or "",
+                "enabled": bool(settings.get("enabled")),
+                "show_products": bool(settings.get("show_products", True)),
+                "show_services": bool(settings.get("show_services", True)),
+                "allow_orders": bool(settings.get("allow_orders", True)),
+                "allow_booking": bool(settings.get("allow_booking", True)),
+                "public_url": public_url,
+            },
+            "orders": orders,
+            "bookings": bookings,
+            "summary": {
+                "new_orders": sum(1 for item in orders if item["status"] == "new"),
+                "new_bookings": sum(1 for item in bookings if item["status"] == "new"),
+                "orders": len(orders),
+                "bookings": len(bookings),
+            },
+        })
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE STOREFRONT ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось загрузить онлайн-витрину"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/storefront/<kind>/<int:item_id>/status", methods=["POST"])
+def mobile_storefront_status(kind, item_id):
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    status = str(_payload().get("status") or "")
+    if kind == "orders":
+        table, column = "online_orders", "order_status"
+        allowed = {"new", "accepted", "assembling", "ready", "completed", "cancelled"}
+    elif kind == "bookings":
+        table, column = "bookings", "status"
+        allowed = {"new", "confirmed", "completed", "cancelled", "rejected"}
+    else:
+        return jsonify({"success": False, "error": "Неизвестный тип"}), 400
+    if status not in allowed:
+        return jsonify({"success": False, "error": "Некорректный статус"}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"UPDATE {table} SET {column}=%s,updated_at=%s "
+            "WHERE id=%s AND company_id=%s RETURNING id",
+            (status, now_kz(), item_id, session["company_id"]),
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Запись не найдена"}), 404
+        conn.commit()
+        return jsonify({"success": True})
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/cto")
+def mobile_cto():
+    denied = _guard()
+    if denied:
+        return denied
+    return jsonify({
+        "success": True,
+        "items": [
+            {"code": "register", "title": "Регистрация ККМ", "icon": "receipt"},
+            {"code": "reregister", "title": "Перерегистрация", "icon": "sync"},
+            {"code": "deregister", "title": "Снятие с учёта", "icon": "remove"},
+            {"code": "ofd", "title": "Подключение ОФД", "icon": "cloud"},
+            {"code": "repair", "title": "Ремонт", "icon": "repair"},
+            {"code": "visit", "title": "Выезд специалиста", "icon": "car"},
+        ],
+    })
