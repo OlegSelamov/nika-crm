@@ -119,7 +119,7 @@ def mobile_health():
     denied = _guard()
     if denied:
         return denied
-    return jsonify({"success": True, "version": 3})
+    return jsonify({"success": True, "version": "3.1"})
 
 
 @mobile_api_bp.route("/tasks", methods=["GET", "POST"])
@@ -848,3 +848,140 @@ def mobile_cto():
             {"code": "visit", "title": "Выезд специалиста", "icon": "car"},
         ],
     })
+
+
+def _pagination():
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        limit = max(10, min(50, int(request.args.get("limit", 30))))
+    except (TypeError, ValueError):
+        limit = 30
+    return page, limit, (page - 1) * limit
+
+
+@mobile_api_bp.route("/sale/clients")
+def mobile_sale_clients():
+    """Небольшие страницы клиентов для нативного окна продажи."""
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    query = str(request.args.get("q") or "").strip()
+    page, limit, offset = _pagination()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id,full_name,company_name,phone,iin,address
+            FROM clients
+            WHERE company_id=%s
+              AND COALESCE(is_deleted,FALSE)=FALSE
+              AND (
+                  %s=''
+                  OR COALESCE(full_name,'') ILIKE %s
+                  OR COALESCE(company_name,'') ILIKE %s
+                  OR COALESCE(phone,'') ILIKE %s
+                  OR COALESCE(iin,'') ILIKE %s
+              )
+            ORDER BY
+              CASE WHEN LOWER(BTRIM(COALESCE(company_name,full_name,'')))='частное лицо'
+                   THEN 0 ELSE 1 END,
+              id DESC
+            LIMIT %s OFFSET %s
+        """, (
+            company_id,
+            query,
+            f"%{query}%",
+            f"%{query}%",
+            f"%{query}%",
+            f"%{query}%",
+            limit + 1,
+            offset,
+        ))
+        rows = [dict(row) for row in cur.fetchall()]
+        has_more = len(rows) > limit
+
+        cur.execute("""
+            SELECT id,full_name,company_name,phone,iin,address
+            FROM clients
+            WHERE company_id=%s
+              AND COALESCE(is_deleted,FALSE)=FALSE
+              AND (
+                LOWER(BTRIM(COALESCE(company_name,'')))='частное лицо'
+                OR LOWER(BTRIM(COALESCE(full_name,'')))='частное лицо'
+              )
+            ORDER BY id LIMIT 1
+        """, (company_id,))
+        private_client = cur.fetchone()
+        return jsonify({
+            "success": True,
+            "items": rows[:limit],
+            "page": page,
+            "has_more": has_more,
+            "default_client": dict(private_client) if private_client else None,
+        })
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE SALE CLIENTS ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось загрузить клиентов"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/sale/items")
+def mobile_sale_items():
+    """Постраничный каталог товаров и услуг без загрузки всей базы."""
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    query = str(request.args.get("q") or "").strip()
+    page, limit, offset = _pagination()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                id,name,retail_price,barcode,unit,gtin,ntin,
+                COALESCE(item_type,'product') AS item_type,
+                COALESCE(quantity,0) AS quantity
+            FROM items
+            WHERE company_id=%s
+              AND (
+                  %s=''
+                  OR COALESCE(name,'') ILIKE %s
+                  OR COALESCE(barcode,'') ILIKE %s
+              )
+            ORDER BY
+                CASE WHEN %s<>'' AND barcode=%s THEN 0 ELSE 1 END,
+                id DESC
+            LIMIT %s OFFSET %s
+        """, (
+            company_id,
+            query,
+            f"%{query}%",
+            f"{query}%",
+            query,
+            query,
+            limit + 1,
+            offset,
+        ))
+        rows = [dict(row) for row in cur.fetchall()]
+        has_more = len(rows) > limit
+        return jsonify({
+            "success": True,
+            "items": _clean(rows[:limit]),
+            "page": page,
+            "has_more": has_more,
+        })
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE SALE ITEMS ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось загрузить каталог"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
