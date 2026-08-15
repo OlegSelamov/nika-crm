@@ -456,12 +456,28 @@ def mobile_accounting():
             SELECT * FROM accounting_operations WHERE company_id=%s
             ORDER BY operation_date DESC,id DESC LIMIT 150
         """, (company_id,))
-        operations = [_clean(_operation_view(row)) for row in cur.fetchall()]
+        operations = []
+        for row in cur.fetchall():
+            item = _clean(_operation_view(row))
+            item.update({
+                "source_type": row.get("source_type"),
+                "source_id": row.get("source_id"),
+                "has_document": row.get("source_type") in ("sale", "sale_refund"),
+            })
+            operations.append(item)
         cur.execute("""
             SELECT * FROM accounting_documents WHERE company_id=%s
             ORDER BY document_date DESC,id DESC LIMIT 150
         """, (company_id,))
-        documents = [_clean(_document_view(row)) for row in cur.fetchall()]
+        documents = []
+        for row in cur.fetchall():
+            item = _clean(_document_view(row))
+            item.update({
+                "source_type": row.get("source_type"),
+                "source_id": row.get("source_id"),
+                "has_preview": bool(row.get("source_id") or row.get("stored_filename")),
+            })
+            documents.append(item)
         cur.execute("""
             SELECT * FROM accounting_tax_events WHERE company_id=%s
             ORDER BY CASE WHEN status='paid' THEN 1 ELSE 0 END,due_date,id LIMIT 50
@@ -495,6 +511,203 @@ def mobile_accounting():
         conn.rollback()
         print("MOBILE ACCOUNTING ERROR:", exc)
         return jsonify({"success": False, "error": "Не удалось загрузить бухгалтерию"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def _payment_label(sale):
+    sale_type = sale.get("sale_type") or "cash"
+    if sale_type == "invoice":
+        return "Расчётный счёт"
+    if _number(sale.get("kaspi_amount")) > 0 or sale_type == "kaspi":
+        return "Kaspi POS"
+    if _number(sale.get("card_amount")) > 0 or sale_type == "card":
+        return "Банковская карта"
+    return "Наличные"
+
+
+def _sale_document(cur, company_id, sale_id, kind):
+    cur.execute("""
+        SELECT
+            s.*,
+            COALESCE(c.company_name,c.full_name,'Частное лицо') AS client_name,
+            c.iin AS client_iin,
+            c.phone AS client_phone,
+            c.address AS client_address,
+            co.name AS company_name,
+            co.bin AS company_bin,
+            co.address AS company_address,
+            co.phone AS company_phone
+        FROM sales s
+        LEFT JOIN clients c ON c.id=s.client_id AND c.company_id=s.company_id
+        LEFT JOIN companies co ON co.id=s.company_id
+        WHERE s.id=%s AND s.company_id=%s
+    """, (sale_id, company_id))
+    sale = cur.fetchone()
+    if not sale:
+        return None
+
+    cur.execute("""
+        SELECT name,quantity,price,total,unit,gtin,ntin
+        FROM sale_items WHERE sale_id=%s ORDER BY id
+    """, (sale_id,))
+    items = [{
+        "name": row.get("name") or "Без названия",
+        "quantity": _number(row.get("quantity")),
+        "price": _number(row.get("price")),
+        "total": _number(row.get("total")),
+        "unit": row.get("unit") or "шт",
+        "gtin": row.get("gtin") or "",
+        "ntin": row.get("ntin") or "",
+    } for row in cur.fetchall()]
+
+    titles = {
+        "check": "Кассовый чек",
+        "refund_check": "Чек возврата",
+        "invoice": "Счёт на оплату",
+        "waybill": "Накладная",
+        "act": "Акт выполненных работ",
+        "invoice_facture": "Счёт-фактура",
+    }
+    document_date = (
+        sale.get("refunded_at")
+        if kind == "refund_check" and sale.get("refunded_at")
+        else sale.get("created_at")
+    )
+    return _clean({
+        "kind": kind,
+        "title": titles.get(kind, "Документ"),
+        "number": str(sale.get("sale_number") or sale.get("id")),
+        "date": document_date.strftime("%d.%m.%Y %H:%M") if document_date else "—",
+        "status": "Возврат" if kind == "refund_check" else sale.get("status") or "Проведён",
+        "payment_method": _payment_label(sale),
+        "total": _number(sale.get("total_amount")),
+        "company": {
+            "name": sale.get("company_name") or "Организация",
+            "bin": sale.get("company_bin") or "",
+            "address": sale.get("company_address") or "",
+            "phone": sale.get("company_phone") or "",
+        },
+        "client": {
+            "name": sale.get("client_name") or "Частное лицо",
+            "iin": sale.get("client_iin") or "",
+            "address": sale.get("client_address") or "",
+            "phone": sale.get("client_phone") or "",
+        },
+        "items": items,
+        "fiscal": {
+            "ticket_number": sale.get("rekassa_ticket_number") or "",
+            "document_number": sale.get("rekassa_document_number") or "",
+            "shift_number": sale.get("rekassa_shift_number") or "",
+            "rnm": sale.get("rekassa_rnm") or "",
+            "znm": sale.get("rekassa_znm") or "",
+            "qr": sale.get("rekassa_qr") or "",
+            "transaction_id": (
+                sale.get("kaspi_transaction_id")
+                if kind != "refund_check"
+                else ""
+            ) or "",
+        },
+    })
+
+
+@mobile_api_bp.route("/accounting/operations/<int:operation_id>/documents")
+def mobile_accounting_operation_documents(operation_id):
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT * FROM accounting_operations
+            WHERE id=%s AND company_id=%s
+        """, (operation_id, company_id))
+        operation = cur.fetchone()
+        if not operation:
+            return jsonify({"success": False, "error": "Операция не найдена"}), 404
+
+        source_type = operation.get("source_type")
+        source_id = operation.get("source_id")
+        if source_type not in ("sale", "sale_refund") or not source_id:
+            return jsonify({
+                "success": True,
+                "documents": [],
+                "message": "Для этой операции документ не сформирован",
+            })
+
+        if source_type == "sale_refund" or operation.get("operation_type") == "refund":
+            kind = "refund_check"
+        else:
+            cur.execute(
+                "SELECT sale_type FROM sales WHERE id=%s AND company_id=%s",
+                (source_id, company_id),
+            )
+            sale = cur.fetchone()
+            kind = "invoice" if sale and sale.get("sale_type") == "invoice" else "check"
+
+        document = _sale_document(cur, company_id, source_id, kind)
+        return jsonify({
+            "success": True,
+            "documents": [document] if document else [],
+        })
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE ACCOUNTING OPERATION DOCUMENT ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось сформировать документ"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/accounting/documents/<int:document_id>/preview")
+def mobile_accounting_document_preview(document_id):
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT * FROM accounting_documents
+            WHERE id=%s AND company_id=%s
+        """, (document_id, company_id))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Документ не найден"}), 404
+
+        kind_map = {
+            "check": "check",
+            "invoice": "invoice",
+            "waybill": "waybill",
+            "act": "act",
+            "invoice_facture": "invoice_facture",
+        }
+        kind = kind_map.get(row.get("document_type"))
+        if row.get("source_type") == "sale" and row.get("source_id") and kind:
+            document = _sale_document(cur, company_id, row["source_id"], kind)
+        else:
+            document = _clean({
+                "kind": "manual",
+                "title": row.get("title") or "Документ",
+                "number": row.get("document_number") or str(row.get("id")),
+                "date": row.get("document_date").strftime("%d.%m.%Y") if row.get("document_date") else "—",
+                "status": row.get("status") or "Добавлен",
+                "total": _number(row.get("amount")),
+                "company": {},
+                "client": {"name": row.get("counterparty") or "—"},
+                "items": [],
+                "comment": row.get("comment") or "",
+                "file_url": row.get("file_url") or "",
+            })
+        return jsonify({"success": True, "document": document})
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE ACCOUNTING DOCUMENT PREVIEW ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось открыть документ"}), 500
     finally:
         cur.close()
         pool.putconn(conn)
