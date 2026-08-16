@@ -467,22 +467,41 @@ def sales_history():
             ))
         else:
             cur.execute("""
-                SELECT
-                    sales.id, sales.client_id, sales.sale_number,
-                    sales.total_amount, sales.sale_type, sales.status,
-                    sales.rekassa_shift_number, sales.rekassa_znm,
-                    CASE WHEN COALESCE(sales.is_refunded, FALSE)
-                         THEN 'refund' ELSE 'sale' END AS event_type,
-                    sales.created_at AS event_at,
-                    clients.full_name
-                FROM sales
-                LEFT JOIN clients ON sales.client_id = clients.id
-                WHERE sales.company_id = %s
-                  AND sales.rekassa_shift_number = %s
-                  AND (%s = '' OR sales.rekassa_znm = %s)
-                ORDER BY sales.id DESC
+                WITH journal AS (
+                    SELECT
+                        s.id, s.client_id, s.sale_number, s.total_amount,
+                        s.sale_type, s.status, s.rekassa_shift_number,
+                        s.rekassa_znm, 'sale'::TEXT AS event_type,
+                        s.created_at AS event_at
+                    FROM sales s
+                    WHERE s.company_id = %s
+                      AND s.rekassa_shift_number = %s
+                      AND (%s = '' OR s.rekassa_znm = %s)
+
+                    UNION ALL
+
+                    SELECT
+                        s.id, s.client_id, s.sale_number, s.total_amount,
+                        s.sale_type, s.status, s.rekassa_shift_number,
+                        s.rekassa_znm, 'refund'::TEXT AS event_type,
+                        COALESCE(s.refunded_at, s.created_at) AS event_at
+                    FROM sales s
+                    WHERE s.company_id = %s
+                      AND s.rekassa_shift_number = %s
+                      AND (%s = '' OR s.rekassa_znm = %s)
+                      AND COALESCE(s.is_refunded, FALSE) = TRUE
+                )
+                SELECT journal.*, clients.full_name
+                FROM journal
+                LEFT JOIN clients ON journal.client_id = clients.id
+                ORDER BY journal.event_at DESC, journal.id DESC,
+                         journal.event_type DESC
                 LIMIT %s OFFSET %s
             """, (
+                session.get("company_id"),
+                shift_number,
+                serial_number,
+                serial_number,
                 session.get("company_id"),
                 shift_number,
                 serial_number,

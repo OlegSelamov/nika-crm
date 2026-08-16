@@ -369,6 +369,155 @@ def _closed_shift_report(payload, shift_number):
     return bool(close_time and str(report_number or shift_number) == str(shift_number))
 
 
+def _shift_value(payload, *keys):
+    if not isinstance(payload, dict):
+        return None
+    core = _report_core(payload)
+    for source in (payload, core):
+        if not isinstance(source, dict):
+            continue
+        for key in keys:
+            value = source.get(key)
+            if value not in (None, ""):
+                return value
+    return None
+
+
+def _shift_number(payload):
+    return _shift_value(payload, "shiftNumber", "shift_number", "number")
+
+
+def _shift_close_time(payload):
+    return _shift_value(
+        payload,
+        "closeShiftTime",
+        "close_shift_time",
+        "closeTime",
+        "endTime",
+    )
+
+
+def _extract_closed_shifts(payload):
+    """Normalize every known reKassa list wrapper to a flat shift list."""
+    result = []
+
+    def walk(value):
+        if isinstance(value, list):
+            for item in value:
+                walk(item)
+            return
+        if not isinstance(value, dict):
+            return
+
+        if _shift_number(value) is not None and _shift_close_time(value):
+            result.append(value)
+            return
+
+        for key in (
+            "content",
+            "items",
+            "list",
+            "records",
+            "shifts",
+            "shift",
+            "history",
+            "results",
+            "result",
+            "data",
+        ):
+            nested = value.get(key)
+            if isinstance(nested, (list, dict)):
+                walk(nested)
+
+    walk(payload)
+
+    unique = {}
+    for item in result:
+        unique[str(_shift_number(item))] = item
+    return list(unique.values())
+
+
+def _local_closed_shifts(company_id, open_shift_number, page, size):
+    """Build a reliable archive from fiscal metadata already stored on sales."""
+    from models import get_db, pool
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                rekassa_shift_number AS shift_number,
+                COALESCE(rekassa_znm, '') AS serial_number,
+                MIN(created_at) AS open_time,
+                MAX(COALESCE(refunded_at, created_at)) AS close_time,
+                COUNT(*) + COUNT(*) FILTER (
+                    WHERE COALESCE(is_refunded, FALSE) = TRUE
+                ) AS ticket_count,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(is_refunded, FALSE)
+                            THEN -total_amount
+                        ELSE total_amount
+                    END
+                ), 0) AS net_revenue
+            FROM sales
+            WHERE company_id = %s
+              AND rekassa_shift_number IS NOT NULL
+              AND (%s IS NULL OR rekassa_shift_number <> %s)
+            GROUP BY rekassa_shift_number, COALESCE(rekassa_znm, '')
+            ORDER BY MAX(COALESCE(refunded_at, created_at)) DESC
+            LIMIT %s OFFSET %s
+        """, (
+            company_id,
+            open_shift_number,
+            open_shift_number,
+            size,
+            page * size,
+        ))
+        rows = cur.fetchall()
+    finally:
+        pool.putconn(conn)
+
+    result = []
+    for row in rows:
+        opened = row.get("open_time")
+        closed = row.get("close_time")
+        result.append({
+            "shiftNumber": row.get("shift_number"),
+            "serialNumber": row.get("serial_number") or "",
+            "openShiftTime": opened.isoformat() if opened else None,
+            "closeShiftTime": closed.isoformat() if closed else None,
+            "ticketCount": int(row.get("ticket_count") or 0),
+            "netRevenue": float(row.get("net_revenue") or 0),
+            "source": "local_sales",
+        })
+    return result
+
+
+def _merge_closed_shifts(remote, local, size):
+    unique = {}
+    for item in local:
+        unique[str(_shift_number(item))] = item
+    for item in remote:
+        key = str(_shift_number(item))
+        local_item = unique.get(key) or {}
+        if not _shift_value(item, "serialNumber", "serial_number", "znm"):
+            serial = _shift_value(
+                local_item,
+                "serialNumber",
+                "serial_number",
+                "znm",
+            )
+            if serial:
+                item = {**item, "serialNumber": serial}
+        unique[key] = item
+
+    def sort_key(item):
+        return str(_shift_close_time(item) or "")
+
+    return sorted(unique.values(), key=sort_key, reverse=True)[:size]
+
+
 def _rekassa_print_url(crs_id, ticket_id):
     """Return the human-readable fiscal ticket URL for test or production."""
     parsed = urlsplit(REKASSA_URL or "")
@@ -1331,6 +1480,22 @@ def rekassa_shift_history():
             "error": "Некорректные параметры страницы"
         }), 400
 
+    open_shift_number = None
+    try:
+        state, state_error = _register_state(context)
+        if not state_error:
+            register = state.get("register") or {}
+            shift = register.get("shift")
+            shift = shift if isinstance(shift, dict) else {}
+            if register.get("shiftOpen"):
+                open_shift_number = (
+                    register.get("shiftNumber") or shift.get("shiftNumber")
+                )
+    except requests.RequestException:
+        pass
+
+    remote_shifts = []
+    warning = None
     try:
         response, payload = _rekassa_api(
             context,
@@ -1338,19 +1503,40 @@ def rekassa_shift_history():
             f"/api/crs/{context['crs_id']}/shifts",
             params={"includeOpen": "false", "page": page, "size": size}
         )
+        if response.status_code < 400 and not _is_api_error(payload):
+            remote_shifts = _extract_closed_shifts(payload)
+        else:
+            warning = _api_error_message(
+                payload,
+                "Архив reKassa временно недоступен",
+            )
     except requests.RequestException:
-        return jsonify({
-            "success": False,
-            "error": "Не удалось загрузить историю смен reKassa"
-        }), 502
+        warning = "Архив reKassa временно недоступен"
 
-    if response.status_code >= 400 or _is_api_error(payload):
-        return jsonify({
-            "success": False,
-            "error": _api_error_message(payload, "Не удалось загрузить историю смен")
-        }), response.status_code if response.status_code >= 400 else 400
+    try:
+        local_shifts = _local_closed_shifts(
+            context["company_id"],
+            open_shift_number,
+            page,
+            size,
+        )
+    except Exception:
+        local_shifts = []
+        if not remote_shifts:
+            return jsonify({
+                "success": False,
+                "error": warning or "Не удалось загрузить историю смен",
+            }), 502
 
-    return jsonify({"success": True, "history": payload})
+    history = _merge_closed_shifts(remote_shifts, local_shifts, size)
+    return jsonify({
+        "success": True,
+        "history": history,
+        "page": page,
+        "size": size,
+        "has_more": len(remote_shifts) >= size or len(local_shifts) >= size,
+        "warning": warning,
+    })
 
 
 @rekassa_bp.route(
