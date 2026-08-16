@@ -45,6 +45,11 @@ const documentConfig = {
     }
 };
 
+// На странице кассы фиксируем рабочую область в пределах окна. Прокрутка
+// остаётся внутри корзины и истории, а не у всего документа.
+document.documentElement.classList.add("sales-page-open");
+document.body.classList.add("sales-page-open");
+
 let company = {}; // 👈 вот сюда
 
 fetch("/api/company/active")

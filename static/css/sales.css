@@ -2792,3 +2792,93 @@
         font-size: 10px;
     }
 }
+
+/* Касса на компьютере занимает ровно доступную высоту окна.
+   Внешняя страница не прокручивается; длинные корзина и история имеют
+   собственный вертикальный скролл внутри левой карточки. */
+@media (min-width: 769px) {
+    html.sales-page-open,
+    body.sales-page-open {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    body.sales-page-open .layout {
+        height: 100vh;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    body.sales-page-open .content {
+        height: 100vh;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    body.sales-page-open .app-topbar {
+        flex: 0 0 auto;
+    }
+
+    body.sales-page-open .page-shell {
+        min-height: 0;
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    body.sales-page-open .sales-page {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    body.sales-page-open .shift-strip {
+        flex: 0 0 auto;
+    }
+
+    body.sales-page-open .sales-grid {
+        height: auto;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+
+    body.sales-page-open .left-side,
+    body.sales-page-open .payment-box {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    body.sales-page-open .payment-box {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    body.sales-page-open .cart-box {
+        height: auto;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+
+    body.sales-page-open #cartTableWrapper,
+    body.sales-page-open #salesHistoryBox {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        max-height: none;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+    }
+}
