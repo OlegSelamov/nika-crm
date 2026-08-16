@@ -1,7 +1,16 @@
+from io import BytesIO
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, jsonify, request, session
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    make_response,
+    request,
+    send_file,
+    session,
+)
 
 from models import get_db, pool
 from utils.timezone import now_kz
@@ -587,6 +596,15 @@ def _sale_document(cur, company_id, sale_id, kind):
         "invoice_facture": "schet-factura",
     }
     pdf_type = pdf_types.get(kind)
+    site_paths = {
+        "check": "check",
+        "refund_check": "refund-check",
+        "invoice": "invoice",
+        "waybill": "nakladnaya",
+        "act": "act",
+        "invoice_facture": "schet-factura",
+    }
+    site_path = site_paths.get(kind)
     document_date = (
         sale.get("refunded_at")
         if kind == "refund_check" and sale.get("refunded_at")
@@ -595,7 +613,12 @@ def _sale_document(cur, company_id, sale_id, kind):
     return _clean({
         "kind": kind,
         "title": titles.get(kind, "Документ"),
-        "pdf_path": f"/docs/pdf/{pdf_type}/{sale_id}" if pdf_type else "",
+        "source_id": sale_id,
+        "file_url": f"/docs/{site_path}/{sale_id}" if site_path else "",
+        "pdf_path": (
+            f"/api/mobile/accounting/pdf/{pdf_type}/{sale_id}"
+            if pdf_type else ""
+        ),
         "file_name": f"{filename_prefixes.get(kind, 'document')}-{sale_id}.pdf",
         "number": str(sale.get("sale_number") or sale.get("id")),
         "date": document_date.strftime("%d.%m.%Y %H:%M") if document_date else "—",
@@ -631,6 +654,95 @@ def _sale_document(cur, company_id, sale_id, kind):
     })
 
 
+def _pdf_target_from_url(value):
+    path = str(value or "").split("?", 1)[0].rstrip("/")
+    if not path:
+        return None
+
+    mappings = {
+        "check": "check",
+        "refund-check": "refund_check",
+        "invoice": "invoice",
+        "nakladnaya": "waybill",
+        "act": "act",
+        "schet-factura": "invoice_facture",
+    }
+    for route_name, kind in mappings.items():
+        marker = f"/docs/{route_name}/"
+        if marker not in path:
+            continue
+        sale_id = path.rsplit(marker, 1)[-1]
+        if sale_id.isdigit():
+            return kind, int(sale_id)
+
+    segments = path.strip("/").split("/")
+    if len(segments) >= 4 and segments[-4:-2] == ["docs", "pdf"]:
+        route_name, sale_id = segments[-2], segments[-1]
+        kind = mappings.get(route_name)
+        if kind and sale_id.isdigit():
+            return kind, int(sale_id)
+    return None
+
+
+@mobile_api_bp.route("/accounting/pdf/<document_type>/<int:sale_id>")
+def mobile_accounting_pdf(document_type, sale_id):
+    """PDF из того же HTML-шаблона, который используется на сайте."""
+    denied = _guard()
+    if denied:
+        return denied
+
+    documents = {
+        "check": ("check", "check"),
+        "refund-check": ("refund_check", "refund-check"),
+        "invoice": ("invoice", "schet-na-oplatu"),
+        "nakladnaya": ("nakladnaya", "nakladnaya"),
+        "schet-factura": ("schet_factura", "schet-factura"),
+        "act": ("act", "akt-vypolnennyh-rabot"),
+    }
+    document = documents.get(document_type)
+    if not document:
+        return jsonify({"success": False, "error": "Неизвестный тип документа"}), 404
+
+    try:
+        from weasyprint import HTML
+        from routes import sales as sales_routes
+    except ImportError:
+        return jsonify({
+            "success": False,
+            "error": "На сервере не установлен модуль формирования PDF (WeasyPrint)",
+        }), 503
+
+    renderer_name, filename_prefix = document
+    try:
+        renderer = getattr(sales_routes, renderer_name)
+        rendered = make_response(renderer(sale_id))
+        if rendered.status_code >= 400:
+            return rendered
+
+        pdf = HTML(
+            string=rendered.get_data(as_text=True),
+            base_url=request.url_root,
+            media_type="print",
+        ).write_pdf()
+        return send_file(
+            BytesIO(pdf),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"{filename_prefix}-{sale_id}.pdf",
+            max_age=0,
+        )
+    except Exception:
+        current_app.logger.exception(
+            "Не удалось сформировать мобильный PDF %s для продажи %s",
+            document_type,
+            sale_id,
+        )
+        return jsonify({
+            "success": False,
+            "error": "Не удалось сформировать PDF документа",
+        }), 500
+
+
 @mobile_api_bp.route("/accounting/operations/<int:operation_id>/documents")
 def mobile_accounting_operation_documents(operation_id):
     denied = _guard()
@@ -650,7 +762,10 @@ def mobile_accounting_operation_documents(operation_id):
 
         source_type = operation.get("source_type")
         source_id = operation.get("source_id")
-        if source_type not in ("sale", "sale_refund") or not source_id:
+        url_target = _pdf_target_from_url(operation.get("document_url"))
+        if not source_id and url_target:
+            source_id = url_target[1]
+        if not source_id:
             return jsonify({
                 "success": True,
                 "documents": [],
@@ -659,6 +774,8 @@ def mobile_accounting_operation_documents(operation_id):
 
         if source_type == "sale_refund" or operation.get("operation_type") == "refund":
             kind = "refund_check"
+        elif url_target:
+            kind = url_target[0]
         else:
             cur.execute(
                 "SELECT sale_type FROM sales WHERE id=%s AND company_id=%s",
@@ -705,13 +822,21 @@ def mobile_accounting_document_preview(document_id):
             "act": "act",
             "invoice_facture": "invoice_facture",
         }
+        url_target = _pdf_target_from_url(row.get("file_url"))
         kind = kind_map.get(row.get("document_type"))
-        if row.get("source_type") == "sale" and row.get("source_id") and kind:
-            document = _sale_document(cur, company_id, row["source_id"], kind)
+        source_id = row.get("source_id")
+        if not source_id and url_target:
+            source_id = url_target[1]
+        if not kind and url_target:
+            kind = url_target[0]
+        if source_id and kind:
+            document = _sale_document(cur, company_id, source_id, kind)
         else:
             stored_filename = row.get("stored_filename") or ""
             original_filename = row.get("original_filename") or stored_filename
             stored_is_pdf = original_filename.lower().endswith(".pdf")
+            file_url = row.get("file_url") or ""
+            url_is_pdf = file_url.split("?", 1)[0].lower().endswith(".pdf")
             document = _clean({
                 "kind": "manual",
                 "title": row.get("title") or "Документ",
@@ -723,13 +848,17 @@ def mobile_accounting_document_preview(document_id):
                 "client": {"name": row.get("counterparty") or "—"},
                 "items": [],
                 "comment": row.get("comment") or "",
-                "file_url": row.get("file_url") or "",
+                "file_url": file_url,
                 "pdf_path": (
                     f"/accounting/files/{stored_filename}"
                     if stored_filename and stored_is_pdf
-                    else ""
+                    else file_url if url_is_pdf else ""
                 ),
-                "file_name": original_filename if stored_is_pdf else "",
+                "file_name": (
+                    original_filename
+                    if stored_is_pdf
+                    else file_url.rsplit("/", 1)[-1] if url_is_pdf else ""
+                ),
             })
         return jsonify({"success": True, "document": document})
     except Exception as exc:
