@@ -1285,6 +1285,25 @@
     font-weight: 900;
     cursor: pointer;
 }
+.sales-receipt-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+.sales-receipt-refund {
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid #f0c8cd;
+    border-radius: 9px;
+    background: #fff0f1;
+    color: #b83f4b;
+    font-size: 9px;
+    font-weight: 900;
+    cursor: pointer;
+}
+.sales-receipt-refund:hover { border-color: #db929a; background: #ffe6e8; }
+.sales-receipt-refund:disabled { opacity: .6; cursor: wait; }
 .sales-shift-body { padding: 0 12px 12px 43px; border-top: 1px solid #edf0f5; background: #fafbfc; }
 .sales-shift-receipts { display: grid; gap: 7px; padding-top: 10px; }
 .sales-receipt-row {
@@ -1323,7 +1342,14 @@
     .sales-shift-body { padding-left: 10px; padding-right: 10px; }
     .sales-receipt-row { grid-template-columns: 30px 1fr auto; }
     .sales-receipt-meta { grid-column: 2; text-align: left; }
-    .sales-receipt-open { grid-column: 3; grid-row: 1 / span 2; }
+    .sales-receipt-actions {
+        grid-column: 3;
+        grid-row: 1 / span 2;
+        display: grid;
+        align-self: stretch;
+    }
+    .sales-receipt-open,
+    .sales-receipt-refund { min-width: 86px; }
 }
 
 .shift-toast {
@@ -2880,5 +2906,142 @@
         overflow-y: auto;
         overscroll-behavior: contain;
         scrollbar-gutter: stable;
+    }
+}
+
+/* Два режима истории: кассовые смены и полный журнал документов. */
+.sales-history-mode-switch {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0;
+    padding: 10px;
+    border-bottom: 1px solid #e5e9f0;
+    background: rgba(255, 255, 255, .96);
+    backdrop-filter: blur(8px);
+}
+
+.sales-history-mode-switch button {
+    min-height: 38px;
+    padding: 7px 12px;
+    border: 1px solid #dfe4ec;
+    border-radius: 10px;
+    background: #f5f7fa;
+    color: #596477;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.sales-history-mode-switch button.active {
+    border-color: #7967ee;
+    background: #7462e7;
+    color: #fff;
+    box-shadow: 0 5px 14px rgba(92, 73, 205, .18);
+}
+
+#salesShiftsModeView[hidden],
+#salesDocumentsModeView[hidden] {
+    display: none !important;
+}
+
+.sales-documents-history {
+    min-width: 0;
+    padding: 0 0 14px;
+}
+
+#salesHistoryBox .sales-documents-table-wrap {
+    max-height: none;
+    overflow-x: auto !important;
+    overflow-y: visible;
+}
+
+.sales-document-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+
+.sales-document-btn {
+    min-height: 28px;
+    padding: 5px 8px;
+    border: 1px solid #dce2eb;
+    border-radius: 8px;
+    background: #f7f8fb;
+    color: #465267;
+    cursor: pointer;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+
+.sales-document-btn:hover {
+    border-color: #bdb4f6;
+    background: #f0edff;
+    color: #5f4fc2;
+}
+
+.sales-document-btn.is-primary {
+    border-color: #cfc8ff;
+    background: #eeebff;
+    color: #604ec5;
+}
+
+.sales-document-btn.is-confirm {
+    border-color: #bce9d9;
+    background: #e9f8f2;
+    color: #147455;
+}
+
+.sales-document-btn.is-refund {
+    border-color: #ffd1d5;
+    background: #fff0f1;
+    color: #b43d49;
+}
+
+.refund-history-row td {
+    background: #fffafa !important;
+}
+
+.sales-documents-message {
+    padding: 28px 14px !important;
+    color: #7c8594;
+    text-align: center;
+    font-size: 11px;
+}
+
+.sales-documents-message.is-error {
+    color: #b42318;
+}
+
+@media (max-width: 768px) {
+    .sales-history-mode-switch {
+        top: 0;
+        margin-bottom: 8px;
+        padding: 8px 0;
+        background: #f5f7fb;
+    }
+
+    .sales-documents-table-wrap {
+        display: none;
+    }
+
+    #mobileSalesDocumentsHistory {
+        display: block;
+    }
+
+    .sales-document-actions {
+        width: 100%;
+    }
+
+    .sales-document-btn {
+        min-height: 38px;
+        flex: 1 1 calc(50% - 5px);
+        font-size: 10px;
     }
 }

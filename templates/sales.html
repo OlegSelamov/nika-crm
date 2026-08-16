@@ -89,7 +89,18 @@
 			<div id="mobileCart" class="mobile-cart"></div>
 			
 			<div id="salesHistoryBox" style="display:none;">
-				<div class="sales-shifts-history">
+				<div class="sales-history-mode-switch" role="tablist" aria-label="Режим истории продаж">
+					<button type="button" id="salesHistoryShiftsMode" class="active"
+							onclick="switchSalesHistoryMode('shifts')" role="tab" aria-selected="true">
+						По сменам
+					</button>
+					<button type="button" id="salesHistoryDocumentsMode"
+							onclick="switchSalesHistoryMode('documents')" role="tab" aria-selected="false">
+						Все документы
+					</button>
+				</div>
+
+				<div id="salesShiftsModeView" class="sales-shifts-history">
 					<div class="sales-shifts-section-head">
 						<div>
 							<strong>Текущая смена</strong>
@@ -109,6 +120,29 @@
 					<div id="salesClosedShifts" class="sales-shifts-list"></div>
 					<button type="button" id="salesShiftsMore" class="sales-shifts-more" hidden>
 						Показать ещё смены
+					</button>
+				</div>
+
+				<div id="salesDocumentsModeView" class="sales-documents-history" hidden>
+					<div class="table-wrapper sales-documents-table-wrap">
+						<table class="history-table sales-documents-table">
+							<thead>
+								<tr>
+									<th>№</th>
+									<th>Дата</th>
+									<th>Клиент</th>
+									<th>Сумма</th>
+									<th>Оплата</th>
+									<th>Статус</th>
+									<th>Документы</th>
+								</tr>
+							</thead>
+							<tbody id="salesDocumentsHistory"></tbody>
+						</table>
+					</div>
+					<div id="mobileSalesDocumentsHistory" class="mobile-sales-history"></div>
+					<button type="button" id="salesDocumentsMore" class="sales-shifts-more" hidden>
+						Показать ещё документы
 					</button>
 				</div>
 
