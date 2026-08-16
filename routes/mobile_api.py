@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -536,6 +537,19 @@ def _payment_label(sale):
     return "Наличные"
 
 
+def _nested_value(data, *paths):
+    for path in paths:
+        current = data
+        for key in path:
+            if not isinstance(current, dict):
+                current = None
+                break
+            current = current.get(key)
+        if current not in (None, ""):
+            return current
+    return ""
+
+
 def _sale_document(cur, company_id, sale_id, kind):
     cur.execute("""
         SELECT
@@ -610,6 +624,58 @@ def _sale_document(cur, company_id, sale_id, kind):
         if kind == "refund_check" and sale.get("refunded_at")
         else sale.get("created_at")
     )
+    fiscal = {
+        "ticket_number": sale.get("rekassa_ticket_number") or "",
+        "document_number": sale.get("rekassa_document_number") or "",
+        "shift_number": sale.get("rekassa_shift_number") or "",
+        "rnm": sale.get("rekassa_rnm") or "",
+        "znm": sale.get("rekassa_znm") or "",
+        "qr": sale.get("rekassa_qr") or "",
+        "transaction_id": sale.get("kaspi_transaction_id") or "",
+    }
+    if kind == "refund_check":
+        raw_refund_data = sale.get("refund_receipt_data") or {}
+        if isinstance(raw_refund_data, str):
+            try:
+                raw_refund_data = json.loads(raw_refund_data)
+            except (TypeError, ValueError):
+                raw_refund_data = {}
+        rekassa_data = raw_refund_data.get("rekassa") or {}
+        fiscal = {
+            "ticket_number": _nested_value(
+                rekassa_data,
+                ("ticketNumber",),
+                ("data", "ticket", "ticketNumber"),
+            ),
+            "document_number": _nested_value(
+                rekassa_data,
+                ("printedDocumentNumber",),
+                ("data", "ticket", "printedDocumentNumber"),
+            ),
+            "shift_number": _nested_value(
+                rekassa_data,
+                ("shiftNumber",),
+                ("data", "ticket", "shiftNumber"),
+            ),
+            "rnm": _nested_value(
+                rekassa_data,
+                ("rnm",),
+                ("data", "service", "regInfo", "kkm", "fnsKkmId"),
+            ) or sale.get("rekassa_rnm") or "",
+            "znm": _nested_value(
+                rekassa_data,
+                ("znm",),
+                ("data", "service", "regInfo", "kkm", "serialNumber"),
+            ) or sale.get("rekassa_znm") or "",
+            "qr": _nested_value(
+                rekassa_data,
+                ("fdoQrCode",),
+                ("data", "ticket", "fdoQrCode"),
+            ),
+            "transaction_id": raw_refund_data.get(
+                "payment_refund_transaction_id"
+            ) or "",
+        }
     return _clean({
         "kind": kind,
         "title": titles.get(kind, "Документ"),
@@ -622,6 +688,11 @@ def _sale_document(cur, company_id, sale_id, kind):
         "file_name": f"{filename_prefixes.get(kind, 'document')}-{sale_id}.pdf",
         "number": str(sale.get("sale_number") or sale.get("id")),
         "date": document_date.strftime("%d.%m.%Y %H:%M") if document_date else "—",
+        "original_date": (
+            sale.get("created_at").strftime("%d.%m.%Y %H:%M")
+            if sale.get("created_at") else "—"
+        ),
+        "is_refunded": bool(sale.get("is_refunded")),
         "status": "Возврат" if kind == "refund_check" else sale.get("status") or "Проведён",
         "payment_method": _payment_label(sale),
         "total": _number(sale.get("total_amount")),
@@ -638,19 +709,7 @@ def _sale_document(cur, company_id, sale_id, kind):
             "phone": sale.get("client_phone") or "",
         },
         "items": items,
-        "fiscal": {
-            "ticket_number": sale.get("rekassa_ticket_number") or "",
-            "document_number": sale.get("rekassa_document_number") or "",
-            "shift_number": sale.get("rekassa_shift_number") or "",
-            "rnm": sale.get("rekassa_rnm") or "",
-            "znm": sale.get("rekassa_znm") or "",
-            "qr": sale.get("rekassa_qr") or "",
-            "transaction_id": (
-                sale.get("kaspi_transaction_id")
-                if kind != "refund_check"
-                else ""
-            ) or "",
-        },
+        "fiscal": fiscal,
     })
 
 
@@ -741,6 +800,48 @@ def mobile_accounting_pdf(document_type, sale_id):
             "success": False,
             "error": "Не удалось сформировать PDF документа",
         }), 500
+
+
+@mobile_api_bp.route("/sales/<int:sale_id>/refund-receipt")
+def mobile_refund_receipt(sale_id):
+    denied = _guard()
+    if denied:
+        return denied
+
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT sale_type,is_refunded
+            FROM sales WHERE id=%s AND company_id=%s
+        """, (sale_id, company_id))
+        sale = cur.fetchone()
+        if not sale:
+            return jsonify({"success": False, "error": "Продажа не найдена"}), 404
+        if sale.get("sale_type") == "invoice":
+            return jsonify({
+                "success": False,
+                "error": "Для продажи по счёту чек возврата не формируется",
+            }), 409
+        if not sale.get("is_refunded"):
+            return jsonify({
+                "success": False,
+                "error": "Сначала оформите возврат продажи",
+            }), 409
+
+        document = _sale_document(cur, company_id, sale_id, "refund_check")
+        return jsonify({"success": True, "document": document})
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE REFUND RECEIPT ERROR:", exc)
+        return jsonify({
+            "success": False,
+            "error": "Не удалось загрузить чек возврата",
+        }), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
 
 
 @mobile_api_bp.route("/accounting/operations/<int:operation_id>/documents")
