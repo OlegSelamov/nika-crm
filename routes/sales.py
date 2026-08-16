@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, make_r
 from models import get_db, pool
 from datetime import datetime, timedelta
 from utils.timezone import now_kz
+from routes.fiscal_metrics import daily_metrics, period_metrics
 from flask import render_template
 from num2words import num2words
 from flask import session
@@ -409,107 +410,135 @@ def get_sale(sale_id):
     
 @sales_bp.route("/api/sales/history")
 def sales_history():
-
-    try:
-        shift_number = int(request.args.get("shift_number", ""))
-        if shift_number <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        # История на странице кассы относится только к открытой смене reKassa.
-        # Без её номера не возвращаем старые продажи и не подменяем смену днём.
-        return jsonify([])
-
+    all_history = request.args.get("scope") == "all"
     serial_number = (request.args.get("serial_number") or "").strip()
 
+    try:
+        page = max(int(request.args.get("page", 0)), 0)
+        default_size = 50 if all_history else 100
+        size = min(max(int(request.args.get("size", default_size)), 1), 100)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Некорректная страница"}), 400
+
+    shift_number = None
+    if not all_history:
+        try:
+            shift_number = int(request.args.get("shift_number", ""))
+            if shift_number <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return jsonify([])
+
     conn = get_db()
-
     cur = conn.cursor()
+    try:
+        ensure_refund_receipt_schema(conn)
+        conn.commit()
+        if all_history:
+            # Постоянный журнал: продажа не исчезает после возврата, а возврат
+            # становится отдельным событием с собственной датой.
+            cur.execute("""
+                WITH journal AS (
+                    SELECT
+                        s.id, s.client_id, s.sale_number, s.total_amount,
+                        s.sale_type, s.status, s.rekassa_shift_number,
+                        s.rekassa_znm, 'sale'::TEXT AS event_type,
+                        s.created_at AS event_at
+                    FROM sales s
+                    WHERE s.company_id = %s
 
-    cur.execute("""
-        SELECT
-            sales.id,
-            sales.sale_number,
-            sales.created_at,
-            sales.total_amount,
-            sales.sale_type,
-            sales.status,
-            COALESCE(sales.is_refunded, FALSE) AS is_refunded,
-            clients.full_name
-        FROM sales
-        LEFT JOIN clients
-            ON sales.client_id = clients.id
-        WHERE sales.company_id = %s
-          AND sales.rekassa_shift_number = %s
-          AND (%s = '' OR sales.rekassa_znm = %s)
-        ORDER BY sales.id DESC
-        LIMIT 100
-    """, (
-        session.get("company_id"),
-        shift_number,
-        serial_number,
-        serial_number,
-    ))
+                    UNION ALL
 
-    sales = cur.fetchall()
+                    SELECT
+                        s.id, s.client_id, s.sale_number, s.total_amount,
+                        s.sale_type, s.status, s.rekassa_shift_number,
+                        s.rekassa_znm, 'refund'::TEXT AS event_type,
+                        COALESCE(s.refunded_at, s.created_at) AS event_at
+                    FROM sales s
+                    WHERE s.company_id = %s
+                      AND COALESCE(s.is_refunded, FALSE) = TRUE
+                )
+                SELECT journal.*, clients.full_name
+                FROM journal
+                LEFT JOIN clients ON journal.client_id = clients.id
+                ORDER BY journal.event_at DESC, journal.id DESC,
+                         journal.event_type DESC
+                LIMIT %s OFFSET %s
+            """, (
+                session.get("company_id"),
+                session.get("company_id"),
+                size,
+                page * size,
+            ))
+        else:
+            # Совместимость с веб-кассой: при переданном номере смены оставляем
+            # прежний режим истории только текущей смены.
+            cur.execute("""
+                SELECT
+                    sales.id, sales.client_id, sales.sale_number,
+                    sales.total_amount, sales.sale_type, sales.status,
+                    sales.rekassa_shift_number, sales.rekassa_znm,
+                    CASE WHEN COALESCE(sales.is_refunded, FALSE)
+                         THEN 'refund' ELSE 'sale' END AS event_type,
+                    sales.created_at AS event_at,
+                    clients.full_name
+                FROM sales
+                LEFT JOIN clients ON sales.client_id = clients.id
+                WHERE sales.company_id = %s
+                  AND sales.rekassa_shift_number = %s
+                  AND (%s = '' OR sales.rekassa_znm = %s)
+                ORDER BY sales.id DESC
+                LIMIT %s OFFSET %s
+            """, (
+                session.get("company_id"),
+                shift_number,
+                serial_number,
+                serial_number,
+                size,
+                page * size,
+            ))
 
-    result = []
+        sales = cur.fetchall()
+        result = []
+        for sale in sales:
+            payment_type = {
+                "cash": "Наличные",
+                "card": "Карта",
+                "kaspi": "Kaspi POS",
+                "invoice": "Счёт",
+            }.get(sale["sale_type"], "—")
+            event_type = sale.get("event_type") or "sale"
+            event_at = sale.get("event_at")
+            is_refund = event_type == "refund"
+            status = "Возврат" if is_refund else sale.get("status")
+            if not is_refund and status == "Возврат":
+                status = "Продажа"
 
-    for sale in sales:
-
-        payment_type = "—"
-
-        if sale["sale_type"] == "cash":
-            payment_type = "Наличные"
-
-        elif sale["sale_type"] == "card":
-            payment_type = "Карта"
-
-        elif sale["sale_type"] == "kaspi":
-            payment_type = "Kaspi POS"
-
-        elif sale["sale_type"] == "invoice":
-            payment_type = "Счёт"
-
-        result.append({
-
-            "id": sale["id"],
-            
-            "sale_number": sale["sale_number"],
-
-            "created_at": sale["created_at"],
-
-            # created_at уже хранится по времени Казахстана. Отдаём готовую
-            # строку, чтобы браузер не воспринял локальное время как UTC и не
-            # прибавил ещё пять часов.
-            "created_at_display":
-                sale["created_at"].strftime("%d.%m.%Y, %H:%M"),
-
-            "client_name":
-                sale["full_name"],
-
-            "total":
-                sale["total_amount"],
-
-            "payment_type":
-                payment_type,
-
-            "sale_type":
-                sale["sale_type"],
-
-            "status":
-                sale["status"],
-
-            "is_refunded":
-                bool(sale["is_refunded"]),
-
-            "refund_check_available":
-                bool(sale["is_refunded"] and sale["sale_type"] != "invoice")
-
-        })
-
-    pool.putconn(conn)
-
-    return jsonify(result)
+            result.append({
+                "id": sale["id"],
+                "event_type": event_type,
+                "sale_number": sale["sale_number"],
+                "created_at": event_at,
+                "event_at": event_at.isoformat() if event_at else "",
+                "created_at_display": (
+                    event_at.strftime("%d.%m.%Y, %H:%M") if event_at else "—"
+                ),
+                "client_name": sale["full_name"] or "Частное лицо",
+                "total": sale["total_amount"],
+                "payment_type": payment_type,
+                "sale_type": sale["sale_type"],
+                "status": status or "Продажа",
+                "is_refunded": is_refund,
+                "shift_number": sale.get("rekassa_shift_number"),
+                "serial_number": sale.get("rekassa_znm") or "",
+                "refund_check_available": bool(
+                    is_refund and sale["sale_type"] != "invoice"
+                ),
+            })
+        return jsonify(result)
+    finally:
+        cur.close()
+        pool.putconn(conn)
 
 
 @sales_bp.route("/api/smart-sale", methods=["POST"])
@@ -1273,6 +1302,41 @@ def refund_check(sale_id):
 
         conn.commit()
 
+        # Единая фискальная база: валовая выручка минус возвраты. Счета без
+        # успешного чека reKassa здесь не считаются кассовой выручкой.
+        fiscal = period_metrics(cur, company_id, date_from, date_to)
+        fiscal_days = daily_metrics(cur, company_id, date_from, date_to)
+        total = fiscal["net_revenue"]
+        sales_count = fiscal["sales_count"]
+        average_check = fiscal["average_check"]
+        returns_count = fiscal["refund_count"]
+        returns_total = fiscal["refunds"]
+        payments = {
+            "cash": fiscal["cash"],
+            "card": fiscal["card"],
+            "kaspi": fiscal["kaspi"],
+        }
+        chart_labels = [row["date"].strftime("%d.%m") for row in fiscal_days]
+        chart_values = [row["net"] for row in fiscal_days]
+
+        cur.execute("""
+            SELECT category, COALESCE(SUM(amount), 0) AS total
+            FROM expenses
+            WHERE company_id = %s AND date BETWEEN %s AND %s
+            GROUP BY category ORDER BY total DESC
+        """, (company_id, date_from, date_to))
+        expense_categories = cur.fetchall() or []
+        expenses_total = sum(float(row["total"] or 0) for row in expense_categories)
+        purchase_total = sum(float(row["total"] or 0) for row in expense_categories
+                             if row["category"] == "Закупки")
+        salary_total = sum(float(row["total"] or 0) for row in expense_categories
+                           if row["category"] == "Зарплата")
+        taxes_total = sum(float(row["total"] or 0) for row in expense_categories
+                          if row["category"] == "Налоги и обязательные платежи")
+        gross_profit = profit
+        profit = gross_profit - expenses_total
+        margin_percent = profit / total * 100 if total else 0
+
         return render_template(
             "docs/refund_check.html",
             sale=sale,
@@ -1454,7 +1518,7 @@ def analytics():
                 COALESCE(AVG(total_amount), 0) AS average_check
             FROM sales
             WHERE company_id = %s
-              AND status IN ('Оплачено', 'Возврат')
+              AND status = 'Оплачено'
               AND DATE(created_at) BETWEEN %s AND %s
         """, (
             company_id,
@@ -1464,8 +1528,7 @@ def analytics():
 
         main_stats = cur.fetchone() or {}
 
-        gross_revenue = float(main_stats.get("revenue") or 0)
-        total = gross_revenue
+        total = float(main_stats.get("revenue") or 0)
         sales_count = int(main_stats.get("sales_count") or 0)
         average_check = float(main_stats.get("average_check") or 0)
 
@@ -1480,7 +1543,7 @@ def analytics():
             JOIN sales s
                 ON s.id = si.sale_id
             WHERE s.company_id = %s
-              AND s.status IN ('Оплачено', 'Возврат')
+              AND s.status = 'Оплачено'
               AND DATE(s.created_at) BETWEEN %s AND %s
         """, (
             company_id,
@@ -1489,8 +1552,7 @@ def analytics():
         ))
 
         profit_row = cur.fetchone() or {}
-        gross_profit = float(profit_row.get("profit") or 0)
-        profit = gross_profit
+        profit = float(profit_row.get("profit") or 0)
 
         # Пока отдельные расходы в этом роуте не подключены
         purchase_total = 0
@@ -1499,25 +1561,12 @@ def analytics():
         expenses_total = 0
         expense_categories = []
 
-        cur.execute("""
-            SELECT COALESCE(category, 'Прочее') AS category,
-                   COALESCE(SUM(amount), 0) AS total
-            FROM expenses
-            WHERE company_id = %s AND date BETWEEN %s AND %s
-            GROUP BY COALESCE(category, 'Прочее')
-            ORDER BY total DESC
-        """, (company_id, date_from, date_to))
-        expense_categories = cur.fetchall() or []
-        expenses_total = sum(float(row.get("total") or 0) for row in expense_categories)
-        for row in expense_categories:
-            category = str(row.get("category") or "").lower()
-            amount = float(row.get("total") or 0)
-            if "закуп" in category or "товар" in category:
-                purchase_total += amount
-            elif "зарп" in category or "оклад" in category:
-                salary_total += amount
-            elif "налог" in category:
-                taxes_total += amount
+        gross_profit = profit + expenses_total
+        margin_percent = (
+            profit / total * 100
+            if total > 0
+            else 0
+        )
 
         # =========================================================
         # ВОЗВРАТЫ
@@ -1533,7 +1582,7 @@ def analytics():
                     status = 'Возврат'
                     OR COALESCE(is_refunded, FALSE) = TRUE
                   )
-              AND DATE(COALESCE(refunded_at, created_at)) BETWEEN %s AND %s
+              AND DATE(created_at) BETWEEN %s AND %s
         """, (
             company_id,
             date_from,
@@ -1550,19 +1599,6 @@ def analytics():
             returns_row.get("returns_total") or 0
         )
 
-        cur.execute("""
-            SELECT COALESCE(SUM(si.profit), 0) AS refunded_profit
-            FROM sale_items si JOIN sales s ON s.id = si.sale_id
-            WHERE s.company_id = %s
-              AND (s.status = 'Возврат' OR COALESCE(s.is_refunded, FALSE) = TRUE)
-              AND DATE(COALESCE(s.refunded_at, s.created_at)) BETWEEN %s AND %s
-        """, (company_id, date_from, date_to))
-        refunded_profit = float((cur.fetchone() or {}).get("refunded_profit") or 0)
-        total = gross_revenue - returns_total
-        gross_profit = gross_profit - refunded_profit
-        profit = gross_profit - expenses_total
-        margin_percent = (profit / total * 100) if total > 0 else 0
-
         # =========================================================
         # СПОСОБЫ ОПЛАТЫ
         # =========================================================
@@ -1574,7 +1610,7 @@ def analytics():
                 COALESCE(SUM(kaspi_amount), 0) AS kaspi
             FROM sales
             WHERE company_id = %s
-              AND status IN ('Оплачено', 'Возврат')
+              AND status = 'Оплачено'
               AND DATE(created_at) BETWEEN %s AND %s
         """, (
             company_id,
@@ -1590,42 +1626,21 @@ def analytics():
             "kaspi": float(payments_row.get("kaspi") or 0)
         }
 
-        cur.execute("""
-            SELECT COALESCE(SUM(cash_amount), 0) AS cash,
-                   COALESCE(SUM(card_amount), 0) AS card,
-                   COALESCE(SUM(kaspi_amount), 0) AS kaspi
-            FROM sales
-            WHERE company_id = %s
-              AND (status = 'Возврат' OR COALESCE(is_refunded, FALSE) = TRUE)
-              AND DATE(COALESCE(refunded_at, created_at)) BETWEEN %s AND %s
-        """, (company_id, date_from, date_to))
-        refunded_payments = cur.fetchone() or {}
-        for key in ("cash", "card", "kaspi"):
-            payments[key] -= float(refunded_payments.get(key) or 0)
-
         # =========================================================
         # ГРАФИК ВЫРУЧКИ
         # =========================================================
 
         cur.execute("""
-            WITH movements AS (
-                SELECT DATE(created_at) AS date, total_amount AS amount
-                FROM sales
-                WHERE company_id = %s AND status IN ('Оплачено', 'Возврат')
-                  AND DATE(created_at) BETWEEN %s AND %s
-                UNION ALL
-                SELECT DATE(COALESCE(refunded_at, created_at)), -total_amount
-                FROM sales
-                WHERE company_id = %s
-                  AND (status = 'Возврат' OR COALESCE(is_refunded, FALSE) = TRUE)
-                  AND DATE(COALESCE(refunded_at, created_at)) BETWEEN %s AND %s
-            )
-            SELECT date, COALESCE(SUM(amount), 0) AS total
-            FROM movements GROUP BY date ORDER BY date
+            SELECT
+                DATE(created_at) AS date,
+                COALESCE(SUM(total_amount), 0) AS total
+            FROM sales
+            WHERE company_id = %s
+              AND status = 'Оплачено'
+              AND DATE(created_at) BETWEEN %s AND %s
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
         """, (
-            company_id,
-            date_from,
-            date_to,
             company_id,
             date_from,
             date_to
@@ -1682,17 +1697,10 @@ def analytics():
             for date in revenue_dates
         ]
 
-        cur.execute("""
-            SELECT date, COALESCE(SUM(amount), 0) AS total
-            FROM expenses
-            WHERE company_id = %s AND date BETWEEN %s AND %s
-            GROUP BY date
-        """, (company_id, date_from, date_to))
-        expenses_by_date = {
-            row["date"]: float(row["total"] or 0)
-            for row in (cur.fetchall() or [])
-        }
-        expense_chart_values = [expenses_by_date.get(day, 0) for day in revenue_dates]
+        # Пока расходы по дням не подключены
+        expense_chart_values = [
+            0 for _ in revenue_dates
+        ]
 
         # =========================================================
         # ТОП ТОВАРОВ
@@ -1930,7 +1938,6 @@ def analytics():
             date_to=date_to,
 
             total=total,
-            gross_revenue=gross_revenue,
             profit=profit,
             gross_profit=gross_profit,
 
@@ -1963,6 +1970,7 @@ def analytics():
             employee_stats=employee_stats,
 
             today=today
+            ,gross_revenue=fiscal["gross_revenue"]
         )
 
     except Exception:
