@@ -570,6 +570,23 @@ def _sale_document(cur, company_id, sale_id, kind):
         "act": "Акт выполненных работ",
         "invoice_facture": "Счёт-фактура",
     }
+    pdf_types = {
+        "check": "check",
+        "refund_check": "refund-check",
+        "invoice": "invoice",
+        "waybill": "nakladnaya",
+        "act": "act",
+        "invoice_facture": "schet-factura",
+    }
+    filename_prefixes = {
+        "check": "check",
+        "refund_check": "refund-check",
+        "invoice": "schet-na-oplatu",
+        "waybill": "nakladnaya",
+        "act": "akt-vypolnennyh-rabot",
+        "invoice_facture": "schet-factura",
+    }
+    pdf_type = pdf_types.get(kind)
     document_date = (
         sale.get("refunded_at")
         if kind == "refund_check" and sale.get("refunded_at")
@@ -578,6 +595,8 @@ def _sale_document(cur, company_id, sale_id, kind):
     return _clean({
         "kind": kind,
         "title": titles.get(kind, "Документ"),
+        "pdf_path": f"/docs/pdf/{pdf_type}/{sale_id}" if pdf_type else "",
+        "file_name": f"{filename_prefixes.get(kind, 'document')}-{sale_id}.pdf",
         "number": str(sale.get("sale_number") or sale.get("id")),
         "date": document_date.strftime("%d.%m.%Y %H:%M") if document_date else "—",
         "status": "Возврат" if kind == "refund_check" else sale.get("status") or "Проведён",
@@ -690,6 +709,9 @@ def mobile_accounting_document_preview(document_id):
         if row.get("source_type") == "sale" and row.get("source_id") and kind:
             document = _sale_document(cur, company_id, row["source_id"], kind)
         else:
+            stored_filename = row.get("stored_filename") or ""
+            original_filename = row.get("original_filename") or stored_filename
+            stored_is_pdf = original_filename.lower().endswith(".pdf")
             document = _clean({
                 "kind": "manual",
                 "title": row.get("title") or "Документ",
@@ -702,6 +724,12 @@ def mobile_accounting_document_preview(document_id):
                 "items": [],
                 "comment": row.get("comment") or "",
                 "file_url": row.get("file_url") or "",
+                "pdf_path": (
+                    f"/accounting/files/{stored_filename}"
+                    if stored_filename and stored_is_pdf
+                    else ""
+                ),
+                "file_name": original_filename if stored_is_pdf else "",
             })
         return jsonify({"success": True, "document": document})
     except Exception as exc:
