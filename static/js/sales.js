@@ -1735,231 +1735,284 @@ function switchSalesTab(tab) {
     }
 }
 
-function loadSalesHistory() {
+const salesShiftHistoryState = {
+    generation: 0,
+    closedPage: 0,
+    closedSize: 10,
+    receiptSize: 20,
+    closedHasMore: false,
+    closedKeys: new Set(),
+    loading: null
+};
 
-    const shiftNumber = Number(window.currentRekassaShiftNumber || 0);
+async function salesHistoryJson(url) {
+    const response = await fetch(url, { credentials: "same-origin" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.message || "Не удалось загрузить данные");
+    }
+    return data;
+}
 
-    if (!shiftNumber) {
-        document.getElementById("salesHistory").innerHTML = `
-            <tr><td colspan="7" class="history-error">Текущая смена закрыта — продаж пока нет</td></tr>
-        `;
-        document.getElementById("mobileSalesHistory").innerHTML = `
-            <div class="history-error">Текущая смена закрыта — продаж пока нет</div>
-        `;
-        return Promise.resolve([]);
+function salesShiftCore(item) {
+    return item && item.data && typeof item.data === "object" ? item.data : (item || {});
+}
+
+function salesShiftValue(item, ...keys) {
+    const core = salesShiftCore(item);
+    for (const source of [item || {}, core]) {
+        for (const key of keys) {
+            if (source[key] !== undefined && source[key] !== null && source[key] !== "") {
+                return source[key];
+            }
+        }
+    }
+    return null;
+}
+
+function salesClosedShiftItems(payload) {
+    const found = [];
+    const walk = value => {
+        if (Array.isArray(value)) {
+            value.forEach(walk);
+            return;
+        }
+        if (!value || typeof value !== "object") return;
+        if (salesShiftValue(value, "shiftNumber", "shift_number", "number") != null) {
+            found.push(value);
+            return;
+        }
+        ["history", "content", "items", "shifts", "records", "list", "data", "_embedded"]
+            .forEach(key => walk(value[key]));
+    };
+    walk(payload?.history ?? payload);
+    return found;
+}
+
+function salesShiftDate(value) {
+    if (!value) return "—";
+    if (value.value) return salesShiftDate(value.value);
+    if (value.date && value.time) {
+        const d = value.date;
+        const t = value.time;
+        return `${String(d.day).padStart(2, "0")}.${String(d.month).padStart(2, "0")}.${d.year} ` +
+            `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`;
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+        ? String(value)
+        : parsed.toLocaleString("ru-RU", { timeZone: "Asia/Almaty", dateStyle: "short", timeStyle: "short" });
+}
+
+function salesShiftMoney(value) {
+    if (value == null || value === "") return "";
+    if (typeof value === "object") {
+        if (value.value != null) return salesShiftMoney(value.value);
+        if (value.bills != null) value = Number(value.bills || 0) + Number(value.coins || 0) / 100;
+    }
+    const number = Number(value);
+    return Number.isFinite(number)
+        ? `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(number)} ₸`
+        : "";
+}
+
+function renderSalesShiftCard(item, current = false) {
+    const number = salesShiftValue(item, "shiftNumber", "shift_number", "number");
+    const serial = salesShiftValue(item, "serialNumber", "serial_number", "znm") || "";
+    const opened = salesShiftValue(item, "openShiftTime", "open_time", "openTime");
+    const closed = salesShiftValue(item, "closeShiftTime", "close_time", "closeTime", "endTime");
+    const count = salesShiftValue(item, "ticketCount", "ticket_count", "ticketsCount") || 0;
+    const revenue = salesShiftValue(item, "netRevenue", "net_revenue", "revenue");
+    const key = `${number}:${serial}`;
+
+    return `
+        <article class="sales-shift-card${current ? " is-current is-open" : ""}"
+                 data-shift-card data-shift-number="${escapeHtml(number)}"
+                 data-serial-number="${escapeHtml(serial)}" data-shift-key="${escapeHtml(key)}">
+            <div class="sales-shift-summary" data-sales-shift-toggle role="button" tabindex="0" aria-expanded="${current ? "true" : "false"}">
+                <span class="sales-shift-chevron">⌄</span>
+                <div class="sales-shift-main">
+                    <div class="sales-shift-title">
+                        Смена №${escapeHtml(number)}
+                        <span class="sales-shift-badge ${current ? "current" : "closed"}">${current ? "Текущая" : "Закрыта"}</span>
+                    </div>
+                    <div class="sales-shift-period">${escapeHtml(salesShiftDate(opened))}${closed ? ` — ${escapeHtml(salesShiftDate(closed))}` : " — сейчас"}</div>
+                </div>
+                <div class="sales-shift-totals">
+                    ${revenue != null ? `<strong>${escapeHtml(salesShiftMoney(revenue))}</strong>` : ""}
+                    <span>Чеков: ${escapeHtml(count)}</span>
+                </div>
+                ${current ? "" : `<button type="button" class="sales-shift-z" data-sales-z="${escapeHtml(number)}">Z‑отчёт</button>`}
+            </div>
+            <div class="sales-shift-body" ${current ? "" : "hidden"}>
+                <div class="sales-shift-receipts"><div class="sales-shifts-loading">Загрузка чеков…</div></div>
+                <button type="button" class="sales-receipts-more" data-sales-receipts-more hidden>Показать ещё чеки</button>
+            </div>
+        </article>
+    `;
+}
+
+function renderSalesReceipt(item) {
+    const refund = item.event_type === "refund" || item.status === "Возврат";
+    const invoice = item.sale_type === "invoice";
+    const id = Number(item.id);
+    const amount = `${refund ? "−" : ""}${salesShiftMoney(item.total || 0)}`;
+    const action = refund && !invoice
+        ? `openRefundCheckModal(${id})`
+        : (invoice ? `openInvoiceModal(${id})` : `openSaleModal(${id})`);
+    const actionLabel = refund ? "Чек возврата" : (invoice ? "Счёт" : "Открыть чек");
+
+    return `
+        <div class="sales-receipt-row${refund ? " is-refund" : ""}">
+            <div class="sales-receipt-icon">${refund ? "↩" : "▤"}</div>
+            <div class="sales-receipt-main">
+                <strong>${refund ? "Возврат" : "Продажа"} · чек №${escapeHtml(item.sale_number || item.id)}</strong>
+                <span>${escapeHtml(item.client_name || "Частное лицо")} · ${escapeHtml(item.payment_type || "—")}</span>
+            </div>
+            <div class="sales-receipt-meta">
+                <strong>${escapeHtml(amount)}</strong>
+                <span>${escapeHtml(item.created_at_display || salesShiftDate(item.event_at || item.created_at))}</span>
+            </div>
+            <button type="button" class="sales-receipt-open" onclick="${action}">${actionLabel}</button>
+        </div>
+    `;
+}
+
+async function loadShiftReceipts(card, append = false) {
+    if (!card || card.dataset.loading === "true") return;
+    if (!append && card.dataset.loaded === "true") return;
+
+    const page = append ? Number(card.dataset.receiptPage || 1) : 0;
+    const list = card.querySelector(".sales-shift-receipts");
+    const more = card.querySelector("[data-sales-receipts-more]");
+    const params = new URLSearchParams({
+        shift_number: card.dataset.shiftNumber,
+        page: String(page),
+        size: String(salesShiftHistoryState.receiptSize)
+    });
+    if (card.dataset.serialNumber) params.set("serial_number", card.dataset.serialNumber);
+
+    card.dataset.loading = "true";
+    if (append) more.disabled = true;
+    try {
+        const data = await salesHistoryJson(`/api/sales/history?${params.toString()}`);
+        const items = Array.isArray(data) ? data : (data.items || []);
+        const html = items.map(renderSalesReceipt).join("");
+        if (append) list.insertAdjacentHTML("beforeend", html);
+        else list.innerHTML = html || '<div class="sales-shifts-empty">В этой смене чеков нет</div>';
+        card.dataset.loaded = "true";
+        card.dataset.receiptPage = String(page + 1);
+        more.hidden = items.length < salesShiftHistoryState.receiptSize;
+    } catch (error) {
+        if (!append) list.innerHTML = `<div class="sales-shifts-error">${escapeHtml(error.message)}</div>`;
+    } finally {
+        card.dataset.loading = "false";
+        more.disabled = false;
+    }
+}
+
+async function loadClosedSalesShifts(append = false, generation = salesShiftHistoryState.generation) {
+    const list = document.getElementById("salesClosedShifts");
+    const more = document.getElementById("salesShiftsMore");
+    if (!append) {
+        list.innerHTML = '<div class="sales-shifts-loading">Загрузка закрытых смен…</div>';
+        salesShiftHistoryState.closedPage = 0;
+        salesShiftHistoryState.closedKeys.clear();
+    }
+    more.disabled = true;
+    try {
+        const page = salesShiftHistoryState.closedPage;
+        const data = await salesHistoryJson(`/api/rekassa/shifts?page=${page}&size=${salesShiftHistoryState.closedSize}`);
+        if (generation !== salesShiftHistoryState.generation) return;
+        const items = salesClosedShiftItems(data);
+        const fresh = items.filter(item => {
+            const key = `${salesShiftValue(item, "shiftNumber", "shift_number", "number")}:${salesShiftValue(item, "serialNumber", "serial_number", "znm") || ""}`;
+            if (salesShiftHistoryState.closedKeys.has(key)) return false;
+            salesShiftHistoryState.closedKeys.add(key);
+            return true;
+        });
+        const html = fresh.map(item => renderSalesShiftCard(item, false)).join("");
+        if (append) list.insertAdjacentHTML("beforeend", html);
+        else list.innerHTML = html || '<div class="sales-shifts-empty">Закрытых смен пока нет</div>';
+        salesShiftHistoryState.closedPage = page + 1;
+        salesShiftHistoryState.closedHasMore = Boolean(data.has_more ?? (items.length >= salesShiftHistoryState.closedSize));
+        more.hidden = !salesShiftHistoryState.closedHasMore;
+    } catch (error) {
+        if (!append) list.innerHTML = `<div class="sales-shifts-error">${escapeHtml(error.message)}</div>`;
+        more.hidden = true;
+    } finally {
+        more.disabled = false;
+    }
+}
+
+async function loadSalesHistory() {
+    if (salesShiftHistoryState.loading) return salesShiftHistoryState.loading;
+    const run = (async () => {
+        const generation = ++salesShiftHistoryState.generation;
+        const current = document.getElementById("salesCurrentShift");
+        current.innerHTML = '<div class="sales-shifts-loading">Проверяем текущую смену…</div>';
+
+        const statusPromise = salesHistoryJson("/api/rekassa/shift/status").catch(() => null);
+        const closedPromise = loadClosedSalesShifts(false, generation);
+        const status = await statusPromise;
+        if (generation !== salesShiftHistoryState.generation) return;
+
+        if (status?.shift_open && status.shift_number) {
+            window.currentRekassaShiftNumber = status.shift_number;
+            window.currentRekassaSerialNumber = status.serial_number || "";
+            const shift = {
+                ...(status.shift || {}),
+                shiftNumber: status.shift_number,
+                serialNumber: status.serial_number || "",
+                openShiftTime: status.shift?.open_time,
+                ticketCount: status.shift?.ticket_count || 0
+            };
+            current.innerHTML = renderSalesShiftCard(shift, true);
+            loadShiftReceipts(current.querySelector("[data-shift-card]"));
+        } else {
+            window.currentRekassaShiftNumber = null;
+            window.currentRekassaSerialNumber = "";
+            current.innerHTML = '<div class="sales-shifts-empty">Смена не открыта</div>';
+        }
+        await closedPromise;
+    })();
+    salesShiftHistoryState.loading = run;
+    try {
+        return await run;
+    } finally {
+        if (salesShiftHistoryState.loading === run) salesShiftHistoryState.loading = null;
+    }
+}
+
+document.getElementById("salesHistoryBox")?.addEventListener("click", event => {
+    const zButton = event.target.closest("[data-sales-z]");
+    if (zButton) {
+        event.stopPropagation();
+        window.dispatchEvent(new CustomEvent("nika:open-z-report", {
+            detail: { shiftNumber: zButton.dataset.salesZ }
+        }));
+        return;
     }
 
-    const serialNumber = String(window.currentRekassaSerialNumber || "");
-    const params = new URLSearchParams({ shift_number: String(shiftNumber) });
-    if (serialNumber) params.set("serial_number", serialNumber);
+    const moreReceipts = event.target.closest("[data-sales-receipts-more]");
+    if (moreReceipts) {
+        loadShiftReceipts(moreReceipts.closest("[data-shift-card]"), true);
+        return;
+    }
 
-    return fetch(`/api/sales/history?${params.toString()}`)
+    const toggle = event.target.closest("[data-sales-shift-toggle]");
+    if (toggle) {
+        const card = toggle.closest("[data-shift-card]");
+        const body = card.querySelector(".sales-shift-body");
+        const opening = body.hidden;
+        body.hidden = !opening;
+        card.classList.toggle("is-open", opening);
+        toggle.setAttribute("aria-expanded", String(opening));
+        if (opening) loadShiftReceipts(card);
+    }
+});
 
-    .then(res => res.json())
-
-    .then(data => {
-
-        let html = "";
-		let mobileHtml = "";
-
-        data.forEach(sale => {
-
-            const isInvoice = sale.sale_type === "invoice";
-            const isPaid = sale.status === "Оплачено";
-            const isRefunded = Boolean(sale.is_refunded) || sale.status === "Возврат";
-            const canConfirmPayment = isInvoice && sale.status === "Счёт выставлен";
-            const statusClass = getSaleStatusClass(sale.status);
-            const saleNumber = sale.sale_number || sale.id;
-            const clientName = escapeHtml(sale.client_name || "-");
-            const paymentType = escapeHtml(sale.payment_type || "-");
-            const status = escapeHtml(sale.status || "-");
-            const createdAt = escapeHtml(
-                sale.created_at_display || formatDate(sale.created_at)
-            );
-
-            const primaryDocumentButton = isInvoice
-                ? `
-                    <button
-                        onclick="openInvoiceModal(${sale.id})"
-                        class="mini-doc-btn invoice-history-btn"
-                        aria-label="Счёт на оплату"
-                        title="Счёт на оплату">
-                        <img src="/static/icons/invoice.png" alt="">
-                    </button>
-                `
-                : `
-                    <button
-                        onclick="openSaleModal(${sale.id})"
-                        class="mini-doc-btn"
-                        aria-label="Чек"
-                        title="Чек">
-                        <img src="/static/icons/receipt.png" alt="">
-                    </button>
-                `;
-
-            const refundCheckButton = isRefunded && !isInvoice
-                ? `
-                    <button
-                        onclick="openRefundCheckModal(${sale.id})"
-                        class="mini-doc-btn refund-check-btn"
-                        aria-label="Чек возврата"
-                        title="Чек возврата">
-                        <img src="/static/icons/refund.png" alt="">
-                    </button>
-                `
-                : "";
-
-            const paidDocumentButtons = (isPaid || isRefunded)
-                ? `
-                    <button
-                        onclick="openDocumentModal(${sale.id}, 'nakladnaya')"
-                        class="mini-doc-btn"
-                        aria-label="Накладная"
-                        title="Накладная">
-                        <img src="/static/icons/invoice-waybill.png" alt="">
-                    </button>
-
-                    <button
-                        onclick="openDocumentModal(${sale.id}, 'schetFactura')"
-                        class="mini-doc-btn"
-                        aria-label="Счёт-фактура"
-                        title="Счёт-фактура">
-                        <img src="/static/icons/invoice.png" alt="">
-                    </button>
-
-                    <button
-                        onclick="openDocumentModal(${sale.id}, 'act')"
-                        class="mini-doc-btn"
-                        aria-label="Акт"
-                        title="Акт">
-                        <img src="/static/icons/act.png" alt="">
-                    </button>
-
-                    ${isPaid ? `
-                        <button
-                            onclick="refundSale(${sale.id})"
-                            class="mini-doc-btn"
-                            aria-label="Оформить возврат"
-                            title="Оформить возврат">
-                            <img src="/static/icons/refund.png" alt="">
-                        </button>
-                    ` : refundCheckButton}
-                `
-                : "";
-
-            const confirmPaymentButton = canConfirmPayment
-                ? `
-                    <button
-                        type="button"
-                        onclick="confirmInvoicePayment(${sale.id}, this)"
-                        class="confirm-payment-btn"
-                        title="Подтвердить поступление оплаты">
-                        Подтвердить оплату
-                    </button>
-                `
-                : "";
-
-            html += `
-                <tr class="${isInvoice ? "invoice-history-row" : ""}">
-
-                    <td>${saleNumber}</td>
-
-                    <td>
-                        ${createdAt}
-                    </td>
-
-                    <td>
-                        ${clientName}
-                    </td>
-
-                    <td>
-                        ${sale.total || 0} ₸
-                    </td>
-
-                    <td>
-                        ${paymentType}
-                    </td>
-
-                    <td>
-                        <span class="sale-status-badge ${statusClass}">${status}</span>
-                    </td>
-
-                    <td>
-
-                        <div class="history-actions">
-
-                            ${primaryDocumentButton}
-                            ${paidDocumentButtons}
-                            ${confirmPaymentButton}
-
-                        </div>
-
-                    </td>
-
-                </tr>
-            `;
-			
-			mobileHtml += `
-
-			<div class="mobile-sale-card ${isInvoice ? "invoice-history-card" : ""}">
-
-				<div class="mobile-sale-top">
-
-					<div class="mobile-sale-client">
-						${clientName}
-					</div>
-
-					<div class="mobile-sale-sum">
-						${sale.total || 0} ₸
-					</div>
-
-				</div>
-
-				<div class="mobile-sale-date">
-					${createdAt}
-				</div>
-
-				<div class="mobile-sale-meta">
-					<span>${paymentType}</span>
-					<span class="sale-status-badge ${statusClass}">${status}</span>
-				</div>
-
-				<div class="mobile-sale-actions">
-
-					${primaryDocumentButton}
-					${paidDocumentButtons}
-					${confirmPaymentButton}
-
-				</div>
-
-			</div>
-			`;
-        });
-
-        if (!data.length) {
-            html = `<tr><td colspan="7" class="history-error">В текущей смене продаж пока нет</td></tr>`;
-            mobileHtml = `<div class="history-error">В текущей смене продаж пока нет</div>`;
-        }
-
-        document.getElementById(
-            "salesHistory"
-        ).innerHTML = html;
-		
-		document.getElementById(
-			"mobileSalesHistory"
-		).innerHTML = mobileHtml;
-
-    })
-    .catch(error => {
-        console.error("HISTORY ERROR:", error);
-        document.getElementById("salesHistory").innerHTML = `
-            <tr><td colspan="7" class="history-error">Не удалось загрузить историю продаж</td></tr>
-        `;
-        document.getElementById("mobileSalesHistory").innerHTML = `
-            <div class="history-error">Не удалось загрузить историю продаж</div>
-        `;
-    });
-}
+document.getElementById("salesShiftsMore")?.addEventListener("click", () => loadClosedSalesShifts(true));
 
 function getSaleStatusClass(status) {
     if (status === "Оплачено") return "is-paid";
@@ -2494,7 +2547,10 @@ function refundSale(id){
         status: null,
         report: null,
         reportType: null,
-        cashRegister: null
+        cashRegister: null,
+        historyPage: 0,
+        historySize: 15,
+        historyKeys: new Set()
     };
 
     const operationOrder = [
@@ -2866,41 +2922,80 @@ function refundSale(id){
     }
 
     function historyItems(payload) {
-        const root = payload?.history || {};
-        const embedded = root._embedded || {};
-        const items = embedded.shifts || root.content || root.items || root.shifts || [];
-        return Array.isArray(items) ? items : [];
+        const items = [];
+        const walk = value => {
+            if (Array.isArray(value)) {
+                value.forEach(walk);
+                return;
+            }
+            if (!value || typeof value !== 'object') return;
+            const core = coreReport(value);
+            if (first(value.shiftNumber, value.shift_number, core.shiftNumber, core.shift_number) != null) {
+                items.push(value);
+                return;
+            }
+            ['history', 'content', 'items', 'shifts', 'records', 'list', 'data', '_embedded']
+                .forEach(key => walk(value[key]));
+        };
+        walk(payload?.history ?? payload);
+        return items;
     }
 
-    async function showHistory() {
+    async function showHistory(append = false) {
         const list = $('shiftHistoryList');
-        list.innerHTML = '<div class="shift-history-empty">Загрузка…</div>';
+        const more = $('shiftHistoryMore');
+        if (!append) {
+            state.historyPage = 0;
+            state.historyKeys.clear();
+            list.innerHTML = '<div class="shift-history-empty">Загрузка…</div>';
+        }
+        more.disabled = true;
         openModal('shiftHistoryModal');
         try {
-            const data = await api('/api/rekassa/shifts?page=0&size=30');
-            const items = historyItems(data).sort((a, b) => Number(b.shiftNumber || 0) - Number(a.shiftNumber || 0));
-            list.innerHTML = items.length ? items.map(item => {
+            const data = await api(`/api/rekassa/shifts?page=${state.historyPage}&size=${state.historySize}`);
+            const items = historyItems(data).sort((a, b) => {
+                const aCore = coreReport(a);
+                const bCore = coreReport(b);
+                return Number(first(b.shiftNumber, bCore.shiftNumber, 0)) - Number(first(a.shiftNumber, aCore.shiftNumber, 0));
+            });
+            const fresh = items.filter(item => {
                 const core = coreReport(item);
-                const number = first(item.shiftNumber, core.shiftNumber, '—');
-                const closed = parseDateTime(first(item.closeTime, core.closeShiftTime, core.closeTime));
+                const key = String(first(item.shiftNumber, item.shift_number, core.shiftNumber, core.shift_number, '—'));
+                if (state.historyKeys.has(key)) return false;
+                state.historyKeys.add(key);
+                return true;
+            });
+            const html = fresh.map(item => {
+                const core = coreReport(item);
+                const number = first(item.shiftNumber, item.shift_number, core.shiftNumber, core.shift_number, '—');
+                const closed = parseDateTime(first(item.closeTime, item.close_shift_time, core.closeShiftTime, core.closeTime));
+                const count = first(item.ticketCount, item.ticket_count, core.ticketCount, core.ticketsCount, 0);
                 return `
                     <div class="shift-history-item">
                         <div class="shift-history-code">Z · ${escapeHtml(number)}</div>
                         <div class="shift-history-main">
                             <strong>Смена №${escapeHtml(number)}</strong>
-                            <span>${escapeHtml(closed ? `${closed.date} ${closed.time}` : 'Закрытая смена')}</span>
+                            <span>${escapeHtml(closed ? `${closed.date} ${closed.time}` : 'Закрытая смена')} · чеков: ${escapeHtml(count)}</span>
                         </div>
                         <button type="button" class="shift-history-open" data-shift="${escapeHtml(number)}">Открыть</button>
                     </div>
                 `;
-            }).join('') : '<div class="shift-history-empty">Закрытых смен пока нет</div>';
+            }).join('');
+            if (append) list.insertAdjacentHTML('beforeend', html);
+            else list.innerHTML = html || '<div class="shift-history-empty">Закрытых смен пока нет</div>';
+            state.historyPage += 1;
+            more.hidden = !Boolean(data.has_more ?? (items.length >= state.historySize));
         } catch (error) {
-            list.innerHTML = `<div class="shift-history-empty">${escapeHtml(error.message)}</div>`;
+            if (!append) list.innerHTML = `<div class="shift-history-empty">${escapeHtml(error.message)}</div>`;
+            else toast(error.message, true);
+            more.hidden = true;
+        } finally {
+            more.disabled = false;
         }
     }
 
     async function openHistoryReport(number, button) {
-        setBusy(button, true, 'Открываем…');
+        if (button) setBusy(button, true, 'Открываем…');
         try {
             const data = await api(`/api/rekassa/shifts/${encodeURIComponent(number)}/report`);
             closeModal('shiftHistoryModal');
@@ -2908,7 +3003,7 @@ function refundSale(id){
         } catch (error) {
             toast(error.message, true);
         } finally {
-            setBusy(button, false);
+            if (button) setBusy(button, false);
         }
     }
 
@@ -2936,6 +3031,11 @@ function refundSale(id){
     $('shiftHistoryList').addEventListener('click', event => {
         const button = event.target.closest('[data-shift]');
         if (button) openHistoryReport(button.dataset.shift, button);
+    });
+    $('shiftHistoryMore').addEventListener('click', () => showHistory(true));
+    window.addEventListener('nika:open-z-report', event => {
+        const number = event.detail?.shiftNumber;
+        if (number) openHistoryReport(number, null);
     });
 
     document.addEventListener('click', async event => {

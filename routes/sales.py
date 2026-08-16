@@ -54,23 +54,10 @@ def nested_value(data, *paths):
 
 @sales_bp.route("/sales")
 def sales():
-    conn = get_db()
-    
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT sales.*, clients.full_name
-        FROM sales
-        LEFT JOIN clients ON sales.client_id = clients.id
-        WHERE sales.company_id = %s
-        ORDER BY sales.id DESC
-    """, (session.get("company_id"),))
-
-    sales = cur.fetchall()
-
-    pool.putconn(conn)
-
-    return render_template("sales.html", sales=sales)
+    # История подгружается порциями через /api/sales/history только после
+    # открытия вкладки и конкретной смены. Не читаем всю таблицу продаж при
+    # каждом открытии кассы — это заметно ускоряет страницу на больших базах.
+    return render_template("sales.html")
 
 
 @sales_bp.route("/sales/add", methods=["POST"])

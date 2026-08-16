@@ -1202,6 +1202,129 @@
 .shift-history-main strong { font-size: 11px; }
 .shift-history-main span { margin-top: 3px; color: #858b97; font-size: 9px; }
 .shift-history-empty { padding: 25px 10px; color: #858b97; text-align: center; font-size: 11px; }
+.shift-history-more,
+.sales-shifts-more,
+.sales-receipts-more {
+    width: 100%;
+    min-height: 40px;
+    margin-top: 10px;
+    border: 1px solid #dfe4ed;
+    border-radius: 11px;
+    background: #f7f8fb;
+    color: #596174;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
+.shift-history-more:disabled,
+.sales-shifts-more:disabled,
+.sales-receipts-more:disabled { opacity: .55; cursor: wait; }
+
+/* История продаж по сменам. Списки чеков создаются только при раскрытии
+   карточки, поэтому большой архив не раздувает DOM и не тормозит кассу. */
+.sales-shifts-history { padding: 2px 0 16px; }
+.sales-shifts-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 4px 2px 9px;
+}
+.sales-shifts-section-head.closed { margin-top: 20px; }
+.sales-shifts-section-head strong,
+.sales-shifts-section-head span { display: block; }
+.sales-shifts-section-head strong { color: #252b38; font-size: 13px; }
+.sales-shifts-section-head span { margin-top: 3px; color: #8a91a0; font-size: 10px; }
+.sales-shifts-list { display: grid; gap: 9px; }
+.sales-shift-card {
+    overflow: hidden;
+    border: 1px solid #e2e6ee;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 3px 12px rgba(31, 39, 58, .04);
+}
+.sales-shift-card.is-current { border-color: #b8e8dc; }
+.sales-shift-summary {
+    display: grid;
+    grid-template-columns: 20px minmax(150px, 1fr) auto auto;
+    align-items: center;
+    gap: 11px;
+    min-height: 64px;
+    padding: 10px 12px;
+    outline: none;
+    cursor: pointer;
+}
+.sales-shift-summary:focus-visible { box-shadow: inset 0 0 0 2px #7b68ee; }
+.sales-shift-chevron { color: #7f8797; font-size: 18px; transition: transform .18s ease; }
+.sales-shift-card.is-open .sales-shift-chevron { transform: rotate(180deg); }
+.sales-shift-title { color: #272d3a; font-size: 12px; font-weight: 900; }
+.sales-shift-period { margin-top: 4px; color: #858d9c; font-size: 9.5px; }
+.sales-shift-badge {
+    display: inline-flex;
+    margin-left: 6px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 8px;
+    vertical-align: 1px;
+}
+.sales-shift-badge.current { background: #e8f8f3; color: #17826c; }
+.sales-shift-badge.closed { background: #eef0f5; color: #697184; }
+.sales-shift-totals { min-width: 84px; text-align: right; }
+.sales-shift-totals strong,
+.sales-shift-totals span { display: block; }
+.sales-shift-totals strong { color: #2c3341; font-size: 11px; }
+.sales-shift-totals span { margin-top: 4px; color: #8a91a0; font-size: 9px; }
+.sales-shift-z,
+.sales-receipt-open {
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid #ddd8fb;
+    border-radius: 9px;
+    background: #f4f1ff;
+    color: #6655c8;
+    font-size: 9px;
+    font-weight: 900;
+    cursor: pointer;
+}
+.sales-shift-body { padding: 0 12px 12px 43px; border-top: 1px solid #edf0f5; background: #fafbfc; }
+.sales-shift-receipts { display: grid; gap: 7px; padding-top: 10px; }
+.sales-receipt-row {
+    display: grid;
+    grid-template-columns: 30px minmax(130px, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 52px;
+    padding: 8px 9px;
+    border: 1px solid #e7eaf0;
+    border-radius: 11px;
+    background: #fff;
+}
+.sales-receipt-row.is-refund { border-color: #f2dadd; background: #fffafb; }
+.sales-receipt-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: #eef2ff; color: #5168c6; font-weight: 900; }
+.sales-receipt-row.is-refund .sales-receipt-icon { background: #fff0f1; color: #c74b57; }
+.sales-receipt-main strong,
+.sales-receipt-main span,
+.sales-receipt-meta strong,
+.sales-receipt-meta span { display: block; }
+.sales-receipt-main strong { color: #333947; font-size: 10px; }
+.sales-receipt-main span { margin-top: 4px; color: #858d9c; font-size: 9px; }
+.sales-receipt-meta { min-width: 96px; text-align: right; }
+.sales-receipt-meta strong { color: #293140; font-size: 10px; }
+.sales-receipt-row.is-refund .sales-receipt-meta strong { color: #be4652; }
+.sales-receipt-meta span { margin-top: 4px; color: #9298a5; font-size: 8.5px; }
+.sales-shifts-loading,
+.sales-shifts-empty,
+.sales-shifts-error { padding: 22px 12px; border-radius: 12px; background: #f7f8fa; color: #858d9c; text-align: center; font-size: 10px; }
+.sales-shifts-error { background: #fff3f4; color: #bd4652; }
+
+@media (max-width: 760px) {
+    .sales-shift-summary { grid-template-columns: 18px 1fr auto; }
+    .sales-shift-totals { grid-column: 2; text-align: left; }
+    .sales-shift-z { grid-column: 3; grid-row: 1 / span 2; }
+    .sales-shift-body { padding-left: 10px; padding-right: 10px; }
+    .sales-receipt-row { grid-template-columns: 30px 1fr auto; }
+    .sales-receipt-meta { grid-column: 2; text-align: left; }
+    .sales-receipt-open { grid-column: 3; grid-row: 1 / span 2; }
+}
 
 .shift-toast {
     position: fixed;

@@ -89,31 +89,27 @@
 			<div id="mobileCart" class="mobile-cart"></div>
 			
 			<div id="salesHistoryBox" style="display:none;">
+				<div class="sales-shifts-history">
+					<div class="sales-shifts-section-head">
+						<div>
+							<strong>Текущая смена</strong>
+							<span>Новые чеки появляются здесь</span>
+						</div>
+					</div>
+					<div id="salesCurrentShift" class="sales-shifts-list">
+						<div class="sales-shifts-loading">Проверяем текущую смену…</div>
+					</div>
 
-				<div class="table-wrapper">
-
-					<table class="history-table">
-
-						<thead>
-
-							<tr>
-								<th>№</th>
-								<th>Дата</th>
-								<th>Клиент</th>
-								<th>Сумма</th>
-								<th>Оплата</th>
-								<th>Статус</th>
-								<th>Действия</th>
-							</tr>
-
-						</thead>
-
-						<tbody id="salesHistory"></tbody>
-
-					</table>
-					
-					<div id="mobileSalesHistory" class="mobile-sales-history"></div>
-
+					<div class="sales-shifts-section-head closed">
+						<div>
+							<strong>Закрытые смены</strong>
+							<span>Раскройте смену, чтобы загрузить её чеки</span>
+						</div>
+					</div>
+					<div id="salesClosedShifts" class="sales-shifts-list"></div>
+					<button type="button" id="salesShiftsMore" class="sales-shifts-more" hidden>
+						Показать ещё смены
+					</button>
 				</div>
 
 			</div>
@@ -298,6 +294,7 @@
 		</div>
 		<div class="shift-modal-body">
 			<div id="shiftHistoryList" class="shift-history-list"></div>
+			<button type="button" id="shiftHistoryMore" class="shift-history-more" hidden>Показать ещё</button>
 		</div>
 		<div class="shift-modal-actions">
 			<button type="button" data-shift-close="shiftHistoryModal">Закрыть</button>
