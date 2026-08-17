@@ -122,13 +122,35 @@ def _first_value(data, *keys):
     return ""
 
 
+def _person_name(value):
+    """Return a readable name from KGD fullName values (object or string)."""
+    if isinstance(value, str):
+        return value.strip()
+    if not isinstance(value, dict):
+        return ""
+
+    parts = []
+    for keys in (
+        ("lastName", "last_name", "surname"),
+        ("firstName", "first_name", "name"),
+        ("middleName", "middle_name", "patronymic"),
+    ):
+        part = _first_value(value, *keys)
+        if part:
+            parts.append(part)
+    return " ".join(parts)
+
+
 def _unwrap_lookup_records(payload):
     if isinstance(payload, list):
         return payload
     if not isinstance(payload, dict):
         return []
 
-    for key in ("data", "result", "results", "items", "records", "taxpayer"):
+    for key in (
+        "taxpayerPortalSearchResponses",
+        "data", "result", "results", "items", "records", "taxpayer",
+    ):
         nested = payload.get(key)
         if isinstance(nested, list):
             return nested
@@ -144,7 +166,9 @@ def _map_lookup_record(record, identifier):
         record = record["_source"]
 
     record_identifier = _normalize_identifier(
-        _first_value(record, "bin", "iin", "iinbin", "identifier", "taxpayerCode")
+        _first_value(
+            record, "bin", "iin", "iinbin", "identifier", "taxpayerCode", "code"
+        )
     )
     if record_identifier and record_identifier != identifier:
         return None
@@ -154,10 +178,11 @@ def _map_lookup_record(record, identifier):
         "nameru", "name_ru", "company_name", "companyName", "organizationName",
         "taxpayerName", "name", "namekz", "name_kz",
     )
-    full_name = _first_value(
+    raw_full_name = record.get("fullName")
+    full_name = _person_name(raw_full_name) or _first_value(
         record,
         "headru", "head_name", "headName", "leaderFio", "directorFio",
-        "director", "fio", "full_name", "fullName",
+        "director", "fio", "full_name",
     )
     address = _first_value(
         record,
@@ -165,6 +190,10 @@ def _map_lookup_record(record, identifier):
         "location", "addresskz", "address_kz",
     )
     phone = _first_value(record, "phone", "telephone", "mobile", "phoneNumber")
+
+    taxpayer_type = _first_value(record, "taxpayerType", "taxpayer_type")
+    if not company_name and taxpayer_type in ("IP", "UL", "UL_NR"):
+        company_name = full_name
 
     if not any((company_name, full_name, address, phone)):
         return None
@@ -175,6 +204,9 @@ def _map_lookup_record(record, identifier):
         "full_name": full_name or company_name,
         "address": address,
         "phone": phone,
+        "taxpayer_type": taxpayer_type,
+        "registration_begin_date": _first_value(record, "beginDate", "begin_date"),
+        "registration_end_date": _first_value(record, "endDate", "end_date"),
     }
 
 
@@ -209,6 +241,42 @@ def _lookup_configured_provider(identifier):
         mapped = _map_lookup_record(record, identifier)
         if mapped:
             return mapped
+    return None
+
+
+def _lookup_kgd_taxpayer(identifier):
+    """Look up a taxpayer using the official KGD ISNA Portal API."""
+    token = os.getenv("KGD_PORTAL_TOKEN", "").strip()
+    if not token:
+        return None
+
+    base_url = os.getenv(
+        "KGD_TAXPAYER_API_URL",
+        "https://portal.kgd.gov.kz/services/isnaportalsync/public/taxpayer-data",
+    ).strip()
+    if not base_url:
+        return None
+
+    # One 12-digit identifier can belong to a legal entity, an individual
+    # entrepreneur, or a natural person. KGD requires the type explicitly.
+    taxpayer_types = ("UL", "IP", "FL")
+    headers = {"X-Portal-Token": token}
+    timeout = max(1, min(int(os.getenv("KGD_API_TIMEOUT", "8")), 30))
+
+    for taxpayer_type in taxpayer_types:
+        separator = "&" if "?" in base_url else "?"
+        url = base_url + separator + urlencode({
+            "taxpayerCode": identifier,
+            "taxpayerType": taxpayer_type,
+            "print": "false",
+        })
+        payload = _fetch_json(url, headers=headers, timeout=timeout)
+        for record in _unwrap_lookup_records(payload):
+            if str(record.get("messageResult", "SUCCESS")).upper() != "SUCCESS":
+                continue
+            mapped = _map_lookup_record(record, identifier)
+            if mapped:
+                return mapped
     return None
 
 
@@ -967,26 +1035,37 @@ def lookup_client_identifier():
         pool.putconn(conn)
 
     provider_configured = bool(
+        os.getenv("KGD_PORTAL_TOKEN", "").strip()
+        or
         os.getenv("CLIENT_LOOKUP_API_URL", "").strip()
         or os.getenv("EGOV_OPEN_DATA_API_KEY", "").strip()
     )
     try:
-        data = _lookup_configured_provider(identifier)
+        data_source = ""
+        data = _lookup_kgd_taxpayer(identifier)
+        if data:
+            data_source = "kgd"
+        if not data:
+            data = _lookup_configured_provider(identifier)
+            if data:
+                data_source = "registry"
         if not data:
             data = _lookup_egov_open_data(identifier)
+            if data:
+                data_source = "egov"
     except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
         current_app.logger.exception("Client lookup provider failed")
         return jsonify({
             "found": False,
-            "message": "Справочник временно недоступен. Данные можно заполнить вручную",
+            "message": "КГД временно недоступен. Данные можно заполнить вручную",
         }), 502
 
     if data:
         return jsonify({
             "found": True,
-            "source": "registry",
+            "source": data_source,
             "data": data,
-            "message": "Данные найдены в справочнике",
+            "message": "Данные найдены в КГД" if data_source == "kgd" else "Данные найдены в справочнике",
         })
 
     message = "По этому ИИН/БИН данные не найдены"
