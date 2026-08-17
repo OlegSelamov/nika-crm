@@ -300,6 +300,15 @@ def _lookup_egov_open_data(identifier):
     return None
 
 
+def _merge_lookup_data(primary, secondary):
+    """Fill empty registry fields without overwriting the primary source."""
+    result = dict(primary or {})
+    for key, value in (secondary or {}).items():
+        if value not in (None, "", [], {}) and result.get(key) in (None, "", [], {}):
+            result[key] = value
+    return result
+
+
 @clients_bp.route("/clients")
 def clients():
     company_id = _company_id()
@@ -1040,32 +1049,66 @@ def lookup_client_identifier():
         os.getenv("CLIENT_LOOKUP_API_URL", "").strip()
         or os.getenv("EGOV_OPEN_DATA_API_KEY", "").strip()
     )
-    try:
-        data_source = ""
-        data = _lookup_kgd_taxpayer(identifier)
-        if data:
-            data_source = "kgd"
-        if not data:
-            data = _lookup_configured_provider(identifier)
+    data = None
+    sources = []
+    provider_failed = False
+
+    if os.getenv("KGD_PORTAL_TOKEN", "").strip():
+        try:
+            data = _lookup_kgd_taxpayer(identifier)
             if data:
-                data_source = "registry"
-        if not data:
-            data = _lookup_egov_open_data(identifier)
-            if data:
-                data_source = "egov"
-    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
-        current_app.logger.exception("Client lookup provider failed")
+                sources.append("kgd")
+        except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+            provider_failed = True
+            current_app.logger.exception("KGD taxpayer lookup failed")
+
+    # Enrich KGD data with address/phone from the previously configured
+    # registry. Values returned by KGD always keep priority.
+    if os.getenv("CLIENT_LOOKUP_API_URL", "").strip():
+        try:
+            registry_data = _lookup_configured_provider(identifier)
+            if registry_data:
+                data = _merge_lookup_data(data, registry_data)
+                sources.append("registry")
+        except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+            provider_failed = True
+            current_app.logger.exception("Configured client registry lookup failed")
+
+    # eGov is queried only while the address is still missing, which avoids an
+    # unnecessary external request when the previous registry filled it.
+    if (
+        os.getenv("EGOV_OPEN_DATA_API_KEY", "").strip()
+        and not (data or {}).get("address")
+    ):
+        try:
+            egov_data = _lookup_egov_open_data(identifier)
+            if egov_data:
+                data = _merge_lookup_data(data, egov_data)
+                sources.append("egov")
+        except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+            provider_failed = True
+            current_app.logger.exception("eGov client registry lookup failed")
+
+    if provider_failed and not data:
         return jsonify({
             "found": False,
-            "message": "КГД временно недоступен. Данные можно заполнить вручную",
+            "message": "Внешние справочники временно недоступны. Данные можно заполнить вручную",
         }), 502
 
     if data:
+        data_source = "+".join(sources)
+        enriched = len(sources) > 1
         return jsonify({
             "found": True,
             "source": data_source,
             "data": data,
-            "message": "Данные найдены в КГД" if data_source == "kgd" else "Данные найдены в справочнике",
+            "message": (
+                "Данные найдены в КГД и дополнены из справочника"
+                if enriched and "kgd" in sources
+                else "Данные найдены в КГД"
+                if data_source == "kgd"
+                else "Данные найдены в справочнике"
+            ),
         })
 
     message = "По этому ИИН/БИН данные не найдены"
