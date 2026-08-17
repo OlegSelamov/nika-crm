@@ -872,25 +872,20 @@ def delete_client_permanently(client_id):
 @clients_bp.route("/api/clients")
 def api_clients():
     company_id = _company_id()
+    deleted = str(request.args.get("deleted", "false")).lower() in {"1", "true", "yes"}
     conn = get_db()
 
     try:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT
-                id,
-                full_name,
-                phone,
-                iin,
-                company_name,
-                address
+            SELECT *
             FROM clients
-            WHERE COALESCE(is_deleted, FALSE) = FALSE
+            WHERE COALESCE(is_deleted, FALSE) = %s
               AND company_id = %s
             ORDER BY id DESC
             """,
-            (company_id,),
+            (deleted, company_id),
         )
         rows = cur.fetchall()
         return jsonify([_serialize_row(row) for row in rows])
@@ -942,13 +937,16 @@ def api_create_client():
                 address,
                 comment,
                 status,
+                category,
                 payment,
+                contract_number,
+                contract_date,
                 created_at,
                 company_id,
                 is_deleted
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
-            RETURNING id
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULLIF(%s, '')::date, %s, %s, FALSE)
+            RETURNING *
             """,
             (
                 full_name,
@@ -958,15 +956,97 @@ def api_create_client():
                 str(data.get("address", "")).strip(),
                 str(data.get("comment", "")).strip(),
                 str(data.get("status", "Новый")).strip() or "Новый",
+                str(data.get("category", "Клиент")).strip() or "Клиент",
                 str(data.get("payment", "Не оплачено")).strip() or "Не оплачено",
+                str(data.get("contract_number", "")).strip(),
+                str(data.get("contract_date", "")).strip(),
                 now_kz(),
                 company_id,
             ),
         )
-        client_id = cur.fetchone()["id"]
+        client = cur.fetchone()
         conn.commit()
 
-        return jsonify({"success": True, "id": client_id})
+        return jsonify({"success": True, "id": client["id"], "client": _serialize_row(client)})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@clients_bp.route("/api/client/<int:client_id>/delete", methods=["POST", "DELETE"])
+def api_delete_client(client_id):
+    company_id = _company_id()
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE clients SET is_deleted = TRUE
+            WHERE id = %s AND company_id = %s
+            RETURNING id
+            """,
+            (client_id, company_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"status": "error", "message": "Клиент не найден"}), 404
+        conn.commit()
+        return jsonify({"status": "ok"})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@clients_bp.route("/api/client/<int:client_id>/restore", methods=["POST"])
+def api_restore_client(client_id):
+    company_id = _company_id()
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE clients SET is_deleted = FALSE
+            WHERE id = %s AND company_id = %s
+            RETURNING id
+            """,
+            (client_id, company_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"status": "error", "message": "Клиент не найден"}), 404
+        conn.commit()
+        return jsonify({"status": "ok"})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@clients_bp.route("/api/client/<int:client_id>/permanent", methods=["DELETE"])
+def api_delete_client_permanently(client_id):
+    company_id = _company_id()
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            DELETE FROM clients
+            WHERE id = %s AND company_id = %s
+              AND COALESCE(is_deleted, FALSE) = TRUE
+            RETURNING id
+            """,
+            (client_id, company_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"status": "error", "message": "Удалённый клиент не найден"}), 404
+        conn.commit()
+        return jsonify({"status": "ok"})
     except Exception:
         conn.rollback()
         raise
