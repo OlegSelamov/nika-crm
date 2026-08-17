@@ -19,8 +19,14 @@ from utils.timezone import now_kz
 
 reports_bp = Blueprint("reports", __name__)
 
+# Keep this value visible in both the web page and mobile API response.  It also
+# makes it easy to verify that the updated reports module reached the server.
+REPORTS_BUILD = "2026.08.17.1"
+
 REPORT_TITLES = {
     "sales": "Отчёт по продажам",
+    "products": "Отчёт по товарам",
+    "services": "Отчёт по услугам",
     "profit": "Отчёт по прибыли",
     "stock": "Отчёт по складу",
     "clients": "Отчёт по клиентам",
@@ -200,18 +206,102 @@ def _profit_report(cur, company_id, date_from, date_to):
     }
 
 
+def _item_sales_report(cur, company_id, date_from, date_to, item_type):
+    type_condition = (
+        "COALESCE(i.item_type, 'product') = 'service'"
+        if item_type == "service"
+        else "COALESCE(i.item_type, 'product') = 'product'"
+    )
+    cur.execute(f"""
+        SELECT
+            COALESCE(i.name, si.name, 'Без названия') AS name,
+            COALESCE(i.category, 'Без категории') AS category,
+            COUNT(DISTINCT s.id) AS sales_count,
+            COALESCE(SUM(si.quantity), 0) AS quantity,
+            COALESCE(SUM(si.total), 0) AS revenue,
+            COALESCE(SUM(si.profit), 0) AS profit
+        FROM sale_items si
+        JOIN sales s
+          ON s.id = si.sale_id
+        LEFT JOIN items i
+          ON i.id = si.item_id
+         AND i.company_id = s.company_id
+        WHERE s.company_id = %s
+          AND s.status = 'Оплачено'
+          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND {type_condition}
+        GROUP BY
+            COALESCE(i.name, si.name, 'Без названия'),
+            COALESCE(i.category, 'Без категории')
+        ORDER BY revenue DESC, name
+        LIMIT 2000
+    """, (company_id, date_from, date_to))
+
+    rows = []
+    for row in cur.fetchall():
+        revenue = _money(row["revenue"])
+        profit = _money(row["profit"])
+        rows.append({
+            "name": row["name"],
+            "category": row["category"],
+            "sales_count": row["sales_count"] or 0,
+            "quantity": row["quantity"] or 0,
+            "revenue": row["revenue"] or 0,
+            "profit": row["profit"] or 0,
+            "margin": round(profit / revenue * 100, 1) if revenue else 0,
+        })
+
+    return {
+        "columns": [
+            ("name", "Услуга" if item_type == "service" else "Товар"),
+            ("category", "Категория"),
+            ("sales_count", "Продаж"),
+            ("quantity", "Количество"),
+            ("revenue", "Выручка"),
+            ("profit", "Прибыль"),
+            ("margin", "Маржа, %"),
+        ],
+        "rows": rows,
+    }
+
+
+def _products_report(cur, company_id, date_from, date_to):
+    return _item_sales_report(cur, company_id, date_from, date_to, "product")
+
+
+def _services_report(cur, company_id, date_from, date_to):
+    return _item_sales_report(cur, company_id, date_from, date_to, "service")
+
+
 def _stock_report(cur, company_id, date_from, date_to):
     cur.execute("""
         SELECT
             i.id,
             i.name,
             COALESCE(i.category, 'Без категории') AS category,
-            COALESCE(i.quantity, 0) AS quantity,
+            COALESCE(SUM(
+                CASE
+                    WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
+                    WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
+                    ELSE 0
+                END
+            ), 0) AS quantity,
             COALESCE(i.purchase_price, 0) AS purchase_price,
             COALESCE(i.retail_price, i.price, 0) AS retail_price,
-            COALESCE(i.quantity, 0) * COALESCE(i.purchase_price, 0) AS stock_cost
+            COALESCE(SUM(
+                CASE
+                    WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
+                    WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
+                    ELSE 0
+                END
+            ), 0) * COALESCE(i.purchase_price, 0) AS stock_cost
         FROM items i
+        LEFT JOIN stock_movements sm
+          ON sm.item_id = i.id
+         AND sm.company_id = i.company_id
         WHERE i.company_id = %s
+          AND COALESCE(i.item_type, 'product') = 'product'
+        GROUP BY i.id
         ORDER BY i.name
         LIMIT 2000
     """, (company_id,))
@@ -289,6 +379,8 @@ def _clients_report(cur, company_id, date_from, date_to):
 def _build_report(cur, report_type, company_id, date_from, date_to):
     builders = {
         "sales": _sales_report,
+        "products": _products_report,
+        "services": _services_report,
         "profit": _profit_report,
         "stock": _stock_report,
         "clients": _clients_report,
@@ -320,6 +412,7 @@ def reports():
             date_to=date_to.isoformat(),
             active_report="sales",
             report_title=REPORT_TITLES["sales"],
+            reports_build=REPORTS_BUILD,
             report=None,
             print_mode=False,
         )
@@ -346,6 +439,7 @@ def reports_data():
         )
         return jsonify({
             "success": True,
+            "reports_build": REPORTS_BUILD,
             "title": REPORT_TITLES.get(report_type, "Отчёт"),
             "columns": [
                 {"key": key, "label": label}
@@ -450,6 +544,7 @@ def print_report():
             date_to=date_to.isoformat(),
             active_report=report_type,
             report_title=REPORT_TITLES.get(report_type, "Отчёт"),
+            reports_build=REPORTS_BUILD,
             report=report,
             print_mode=True,
         )

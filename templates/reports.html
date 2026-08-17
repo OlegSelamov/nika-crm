@@ -6,6 +6,7 @@
 
 <div class="reports-page{% if print_mode %} reports-page--print{% endif %}"
      data-active-report="{{ active_report }}"
+     data-reports-build="{{ reports_build|default('2026.08.17.1') }}"
      data-date-from="{{ date_from }}"
      data-date-to="{{ date_to }}"
      data-print-mode="{{ '1' if print_mode else '0' }}">
@@ -16,7 +17,7 @@
                 {% if print_mode %}
                     Период: {{ date_from }} — {{ date_to }}
                 {% else %}
-                    Продажи, прибыль, склад и клиенты
+                    Продажи товаров и услуг, прибыль, склад и клиенты · версия {{ reports_build|default('2026.08.17.1') }}
                 {% endif %}
             </div>
         </div>
@@ -57,7 +58,7 @@
         <article>
             <span>Валовая прибыль</span>
             <strong>{{ "{:,.0f}".format(summary.get("gross_profit", 0)).replace(",", " ") }} ₸</strong>
-            <small>По проданным товарам</small>
+            <small>По товарам и услугам</small>
         </article>
         <article>
             <span>Чистая прибыль</span>
@@ -82,6 +83,12 @@
         <div class="reports-tools">
             <button class="report-tool is-active" data-report="sales" onclick="selectReport('sales', this)">
                 <span>📊</span><div><strong>Продажи</strong><small>Чеки, оплаты и клиенты</small></div>
+            </button>
+            <button class="report-tool" data-report="products" onclick="selectReport('products', this)">
+                <span>📦</span><div><strong>Товары</strong><small>Продажи, количество и прибыль</small></div>
+            </button>
+            <button class="report-tool" data-report="services" onclick="selectReport('services', this)">
+                <span>🛠</span><div><strong>Услуги</strong><small>Продажи услуг и выручка</small></div>
             </button>
             <button class="report-tool" data-report="profit" onclick="selectReport('profit', this)">
                 <span>💰</span><div><strong>Прибыль</strong><small>Выручка, маржа и прибыль</small></div>
