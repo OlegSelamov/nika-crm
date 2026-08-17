@@ -74,7 +74,10 @@ def items():
 def _catalog_item_payload(item):
     """Convert a database row into a compact JSON-safe catalog item."""
     data = dict(item)
-    for field in ("retail_price", "purchase_price", "wholesale_price"):
+    for field in (
+        "retail_price", "purchase_price", "wholesale_price", "quantity",
+        "discount_percent", "markup_percent",
+    ):
         value = data.get(field)
         if isinstance(value, Decimal):
             data[field] = float(value)
@@ -428,25 +431,60 @@ def delete_item(item_id):
     
 @items_bp.route("/api/items")
 def api_items():
+    item_type = str(request.args.get("type") or "all").strip().lower()
+    category = str(request.args.get("category") or "all").strip()
     conn = get_db()
     
     cur = conn.cursor()
 
-    cur.execute("""
+    where = ["items.company_id = %s"]
+    params = [session.get("company_id")]
+    if item_type in ("product", "service"):
+        where.append("COALESCE(items.item_type, 'product') = %s")
+        params.append(item_type)
+    if category and category.lower() != "all":
+        where.append("LOWER(COALESCE(items.category, '')) = LOWER(%s)")
+        params.append(category)
+
+    cur.execute(f"""
     SELECT 
         items.*,
         (SELECT image FROM item_images 
          WHERE item_id = items.id 
          LIMIT 1) as image
     FROM items
-    WHERE items.company_id = %s
-    """, (session.get("company_id"),))
+    WHERE {' AND '.join(where)}
+    ORDER BY items.id DESC
+    """, tuple(params))
     
     items = cur.fetchall()
 
     pool.putconn(conn)
 
-    return [dict(i) for i in items]
+    return jsonify([_catalog_item_payload(i) for i in items])
+
+
+@items_bp.route("/api/categories")
+def api_categories():
+    category_type = str(request.args.get("type") or "all").strip().lower()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if category_type in ("product", "service"):
+            cur.execute("""
+                SELECT id, name, markup_percent, category_type
+                FROM categories
+                WHERE company_id = %s AND COALESCE(category_type, 'product') = %s
+                ORDER BY name
+            """, (session.get("company_id"), category_type))
+        else:
+            cur.execute("""
+                SELECT id, name, markup_percent, category_type
+                FROM categories WHERE company_id = %s ORDER BY category_type, name
+            """, (session.get("company_id"),))
+        return jsonify([_catalog_item_payload(row) for row in cur.fetchall()])
+    finally:
+        pool.putconn(conn)
     
 @items_bp.route("/add_category", methods=["POST"])
 def add_category():
@@ -698,7 +736,11 @@ def barcode_info(barcode):
     
 @items_bp.route("/api/items/create", methods=["POST"])
 def api_create_item():
-    data = request.json
+    data = request.get_json(silent=True) or {}
+    item_type = "service" if data.get("item_type") == "service" else "product"
+    service_sale_mode = data.get("service_sale_mode") if item_type == "service" else None
+    if service_sale_mode not in ("order", "booking", "request"):
+        service_sale_mode = "order" if item_type == "service" else None
 
     conn = get_db()
     cur = conn.cursor()
@@ -719,10 +761,11 @@ def api_create_item():
             ntin,
             is_marked,
             item_type,
+            service_sale_mode,
             quantity,
             company_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """, (
         data.get("name", ""),
@@ -737,9 +780,10 @@ def api_create_item():
         data.get("barcode", ""),
         data.get("gtin", ""),
         data.get("ntin", ""),
-        bool(data.get("is_marked", False)) if data.get("item_type", "product") == "product" else False,
-        data.get("item_type", "product"),
-        float(data.get("quantity") or 0) if data.get("item_type", "product") == "product" else 0,
+        bool(data.get("is_marked", False)) if item_type == "product" else False,
+        item_type,
+        service_sale_mode,
+        float(data.get("quantity") or 0) if item_type == "product" else 0,
         session.get("company_id")
     ))
 
@@ -748,8 +792,6 @@ def api_create_item():
     # если количество больше 0 — создаём приход в движении товара
     quantity = float(data.get("quantity") or 0)
     purchase_price = float(data.get("purchase_price") or 0)
-
-    item_type = data.get("item_type", "product")
 
     if quantity > 0 and item_type == "product":
         cur.execute("""
@@ -789,8 +831,84 @@ def api_create_item():
 
     return jsonify({
         "success": True,
-        "item": dict(item)
+        "id": item_id,
+        "item": _catalog_item_payload(item)
     })
+
+
+@items_bp.route("/api/items/<int:item_id>", methods=["PATCH"])
+def api_update_item(item_id):
+    data = request.get_json(silent=True) or {}
+    item_type = "service" if data.get("item_type") == "service" else "product"
+    service_sale_mode = data.get("service_sale_mode") if item_type == "service" else None
+    if service_sale_mode not in ("order", "booking", "request"):
+        service_sale_mode = "order" if item_type == "service" else None
+
+    name = str(data.get("name") or "").strip()
+    if not name:
+        return jsonify({"success": False, "message": "Укажите название позиции"}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE items SET
+                name=%s, category=%s, unit=%s, type=%s, description=%s,
+                retail_price=%s, purchase_price=%s, wholesale_price=%s,
+                discount_percent=%s, barcode=%s, gtin=%s, ntin=%s,
+                is_marked=%s, item_type=%s, service_sale_mode=%s
+            WHERE id=%s AND company_id=%s
+            RETURNING *
+        """, (
+            name,
+            str(data.get("category") or "").strip(),
+            str(data.get("unit") or ("услуга" if item_type == "service" else "шт")).strip(),
+            str(data.get("type") or "piece").strip(),
+            str(data.get("description") or "").strip(),
+            float(data.get("retail_price") or 0),
+            float(data.get("purchase_price") or 0),
+            float(data.get("wholesale_price") or 0),
+            int(float(data.get("discount_percent") or 0)),
+            str(data.get("barcode") or "").strip(),
+            str(data.get("gtin") or "").strip() if item_type == "product" else "",
+            str(data.get("ntin") or "").strip() if item_type == "product" else "",
+            bool(data.get("is_marked", False)) if item_type == "product" else False,
+            item_type,
+            service_sale_mode,
+            item_id,
+            session.get("company_id"),
+        ))
+        item = cur.fetchone()
+        if not item:
+            return jsonify({"success": False, "message": "Позиция не найдена"}), 404
+        conn.commit()
+        return jsonify({"success": True, "item": _catalog_item_payload(item)})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@items_bp.route("/api/items/<int:item_id>", methods=["DELETE"])
+def api_delete_item(item_id):
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "DELETE FROM items WHERE id=%s AND company_id=%s RETURNING id",
+            (item_id, session.get("company_id")),
+        )
+        deleted = cur.fetchone()
+        if not deleted:
+            return jsonify({"success": False, "message": "Позиция не найдена"}), 404
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
 # ================== ИМПОРТ / ЭКСПОРТ КАТАЛОГА ==================
 
