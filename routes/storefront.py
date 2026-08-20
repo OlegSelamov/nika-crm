@@ -8,6 +8,25 @@ from utils.timezone import now_kz
 storefront_bp = Blueprint("storefront", __name__, url_prefix="/s")
 
 
+# Фактический остаток считается по движениям склада. Поле items.quantity
+# может отставать после прихода или списания, поэтому его не используем
+# в публичной витрине и при проверке корзины.
+STOREFRONT_STOCK_SQL = """
+    COALESCE((
+        SELECT SUM(
+            CASE
+                WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
+                WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
+                ELSE 0
+            END
+        )
+        FROM stock_movements sm
+        WHERE sm.company_id = i.company_id
+          AND sm.item_id = i.id
+    ), 0)
+"""
+
+
 def _money(value):
     try:
         return Decimal(str(value or 0))
@@ -98,9 +117,10 @@ def _cart_payload(store):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT
-                i.id, i.name, i.retail_price, i.price, i.unit, i.quantity,
+                i.id, i.name, i.retail_price, i.price, i.unit,
+                {STOREFRONT_STOCK_SQL} AS quantity,
                 (SELECT ii.image
                  FROM item_images ii
                  WHERE ii.item_id=i.id
@@ -169,7 +189,8 @@ def home(slug):
         cur.execute(f"""
             SELECT
                 i.id, i.name, i.description, i.retail_price, i.price,
-                i.discount_percent, i.category, i.unit, i.quantity,
+                i.discount_percent, i.category, i.unit,
+                {STOREFRONT_STOCK_SQL} AS quantity,
                 i.item_type, i.service_sale_mode, i.booking_enabled, i.booking_duration_minutes,
                 (SELECT ii.image
                  FROM item_images ii
@@ -178,7 +199,7 @@ def home(slug):
             FROM items i
             WHERE {" AND ".join(filters)}
             ORDER BY
-                CASE WHEN i.item_type='service' OR COALESCE(i.quantity,0)>0 THEN 0 ELSE 1 END,
+                CASE WHEN i.item_type='service' OR {STOREFRONT_STOCK_SQL}>0 THEN 0 ELSE 1 END,
                 i.category NULLS LAST,
                 i.name
         """, params)
@@ -239,10 +260,11 @@ def item_data(slug, item_id):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 i.id, i.name, i.description, i.retail_price, i.price,
-                i.discount_percent, i.category, i.unit, i.quantity,
+                i.discount_percent, i.category, i.unit,
+                {STOREFRONT_STOCK_SQL} AS quantity,
                 i.item_type, i.service_sale_mode, i.booking_enabled, i.booking_duration_minutes
             FROM items i
             WHERE i.id=%s
@@ -369,12 +391,14 @@ def cart_add(slug):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT id, item_type, service_sale_mode, quantity
-            FROM items
-            WHERE id=%s
-              AND company_id=%s
-              AND COALESCE(storefront_hidden,FALSE)=FALSE
+        cur.execute(f"""
+            SELECT
+                i.id, i.item_type, i.service_sale_mode,
+                {STOREFRONT_STOCK_SQL} AS quantity
+            FROM items i
+            WHERE i.id=%s
+              AND i.company_id=%s
+              AND COALESCE(i.storefront_hidden,FALSE)=FALSE
         """, (int(raw_id), store["company_id"]))
         item = cur.fetchone()
 
@@ -447,10 +471,12 @@ def cart_update(slug):
             conn = get_db()
             cur = conn.cursor()
             try:
-                cur.execute("""
-                    SELECT quantity, item_type
-                    FROM items
-                    WHERE id=%s AND company_id=%s
+                cur.execute(f"""
+                    SELECT
+                        i.item_type,
+                        {STOREFRONT_STOCK_SQL} AS quantity
+                    FROM items i
+                    WHERE i.id=%s AND i.company_id=%s
                 """, (int(item_id), store["company_id"]))
                 row = cur.fetchone()
 
@@ -560,11 +586,13 @@ def checkout_ajax(slug):
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            SELECT id, name, retail_price, price, unit, quantity, item_type
-            FROM items
-            WHERE company_id=%s AND id=ANY(%s)
-            FOR UPDATE
+        cur.execute(f"""
+            SELECT
+                i.id, i.name, i.retail_price, i.price, i.unit, i.item_type,
+                {STOREFRONT_STOCK_SQL} AS quantity
+            FROM items i
+            WHERE i.company_id=%s AND i.id=ANY(%s)
+            FOR UPDATE OF i
         """, (store["company_id"], ids))
         rows = cur.fetchall()
 
@@ -710,10 +738,12 @@ def checkout(slug):
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            SELECT id, name, retail_price, price, unit, quantity, item_type
-            FROM items
-            WHERE company_id=%s AND id=ANY(%s)
+        cur.execute(f"""
+            SELECT
+                i.id, i.name, i.retail_price, i.price, i.unit, i.item_type,
+                {STOREFRONT_STOCK_SQL} AS quantity
+            FROM items i
+            WHERE i.company_id=%s AND i.id=ANY(%s)
         """, (store["company_id"], ids))
         rows = cur.fetchall()
 
