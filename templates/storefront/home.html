@@ -71,6 +71,22 @@
 .sf-slider-prev{left:14px}.sf-slider-next{right:14px}
 
 .sf-chips{display:flex;gap:8px;overflow:auto;padding:16px 0 0;scrollbar-width:none}
+.sf-category-filter-row{
+    display:flex;align-items:flex-start;gap:10px;padding-top:16px
+}
+.sf-category-filter-row .sf-chips{padding-top:0}
+.sf-category-chips{
+    flex:1;flex-wrap:wrap;overflow:hidden;max-height:80px
+}
+.sf-category-chips.expanded{max-height:none}
+.sf-category-toggle{
+    flex:0 0 auto;min-height:38px;padding:9px 13px;
+    border:1px solid var(--brand-border);border-radius:12px;
+    background:var(--brand-soft);color:var(--brand);
+    font:inherit;font-size:11px;font-weight:850;cursor:pointer
+}
+.sf-category-toggle:hover{background:var(--brand-soft-2)}
+.sf-category-toggle[hidden],.sf-chip[hidden]{display:none}
 .sf-chip{
     flex:0 0 auto;padding:10px 13px;border:1px solid var(--line);
     cursor:pointer;font:inherit;
@@ -210,6 +226,10 @@
     .sf-name{font-size:12px;min-height:32px}
     .sf-price{font-size:17px}
     .sf-more{font-size:10px}
+
+    .sf-category-filter-row{gap:7px}
+    .sf-category-chips{max-height:78px}
+    .sf-category-toggle{padding:9px 10px}
 }
 </style>
 {% endblock %}
@@ -259,24 +279,39 @@
 </section>
 
 <div class="sf-chips" id="sfTypeFilters">
-    <button class="sf-chip active" type="button" data-filter-kind="all">Все</button>
-    <button class="sf-chip" type="button" data-filter-kind="products">Товары</button>
-    <button class="sf-chip" type="button" data-filter-kind="services">Услуги</button>
+    <button class="sf-chip {% if kind == 'all' %}active{% endif %}" type="button" data-filter-kind="all">Все</button>
+    {% if store.show_products %}
+    <button class="sf-chip {% if kind == 'products' %}active{% endif %}" type="button" data-filter-kind="products">Товары</button>
+    {% endif %}
+    {% if store.show_services %}
+    <button class="sf-chip {% if kind == 'services' %}active{% endif %}" type="button" data-filter-kind="services">Услуги</button>
+    {% endif %}
 </div>
 
 {% if store.show_categories is not false and categories %}
-<div class="sf-chips" id="sfCategoryFilters">
-    <button class="sf-chip active" type="button" data-filter-category="all">
-        Все категории
-    </button>
+<div class="sf-category-filter-row">
+    <div class="sf-chips sf-category-chips" id="sfCategoryFilters">
+        <button class="sf-chip {% if not selected_category %}active{% endif %}"
+                type="button"
+                data-filter-category="all"
+                data-all-categories>
+            Все категории
+        </button>
 
-    {% for category in categories %}
-    <button class="sf-chip"
-            type="button"
-            data-filter-category="{{ category|lower }}">
-        {{ category }}
+        {% for category in categories %}
+        {% if (category.has_products and store.show_products) or (category.has_services and store.show_services) %}
+        <button class="sf-chip {% if selected_category|lower == category.category|lower %}active{% endif %}"
+                type="button"
+                data-filter-category="{{ category.category|lower }}"
+                data-category-kinds="{% if category.has_products and store.show_products %}products {% endif %}{% if category.has_services and store.show_services %}services{% endif %}">
+            {{ category.category }}
+        </button>
+        {% endif %}
+        {% endfor %}
+    </div>
+    <button class="sf-category-toggle" id="sfCategoryToggle" type="button" hidden>
+        Показать все
     </button>
-    {% endfor %}
 </div>
 {% endif %}
 
@@ -294,7 +329,7 @@
         <article class="sf-card {{ store.card_style or 'rounded' }}"
                  data-item-card="{{ item.id }}"
                  data-item-kind="products"
-                 data-item-category="{{ (item.category or '')|lower }}"
+                 data-item-category="{{ (item.category or '')|trim|lower }}"
                  data-search="{{ (item.name or '')|lower }} {{ (item.category or '')|lower }} {{ (item.description or '')|lower }}">
 
             <div class="sf-media" data-open-product="{{ item.id }}">
@@ -368,7 +403,7 @@
         <article class="sf-card sf-service {{ store.card_style or 'rounded' }}"
                  data-item-card="{{ item.id }}"
                  data-item-kind="services"
-                 data-item-category="{{ (item.category or '')|lower }}"
+                 data-item-category="{{ (item.category or '')|trim|lower }}"
                  data-search="{{ (item.name or '')|lower }} {{ (item.category or '')|lower }} {{ (item.description or '')|lower }}">
 
             <div class="sf-media" data-open-product="{{ item.id }}">
@@ -430,9 +465,69 @@
 
 <script>
 window.sfCatalogFilter = {
-    kind: 'all',
-    category: 'all'
+    kind: document.querySelector('[data-filter-kind].active')?.dataset.filterKind || 'all',
+    category: (document.querySelector('[data-filter-category].active')?.dataset.filterCategory || 'all')
+        .toLocaleLowerCase('ru-RU')
 };
+window.sfCategoriesExpanded = false;
+
+function sfRefreshCategoryOverflow(){
+    const list = document.getElementById('sfCategoryFilters');
+    const toggle = document.getElementById('sfCategoryToggle');
+    if(!list || !toggle) return;
+
+    list.classList.toggle('expanded', window.sfCategoriesExpanded);
+    toggle.textContent = window.sfCategoriesExpanded ? 'Свернуть' : 'Показать все';
+
+    if(window.sfCategoriesExpanded){
+        toggle.hidden = false;
+        return;
+    }
+
+    requestAnimationFrame(()=>{
+        toggle.hidden = list.scrollHeight <= list.clientHeight + 1;
+    });
+}
+
+function sfSyncCategoryFilters(resetExpansion=false){
+    const state = window.sfCatalogFilter;
+    const allButton = document.querySelector('[data-all-categories]');
+    let selectedCategoryIsAvailable = state.category === 'all';
+
+    document.querySelectorAll('[data-category-kinds]').forEach(button=>{
+        const kinds = (button.dataset.categoryKinds || '').split(/\s+/).filter(Boolean);
+        const visible = state.kind === 'all' || kinds.includes(state.kind);
+        button.hidden = !visible;
+
+        if(visible && button.dataset.filterCategory === state.category){
+            selectedCategoryIsAvailable = true;
+        }
+    });
+
+    if(!selectedCategoryIsAvailable){
+        state.category = 'all';
+    }
+
+    document.querySelectorAll('[data-filter-category]').forEach(button=>{
+        button.classList.toggle(
+            'active',
+            (button.dataset.filterCategory || 'all').toLocaleLowerCase('ru-RU') === state.category
+        );
+    });
+
+    if(allButton){
+        allButton.textContent = state.kind === 'products'
+            ? 'Все товары'
+            : state.kind === 'services'
+                ? 'Все услуги'
+                : 'Все категории';
+    }
+
+    if(resetExpansion){
+        window.sfCategoriesExpanded = false;
+    }
+    sfRefreshCategoryOverflow();
+}
 
 function sfApplyCatalogFilters(){
     const state = window.sfCatalogFilter;
@@ -494,7 +589,15 @@ document.addEventListener('click', event=>{
             button.classList.toggle('active', button === kindButton);
         });
 
+        sfSyncCategoryFilters(true);
         sfApplyCatalogFilters();
+        return;
+    }
+
+    const categoryToggle = event.target.closest('#sfCategoryToggle');
+    if(categoryToggle){
+        window.sfCategoriesExpanded = !window.sfCategoriesExpanded;
+        sfRefreshCategoryOverflow();
         return;
     }
 
@@ -541,8 +644,11 @@ window.addEventListener('DOMContentLoaded', ()=>{
         });
     }
 
+    sfSyncCategoryFilters(true);
     sfApplyCatalogFilters();
 });
+
+window.addEventListener('resize', ()=>sfRefreshCategoryOverflow());
 </script>
 
 {% if banners|length > 1 %}

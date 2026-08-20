@@ -1,7 +1,67 @@
 window.sfCatalogFilter = {
-    kind: 'all',
-    category: 'all'
+    kind: document.querySelector('[data-filter-kind].active')?.dataset.filterKind || 'all',
+    category: (document.querySelector('[data-filter-category].active')?.dataset.filterCategory || 'all')
+        .toLocaleLowerCase('ru-RU')
 };
+window.sfCategoriesExpanded = false;
+
+function sfRefreshCategoryOverflow(){
+    const list = document.getElementById('sfCategoryFilters');
+    const toggle = document.getElementById('sfCategoryToggle');
+    if(!list || !toggle) return;
+
+    list.classList.toggle('expanded', window.sfCategoriesExpanded);
+    toggle.textContent = window.sfCategoriesExpanded ? 'Свернуть' : 'Показать все';
+
+    if(window.sfCategoriesExpanded){
+        toggle.hidden = false;
+        return;
+    }
+
+    requestAnimationFrame(()=>{
+        toggle.hidden = list.scrollHeight <= list.clientHeight + 1;
+    });
+}
+
+function sfSyncCategoryFilters(resetExpansion=false){
+    const state = window.sfCatalogFilter;
+    const allButton = document.querySelector('[data-all-categories]');
+    let selectedCategoryIsAvailable = state.category === 'all';
+
+    document.querySelectorAll('[data-category-kinds]').forEach(button=>{
+        const kinds = (button.dataset.categoryKinds || '').split(/\s+/).filter(Boolean);
+        const visible = state.kind === 'all' || kinds.includes(state.kind);
+        button.hidden = !visible;
+
+        if(visible && button.dataset.filterCategory === state.category){
+            selectedCategoryIsAvailable = true;
+        }
+    });
+
+    if(!selectedCategoryIsAvailable){
+        state.category = 'all';
+    }
+
+    document.querySelectorAll('[data-filter-category]').forEach(button=>{
+        button.classList.toggle(
+            'active',
+            (button.dataset.filterCategory || 'all').toLocaleLowerCase('ru-RU') === state.category
+        );
+    });
+
+    if(allButton){
+        allButton.textContent = state.kind === 'products'
+            ? 'Все товары'
+            : state.kind === 'services'
+                ? 'Все услуги'
+                : 'Все категории';
+    }
+
+    if(resetExpansion){
+        window.sfCategoriesExpanded = false;
+    }
+    sfRefreshCategoryOverflow();
+}
 
 function sfApplyCatalogFilters(){
     const state = window.sfCatalogFilter;
@@ -63,7 +123,15 @@ document.addEventListener('click', event=>{
             button.classList.toggle('active', button === kindButton);
         });
 
+        sfSyncCategoryFilters(true);
         sfApplyCatalogFilters();
+        return;
+    }
+
+    const categoryToggle = event.target.closest('#sfCategoryToggle');
+    if(categoryToggle){
+        window.sfCategoriesExpanded = !window.sfCategoriesExpanded;
+        sfRefreshCategoryOverflow();
         return;
     }
 
@@ -110,8 +178,11 @@ window.addEventListener('DOMContentLoaded', ()=>{
         });
     }
 
+    sfSyncCategoryFilters(true);
     sfApplyCatalogFilters();
 });
+
+window.addEventListener('resize', ()=>sfRefreshCategoryOverflow());
 
 let sfIndex = 0;
 const sfSlides = [...document.querySelectorAll('.sf-slide')];
