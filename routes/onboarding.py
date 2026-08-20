@@ -112,6 +112,8 @@ def onboarding():
                 c.phone,
                 c.city,
                 c.business_type,
+                c.tariff,
+                cs.base_price,
                 cs.trial_ends_at,
                 op.*
             FROM companies c
@@ -297,6 +299,8 @@ def onboarding_finish():
                 c.business_type,
                 c.city,
                 c.address,
+                c.tariff,
+                cs.base_price,
                 cs.trial_ends_at,
                 op.*
             FROM companies c

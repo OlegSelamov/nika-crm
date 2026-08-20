@@ -77,6 +77,58 @@ AI_INSTRUCTIONS = """
 """.strip()
 
 
+# Контекст страницы определяется только по заранее разрешённым путям.
+# Текст из браузера не вставляется в системную инструкцию напрямую.
+AI_PAGE_CONTEXTS = (
+    ("/onboarding/finish", "Завершение настройки", "подключённых разделах и первых шагах после запуска"),
+    ("/onboarding", "Настройка бизнеса", "выборе типа бизнеса, модулей и стартовых настроек"),
+    ("/stock/income", "Приход товара", "поиске позиции, закупочной цене и подготовке прихода"),
+    ("/stock/writeoff", "Списание", "остатках и подготовке безопасного списания"),
+    ("/stock/movements", "Движение товара", "приходах, продажах, возвратах и списаниях"),
+    ("/stock", "Склад", "остатках, дефиците и складских операциях"),
+    ("/sales", "Продажи", "товарах, клиентах, корзине, оплате, чеках и сменах"),
+    ("/items", "Товары и услуги", "каталоге, ценах, штрихкодах, товарах и услугах"),
+    ("/clients", "Клиенты", "поиске клиента, истории покупок, карточках и сообщениях"),
+    ("/accounting", "Бухгалтерия", "налогах, документах, задолженностях и обязательствах"),
+    ("/reports", "Отчёты", "выборе отчёта и объяснении показателей"),
+    ("/analytics", "Аналитика", "выручке, прибыли, среднем чеке и динамике продаж"),
+    ("/expenses", "Расходы", "поиске, анализе и подготовке расходов"),
+    ("/tasks", "Задачи", "сроках, исполнителях и подготовке задач"),
+    ("/users", "Пользователи", "сотрудниках, ролях и правах доступа"),
+    ("/cto", "ККМ и ЦТО", "кассах, reKassa, сменах, отчётах и оборудовании"),
+    ("/rekassa", "ККМ и ЦТО", "reKassa, сменах, чеках и отчётах"),
+    ("/storefront", "Онлайн-витрина", "опубликованных позициях, заказах и настройках витрины"),
+    ("/subscription", "Подписка и модули", "составе подписки и доступных модулях"),
+    ("/settings", "Настройки", "данных компании, интеграциях и настройках оборудования"),
+    ("/company", "Настройки компании", "реквизитах и настройках организации"),
+    ("/profile", "Профиль", "аккаунте, компании и активности пользователя"),
+    ("/dashboard", "Главная", "общем состоянии бизнеса и приоритетных действиях"),
+    ("/", "Главная", "общем состоянии бизнеса и приоритетных действиях"),
+)
+
+
+def _page_context_instruction(raw_path):
+    path = str(raw_path or "").split("?", 1)[0].strip()
+    if not re.fullmatch(r"/[A-Za-z0-9_./-]{0,180}", path):
+        return ""
+
+    normalized_path = path.rstrip("/") or "/"
+    for prefix, label, focus in AI_PAGE_CONTEXTS:
+        matches = (
+            normalized_path == "/"
+            if prefix == "/"
+            else normalized_path == prefix or normalized_path.startswith(prefix + "/")
+        )
+        if matches:
+            return (
+                f"Пользователь сейчас находится в разделе «{label}». "
+                f"Учитывай это, когда он говорит «здесь», «на этой странице» или просит помощь по разделу. "
+                f"В этом разделе прежде всего помогай с {focus}. "
+                "Контекст страницы не отменяет проверку прав, поиск реальных данных и подтверждение изменений."
+            )
+    return ""
+
+
 AI_TTS_INSTRUCTIONS = """
 Speak in Russian with a warm, confident adult female voice.
 Sound like Nika, a thoughtful personal business assistant speaking directly to one person.
@@ -1802,8 +1854,14 @@ def ai_chat():
             return jsonify({"error": "Nika AI ещё не подключён на сервере"}), 503
 
         history = _load_messages(conversation_id, company_id, user_id)
+        page_instructions = _page_context_instruction(payload.get("page_path"))
         reply, pending = _generate_reply(
-            message, history, company_id, user_id, conversation_id
+            message,
+            history,
+            company_id,
+            user_id,
+            conversation_id,
+            additional_instructions=page_instructions,
         )
         saved_message = "[команда с паролем скрыта]" if pending and pending.get("sensitive") else message
         _save_exchange(conversation_id, company_id, user_id, saved_message, reply)

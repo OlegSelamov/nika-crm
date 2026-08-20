@@ -22,13 +22,16 @@ input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
 .optional{font-weight:400;color:#94a3b8}
 .actions{display:flex;gap:10px;margin-top:24px}.btn{border:0;border-radius:12px;padding:13px 18px;font-weight:750;cursor:pointer;font-size:14px}.next,.submit{margin-left:auto;background:linear-gradient(135deg,#6366f1,#3b82f6);color:#fff;min-width:180px}.back{background:#eef2f7;color:#475569}
 .error{padding:11px 13px;border-radius:11px;background:#fee2e2;color:#991b1b;margin-bottom:18px;font-size:13px}
+.selected-plan{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px;padding:14px 16px;border:1px solid #bfdbfe;border-radius:14px;background:linear-gradient(135deg,#eff6ff,#eef2ff);color:#1e3a8a}
+.selected-plan span{display:block;color:#64748b;font-size:12px;margin-bottom:3px}.selected-plan strong{font-size:16px}.selected-plan b{white-space:nowrap;color:#1d4ed8;font-size:15px}
 .summary{display:grid;gap:10px}.summary-row{display:flex;justify-content:space-between;gap:15px;padding:13px 15px;border-radius:12px;background:#f8fafc;color:#475569}.summary-row strong{color:#0f172a;text-align:right}
 .trial{margin-top:16px;padding:16px;border-radius:14px;background:#eff6ff;color:#1e40af}.trial strong{display:block;color:#1e3a8a;margin-bottom:4px}
 .bottom{text-align:center;padding:0 30px 24px;font-size:14px;color:#64748b}.bottom a{color:#6366f1;text-decoration:none;font-weight:650}
 @media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.content,.head{padding-left:20px;padding-right:20px}.actions{flex-wrap:wrap}.next,.submit{width:100%;margin-left:0}.back{width:100%}}
 </style>
+<link rel="stylesheet" href="/static/css/nika-public-assistant.css">
 </head>
-<body>
+<body data-nika-assistant-page="register" data-nika-assistant-authenticated="false">
 <div class="card">
   <div class="head">
     <div class="logo">Nika <span>Business</span></div>
@@ -39,7 +42,12 @@ input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
 
   <div class="content">
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <div class="selected-plan">
+      <div><span>Выбранный тариф</span><strong>{{ selected_plan_info.name }}</strong></div>
+      <b>{{ '{:,.0f}'.format(selected_plan_info.price).replace(',', ' ') }} ₸/месяц</b>
+    </div>
     <form method="POST" id="registerForm">
+      <input type="hidden" name="plan" value="{{ selected_plan }}">
 
       <section class="step active">
         <div class="eyebrow">Шаг 1 из 4</div>
@@ -90,8 +98,9 @@ input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
           <div class="summary-row"><span>Компания</span><strong id="sumCompany">—</strong></div>
           <div class="summary-row"><span>Логин</span><strong id="sumLogin">—</strong></div>
           <div class="summary-row"><span>БИН / ИИН</span><strong id="sumBin">Не указан</strong></div>
+          <div class="summary-row"><span>Тариф</span><strong>{{ selected_plan_info.name }} · {{ '{:,.0f}'.format(selected_plan_info.price).replace(',', ' ') }} ₸/месяц</strong></div>
         </div>
-        <div class="trial"><strong>14 дней бесплатно</strong>Компания и владелец будут созданы один раз. После этого Nika сразу откроет следующий этап настройки именно этой компании.</div>
+        <div class="trial"><strong>14 дней бесплатно</strong>Оплата сейчас не требуется. После пробного периода вы сможете подтвердить тариф или изменить его в настройках подписки.</div>
         <div class="actions"><button class="btn back" type="button" onclick="goBack()">← Назад</button><button class="btn submit" type="submit">Создать компанию →</button></div>
       </section>
 
@@ -132,5 +141,6 @@ function fillSummary(){
   document.getElementById('sumBin').textContent=document.getElementById('bin').value || 'Не указан';
 }
 </script>
+<script src="/static/js/nika-public-assistant.js" defer></script>
 </body>
 </html>

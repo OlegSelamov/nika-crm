@@ -13,14 +13,17 @@ h2{font-size:19px;margin:28px 0 12px}.checklist{display:grid;gap:10px}.task{disp
 .finish{width:100%;margin-top:22px;padding:14px;border:0;border-radius:13px;background:linear-gradient(135deg,#6366f1,#3b82f6);color:#fff;font-weight:850;font-size:14px;cursor:pointer}
 .trial{margin-top:15px;color:#64748b;font-size:13px}
 @media(max-width:650px){.body,.hero{padding-left:20px;padding-right:20px}.task{grid-template-columns:1fr}.task a{text-align:center}}
-</style></head>
-<body>
+</style>
+<link rel="stylesheet" href="/static/css/nika-public-assistant.css">
+</head>
+<body data-nika-assistant-page="onboarding_finish" data-nika-assistant-authenticated="true">
+{% set plan_names = {'start': 'Старт', 'business': 'Бизнес', 'pro': 'Профи'} %}
 <div class="shell">
 <div class="hero">
   <div class="ok">✓</div>
   <h1>{{ setup.name }} готова к работе</h1>
   <div class="muted">Nika настроила стартовое рабочее пространство на основе ваших ответов.</div>
-  <div class="trial">Пробный период до {{ setup.trial_ends_at.strftime('%d.%m.%Y') if setup.trial_ends_at else '—' }}</div>
+  <div class="trial">Тариф «{{ plan_names.get(setup.tariff, 'Бизнес') }}» · {{ '{:,.0f}'.format(setup.base_price or 19900).replace(',', ' ') }} ₸/месяц · бесплатно до {{ setup.trial_ends_at.strftime('%d.%m.%Y') if setup.trial_ends_at else '—' }}</div>
 </div>
 <div class="body">
   <strong>Подключённые разделы</strong>
@@ -39,5 +42,6 @@ h2{font-size:19px;margin:28px 0 12px}.checklist{display:grid;gap:10px}.task{disp
   <form method="post"><button class="finish" type="submit">Открыть рабочий стол Nika →</button></form>
 </div>
 </div>
+<script src="/static/js/nika-public-assistant.js" defer></script>
 </body>
 </html>

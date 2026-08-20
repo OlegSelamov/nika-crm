@@ -8,6 +8,20 @@ auth_bp = Blueprint("auth", __name__)
 ONLINE_TIMEOUT_MINUTES = 3
 HEARTBEAT_INTERVAL_SECONDS = 45
 
+# Тарифы лендинга. Код сохраняется в companies.tariff, а цена — в подписке.
+# Не принимаем произвольные значения из URL/формы.
+REGISTRATION_PLANS = {
+    "start": {"name": "Старт", "price": 9900},
+    "business": {"name": "Бизнес", "price": 19900},
+    "pro": {"name": "Профи", "price": 29900},
+}
+DEFAULT_REGISTRATION_PLAN = "business"
+
+
+def normalize_registration_plan(value):
+    code = (value or "").strip().lower()
+    return code if code in REGISTRATION_PLANS else DEFAULT_REGISTRATION_PLAN
+
 
 @auth_bp.before_app_request
 def update_user_presence():
@@ -1194,6 +1208,17 @@ def delete_user(user_id):
     
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
+    selected_plan = normalize_registration_plan(
+        request.form.get("plan")
+        or request.args.get("plan")
+        or session.get("selected_plan")
+    )
+    selected_plan_info = REGISTRATION_PLANS[selected_plan]
+
+    # Сохраняем выбор до завершения регистрации, даже если форма отправляется
+    # без query-параметра ?plan=...
+    session["selected_plan"] = selected_plan
+
     if request.method == "POST":
         conn = get_db()
         cur = conn.cursor()
@@ -1219,14 +1244,18 @@ def register():
                 return render_template(
                     "register.html",
                     error="Укажите название компании, логин и пароль.",
-                    form=request.form
+                    form=request.form,
+                    selected_plan=selected_plan,
+                    selected_plan_info=selected_plan_info,
                 )
 
             if len(password) < 6:
                 return render_template(
                     "register.html",
                     error="Пароль должен содержать минимум 6 символов.",
-                    form=request.form
+                    form=request.form,
+                    selected_plan=selected_plan,
+                    selected_plan_info=selected_plan_info,
                 )
 
             cur.execute("SELECT id FROM users WHERE username = %s", (username,))
@@ -1234,20 +1263,23 @@ def register():
                 return render_template(
                     "register.html",
                     error="Такой логин уже используется.",
-                    form=request.form
+                    form=request.form,
+                    selected_plan=selected_plan,
+                    selected_plan_info=selected_plan_info,
                 )
 
             # 1. Компания
             cur.execute("""
                 INSERT INTO companies (
                     name, director, bin, address, phone,
-                    iik, bik, bank, kbe, knp, is_active
+                    iik, bik, bank, kbe, knp, tariff, is_active
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
                 RETURNING id
             """, (
                 name, director or None, bin or None, address or None, phone or None,
-                iik or None, bik or None, bank or None, kbe or None, knp or None
+                iik or None, bik or None, bank or None, kbe or None, knp or None,
+                selected_plan,
             ))
             company_id = cur.fetchone()["id"]
 
@@ -1281,13 +1313,13 @@ def register():
                     trial_ends_at, period_start, next_payment_at
                 )
                 VALUES (
-                    %s, 'trial', 'month', 2990,
+                    %s, 'trial', 'month', %s,
                     NOW() + INTERVAL '14 days',
                     NOW(),
                     NOW() + INTERVAL '14 days'
                 )
                 ON CONFLICT (company_id) DO NOTHING
-            """, (company_id,))
+            """, (company_id, selected_plan_info["price"]))
 
             # 4. Базовые модули
             cur.execute("""
@@ -1325,6 +1357,9 @@ def register():
             session["percent_rate"] = 0
             session["is_super_admin"] = False
             session["is_creator"] = False
+            session["selected_plan"] = selected_plan
+            session["selected_plan_label"] = selected_plan_info["name"]
+            session["selected_plan_price"] = selected_plan_info["price"]
             session["employee_modules"] = load_user_module_codes(user)
             session["presence_heartbeat_at"] = now_kz().isoformat()
             
@@ -1340,5 +1375,8 @@ def register():
             cur.close()
             pool.putconn(conn)
 
-    return render_template("register.html")
-
+    return render_template(
+        "register.html",
+        selected_plan=selected_plan,
+        selected_plan_info=selected_plan_info,
+    )

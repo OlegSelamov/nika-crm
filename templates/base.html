@@ -3468,15 +3468,15 @@ body.wa-modal-open {
     <div class="ai-assistant-panel__head">
         <div class="ai-assistant-panel__title">
             <img src="/static/icons/assistant-top.png" alt="" onerror="this.onerror=null;this.src='/static/icons/assistant-icon.png';">
-            <div><b>Nika AI</b><span>Ассистент вашей компании</span></div>
+            <div><b>Nika AI</b><span id="aiContextLabel">Ассистент вашей компании</span></div>
         </div>
         <button class="ai-assistant-panel__close" type="button" onclick="closeAiAssistant()">×</button>
     </div>
     <div id="aiMessages" class="ai-assistant-messages" aria-live="polite">
         <div id="aiWelcome" class="ai-welcome">
-            <b>Чем помочь?</b>
-            <p>Я могу читать и изменять данные Nika в пределах ваших прав. Перед любым изменением я попрошу подтверждение.</p>
-            <div class="ai-suggestions">
+            <b id="aiWelcomeTitle">Чем помочь?</b>
+            <p id="aiWelcomeText">Я могу читать и изменять данные Nika в пределах ваших прав. Перед любым изменением я попрошу подтверждение.</p>
+            <div id="aiSuggestions" class="ai-suggestions">
                 <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Какая выручка и прибыль сегодня?')">Выручка сегодня</button>
                 <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Покажи товары с низким остатком')">Низкие остатки</button>
                 <button class="ai-suggestion" type="button" onclick="useAiSuggestion('Какие товары продаются лучше всего?')">Лучшие товары</button>
@@ -4644,6 +4644,230 @@ let aiConversationId = null;
 let aiSending = false;
 let aiHistoryLoaded = false;
 
+const NIKA_PAGE_CONTEXTS = [
+    {
+        prefixes: ["/sales"],
+        label: "Продажи",
+        description: "Помогу найти товар, собрать продажу, выбрать клиента и проверить чеки.",
+        suggestions: [
+            ["Продажи сегодня", "Покажи продажи и выручку за сегодня"],
+            ["Найти товар", "Найди товар по названию или штрихкоду"],
+            ["Помощь по разделу", "Что я могу сделать в разделе продаж?"]
+        ]
+    },
+    {
+        prefixes: ["/stock/income"],
+        label: "Приход товара",
+        description: "Помогу найти позицию, подготовить приход и проверить закупочные цены.",
+        suggestions: [
+            ["Подготовить приход", "Помоги подготовить приход товара"],
+            ["Найти товар", "Найди товар в каталоге"],
+            ["Низкие остатки", "Покажи товары с низким остатком"]
+        ]
+    },
+    {
+        prefixes: ["/stock/writeoff"],
+        label: "Списание",
+        description: "Помогу найти товар, проверить остаток и подготовить безопасное списание.",
+        suggestions: [
+            ["Подготовить списание", "Помоги подготовить списание товара"],
+            ["Проверить остаток", "Покажи остаток товара"],
+            ["Движения товара", "Покажи последние движения товара"]
+        ]
+    },
+    {
+        prefixes: ["/stock/movements"],
+        label: "Движение товара",
+        description: "Помогу разобраться в приходах, продажах, возвратах и списаниях.",
+        suggestions: [
+            ["Последние движения", "Покажи последние движения товаров"],
+            ["Найти товар", "Найди товар и покажи его движение"],
+            ["Низкие остатки", "Покажи товары с низким остатком"]
+        ]
+    },
+    {
+        prefixes: ["/stock"],
+        label: "Склад",
+        description: "Помогу проверить остатки, найти дефицит и подготовить складскую операцию.",
+        suggestions: [
+            ["Низкие остатки", "Покажи товары с низким остатком"],
+            ["Остаток товара", "Покажи остаток товара"],
+            ["Помощь по складу", "Что я могу сделать в разделе склада?"]
+        ]
+    },
+    {
+        prefixes: ["/items"],
+        label: "Товары и услуги",
+        description: "Помогу найти позицию, проверить цену и подготовить добавление или изменение.",
+        suggestions: [
+            ["Найти позицию", "Найди товар или услугу в каталоге"],
+            ["Проверить цены", "Покажи товары без розничной цены"],
+            ["Добавить товар", "Помоги добавить новый товар"]
+        ]
+    },
+    {
+        prefixes: ["/clients"],
+        label: "Клиенты",
+        description: "Помогу найти клиента, посмотреть историю и подготовить сообщение или карточку.",
+        suggestions: [
+            ["Найти клиента", "Найди клиента по имени или номеру телефона"],
+            ["Лучшие клиенты", "Покажи лучших клиентов по покупкам"],
+            ["Создать клиента", "Помоги создать нового клиента"]
+        ]
+    },
+    {
+        prefixes: ["/accounting"],
+        label: "Бухгалтерия",
+        description: "Помогу проверить обязательства, документы, налоги и задолженности.",
+        suggestions: [
+            ["Задолженности", "Покажи текущие задолженности"],
+            ["Ближайшие налоги", "Какие налоговые события ближайшие?"],
+            ["Помощь по разделу", "Что я могу сделать в бухгалтерии?"]
+        ]
+    },
+    {
+        prefixes: ["/reports"],
+        label: "Отчёты",
+        description: "Помогу подобрать отчёт и объяснить показатели бизнеса.",
+        suggestions: [
+            ["Итоги месяца", "Покажи основные итоги текущего месяца"],
+            ["Лучшие товары", "Какие товары продаются лучше всего?"],
+            ["Помощь по отчётам", "Какой отчёт мне лучше открыть?"]
+        ]
+    },
+    {
+        prefixes: ["/analytics"],
+        label: "Аналитика",
+        description: "Помогу объяснить выручку, прибыль, средний чек и динамику продаж.",
+        suggestions: [
+            ["Итоги сегодня", "Какая выручка и прибыль сегодня?"],
+            ["Динамика продаж", "Как изменилась выручка за последнее время?"],
+            ["Лучшие товары", "Какие товары продаются лучше всего?"]
+        ]
+    },
+    {
+        prefixes: ["/expenses"],
+        label: "Расходы",
+        description: "Помогу найти расходы, посчитать сумму и подготовить новую запись.",
+        suggestions: [
+            ["Расходы месяца", "Покажи расходы за текущий месяц"],
+            ["Крупные расходы", "Какие расходы были самыми крупными?"],
+            ["Добавить расход", "Помоги добавить новый расход"]
+        ]
+    },
+    {
+        prefixes: ["/tasks"],
+        label: "Задачи",
+        description: "Помогу проверить сроки, найти просроченные задачи и подготовить новую.",
+        suggestions: [
+            ["Просроченные", "Покажи просроченные задачи"],
+            ["Задачи сегодня", "Какие задачи нужно выполнить сегодня?"],
+            ["Создать задачу", "Помоги создать новую задачу"]
+        ]
+    },
+    {
+        prefixes: ["/users"],
+        label: "Пользователи",
+        description: "Помогу найти сотрудника и разобраться с ролями и доступами.",
+        suggestions: [
+            ["Список сотрудников", "Покажи пользователей компании"],
+            ["Добавить сотрудника", "Помоги добавить нового сотрудника"],
+            ["Права доступа", "Объясни роли и права пользователей"]
+        ]
+    },
+    {
+        prefixes: ["/cto", "/rekassa"],
+        label: "ККМ и ЦТО",
+        description: "Помогу с кассой, reKassa, сменами, отчётами и оборудованием.",
+        suggestions: [
+            ["Статус кассы", "Что нужно проверить в настройках кассы?"],
+            ["Смена и отчёты", "Объясни работу X- и Z-отчётов"],
+            ["Помощь по разделу", "Что я могу настроить в ККМ и ЦТО?"]
+        ]
+    },
+    {
+        prefixes: ["/storefront"],
+        label: "Онлайн-витрина",
+        description: "Помогу проверить опубликованные позиции, заказы и настройки витрины.",
+        suggestions: [
+            ["Товары на витрине", "Покажи товары, опубликованные на онлайн-витрине"],
+            ["Проверить заказы", "Помоги проверить заказы с онлайн-витрины"],
+            ["Настроить витрину", "Что нужно настроить на онлайн-витрине?"]
+        ]
+    },
+    {
+        prefixes: ["/subscription"],
+        label: "Подписка и модули",
+        description: "Помогу понять состав подписки, модули и доступные возможности.",
+        suggestions: [
+            ["Моя подписка", "Объясни мою текущую подписку"],
+            ["Нужные модули", "Какие модули нужны моему бизнесу?"],
+            ["Помощь по разделу", "Что можно изменить в подписке?"]
+        ]
+    },
+    {
+        prefixes: ["/settings", "/company"],
+        label: "Настройки",
+        description: "Помогу найти нужную настройку компании, интеграции или оборудования.",
+        suggestions: [
+            ["Настройки компании", "Что важно заполнить в настройках компании?"],
+            ["Интеграции", "Какие интеграции можно подключить?"],
+            ["Найти настройку", "Помоги найти нужную настройку"]
+        ]
+    },
+    {
+        prefixes: ["/profile"],
+        label: "Профиль",
+        description: "Помогу разобраться с аккаунтом, компанией и вашей активностью.",
+        suggestions: [
+            ["Моя компания", "Покажи основные данные моей компании"],
+            ["Мои задачи", "Покажи мои текущие задачи"],
+            ["Помощь по профилю", "Что можно сделать в профиле?"]
+        ]
+    },
+    {
+        prefixes: ["/dashboard", "/"],
+        label: "Главная",
+        description: "Помогу быстро оценить состояние бизнеса и перейти к нужному действию.",
+        suggestions: [
+            ["Итоги сегодня", "Какая выручка и прибыль сегодня?"],
+            ["Низкие остатки", "Покажи товары с низким остатком"],
+            ["Что требует внимания", "Что в бизнесе сейчас требует моего внимания?"]
+        ]
+    }
+];
+
+function getNikaPageContext() {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    return NIKA_PAGE_CONTEXTS.find(context =>
+        context.prefixes.some(prefix => prefix === "/" ? path === "/" : path === prefix || path.startsWith(`${prefix}/`))
+    ) || NIKA_PAGE_CONTEXTS[NIKA_PAGE_CONTEXTS.length - 1];
+}
+
+function renderNikaPageContext() {
+    const context = getNikaPageContext();
+    const contextLabel = document.getElementById("aiContextLabel");
+    const welcomeTitle = document.getElementById("aiWelcomeTitle");
+    const welcomeText = document.getElementById("aiWelcomeText");
+    const suggestions = document.getElementById("aiSuggestions");
+
+    if (contextLabel) contextLabel.textContent = `Помогаю: ${context.label}`;
+    if (welcomeTitle) welcomeTitle.textContent = `Помогу в разделе «${context.label}»`;
+    if (welcomeText) welcomeText.textContent = context.description;
+
+    if (suggestions) {
+        suggestions.replaceChildren();
+        context.suggestions.forEach(([label, command]) => {
+            const button = document.createElement("button");
+            button.className = "ai-suggestion";
+            button.type = "button";
+            button.textContent = label;
+            button.addEventListener("click", () => useAiSuggestion(command));
+            suggestions.appendChild(button);
+        });
+    }
+}
+
 function appendAiMessage(role, text, options = {}) {
     const messages = document.getElementById("aiMessages");
     if (!messages || !text) return null;
@@ -4788,10 +5012,15 @@ async function runLegacyAgentAction(data) {
 }
 
 async function requestAiReply(text) {
+    const pagePath = window.location.pathname.slice(0, 200);
     let response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: {"Content-Type": "application/json", "Accept": "application/json"},
-        body: JSON.stringify({message: text, conversation_id: aiConversationId})
+        body: JSON.stringify({
+            message: text,
+            conversation_id: aiConversationId,
+            page_path: pagePath
+        })
     });
 
     // Пока серверный AI-маршрут не добавлен, старые голосовые команды продолжают работать.
@@ -4931,19 +5160,50 @@ function toggleAiAssistant() {
     const panel = document.getElementById("aiAssistantPanel");
     if (!panel) return;
 
-    const isOpen = panel.classList.toggle("open");
+    if (panel.classList.contains("open")) {
+        closeAiAssistant();
+    } else {
+        openAiAssistant();
+    }
+}
 
-    if (isOpen) {
-        closeSystemDrawers();
-        loadAiHistory();
+function syncAiAssistantState(isOpen) {
+    document.querySelectorAll('[onclick="toggleAiAssistant()"]')
+        .forEach(button => button.setAttribute("aria-expanded", isOpen ? "true" : "false"));
+}
+
+function openAiAssistant(options = {}) {
+    const panel = document.getElementById("aiAssistantPanel");
+    if (!panel) return;
+
+    closeSystemDrawers();
+    panel.classList.add("open");
+    syncAiAssistantState(true);
+    sessionStorage.setItem("nikaAiPanelOpen", "1");
+    loadAiHistory();
+
+    if (options.focus !== false) {
         setTimeout(() => document.getElementById("agent-input")?.focus(), 80);
     }
 }
 
-function closeAiAssistant() {
+function closeAiAssistant(options = {}) {
     document.getElementById("aiAssistantPanel")?.classList.remove("open");
+    syncAiAssistantState(false);
+    if (options.remember !== false) {
+        sessionStorage.setItem("nikaAiPanelOpen", "0");
+    }
     if (recognition) recognition.stop();
 }
+
+document.addEventListener("DOMContentLoaded", function() {
+    renderNikaPageContext();
+    if (sessionStorage.getItem("nikaAiPanelOpen") === "1") {
+        openAiAssistant({focus: false});
+    } else {
+        syncAiAssistantState(false);
+    }
+});
 
 document.addEventListener("click", function(event) {
     const panel = document.getElementById("aiAssistantPanel");

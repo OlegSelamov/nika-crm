@@ -10,8 +10,9 @@
     <title>Nika Business — бизнес, который вас слышит</title>
     <link rel="icon" type="image/png" href="/static/img/logo-mini.png">
     <link rel="stylesheet" href="/static/css/landing.css">
+    <link rel="stylesheet" href="/static/css/nika-public-assistant.css">
 </head>
-<body>
+<body data-nika-assistant-page="landing" data-nika-assistant-authenticated="false">
     <div class="site-noise" aria-hidden="true"></div>
 
     <header class="site-header" data-site-header>
@@ -30,7 +31,7 @@
 
             <div class="site-header__actions">
                 <a class="button button--quiet site-login" href="/login">Войти</a>
-                <a class="button button--primary site-start" href="/login">Начать бесплатно</a>
+                <a class="button button--primary site-start" href="{{ url_for('auth.register', plan='business') }}">Начать бесплатно</a>
                 <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="siteNavigation" aria-label="Открыть меню" data-nav-toggle>
                     <span></span><span></span><span></span>
                 </button>
@@ -53,7 +54,7 @@
                     <p class="hero__lead">Скажите Nika, что нужно сделать. Она откроет нужный раздел, найдёт клиента, соберёт корзину, примет оплату, пробьёт фискальный чек и отправит его клиенту.</p>
 
                     <div class="hero__actions">
-                        <a class="button button--primary button--large" href="/login">
+                        <a class="button button--primary button--large" href="{{ url_for('auth.register', plan='business') }}">
                             <img src="/static/icons/start.png" alt="">
                             Попробовать бесплатно
                         </a>
@@ -323,17 +324,17 @@
                     <article class="price-card reveal">
                         <span class="price-card__name">Старт</span><h3>9 900 ₸<small>/ месяц</small></h3><p>Для одной торговой точки.</p>
                         <ul><li>Продажи и остатки</li><li>Товары и клиенты</li><li>Базовая аналитика</li><li>Android и веб-версия</li><li>reKassa — 1 точка</li></ul>
-                        <a class="button button--glass" href="/login">Начать работу</a>
+                        <a class="button button--glass" href="{{ url_for('auth.register', plan='start') }}">Начать работу</a>
                     </article>
                     <article class="price-card price-card--featured reveal" data-delay="60">
                         <span class="price-card__popular">Популярный</span><span class="price-card__name">Бизнес</span><h3>19 900 ₸<small>/ месяц</small></h3><p>Для большинства магазинов.</p>
                         <ul><li>Всё из тарифа «Старт»</li><li>Windows-приложение</li><li>Пользователи и роли</li><li>Kaspi POS и автопечать</li><li>reKassa — до 3 точек</li></ul>
-                        <a class="button button--primary" href="/login">Выбрать тариф</a>
+                        <a class="button button--primary" href="{{ url_for('auth.register', plan='business') }}">Выбрать тариф</a>
                     </article>
                     <article class="price-card reveal" data-delay="120">
                         <span class="price-card__name">Профи</span><h3>29 900 ₸<small>/ месяц</small></h3><p>Для нескольких магазинов.</p>
                         <ul><li>Всё из тарифа «Бизнес»</li><li>До 10 торговых точек</li><li>Несколько складов и касс</li><li>Расширенная аналитика</li><li>Приоритетная поддержка</li></ul>
-                        <a class="button button--glass" href="/login">Подключить</a>
+                        <a class="button button--glass" href="{{ url_for('auth.register', plan='pro') }}">Подключить</a>
                     </article>
                     <article class="price-card reveal" data-delay="180">
                         <span class="price-card__name">Корпоративный</span><h3 class="price-card__custom">Индивидуально</h3><p>Для сетей и особых процессов.</p>
@@ -364,7 +365,7 @@
                 <span class="section-kicker">Попробуйте Nika Business</span>
                 <h2>Пусть бизнес работает<br><em>быстрее вас.</em></h2>
                 <p>Продажи, склад, клиенты, чеки и AI-агент — в одной системе.</p>
-                <div class="final-cta__actions"><a class="button button--primary button--large" href="/login">Начать бесплатно</a><a class="button button--glass button--large" href="#capabilities">Посмотреть возможности</a></div>
+                <div class="final-cta__actions"><a class="button button--primary button--large" href="{{ url_for('auth.register', plan='business') }}">Начать бесплатно</a><a class="button button--glass button--large" href="#capabilities">Посмотреть возможности</a></div>
             </div>
         </section>
     </main>
@@ -379,5 +380,6 @@
     </footer>
 
     <script src="/static/js/landing.js" defer></script>
+    <script src="/static/js/nika-public-assistant.js" defer></script>
 </body>
 </html>

@@ -8,6 +8,25 @@ from utils.timezone import now_kz
 storefront_bp = Blueprint("storefront", __name__, url_prefix="/s")
 
 
+# Фактический остаток во всей системе хранится как сумма движений склада.
+# items.quantity может отставать после прихода или списания, поэтому витрина
+# использует тот же источник, что и основной раздел «Склад».
+ACTUAL_STOCK_JOIN = """
+    LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
+                WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
+                ELSE 0
+            END
+        ), 0) AS quantity
+        FROM stock_movements sm
+        WHERE sm.company_id = i.company_id
+          AND sm.item_id = i.id
+    ) stock_totals ON TRUE
+"""
+
+
 def _money(value):
     try:
         return Decimal(str(value or 0))
@@ -98,14 +117,16 @@ def _cart_payload(store):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT
-                i.id, i.name, i.retail_price, i.price, i.unit, i.quantity,
+                i.id, i.name, i.retail_price, i.price, i.unit,
+                stock_totals.quantity AS quantity,
                 (SELECT ii.image
                  FROM item_images ii
                  WHERE ii.item_id=i.id
                  ORDER BY ii.id LIMIT 1) AS image
             FROM items i
+            {ACTUAL_STOCK_JOIN}
             WHERE i.company_id=%s AND i.id=ANY(%s)
         """, (store["company_id"], ids))
         rows = cur.fetchall()
@@ -176,16 +197,18 @@ def home(slug):
         cur.execute(f"""
             SELECT
                 i.id, i.name, i.description, i.retail_price, i.price,
-                i.discount_percent, i.category, i.unit, i.quantity,
+                i.discount_percent, i.category, i.unit,
+                stock_totals.quantity AS quantity,
                 i.item_type, i.service_sale_mode, i.booking_enabled, i.booking_duration_minutes,
                 (SELECT ii.image
                  FROM item_images ii
                  WHERE ii.item_id=i.id
                  ORDER BY ii.id LIMIT 1) AS image
             FROM items i
+            {ACTUAL_STOCK_JOIN}
             WHERE {" AND ".join(filters)}
             ORDER BY
-                CASE WHEN i.item_type='service' OR COALESCE(i.quantity,0)>0 THEN 0 ELSE 1 END,
+                CASE WHEN i.item_type='service' OR stock_totals.quantity>0 THEN 0 ELSE 1 END,
                 i.category NULLS LAST,
                 i.name
         """, params)
@@ -241,12 +264,14 @@ def item_data(slug, item_id):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 i.id, i.name, i.description, i.retail_price, i.price,
-                i.discount_percent, i.category, i.unit, i.quantity,
+                i.discount_percent, i.category, i.unit,
+                stock_totals.quantity AS quantity,
                 i.item_type, i.service_sale_mode, i.booking_enabled, i.booking_duration_minutes
             FROM items i
+            {ACTUAL_STOCK_JOIN}
             WHERE i.id=%s
               AND i.company_id=%s
               AND COALESCE(i.storefront_hidden,FALSE)=FALSE
@@ -305,9 +330,10 @@ def item(slug, item_id):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT i.*
+        cur.execute(f"""
+            SELECT i.*, stock_totals.quantity AS actual_quantity
             FROM items i
+            {ACTUAL_STOCK_JOIN}
             WHERE i.id=%s AND i.company_id=%s
               AND COALESCE(i.storefront_hidden,FALSE)=FALSE
         """, (item_id, store["company_id"]))
@@ -317,6 +343,7 @@ def item(slug, item_id):
             return "Позиция не найдена", 404
 
         item = dict(raw)
+        item["quantity"] = item.pop("actual_quantity")
         item["display_price"] = item.get("retail_price") or item.get("price") or 0
 
         cur.execute("""
@@ -371,12 +398,14 @@ def cart_add(slug):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT id, item_type, service_sale_mode, quantity
-            FROM items
-            WHERE id=%s
-              AND company_id=%s
-              AND COALESCE(storefront_hidden,FALSE)=FALSE
+        cur.execute(f"""
+            SELECT i.id, i.item_type, i.service_sale_mode,
+                   stock_totals.quantity AS quantity
+            FROM items i
+            {ACTUAL_STOCK_JOIN}
+            WHERE i.id=%s
+              AND i.company_id=%s
+              AND COALESCE(i.storefront_hidden,FALSE)=FALSE
         """, (int(raw_id), store["company_id"]))
         item = cur.fetchone()
 
@@ -449,10 +478,11 @@ def cart_update(slug):
             conn = get_db()
             cur = conn.cursor()
             try:
-                cur.execute("""
-                    SELECT quantity, item_type
-                    FROM items
-                    WHERE id=%s AND company_id=%s
+                cur.execute(f"""
+                    SELECT stock_totals.quantity AS quantity, i.item_type
+                    FROM items i
+                    {ACTUAL_STOCK_JOIN}
+                    WHERE i.id=%s AND i.company_id=%s
                 """, (int(item_id), store["company_id"]))
                 row = cur.fetchone()
 
@@ -562,11 +592,14 @@ def checkout_ajax(slug):
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            SELECT id, name, retail_price, price, unit, quantity, item_type
-            FROM items
-            WHERE company_id=%s AND id=ANY(%s)
-            FOR UPDATE
+        cur.execute(f"""
+            SELECT
+                i.id, i.name, i.retail_price, i.price, i.unit,
+                stock_totals.quantity AS quantity, i.item_type
+            FROM items i
+            {ACTUAL_STOCK_JOIN}
+            WHERE i.company_id=%s AND i.id=ANY(%s)
+            FOR UPDATE OF i
         """, (store["company_id"], ids))
         rows = cur.fetchall()
 
@@ -712,10 +745,13 @@ def checkout(slug):
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            SELECT id, name, retail_price, price, unit, quantity, item_type
-            FROM items
-            WHERE company_id=%s AND id=ANY(%s)
+        cur.execute(f"""
+            SELECT
+                i.id, i.name, i.retail_price, i.price, i.unit,
+                stock_totals.quantity AS quantity, i.item_type
+            FROM items i
+            {ACTUAL_STOCK_JOIN}
+            WHERE i.company_id=%s AND i.id=ANY(%s)
         """, (store["company_id"], ids))
         rows = cur.fetchall()
 

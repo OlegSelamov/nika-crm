@@ -129,9 +129,10 @@ button:hover {
     text-decoration: none;
 }
 </style>
+<link rel="stylesheet" href="/static/css/nika-public-assistant.css">
 </head>
 
-<body>
+<body data-nika-assistant-page="login" data-nika-assistant-authenticated="false">
 
 <form method="POST" class="login-box">
     <div class="logo">Nika <span>Business</span></div>
@@ -155,5 +156,6 @@ button:hover {
     <a href="/" class="back-link">← На главную</a>
 </form>
 
+<script src="/static/js/nika-public-assistant.js" defer></script>
 </body>
 </html>

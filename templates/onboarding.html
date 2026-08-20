@@ -31,12 +31,14 @@ input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.1)}
 .tip{margin-top:17px;padding:15px;border-radius:13px;background:#ecfdf5;color:#166534;font-size:13px;line-height:1.45}
 @media(max-width:650px){.cards,.grid{grid-template-columns:1fr}.body,.head{padding-left:20px;padding-right:20px}.actions{flex-wrap:wrap}.next,.back{width:100%;margin-left:0}}
 </style>
+<link rel="stylesheet" href="/static/css/nika-public-assistant.css">
 </head>
-<body>
+<body data-nika-assistant-page="onboarding" data-nika-assistant-authenticated="true">
+{% set plan_names = {'start': 'Старт', 'business': 'Бизнес', 'pro': 'Профи'} %}
 <div class="shell">
 <div class="head">
   <div class="logo">Nika <span>Business</span></div>
-  <div class="company">{{ company.name }} · пробный период до {{ company.trial_ends_at.strftime('%d.%m.%Y') if company.trial_ends_at else '—' }}</div>
+  <div class="company">{{ company.name }} · тариф «{{ plan_names.get(company.tariff, 'Бизнес') }}» · пробный период до {{ company.trial_ends_at.strftime('%d.%m.%Y') if company.trial_ends_at else '—' }}</div>
   <div class="progress">
     <div class="bar active"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
   </div>
@@ -124,6 +126,7 @@ input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.1)}
   <div class="desc">После сохранения система сама включит подходящие модули и сформирует персональный план запуска.</div>
   <div class="review">
     <div class="review-row"><span>Компания</span><strong>{{ company.name }}</strong></div>
+    <div class="review-row"><span>Тариф</span><strong>{{ plan_names.get(company.tariff, 'Бизнес') }} · {{ '{:,.0f}'.format(company.base_price or 19900).replace(',', ' ') }} ₸/месяц</strong></div>
     <div class="review-row"><span>Бизнес</span><strong id="reviewBusiness">—</strong></div>
     <div class="review-row"><span>Товары</span><strong id="reviewProducts">—</strong></div>
     <div class="review-row"><span>Услуги</span><strong id="reviewServices">—</strong></div>
@@ -181,5 +184,6 @@ function fillReview(){
   document.getElementById('reviewEmployees').textContent=v('has_employees')==='1' ? `${v('employee_count')||1}` : 'Нет';
 }
 </script>
+<script src="/static/js/nika-public-assistant.js" defer></script>
 </body>
 </html>
