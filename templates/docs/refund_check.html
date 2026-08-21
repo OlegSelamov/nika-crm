@@ -5,28 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Чек возврата №{{ sale.sale_number or sale.id }}</title>
     <style>
-        @page { size: 80mm auto; margin: 4mm; }
+        @page { margin: 0; }
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; background: #fff; color: #111; }
-        body { font: 12px/1.35 "Courier New", monospace; }
-        .receipt { width: 72mm; max-width: 100%; margin: 0 auto; padding: 3mm; }
+        body { font: 11px/1.2 Arial, sans-serif; }
+        .receipt { width: 68mm; max-width: 100%; margin: 0 auto; padding: 2mm 0; }
         .center { text-align: center; }
-        .title { margin: 8px 0 2px; font-size: 17px; font-weight: 700; }
-        .subtitle { font-size: 13px; font-weight: 700; }
-        .divider { margin: 8px 0; border-top: 1px dashed #111; }
-        .row { display: flex; justify-content: space-between; gap: 10px; }
-        .row span:last-child { text-align: right; }
-        .item { margin: 7px 0; }
-        .item-name { font-weight: 700; overflow-wrap: anywhere; }
-        .total { margin-top: 8px; font-size: 15px; font-weight: 700; }
-        .meta { margin-top: 5px; overflow-wrap: anywhere; }
+        .center > div:first-child { font-size: 16px; font-weight: 700; }
+        .title { margin: 8px 0 2px; font-size: 16px; font-weight: 800; }
+        .subtitle { font-size: 12px; font-weight: 700; }
+        .divider { margin: 6px 0; border-top: 1px dashed #000; }
+        .row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 2px; font-size: 11px; }
+        .row span:first-child { min-width: 0; overflow-wrap: anywhere; }
+        .row span:last-child { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+        .item { margin: 6px 0; }
+        .item-name { margin-bottom: 2px; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+        .total { margin-top: 8px; font-size: 18px; font-weight: 800; }
+        .meta { margin-top: 4px; overflow-wrap: anywhere; }
         .muted { color: #444; }
-        .fiscal-qr { margin-top: 10px; text-align: center; }
+        .fiscal-qr { margin-top: 8px; text-align: center; }
         .fiscal-qr a { display: inline-block; color: inherit; text-decoration: none; }
-        .fiscal-qr img { display: block; width: 38mm; height: 38mm; margin: 0 auto 4px; }
-        .fiscal-qr-label { font-size: 11px; font-weight: 700; }
+        .fiscal-qr img { display: block; width: 32mm; height: 32mm; margin: 0 auto 4px; }
+        .fiscal-qr-label { font-size: 10px; font-weight: 700; }
         @media print {
-            .receipt { width: 72mm; padding: 0; }
+            .receipt { width: 68mm; padding: 1.5mm 0; }
         }
     </style>
 </head>

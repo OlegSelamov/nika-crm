@@ -6,13 +6,23 @@
 
 <style>
 
+@page {
+    margin: 0;
+}
+
+* {
+    box-sizing: border-box;
+}
+
 .receipt {
 
-    width: 58mm;
+    width: 68mm;
+
+    max-width: 100%;
 
     margin: 0 auto;
 
-    padding: 4px;
+    padding: 2mm 0;
 
     font-family: Arial, sans-serif;
 
@@ -365,8 +375,6 @@
             src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=SALE-{{ sale.id }}"
         >
     {% endif %}
-
-</div>
 
 </div>
 

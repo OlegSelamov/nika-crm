@@ -200,7 +200,9 @@ function ensureSelectedPrinter(deviceName, kind) {
 
 function receiptPage(html, title = "Чек") {
     const paperWidth = settings.receipt_paper_width === 58 ? 58 : 80;
-    const contentWidth = paperWidth === 58 ? 52 : 72;
+    // У принтеров с лентой 80 мм реальная печатная область обычно 68–72 мм.
+    // Берём безопасную ширину, чтобы правый край не обрезался драйвером.
+    const contentWidth = paperWidth === 58 ? 48 : 68;
     return `<!doctype html>
 <html lang="ru">
 <head>
@@ -211,26 +213,114 @@ function receiptPage(html, title = "Чек") {
         @page { margin: 0; }
         * { box-sizing: border-box; }
         html, body {
-            width: ${paperWidth}mm;
+            width: 100%;
             margin: 0;
             padding: 0;
             overflow: visible;
             background: #fff;
             color: #111;
         }
-        body { padding: 2mm; }
-        .receipt {
+        body {
+            min-width: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .receipt,
+        .shift-report-paper {
             width: ${contentWidth}mm !important;
             max-width: ${contentWidth}mm !important;
             min-height: 0 !important;
             margin: 0 auto !important;
-            padding: 0 !important;
+            padding: 1.5mm 0 !important;
             overflow: visible !important;
+            background: #fff !important;
+            color: #000 !important;
         }
         img { max-width: 100%; }
     </style>
 </head>
-<body>${html}</body>
+<body>
+${html}
+<style>
+    @page { margin: 0 !important; }
+    html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    .receipt,
+    .shift-report-paper {
+        width: ${contentWidth}mm !important;
+        max-width: ${contentWidth}mm !important;
+        min-height: 0 !important;
+        margin: 0 auto !important;
+        padding: 1.5mm 0 !important;
+        overflow: visible !important;
+        background: #fff !important;
+        color: #000 !important;
+    }
+    .receipt *,
+    .shift-report-paper * { box-sizing: border-box; }
+    .receipt .info-row,
+    .receipt .item-meta,
+    .receipt .payment,
+    .receipt .total,
+    .receipt .row {
+        min-width: 0 !important;
+        gap: 5px !important;
+    }
+    .receipt .info-row > :first-child,
+    .receipt .item-meta > :first-child,
+    .receipt .payment > :first-child,
+    .receipt .total > :first-child,
+    .receipt .row > :first-child {
+        min-width: 0 !important;
+        overflow-wrap: anywhere !important;
+    }
+    .receipt .info-row > :last-child,
+    .receipt .item-meta > :last-child,
+    .receipt .payment > :last-child,
+    .receipt .total > :last-child,
+    .receipt .row > :last-child {
+        flex: 0 1 auto !important;
+        min-width: 0 !important;
+        text-align: right !important;
+        overflow-wrap: anywhere !important;
+    }
+    .shift-report-paper {
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        line-height: 1.32 !important;
+        box-shadow: none !important;
+    }
+    .shift-receipt-center { text-align: center !important; }
+    .shift-receipt-name { font-size: 16px !important; font-weight: 800 !important; }
+    .shift-receipt-id { font-size: 12px !important; font-weight: 700 !important; }
+    .shift-receipt-address { margin-top: 2px !important; font-size: 11px !important; font-weight: 600 !important; }
+    .shift-receipt-requisites { margin: 12px 0 !important; }
+    .shift-receipt-line {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: flex-start !important;
+        gap: 6px !important;
+        margin: 3px 0 !important;
+    }
+    .shift-receipt-line > :first-child { min-width: 0 !important; overflow-wrap: anywhere !important; }
+    .shift-receipt-line > :last-child { flex: 0 0 auto !important; text-align: right !important; font-weight: 700 !important; }
+    .shift-receipt-kind { margin: 14px 0 12px !important; text-align: center !important; font-size: 18px !important; font-weight: 900 !important; }
+    .shift-receipt-grid {
+        display: grid !important;
+        grid-template-columns: auto 1fr !important;
+        gap: 3px 8px !important;
+        align-items: baseline !important;
+    }
+    .shift-receipt-grid .value { text-align: right !important; white-space: normal !important; font-weight: 700 !important; }
+    .shift-receipt-separator { margin: 10px 0 !important; border-top: 1px dashed #000 !important; }
+    .shift-receipt-section-title { margin: 0 0 5px !important; font-size: 13px !important; font-weight: 900 !important; text-transform: uppercase !important; }
+    .shift-receipt-block { margin: 0 0 11px !important; }
+    .shift-receipt-operation-title { margin: 0 0 4px !important; font-size: 14px !important; font-weight: 900 !important; text-transform: uppercase !important; }
+    .shift-receipt-total-count { margin-top: 10px !important; }
+    .shift-receipt-fdo { margin-top: 16px !important; text-align: center !important; font-size: 11px !important; font-weight: 700 !important; }
+    .shift-receipt-empty { color: #000 !important; text-align: center !important; }
+</style>
+</body>
 </html>`;
 }
 
@@ -348,6 +438,7 @@ function testReceiptHtml() {
             <div style="margin:8px 0;border-top:1px dashed #111"></div>
             <div style="display:flex;justify-content:space-between"><span>Дата</span><span>${now}</span></div>
             <div style="display:flex;justify-content:space-between"><span>Ширина ленты</span><span>${settings.receipt_paper_width} мм</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Рабочая ширина</span><span>${settings.receipt_paper_width === 58 ? 48 : 68} мм</span></div>
             <div style="display:flex;justify-content:space-between"><span>Копий</span><span>${settings.receipt_copies}</span></div>
             <div style="margin:8px 0;border-top:1px dashed #111"></div>
             <div>Русский: Проверка печати</div>

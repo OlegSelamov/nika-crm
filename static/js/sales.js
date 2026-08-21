@@ -834,6 +834,30 @@ async function printCurrentDocument(event) {
         event.stopPropagation();
     }
 
+    if (currentDocumentType === "refundCheck") {
+        const frame = document.getElementById("documentFrame");
+        if (frame && frame.contentWindow) {
+            const printerApi = getElectronPrinterApi();
+            if (printerApi && frame.contentDocument) {
+                try {
+                    await printerApi.printReceipt({
+                        html: frame.contentDocument.documentElement.outerHTML,
+                        title: documentConfig.refundCheck.title
+                    });
+                    return;
+                } catch (error) {
+                    console.error("Electron refund receipt print failed", error);
+                    alert(error.message || "Не удалось распечатать чек возврата");
+                    return;
+                }
+            }
+
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+        }
+        return;
+    }
+
     if (currentDocumentType !== "check") {
         const frame = document.getElementById("documentFrame");
         if (frame && frame.contentWindow) {
@@ -3345,7 +3369,7 @@ function refundSale(id, button = null){
         }
     }
 
-    function printReport(modalId) {
+    function printReportInBrowser(modalId) {
         const modal = $(modalId);
         modal.classList.add('print-target');
         document.body.classList.add('shift-report-printing');
@@ -3356,6 +3380,30 @@ function refundSale(id, button = null){
         window.addEventListener('afterprint', cleanup, { once: true });
         window.print();
         setTimeout(cleanup, 1500);
+    }
+
+    async function printReport(modalId) {
+        const modal = $(modalId);
+        const paper = modal?.querySelector('.shift-report-paper:not([hidden])');
+        const printerApi = getElectronPrinterApi();
+
+        if (printerApi && paper) {
+            try {
+                const reportType = modalId === 'shiftXModal' ? 'X' : 'Z';
+                await printerApi.printReceipt({
+                    html: `<main class="receipt shift-report-paper">${paper.innerHTML}</main>`,
+                    title: `${reportType}‑отчёт`
+                });
+                toast(`${reportType}‑отчёт отправлен на чековый принтер`);
+                return;
+            } catch (error) {
+                console.error('Electron shift report print failed', error);
+                toast(error.message || 'Не удалось распечатать отчёт', true);
+                return;
+            }
+        }
+
+        printReportInBrowser(modalId);
     }
 
     $('shiftRefreshBtn').addEventListener('click', () => loadStatus(true));
@@ -3382,10 +3430,10 @@ function refundSale(id, button = null){
 
         const action = event.target.closest('[data-shift-action]');
         if (!action) return;
-        if (action.dataset.shiftAction === 'print') printReport(action.dataset.modal);
+        if (action.dataset.shiftAction === 'print') await printReport(action.dataset.modal);
         if (action.dataset.shiftAction === 'pdf') {
             toast('В окне печати выберите «Сохранить как PDF»');
-            setTimeout(() => printReport(action.dataset.modal), 180);
+            setTimeout(() => printReportInBrowser(action.dataset.modal), 180);
         }
         if (action.dataset.shiftAction === 'share') {
             try {
