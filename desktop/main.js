@@ -1,10 +1,15 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 
 let win;
 let flaskProcess;
+let updatePromptOpen = false;
+let updateCheckTimer;
+
+const UPDATE_URL = "https://nikabusiness.com/static/downloads/windows/";
 
 const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
@@ -605,11 +610,76 @@ function createWindow() {
     });
 }
 
+function configureAutoUpdates() {
+    if (!app.isPackaged) {
+        console.log("Автообновление отключено в режиме разработки");
+        return;
+    }
+
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.allowDowngrade = false;
+    autoUpdater.setFeedURL({ provider: "generic", url: UPDATE_URL });
+
+    autoUpdater.on("update-available", async (info) => {
+        if (updatePromptOpen || !win || win.isDestroyed()) return;
+        updatePromptOpen = true;
+        try {
+            const result = await dialog.showMessageBox(win, {
+                type: "info",
+                title: "Обновление Nika Business",
+                message: `Доступна новая версия ${info.version}`,
+                detail: "Скачать обновление сейчас? Можно продолжать работу, пока оно загружается.",
+                buttons: ["Обновить", "Позже"],
+                defaultId: 0,
+                cancelId: 1,
+                noLink: true
+            });
+            if (result.response === 0) {
+                await autoUpdater.downloadUpdate();
+            }
+        } catch (error) {
+            console.error("Не удалось скачать обновление:", error);
+        } finally {
+            updatePromptOpen = false;
+        }
+    });
+
+    autoUpdater.on("update-downloaded", async (info) => {
+        if (!win || win.isDestroyed()) return;
+        const result = await dialog.showMessageBox(win, {
+            type: "info",
+            title: "Обновление готово",
+            message: `Nika Business ${info.version} скачана`,
+            detail: "Перезапустить приложение и установить обновление?",
+            buttons: ["Перезапустить сейчас", "После закрытия приложения"],
+            defaultId: 0,
+            cancelId: 1,
+            noLink: true
+        });
+        if (result.response === 0) {
+            setImmediate(() => autoUpdater.quitAndInstall(false, true));
+        }
+    });
+
+    autoUpdater.on("error", (error) => {
+        console.error("Ошибка автообновления Nika Business:", error);
+    });
+
+    const check = () => autoUpdater.checkForUpdates().catch((error) => {
+        console.error("Не удалось проверить обновления:", error);
+    });
+
+    setTimeout(check, 10_000);
+    updateCheckTimer = setInterval(check, 4 * 60 * 60 * 1000);
+}
+
 app.whenReady().then(() => {
     settings = loadPrinterSettings();
     registerPrinterIpc();
     if (DEV_MODE) startFlask();
     createWindow();
+    configureAutoUpdates();
 
     app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -617,6 +687,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+    if (updateCheckTimer) clearInterval(updateCheckTimer);
     if (DEV_MODE && flaskProcess) {
         flaskProcess.kill();
         flaskProcess = null;

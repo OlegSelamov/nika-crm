@@ -1865,6 +1865,85 @@ img {
 .device-phone strong { font-size: 11px; }
 .device-phone span { max-width: 90px; color: #868fa1; font-size: 7px; line-height: 1.4; }
 
+.downloads-section {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+}
+
+.downloads-glow {
+    position: absolute;
+    z-index: -1;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    filter: blur(100px);
+    opacity: .18;
+}
+
+.downloads-glow--one { top: 5%; left: -180px; background: var(--violet); }
+.downloads-glow--two { right: -180px; bottom: 0; background: var(--cyan); }
+
+.downloads-grid {
+    max-width: 960px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 17px;
+    margin: 0 auto;
+}
+
+.download-card {
+    position: relative;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 31px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    background: linear-gradient(145deg, rgba(255,255,255,.065), rgba(255,255,255,.022));
+    box-shadow: 0 25px 70px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.download-card::after {
+    content: "";
+    position: absolute;
+    right: -110px;
+    bottom: -130px;
+    z-index: -1;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: rgba(130,107,255,.14);
+    filter: blur(15px);
+}
+
+.download-card--android::after { background: rgba(69,212,154,.12); }
+.download-card__top { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+.download-card__icon {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 18px;
+    color: #fff;
+    background: linear-gradient(145deg, rgba(130,107,255,.36), rgba(53,198,223,.16));
+    font-size: 30px;
+    font-weight: 900;
+}
+.download-card--android .download-card__icon { background: linear-gradient(145deg, rgba(69,212,154,.34), rgba(53,198,223,.15)); }
+.download-card__badge { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: #bfc7d7; background: rgba(255,255,255,.035); font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+.download-card h3 { margin: 25px 0 10px; font-size: 24px; line-height: 1.15; letter-spacing: -.03em; }
+.download-card > p { min-height: 61px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.download-card ul { display: grid; gap: 9px; margin: 23px 0 25px; padding: 0; list-style: none; }
+.download-card li { position: relative; padding-left: 20px; color: #c7cfdd; font-size: 10px; }
+.download-card li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 900; }
+.download-card .button { width: 100%; margin-top: auto; }
+.button--android { color: #06130e; background: linear-gradient(120deg, #55dfa7, #38c8d3); box-shadow: 0 13px 35px rgba(69,212,154,.19); }
+.button--android:hover { filter: brightness(1.07); box-shadow: 0 18px 44px rgba(69,212,154,.28); }
+.download-card__hint { display: block; margin-top: 12px; color: #798398; font-size: 8px; line-height: 1.5; text-align: center; }
+
 .pricing-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0,1fr));
@@ -2308,6 +2387,9 @@ img {
     .whatsapp-card { padding: 26px 20px; border-radius: 25px; }
     .whatsapp-card h2 { font-size: 37px; }
     .integration-grid { grid-template-columns: 1fr; }
+    .downloads-grid { grid-template-columns: 1fr; }
+    .download-card { padding: 24px; border-radius: 23px; }
+    .download-card > p { min-height: 0; }
     .device-scene { min-height: 410px; }
     .device-laptop { min-height: 265px; }
     .device-laptop > div { height: 227px; padding: 20px; }
