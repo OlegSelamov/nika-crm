@@ -363,7 +363,7 @@ function pay() {
             return;
         }
 
-        openSaleModal(data.sale_id);
+        openSaleModal(data.sale_id, { autoPrint: true });
 
         cart = [];
         renderCart();
@@ -729,7 +729,7 @@ function sendAssistant(text) {
     });
 }
 
-function openSaleModal(id) {
+function openSaleModal(id, options = {}) {
 
     currentDocumentType = "check";
     currentDocumentId = id;
@@ -767,6 +767,10 @@ function openSaleModal(id) {
     .then(html => {
 
         body.innerHTML = html;
+
+        if (options.autoPrint === true) {
+            maybeAutoPrintReceipt();
+        }
 
     })
 
@@ -824,7 +828,7 @@ function openDocumentModal(id, type) {
     `;
 }
 
-function printCurrentDocument(event) {
+async function printCurrentDocument(event) {
     if (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -833,6 +837,21 @@ function printCurrentDocument(event) {
     if (currentDocumentType !== "check") {
         const frame = document.getElementById("documentFrame");
         if (frame && frame.contentWindow) {
+            const printerApi = getElectronPrinterApi();
+            if (printerApi && frame.contentDocument) {
+                try {
+                    await printerApi.printDocument({
+                        html: frame.contentDocument.documentElement.outerHTML,
+                        title: documentConfig[currentDocumentType]?.title || "Документ"
+                    });
+                    return;
+                } catch (error) {
+                    console.error("Electron document print failed", error);
+                    alert(error.message || "Не удалось распечатать документ");
+                    return;
+                }
+            }
+
             frame.contentWindow.focus();
             frame.contentWindow.print();
         }
@@ -865,7 +884,27 @@ function formatDate(dateStr) {
     return `${day}.${month}.${year}, ${hours}:${minutes}`;
 }
 
-function printCheck() {
+function getElectronPrinterApi() {
+	if (window.nikaDesktop?.printers) {
+		return window.nikaDesktop.printers;
+	}
+
+	if (!window.require) return null;
+
+	try {
+		const ipcRenderer = window.require("electron").ipcRenderer;
+		return {
+			getState: () => ipcRenderer.invoke("printer:get-state"),
+			printReceipt: payload => ipcRenderer.invoke("printer:print-receipt", payload),
+			printDocument: payload => ipcRenderer.invoke("printer:print-document", payload)
+		};
+	} catch (error) {
+		console.warn("Electron printer API is unavailable", error);
+		return null;
+	}
+}
+
+async function printCheck(options = {}) {
 	const saleBody = document.getElementById("saleBody");
 
 	if (!saleBody || !saleBody.textContent.trim()) {
@@ -873,18 +912,38 @@ function printCheck() {
 		return;
 	}
 
-	// В Electron сохраняем штатную печать на настроенный чековый принтер.
-	if (window.require) {
+	const printerApi = getElectronPrinterApi();
+	if (printerApi) {
 		try {
-			const { ipcRenderer } = require("electron");
-			ipcRenderer.send("print-receipt");
+			await printerApi.printReceipt({
+				html: saleBody.innerHTML,
+				title: "Чек"
+			});
 			return;
 		} catch (error) {
-			console.error("Electron print is unavailable", error);
+			console.error("Electron receipt print failed", error);
+			if (options.silent !== true) {
+				alert(error.message || "Не удалось распечатать чек");
+			}
+			return;
 		}
 	}
 
 	printCheckInIsolatedFrame(saleBody);
+}
+
+async function maybeAutoPrintReceipt() {
+	const printerApi = getElectronPrinterApi();
+	if (!printerApi) return;
+
+	try {
+		const state = await printerApi.getState();
+		if (state?.settings?.auto_print_receipt === true) {
+			await printCheck({ silent: true });
+		}
+	} catch (error) {
+		console.error("Automatic receipt print failed", error);
+	}
 }
 
 function printCheckInIsolatedFrame(saleBody) {

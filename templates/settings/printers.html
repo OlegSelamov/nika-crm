@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+:root{--pr-card:#fff;--pr-border:#e5e8f0;--pr-text:#222736;--pr-muted:#777f91;--pr-purple:#7257ff;--pr-purple-soft:#f1eeff;--pr-red:#d14d59;--pr-shadow:0 14px 38px rgba(45,49,78,.08)}
+.printer-page{width:100%;max-width:1180px;margin:0 auto;padding:4px 0 42px;color:var(--pr-text)}
+.printer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.printer-head h1{margin:0;font-size:29px;font-weight:850;letter-spacing:-.03em}.printer-head p{margin:6px 0 0;color:var(--pr-muted);font-size:13px}.printer-status{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 13px;border:1px solid var(--pr-border);border-radius:999px;background:#fff;color:#687084;font-size:11px;font-weight:800;box-shadow:0 7px 20px rgba(45,49,78,.05)}.printer-status-dot{width:8px;height:8px;border-radius:50%;background:#a8afbd}.printer-status.is-ready .printer-status-dot{background:#23ad6a;box-shadow:0 0 0 4px rgba(35,173,106,.12)}.printer-status.is-error .printer-status-dot{background:var(--pr-red)}
+.printer-notice{display:none;margin-bottom:14px;padding:13px 15px;border:1px solid #f0d8a8;border-radius:14px;background:#fff8e8;color:#795a1c;font-size:12px;line-height:1.55}.printer-notice.is-visible{display:block}
+.printer-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.printer-card{padding:20px;border:1px solid var(--pr-border);border-radius:21px;background:var(--pr-card);box-shadow:var(--pr-shadow)}.printer-card-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}.printer-card-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:var(--pr-purple-soft);font-size:25px}.printer-card h2{margin:0 0 4px;font-size:17px;font-weight:850}.printer-card-head p{margin:0;color:var(--pr-muted);font-size:11px}
+.printer-field{margin-top:14px}.printer-field label,.printer-label{display:block;margin:0 0 6px;color:#616a7d;font-size:10px;font-weight:850;letter-spacing:.04em;text-transform:uppercase}.printer-select,.printer-input{width:100%;height:44px;padding:0 12px;border:1px solid #d9dde7;border-radius:11px;background:#fbfcfe;color:#252b39;font:600 12px inherit;outline:none}.printer-select:focus,.printer-input:focus{border-color:#9e8cff;box-shadow:0 0 0 3px rgba(114,87,255,.10)}.printer-row{display:grid;grid-template-columns:1fr 1fr;gap:11px}.printer-segment{display:grid;grid-template-columns:1fr 1fr;gap:7px}.printer-segment label{position:relative}.printer-segment input{position:absolute;opacity:0;pointer-events:none}.printer-segment span{height:42px;display:grid;place-items:center;border:1px solid #d9dde7;border-radius:11px;background:#fbfcfe;color:#70788a;font-size:12px;font-weight:800;cursor:pointer}.printer-segment input:checked+span{border-color:#b9adff;background:var(--pr-purple-soft);color:#5d43df}.printer-toggle{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:17px;padding:12px 13px;border:1px solid #e5e8f0;border-radius:13px;background:#fafbfe}.printer-toggle strong{display:block;font-size:12px}.printer-toggle small{display:block;margin-top:3px;color:var(--pr-muted);font-size:10px;line-height:1.4}.printer-switch{position:relative;flex:0 0 42px;width:42px;height:24px}.printer-switch input{position:absolute;opacity:0}.printer-switch span{position:absolute;inset:0;border-radius:999px;background:#cbd0da;cursor:pointer;transition:.18s}.printer-switch span::after{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.18);transition:.18s}.printer-switch input:checked+span{background:var(--pr-purple)}.printer-switch input:checked+span::after{transform:translateX(18px)}
+.printer-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;margin-top:15px}.printer-btn{min-height:42px;padding:0 15px;border:1px solid #dfe3eb;border-radius:11px;background:#fff;color:#50586b;font:800 11px inherit;cursor:pointer}.printer-btn:hover{border-color:#c7bfef;background:#faf9ff}.printer-btn:disabled{opacity:.55;cursor:wait}.printer-btn--primary{border-color:var(--pr-purple);background:var(--pr-purple);color:#fff;box-shadow:0 8px 20px rgba(114,87,255,.22)}.printer-btn--primary:hover{background:#664ae9;color:#fff}.printer-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px;padding:16px 18px;border:1px solid var(--pr-border);border-radius:18px;background:#fff;box-shadow:var(--pr-shadow)}.printer-footer-text{color:var(--pr-muted);font-size:11px;line-height:1.5}.printer-toast{position:fixed;right:22px;bottom:22px;z-index:10000;max-width:360px;padding:13px 16px;border-radius:13px;background:#242938;color:#fff;font-size:12px;font-weight:700;box-shadow:0 14px 34px rgba(20,25,40,.28);opacity:0;transform:translateY(12px);pointer-events:none;transition:.2s}.printer-toast.is-visible{opacity:1;transform:translateY(0)}.printer-toast.is-error{background:#a93340}
+@media(max-width:820px){.printer-grid{grid-template-columns:1fr}.printer-head h1{font-size:25px}}@media(max-width:560px){.printer-page{padding-bottom:28px}.printer-head{display:block}.printer-status{margin-top:12px}.printer-card{padding:16px;border-radius:18px}.printer-row{grid-template-columns:1fr}.printer-footer{align-items:stretch;flex-direction:column}.printer-actions{justify-content:stretch}.printer-btn{flex:1}}
+</style>
+
+<div class="printer-page">
+  <div class="printer-head">
+    <div><h1>Принтеры</h1><p>Настройки сохраняются отдельно на каждом компьютере с Nika Business</p></div>
+    <div id="printerStatus" class="printer-status"><span class="printer-status-dot"></span><span id="printerStatusText">Проверка подключения…</span></div>
+  </div>
+
+  <div id="printerNotice" class="printer-notice">Настройка принтеров доступна в приложении Nika Business для Windows. В обычном браузере Windows не разрешает сайту выбирать локальный принтер.</div>
+
+  <div class="printer-grid">
+    <section class="printer-card">
+      <div class="printer-card-head"><div class="printer-card-icon">🧾</div><div><h2>Чековый принтер</h2><p>Чеки продаж, возвратов, X- и Z-отчёты</p></div></div>
+      <div class="printer-field"><label for="receiptPrinter">Принтер Windows</label><select id="receiptPrinter" class="printer-select"><option value="">Выберите принтер</option></select></div>
+      <div class="printer-row">
+        <div class="printer-field"><span class="printer-label">Ширина ленты</span><div class="printer-segment"><label><input type="radio" name="receiptPaperWidth" value="58"><span>58 мм</span></label><label><input type="radio" name="receiptPaperWidth" value="80"><span>80 мм</span></label></div></div>
+        <div class="printer-field"><label for="receiptCopies">Количество копий</label><input id="receiptCopies" class="printer-input" type="number" min="1" max="5" value="1"></div>
+      </div>
+      <div class="printer-toggle"><div><strong>Печатать сразу после продажи</strong><small>Чек автоматически уйдёт на выбранный принтер</small></div><label class="printer-switch"><input id="autoPrintReceipt" type="checkbox"><span></span></label></div>
+      <div class="printer-actions"><button id="testReceiptBtn" class="printer-btn" type="button">Тестовый чек</button></div>
+    </section>
+
+    <section class="printer-card">
+      <div class="printer-card-head"><div class="printer-card-icon">📄</div><div><h2>Принтер документов</h2><p>Счета, накладные, акты и документы А4</p></div></div>
+      <div class="printer-field"><label for="documentPrinter">Принтер Windows</label><select id="documentPrinter" class="printer-select"><option value="">Выберите принтер</option></select></div>
+      <div class="printer-row">
+        <div class="printer-field"><label for="documentCopies">Количество копий</label><input id="documentCopies" class="printer-input" type="number" min="1" max="5" value="1"></div>
+        <div class="printer-field"><span class="printer-label">Ориентация А4</span><div class="printer-segment"><label><input type="radio" name="documentOrientation" value="portrait"><span>Книжная</span></label><label><input type="radio" name="documentOrientation" value="landscape"><span>Альбомная</span></label></div></div>
+      </div>
+      <div class="printer-toggle"><div><strong>Печать через Windows</strong><small>Кириллица и қазақша выводятся графически, без смены кодировки принтера</small></div><span style="color:#249b62;font-size:20px">✓</span></div>
+      <div class="printer-actions"><button id="testDocumentBtn" class="printer-btn" type="button">Тестовый лист А4</button></div>
+    </section>
+  </div>
+
+  <div class="printer-footer"><div class="printer-footer-text">Если новый принтер не появился, установите его драйвер в Windows и нажмите «Обновить список».</div><div class="printer-actions" style="margin-top:0"><button id="refreshPrintersBtn" class="printer-btn" type="button">Обновить список</button><button id="savePrintersBtn" class="printer-btn printer-btn--primary" type="button">Сохранить настройки</button></div></div>
+</div>
+
+<div id="printerToast" class="printer-toast"></div>
+
+<script>
+(() => {
+  const elements={status:document.getElementById("printerStatus"),statusText:document.getElementById("printerStatusText"),notice:document.getElementById("printerNotice"),receiptPrinter:document.getElementById("receiptPrinter"),documentPrinter:document.getElementById("documentPrinter"),receiptCopies:document.getElementById("receiptCopies"),documentCopies:document.getElementById("documentCopies"),autoPrint:document.getElementById("autoPrintReceipt"),refresh:document.getElementById("refreshPrintersBtn"),save:document.getElementById("savePrintersBtn"),testReceipt:document.getElementById("testReceiptBtn"),testDocument:document.getElementById("testDocumentBtn"),toast:document.getElementById("printerToast")};
+  let printerApi=window.nikaDesktop?.printers||null;let toastTimer=null;
+  try{if(!printerApi&&window.require){const ipcRenderer=window.require("electron").ipcRenderer;printerApi={getState:()=>ipcRenderer.invoke("printer:get-state"),refresh:()=>ipcRenderer.invoke("printer:refresh"),saveSettings:data=>ipcRenderer.invoke("printer:save-settings",data),testReceipt:()=>ipcRenderer.invoke("printer:test-receipt"),testDocument:()=>ipcRenderer.invoke("printer:test-document")}}}catch(error){console.warn("Electron printer API is unavailable",error)}
+
+  function setStatus(text,mode=""){elements.statusText.textContent=text;elements.status.classList.toggle("is-ready",mode==="ready");elements.status.classList.toggle("is-error",mode==="error")}
+  function showToast(message,isError=false){clearTimeout(toastTimer);elements.toast.textContent=message;elements.toast.classList.toggle("is-error",isError);elements.toast.classList.add("is-visible");toastTimer=setTimeout(()=>elements.toast.classList.remove("is-visible"),3500)}
+  function setDisabled(disabled){document.querySelectorAll(".printer-page input,.printer-page select,.printer-page button").forEach(control=>{control.disabled=disabled})}
+  function printerLabel(printer){return`${printer.displayName||printer.name}${printer.isDefault?" — по умолчанию":""}`}
+  function fillSelect(select,printers,selected){select.innerHTML='<option value="">Выберите принтер</option>';printers.forEach(printer=>{const option=document.createElement("option");option.value=printer.name;option.textContent=printerLabel(printer);option.selected=printer.name===selected;select.appendChild(option)});if(selected&&!printers.some(printer=>printer.name===selected)){const missing=document.createElement("option");missing.value=selected;missing.textContent=`${selected} — не подключён`;missing.selected=true;select.appendChild(missing)}}
+  function setRadio(name,value){const input=document.querySelector(`input[name="${name}"][value="${value}"]`);if(input)input.checked=true}
+  function renderState(state){const printers=Array.isArray(state.printers)?state.printers:[];const saved=state.settings||{};fillSelect(elements.receiptPrinter,printers,saved.receipt_printer);fillSelect(elements.documentPrinter,printers,saved.document_printer);elements.receiptCopies.value=saved.receipt_copies||1;elements.documentCopies.value=saved.document_copies||1;elements.autoPrint.checked=saved.auto_print_receipt===true;setRadio("receiptPaperWidth",String(saved.receipt_paper_width||80));setRadio("documentOrientation",saved.document_landscape?"landscape":"portrait");setStatus(`Electron подключён · принтеров: ${printers.length}`,"ready")}
+  function formData(){const width=document.querySelector('input[name="receiptPaperWidth"]:checked');const orientation=document.querySelector('input[name="documentOrientation"]:checked');return{receipt_printer:elements.receiptPrinter.value||null,document_printer:elements.documentPrinter.value||null,receipt_paper_width:Number(width?width.value:80),receipt_copies:Number(elements.receiptCopies.value||1),document_copies:Number(elements.documentCopies.value||1),auto_print_receipt:elements.autoPrint.checked,document_landscape:Boolean(orientation&&orientation.value==="landscape")}}
+  async function loadState(refresh=false){if(!printerApi){elements.notice.classList.add("is-visible");setStatus("Открыто в браузере","error");setDisabled(true);return}try{const state=refresh?await printerApi.refresh():await printerApi.getState();renderState(state)}catch(error){console.error(error);setStatus("Ошибка подключения","error");showToast(error.message||"Не удалось получить принтеры Windows",true)}}
+  async function busy(button,action){const oldText=button.textContent;button.disabled=true;button.textContent="Подождите…";try{await action()}catch(error){console.error(error);showToast(error.message||"Не удалось выполнить действие",true)}finally{button.disabled=false;button.textContent=oldText}}
+
+  elements.save.addEventListener("click",()=>busy(elements.save,async()=>{const result=await printerApi.saveSettings(formData());if(!result||result.success!==true)throw new Error("Настройки не сохранены");showToast("Настройки принтеров сохранены");await loadState()}));
+  elements.refresh.addEventListener("click",()=>busy(elements.refresh,async()=>{await loadState(true);showToast("Список принтеров обновлён")}));
+  elements.testReceipt.addEventListener("click",()=>busy(elements.testReceipt,async()=>{await printerApi.saveSettings(formData());await printerApi.testReceipt();showToast("Тестовый чек отправлен на печать")}));
+  elements.testDocument.addEventListener("click",()=>busy(elements.testDocument,async()=>{await printerApi.saveSettings(formData());await printerApi.testDocument();showToast("Тестовый лист отправлен на печать")}));
+  loadState();
+})();
+</script>
+{% endblock %}

@@ -1,212 +1,514 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
-
-const path = require('path');
-
-const { spawn } = require('child_process');
+const { app, BrowserWindow, ipcMain } = require("electron");
+const fs = require("fs");
+const path = require("path");
+const { spawn } = require("child_process");
 
 let win;
 let flaskProcess;
 
 const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
-
 const APP_URL = DEV_MODE
     ? "http://127.0.0.1:5000"
     : "https://nikabusiness.com";
 
+const DEFAULT_PRINTER_SETTINGS = Object.freeze({
+    receipt_printer: null,
+    document_printer: null,
+    receipt_paper_width: 80,
+    receipt_copies: 1,
+    document_copies: 1,
+    auto_print_receipt: false,
+    document_landscape: false
+});
+
+let settings = { ...DEFAULT_PRINTER_SETTINGS };
+
 function startFlask() {
-
     flaskProcess = spawn(
-
-        'python',
-
-        ['D:/PRO/nika_business/app.py'],
-
+        "python",
+        ["D:/PRO/nika_business/app.py"],
         {
-            cwd: 'D:/PRO/nika_business',
+            cwd: "D:/PRO/nika_business",
             shell: true
         }
     );
 
-    flaskProcess.stdout.on('data', (data) => {
+    flaskProcess.stdout.on("data", (data) => {
         console.log(`FLASK: ${data}`);
     });
 
-    flaskProcess.stderr.on('data', (data) => {
+    flaskProcess.stderr.on("data", (data) => {
         console.error(`FLASK ERROR: ${data}`);
     });
 }
 
-function createWindow() {
-
-    win = new BrowserWindow({
-
-        width: 1400,
-        height: 900,
-
-        webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
-			partition: "persist:nika-business"
-        }
-
-    });
-
-	if (DEV_MODE) {
-
-		setTimeout(() => {
-			win.loadURL(APP_URL);
-		}, 5000);
-
-	} else {
-
-		win.loadURL(APP_URL);
-
-	}
-
-	win.maximize();
-
-	win.setMenu(null);
-
-	win.webContents.once('did-finish-load', async () => {
-
-		const printers =
-			await win.webContents.getPrintersAsync();
-
-		console.log("ПРИНТЕРЫ:");
-
-		printers.forEach(p => {
-			console.log(p.name);
-		});
-
-	});
+function printerSettingsPath() {
+    return path.join(app.getPath("userData"), "printer-settings.json");
 }
 
-app.whenReady().then(async () => {
+function toCopyCount(value) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return 1;
+    return Math.max(1, Math.min(parsed, 5));
+}
 
-    if (DEV_MODE) {
-        startFlask();
+function normalizePrinterName(value) {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed || null;
+}
+
+function normalizeSettings(value = {}) {
+    const paperWidth = Number(value.receipt_paper_width);
+    return {
+        receipt_printer: normalizePrinterName(value.receipt_printer),
+        document_printer: normalizePrinterName(value.document_printer),
+        receipt_paper_width: paperWidth === 58 ? 58 : 80,
+        receipt_copies: toCopyCount(value.receipt_copies),
+        document_copies: toCopyCount(value.document_copies),
+        auto_print_receipt: value.auto_print_receipt === true,
+        document_landscape: value.document_landscape === true
+    };
+}
+
+function loadPrinterSettings() {
+    try {
+        const saved = JSON.parse(
+            fs.readFileSync(printerSettingsPath(), "utf8")
+        );
+        return normalizeSettings({
+            ...DEFAULT_PRINTER_SETTINGS,
+            ...saved
+        });
+    } catch (error) {
+        if (error.code !== "ENOENT") {
+            console.error("Не удалось прочитать настройки принтеров:", error);
+        }
+        return { ...DEFAULT_PRINTER_SETTINGS };
     }
+}
 
-    createWindow();
+function savePrinterSettings(nextSettings) {
+    settings = normalizeSettings({
+        ...settings,
+        ...nextSettings
+    });
 
-    setTimeout(async () => {
-        await detectPrinters();
-    }, DEV_MODE ? 7000 : 2000);
+    const filePath = printerSettingsPath();
+    const tempPath = `${filePath}.tmp`;
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2), "utf8");
+    fs.renameSync(tempPath, filePath);
+    return { ...settings };
+}
 
-});
+async function getPrinters() {
+    if (!win || win.isDestroyed()) return [];
 
-let settings = {
-    receipt_printer: null,
-    document_printer: null
-};
+    const printers = await win.webContents.getPrintersAsync();
+    return printers.map((printer) => ({
+        name: printer.name,
+        displayName: printer.displayName || printer.name,
+        description: printer.description || "",
+        status: printer.status,
+        isDefault: printer.isDefault === true
+    }));
+}
+
+function isVirtualPrinter(name) {
+    return ["PDF", "XPS", "FAX", "ONENOTE"].some((word) =>
+        String(name || "").toUpperCase().includes(word)
+    );
+}
 
 async function detectPrinters() {
+    const printers = await getPrinters();
+    if (!printers.length) return printers;
 
-    const printers =
-        await win.webContents.getPrintersAsync();
+    let changed = false;
+
+    if (!settings.receipt_printer) {
+        const receiptKeywords = [
+            "POS", "POS58", "POS80", "XPRINTER", "XP-",
+            "THERMAL", "RECEIPT", "MHT", "MILESTONE"
+        ];
+        const receiptPrinter = printers.find((printer) =>
+            receiptKeywords.some((keyword) =>
+                printer.name.toUpperCase().includes(keyword)
+            )
+        );
+
+        if (receiptPrinter) {
+            settings.receipt_printer = receiptPrinter.name;
+            changed = true;
+        }
+    }
+
+    if (!settings.document_printer) {
+        const documentPrinter = printers.find((printer) =>
+            printer.name !== settings.receipt_printer &&
+            !isVirtualPrinter(printer.name)
+        );
+
+        if (documentPrinter) {
+            settings.document_printer = documentPrinter.name;
+            changed = true;
+        }
+    }
+
+    if (changed) savePrinterSettings(settings);
 
     console.log("Найдены принтеры:");
-
-    printers.forEach(p => {
-        console.log(p.name);
-    });
-
-    const receiptKeywords = [
-        "POS",
-        "POS58",
-        "XPrinter",
-        "XP-",
-        "Thermal",
-        "Receipt"
-    ];
-
-    const receiptPrinter = printers.find(p =>
-
-        receiptKeywords.some(k =>
-            p.name.toLowerCase().includes(
-                k.toLowerCase()
-            )
-        )
-
-    );
-
-    if (receiptPrinter) {
-
-        settings.receipt_printer =
-            receiptPrinter.name;
-
-        console.log(
-            "Чековый принтер:",
-            receiptPrinter.name
-        );
-    }
-
-    const documentPrinter = printers.find(p =>
-
-        p.name !== settings.receipt_printer &&
-
-        !p.name.includes("PDF") &&
-        !p.name.includes("XPS") &&
-        !p.name.includes("Fax") &&
-        !p.name.includes("OneNote")
-
-    );
-
-    if (documentPrinter) {
-
-        settings.document_printer =
-            documentPrinter.name;
-
-        console.log(
-            "Документный принтер:",
-            documentPrinter.name
-        );
-    }
-
+    printers.forEach((printer) => console.log(printer.name));
+    return printers;
 }
 
-ipcMain.on('set-printers', (event, data) => {
+function requireMainWindow(event) {
+    if (!win || win.isDestroyed() || event.sender !== win.webContents) {
+        throw new Error("Команда доступна только из окна Nika Business");
+    }
+}
 
-    settings.receipt_printer = data.receipt_printer;
-    settings.document_printer = data.document_printer;
+async function getPrinterState() {
+    const printers = await getPrinters();
+    const names = new Set(printers.map((printer) => printer.name));
+    return {
+        isElectron: true,
+        printers,
+        settings: { ...settings },
+        availability: {
+            receipt: settings.receipt_printer
+                ? names.has(settings.receipt_printer)
+                : false,
+            document: settings.document_printer
+                ? names.has(settings.document_printer)
+                : false
+        }
+    };
+}
 
-});
+function ensureSelectedPrinter(deviceName, kind) {
+    if (!deviceName) {
+        throw new Error(
+            kind === "receipt"
+                ? "Сначала выберите чековый принтер в настройках"
+                : "Сначала выберите принтер документов в настройках"
+        );
+    }
+}
 
-ipcMain.on('print-receipt', () => {
+function receiptPage(html, title = "Чек") {
+    const paperWidth = settings.receipt_paper_width === 58 ? 58 : 80;
+    const contentWidth = paperWidth === 58 ? 52 : 72;
+    return `<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${title}</title>
+    <style>
+        @page { margin: 0; }
+        * { box-sizing: border-box; }
+        html, body {
+            width: ${paperWidth}mm;
+            margin: 0;
+            padding: 0;
+            overflow: visible;
+            background: #fff;
+            color: #111;
+        }
+        body { padding: 2mm; }
+        .receipt {
+            width: ${contentWidth}mm !important;
+            max-width: ${contentWidth}mm !important;
+            min-height: 0 !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
+        img { max-width: 100%; }
+    </style>
+</head>
+<body>${html}</body>
+</html>`;
+}
 
-    console.log("PRINT RECEIPT EVENT");
+function documentPage(html, title = "Документ") {
+    const printStyle = `
+        <style>
+            @page { size: A4; margin: 10mm; }
+            html, body { margin: 0; padding: 0; background: #fff; }
+        </style>`;
 
-    win.webContents.print({
+    if (/<html[\s>]/i.test(html)) {
+        if (/<\/head>/i.test(html)) {
+            return html.replace(/<\/head>/i, `${printStyle}</head>`);
+        }
+        return html.replace(/<html([^>]*)>/i, `<html$1><head>${printStyle}</head>`);
+    }
 
-        silent: true,
-        printBackground: true,
-        deviceName: settings.receipt_printer
+    return `<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${title}</title>
+    ${printStyle}
+</head>
+<body>${html}</body>
+</html>`;
+}
 
+function waitForPrint(printWindow, options) {
+    return new Promise((resolve, reject) => {
+        printWindow.webContents.print(options, (success, failureReason) => {
+            if (success) resolve({ success: true });
+            else reject(new Error(failureReason || "Windows не принял задание печати"));
+        });
+    });
+}
+
+async function printHtml({ html, title, kind }) {
+    if (typeof html !== "string" || !html.trim()) {
+        throw new Error("Нет содержимого для печати");
+    }
+    if (html.length > 5_000_000) {
+        throw new Error("Документ слишком большой для печати");
+    }
+
+    const receipt = kind === "receipt";
+    const deviceName = receipt
+        ? settings.receipt_printer
+        : settings.document_printer;
+    ensureSelectedPrinter(deviceName, kind);
+
+    const printers = await getPrinters();
+    if (!printers.some((printer) => printer.name === deviceName)) {
+        throw new Error(`Принтер «${deviceName}» сейчас не найден в Windows`);
+    }
+
+    const printWindow = new BrowserWindow({
+        show: false,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            partition: "persist:nika-business"
+        }
     });
 
-});
+    try {
+        const page = receipt
+            ? receiptPage(html, title)
+            : documentPage(html, title);
+        const dataUrl = `data:text/html;base64,${Buffer.from(page, "utf8").toString("base64")}`;
 
+        await printWindow.loadURL(dataUrl);
+        await printWindow.webContents.executeJavaScript(`
+            Promise.all(Array.from(document.images).map((image) => {
+                if (image.complete) return true;
+                return new Promise((resolve) => {
+                    image.addEventListener("load", () => resolve(true), { once: true });
+                    image.addEventListener("error", () => resolve(true), { once: true });
+                    setTimeout(() => resolve(true), 4000);
+                });
+            }))
+        `);
 
-ipcMain.on('print-document', () => {
+        const options = {
+            silent: true,
+            printBackground: true,
+            deviceName,
+            copies: receipt
+                ? settings.receipt_copies
+                : settings.document_copies,
+            margins: { marginType: "none" }
+        };
 
-    win.webContents.print({
+        if (!receipt) {
+            options.pageSize = "A4";
+            options.landscape = settings.document_landscape;
+        }
 
-        silent: true,
-        printBackground: true,
+        return await waitForPrint(printWindow, options);
+    } finally {
+        if (!printWindow.isDestroyed()) printWindow.destroy();
+    }
+}
 
-        deviceName:
-            settings.document_printer || undefined
+function testReceiptHtml() {
+    const now = new Intl.DateTimeFormat("ru-RU", {
+        dateStyle: "short",
+        timeStyle: "short"
+    }).format(new Date());
+    return `
+        <main class="receipt" style="font:12px/1.35 'Courier New',monospace;color:#111">
+            <div style="text-align:center;font-size:17px;font-weight:700">NIKA BUSINESS</div>
+            <div style="text-align:center">Тест чекового принтера</div>
+            <div style="margin:8px 0;border-top:1px dashed #111"></div>
+            <div style="display:flex;justify-content:space-between"><span>Дата</span><span>${now}</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Ширина ленты</span><span>${settings.receipt_paper_width} мм</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Копий</span><span>${settings.receipt_copies}</span></div>
+            <div style="margin:8px 0;border-top:1px dashed #111"></div>
+            <div>Русский: Проверка печати</div>
+            <div>Қазақша: Басып шығаруды тексеру</div>
+            <div style="margin-top:10px;text-align:center;font-weight:700">ПРИНТЕР НАСТРОЕН</div>
+        </main>`;
+}
 
+function testDocumentHtml() {
+    return `
+        <main style="font-family:Arial,sans-serif;color:#182033">
+            <h1 style="margin:0 0 10px">Nika Business</h1>
+            <h2>Тест печати документа</h2>
+            <p>Если этот лист распечатан, принтер документов настроен правильно.</p>
+            <p>Русский и қазақша мәтін отображаются через драйвер Windows.</p>
+        </main>`;
+}
+
+function registerPrinterIpc() {
+    ipcMain.handle("printer:get-state", async (event) => {
+        requireMainWindow(event);
+        return getPrinterState();
     });
 
+    ipcMain.handle("printer:refresh", async (event) => {
+        requireMainWindow(event);
+        await detectPrinters();
+        return getPrinterState();
+    });
+
+    ipcMain.handle("printer:save-settings", async (event, data) => {
+        requireMainWindow(event);
+        const saved = savePrinterSettings(data || {});
+        return { success: true, settings: saved };
+    });
+
+    ipcMain.handle("printer:test-receipt", async (event) => {
+        requireMainWindow(event);
+        return printHtml({
+            html: testReceiptHtml(),
+            title: "Тест чекового принтера",
+            kind: "receipt"
+        });
+    });
+
+    ipcMain.handle("printer:test-document", async (event) => {
+        requireMainWindow(event);
+        return printHtml({
+            html: testDocumentHtml(),
+            title: "Тест принтера документов",
+            kind: "document"
+        });
+    });
+
+    ipcMain.handle("printer:print-receipt", async (event, payload = {}) => {
+        requireMainWindow(event);
+        return printHtml({
+            html: payload.html,
+            title: payload.title || "Чек",
+            kind: "receipt"
+        });
+    });
+
+    ipcMain.handle("printer:print-document", async (event, payload = {}) => {
+        requireMainWindow(event);
+        return printHtml({
+            html: payload.html,
+            title: payload.title || "Документ",
+            kind: "document"
+        });
+    });
+
+    // Совместимость с уже установленными версиями сайта.
+    ipcMain.on("set-printers", (event, data) => {
+        try {
+            requireMainWindow(event);
+            savePrinterSettings(data || {});
+        } catch (error) {
+            console.error("Не удалось сохранить принтеры:", error);
+        }
+    });
+
+    ipcMain.on("print-receipt", (event) => {
+        try {
+            requireMainWindow(event);
+            ensureSelectedPrinter(settings.receipt_printer, "receipt");
+            win.webContents.print({
+                silent: true,
+                printBackground: true,
+                deviceName: settings.receipt_printer,
+                copies: settings.receipt_copies
+            });
+        } catch (error) {
+            console.error("Не удалось распечатать чек:", error);
+        }
+    });
+
+    ipcMain.on("print-document", (event) => {
+        try {
+            requireMainWindow(event);
+            ensureSelectedPrinter(settings.document_printer, "document");
+            win.webContents.print({
+                silent: true,
+                printBackground: true,
+                deviceName: settings.document_printer,
+                copies: settings.document_copies,
+                pageSize: "A4",
+                landscape: settings.document_landscape
+            });
+        } catch (error) {
+            console.error("Не удалось распечатать документ:", error);
+        }
+    });
+}
+
+function createWindow() {
+    win = new BrowserWindow({
+        width: 1400,
+        height: 900,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, "preload.js"),
+            partition: "persist:nika-business"
+        }
+    });
+
+    if (DEV_MODE) setTimeout(() => win.loadURL(APP_URL), 5000);
+    else win.loadURL(APP_URL);
+
+    win.maximize();
+    win.setMenu(null);
+
+    win.webContents.once("did-finish-load", async () => {
+        try {
+            await detectPrinters();
+        } catch (error) {
+            console.error("Не удалось получить список принтеров:", error);
+        }
+    });
+
+    win.on("closed", () => {
+        win = null;
+    });
+}
+
+app.whenReady().then(() => {
+    settings = loadPrinterSettings();
+    registerPrinterIpc();
+    if (DEV_MODE) startFlask();
+    createWindow();
+
+    app.on("activate", () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
 });
 
-app.on('window-all-closed', () => {
-
-	if (DEV_MODE && flaskProcess) {
-		flaskProcess.kill();
-	}
-
-    app.quit();
+app.on("window-all-closed", () => {
+    if (DEV_MODE && flaskProcess) {
+        flaskProcess.kill();
+        flaskProcess = null;
+    }
+    if (process.platform !== "darwin") app.quit();
 });
