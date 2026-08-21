@@ -1,0 +1,8 @@
+version: 1.0.0
+files:
+  - url: NikaBusinessSetup.exe
+    sha512: IYx15a77ufzqQsjcVqInzYwd4pl/LQqxawAIWgM04AvsYZoztKtWlvIN0MnE9CrGNsVxnSaEpEv+lFLYb4GpkA==
+    size: 76589075
+path: NikaBusinessSetup.exe
+sha512: IYx15a77ufzqQsjcVqInzYwd4pl/LQqxawAIWgM04AvsYZoztKtWlvIN0MnE9CrGNsVxnSaEpEv+lFLYb4GpkA==
+releaseDate: '2026-08-21T08:58:21.000Z'

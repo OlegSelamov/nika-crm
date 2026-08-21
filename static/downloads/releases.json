@@ -1,0 +1,12 @@
+{
+  "windows": {
+    "version": "1.0.0",
+    "url": "/static/downloads/windows/NikaBusinessSetup.exe",
+    "size_mb": 73.0
+  },
+  "android": {
+    "version": "3.1.0",
+    "url": "/static/downloads/android/NikaBusiness.apk",
+    "size_mb": 69.8
+  }
+}

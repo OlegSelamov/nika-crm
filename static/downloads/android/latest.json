@@ -1,0 +1,9 @@
+{
+  "platform": "android",
+  "version": "1.1.0",
+  "download_url": "https://nikabusiness.com/static/downloads/android/NikaBusiness.apk",
+  "size": 73180127,
+  "sha256": "919b12aaf31dcee19812fdbf74c11f70c072b4e2db3e5dd7d1a2655f04894d75",
+  "notes": "Автоматическая проверка и установка обновлений Nika Business",
+  "published_at": "2026-08-21T09:57:24Z"
+}
