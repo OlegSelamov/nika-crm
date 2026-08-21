@@ -16,6 +16,7 @@ const DEFAULT_PRINTER_SETTINGS = Object.freeze({
     receipt_printer: null,
     document_printer: null,
     receipt_paper_width: 80,
+    receipt_offset_mm: -2,
     receipt_copies: 1,
     document_copies: 1,
     auto_print_receipt: false,
@@ -61,10 +62,15 @@ function normalizePrinterName(value) {
 
 function normalizeSettings(value = {}) {
     const paperWidth = Number(value.receipt_paper_width);
+    const rawOffset = Number(value.receipt_offset_mm);
+    const receiptOffset = Number.isFinite(rawOffset)
+        ? Math.max(-5, Math.min(rawOffset, 5))
+        : -2;
     return {
         receipt_printer: normalizePrinterName(value.receipt_printer),
         document_printer: normalizePrinterName(value.document_printer),
         receipt_paper_width: paperWidth === 58 ? 58 : 80,
+        receipt_offset_mm: receiptOffset,
         receipt_copies: toCopyCount(value.receipt_copies),
         document_copies: toCopyCount(value.document_copies),
         auto_print_receipt: value.auto_print_receipt === true,
@@ -203,6 +209,13 @@ function receiptPage(html, title = "Чек") {
     // У принтеров с лентой 80 мм реальная печатная область обычно 68–72 мм.
     // Берём безопасную ширину, чтобы правый край не обрезался драйвером.
     const contentWidth = paperWidth === 58 ? 48 : 68;
+    const baseSideMargin = (paperWidth - contentWidth) / 2;
+    const offset = Number(settings.receipt_offset_mm || 0);
+    const leftMargin = Math.max(0, baseSideMargin + offset);
+    const rightMargin = Math.max(
+        0,
+        paperWidth - contentWidth - leftMargin
+    );
     return `<!doctype html>
 <html lang="ru">
 <head>
@@ -213,7 +226,8 @@ function receiptPage(html, title = "Чек") {
         @page { margin: 0; }
         * { box-sizing: border-box; }
         html, body {
-            width: 100%;
+            width: ${paperWidth}mm;
+            max-width: ${paperWidth}mm;
             margin: 0;
             padding: 0;
             overflow: visible;
@@ -230,7 +244,7 @@ function receiptPage(html, title = "Чек") {
             width: ${contentWidth}mm !important;
             max-width: ${contentWidth}mm !important;
             min-height: 0 !important;
-            margin: 0 auto !important;
+            margin: 0 ${rightMargin}mm 0 ${leftMargin}mm !important;
             padding: 1.5mm 0 !important;
             overflow: visible !important;
             background: #fff !important;
@@ -243,13 +257,18 @@ function receiptPage(html, title = "Чек") {
 ${html}
 <style>
     @page { margin: 0 !important; }
-    html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    html, body {
+        width: ${paperWidth}mm !important;
+        max-width: ${paperWidth}mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
     .receipt,
     .shift-report-paper {
         width: ${contentWidth}mm !important;
         max-width: ${contentWidth}mm !important;
         min-height: 0 !important;
-        margin: 0 auto !important;
+        margin: 0 ${rightMargin}mm 0 ${leftMargin}mm !important;
         padding: 1.5mm 0 !important;
         overflow: visible !important;
         background: #fff !important;
@@ -439,6 +458,7 @@ function testReceiptHtml() {
             <div style="display:flex;justify-content:space-between"><span>Дата</span><span>${now}</span></div>
             <div style="display:flex;justify-content:space-between"><span>Ширина ленты</span><span>${settings.receipt_paper_width} мм</span></div>
             <div style="display:flex;justify-content:space-between"><span>Рабочая ширина</span><span>${settings.receipt_paper_width === 58 ? 48 : 68} мм</span></div>
+            <div style="display:flex;justify-content:space-between"><span>Смещение</span><span>${settings.receipt_offset_mm} мм</span></div>
             <div style="display:flex;justify-content:space-between"><span>Копий</span><span>${settings.receipt_copies}</span></div>
             <div style="margin:8px 0;border-top:1px dashed #111"></div>
             <div>Русский: Проверка печати</div>
