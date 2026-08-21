@@ -9,8 +9,6 @@ let flaskProcess;
 let updatePromptOpen = false;
 let updateCheckTimer;
 
-const UPDATE_URL = "https://nikabusiness.com/static/downloads/windows/";
-
 const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
 const APP_URL = DEV_MODE
@@ -619,7 +617,9 @@ function configureAutoUpdates() {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowDowngrade = false;
-    autoUpdater.setFeedURL({ provider: "generic", url: UPDATE_URL });
+    // The GitHub feed is embedded into app-update.yml by electron-builder
+    // from package.json. electron-updater reads latest.yml from the newest
+    // published GitHub Release; setFeedURL must not be called here.
 
     autoUpdater.on("update-available", async (info) => {
         if (updatePromptOpen || !win || win.isDestroyed()) return;

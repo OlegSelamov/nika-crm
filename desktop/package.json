@@ -1,6 +1,6 @@
 {
   "name": "nika-business",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Nika Business",
   "author": "Nika Business",
   "main": "main.js",
@@ -29,8 +29,10 @@
     ],
     "publish": [
       {
-        "provider": "generic",
-        "url": "https://nikabusiness.com/static/downloads/windows/"
+        "provider": "github",
+        "owner": "OlegSelamov",
+        "repo": "nika-crm",
+        "releaseType": "release"
       }
     ],
     "win": {
@@ -43,7 +45,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Nika Business",
-      "artifactName": "NikaBusinessSetup-${version}.${ext}"
+      "artifactName": "NikaBusinessSetup.${ext}"
     }
   }
 }
