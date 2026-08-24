@@ -163,7 +163,14 @@
 
     function signedValue(result) {
         if (typeof result === "string") return result;
-        if (result && Array.isArray(result.signatures)) return result.signatures.join("\n");
+        if (Array.isArray(result)) {
+            if (result.length === 1) return signedValue(result[0]);
+            return result.map(signedValue).join("\n");
+        }
+        if (result && Array.isArray(result.signatures)) {
+            if (result.signatures.length === 1) return signedValue(result.signatures[0]);
+            return result.signatures.map(signedValue).join("\n");
+        }
         if (result && typeof result.signatures === "string") return result.signatures;
         return JSON.stringify(result, null, 2);
     }
