@@ -274,6 +274,107 @@
 
 </div>
 
+<div id="esfModal" class="esf-modal" hidden aria-hidden="true">
+    <div class="esf-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="esfModalTitle">
+        <div class="esf-modal-header">
+            <div>
+                <span class="esf-modal-kicker">ИС ЭСФ · InvoiceV2</span>
+                <h2 id="esfModalTitle">Электронный счёт-фактура</h2>
+            </div>
+            <div class="esf-modal-header-actions">
+                <span id="esfStatusBadge" class="esf-status-badge">Новый</span>
+                <button type="button" class="esf-close" onclick="closeEsfModal()" aria-label="Закрыть">×</button>
+            </div>
+        </div>
+
+        <div class="esf-modal-body">
+            <div class="esf-notice">
+                <strong>Ключ ЭЦП остаётся на вашем компьютере.</strong>
+                Nika сохраняет черновик и результат подписи, но не получает файл ключа или пароль.
+                Подписание пока не отправляет документ в ИС ЭСФ.
+            </div>
+
+            <div id="esfMessage" class="esf-message" hidden></div>
+            <div id="esfValidation" class="esf-validation" hidden>
+                <strong>Нужно заполнить перед подписью:</strong>
+                <ul id="esfValidationList"></ul>
+            </div>
+
+            <div id="esfForm" class="esf-form">
+                <section class="esf-section">
+                    <h3>Документ</h3>
+                    <div class="esf-fields esf-fields-four">
+                        <label>Номер ЭСФ<input data-esf="invoice.num" inputmode="numeric" maxlength="30"></label>
+                        <label>Дата выписки<input data-esf="invoice.date" type="date"></label>
+                        <label>Дата оборота<input data-esf="invoice.turnover_date" type="date"></label>
+                        <label>Ставка НДС, %<input data-esf="tax.nds_rate" type="number" min="0" max="100" step="1"></label>
+                    </div>
+                    <label>ФИО оператора<input data-esf="invoice.operator_fullname" placeholder="Кто выписывает ЭСФ"></label>
+                </section>
+
+                <div class="esf-columns">
+                    <section class="esf-section">
+                        <h3>Поставщик</h3>
+                        <label>Наименование<input data-esf="seller.name"></label>
+                        <div class="esf-fields">
+                            <label>ИИН/БИН<input data-esf="seller.tin" inputmode="numeric"></label>
+                            <label>Страна<input data-esf="seller.country_code" maxlength="2"></label>
+                        </div>
+                        <label>Адрес<input data-esf="seller.address"></label>
+                        <div class="esf-fields esf-fields-four">
+                            <label>ИИК<input data-esf="seller.iik"></label>
+                            <label>БИК<input data-esf="seller.bik"></label>
+                            <label>КБе<input data-esf="seller.kbe"></label>
+                            <label>Банк<input data-esf="seller.bank"></label>
+                        </div>
+                    </section>
+
+                    <section class="esf-section">
+                        <h3>Получатель</h3>
+                        <label>Наименование<input data-esf="customer.name"></label>
+                        <div class="esf-fields">
+                            <label>ИИН/БИН<input data-esf="customer.tin" inputmode="numeric"></label>
+                            <label>Страна<input data-esf="customer.country_code" maxlength="2"></label>
+                        </div>
+                        <label>Адрес<input data-esf="customer.address"></label>
+                        <div class="esf-fields">
+                            <label>Документ поставки №<input data-esf="delivery.document_num"></label>
+                            <label>Дата документа<input data-esf="delivery.document_date" type="date"></label>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="esf-section">
+                    <div class="esf-section-title">
+                        <div>
+                            <h3>Товары, работы и услуги</h3>
+                            <p>Признак происхождения 1–6 обязателен для каждой строки.</p>
+                        </div>
+                    </div>
+                    <div class="esf-products-wrap">
+                        <table class="esf-products-table">
+                            <thead><tr><th>Наименование</th><th>Кол-во</th><th>Цена с НДС</th><th>ID ТРУ</th><th>Происхождение</th><th>ТН ВЭД</th></tr></thead>
+                            <tbody id="esfProductsBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div class="esf-modal-footer">
+            <div class="esf-footer-meta">
+                <span id="esfFooterStatus">Изменения ещё не сохранены</span>
+            </div>
+            <div class="esf-footer-actions">
+                <a id="esfDownloadXml" class="esf-btn is-secondary" href="#" hidden>Скачать XML</a>
+                <button id="esfSaveDraft" type="button" class="esf-btn is-secondary">Сохранить черновик</button>
+                <button id="esfSign" type="button" class="esf-btn is-primary">Подписать ЭЦП</button>
+                <button id="esfSend" type="button" class="esf-btn is-send" disabled title="Будет включено после подключения API ИС ЭСФ">Отправить в ИС ЭСФ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="shiftXModal" class="shift-modal" aria-hidden="true">
 	<div class="shift-modal-dialog shift-report-dialog">
 		<div class="shift-modal-head">
@@ -454,5 +555,7 @@
 
 {% block page_js %}
 <script src="https://unpkg.com/@zxing/library@latest"></script>
+<script src="{{ url_for('static', filename='js/ncalayer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/esf.js') }}"></script>
 <script src="{{ url_for('static', filename='js/sales.js') }}"></script>
 {% endblock %}
