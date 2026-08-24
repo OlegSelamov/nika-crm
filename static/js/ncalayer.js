@@ -175,6 +175,74 @@
         return JSON.stringify(result, null, 2);
     }
 
+    function certificateValue(result) {
+        if (!result || typeof result !== "object") return "";
+        if (typeof result.certificate === "string") return result.certificate;
+        if (typeof result.cert === "string") return result.cert;
+        if (typeof result.x509Certificate === "string") return result.x509Certificate;
+        if (Array.isArray(result.certificates) && result.certificates.length) {
+            return String(result.certificates[0] || "");
+        }
+        return "";
+    }
+
+    function certificateSubjectValue(result) {
+        if (!result || typeof result !== "object") return "";
+        return String(result.certificateSubject || result.subject || result.subjectDn || "");
+    }
+
+    async function signXml(xml) {
+        const result = await sendRequest({
+            module: "kz.gov.pki.knca.basics",
+            method: "sign",
+            args: {
+                format: "xml",
+                data: xml,
+                signingParams: {},
+                signerParams: {
+                    extKeyUsageOids: [SIGNING_OID],
+                    chain: null
+                },
+                locale: "ru"
+            }
+        });
+        return {
+            signedXml: signedValue(result),
+            certificate: certificateValue(result),
+            certificateSubject: certificateSubjectValue(result),
+            raw: result
+        };
+    }
+
+    async function signCmsDetached(data) {
+        const result = await sendRequest({
+            module: "kz.gov.pki.knca.basics",
+            method: "sign",
+            args: {
+                format: "cms",
+                data,
+                signingParams: {
+                    decode: false,
+                    encapsulate: false,
+                    digested: false,
+                    tsaProfile: null,
+                    outputCert: true
+                },
+                signerParams: {
+                    extKeyUsageOids: [SIGNING_OID],
+                    chain: null
+                },
+                locale: "ru"
+            }
+        });
+        return {
+            signature: signedValue(result),
+            certificate: certificateValue(result),
+            certificateSubject: certificateSubjectValue(result),
+            raw: result
+        };
+    }
+
     async function checkNcalayer() {
         setBusy(true);
         setStatus("Подключаемся к NCALayer…", "loading");
@@ -195,28 +263,9 @@
         const downloadButton = document.getElementById("ncalayerDownloadSignature");
 
         try {
-            const result = await sendRequest({
-                module: "kz.gov.pki.knca.basics",
-                method: "sign",
-                args: {
-                    format: "xml",
-                    data: buildTestXml(),
-                    signingParams: {
-                        decode: false,
-                        encapsulate: true,
-                        digested: false,
-                        tsaProfile: null,
-                        outputCert: true
-                    },
-                    signerParams: {
-                        extKeyUsageOids: [SIGNING_OID],
-                        chain: null
-                    },
-                    locale: "ru"
-                }
-            });
+            const result = await signXml(buildTestXml());
 
-            lastSignedXml = signedValue(result);
+            lastSignedXml = result.signedXml;
             if (resultField) {
                 resultField.value = lastSignedXml;
                 resultField.hidden = false;
@@ -243,6 +292,14 @@
         anchor.remove();
         URL.revokeObjectURL(url);
     }
+
+    window.NikaNCALayer = Object.freeze({
+        connect,
+        check: connect,
+        friendlyError,
+        signXml,
+        signCmsDetached
+    });
 
     document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("ncalayerCheck")?.addEventListener("click", checkNcalayer);

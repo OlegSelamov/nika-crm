@@ -2157,6 +2157,13 @@ function salesDocumentActions(item) {
         ));
     }
 
+    actions.push(salesDocumentAction(
+        "ЭСФ",
+        "Сформировать электронный счёт-фактуру",
+        `openEsfModal(${id})`,
+        "is-esf"
+    ));
+
     if (pendingInvoice) {
         actions.push(salesDocumentAction(
             "Подтвердить оплату",
