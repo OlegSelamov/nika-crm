@@ -1,10 +1,108 @@
 {% extends "base.html" %}
 
+{% block page_css %}
+<style>
+    .ncalayer-card {
+        grid-column: 1 / -1;
+        border: 1px solid rgba(99, 102, 241, .22);
+    }
+
+    .ncalayer-card__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .ncalayer-card__actions button {
+        border: 0;
+        cursor: pointer;
+    }
+
+    .ncalayer-card__actions button:disabled {
+        cursor: wait;
+        opacity: .6;
+    }
+
+    .ncalayer-card__status {
+        margin: 14px 0 0;
+        padding: 11px 13px;
+        border-radius: 12px;
+        background: rgba(100, 116, 139, .1);
+        color: #475569;
+        font-size: 14px;
+    }
+
+    .ncalayer-card__status[data-state="success"] {
+        background: rgba(22, 163, 74, .12);
+        color: #166534;
+    }
+
+    .ncalayer-card__status[data-state="error"] {
+        background: rgba(239, 68, 68, .12);
+        color: #991b1b;
+    }
+
+    .ncalayer-card__status[data-state="loading"] {
+        background: rgba(245, 158, 11, .13);
+        color: #92400e;
+    }
+
+    .ncalayer-card textarea {
+        width: 100%;
+        min-height: 130px;
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid rgba(148, 163, 184, .45);
+        border-radius: 12px;
+        background: rgba(248, 250, 252, .9);
+        color: #334155;
+        resize: vertical;
+    }
+
+    .ncalayer-card__note {
+        margin-top: 12px;
+        color: #64748b;
+        font-size: 13px;
+        line-height: 1.45;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 
 <h2>Интеграции</h2>
 
 <div class="stats-grid">
+
+    <div class="card ncalayer-card">
+        <h3>🔐 Электронная подпись NCALayer</h3>
+        <p>Проверка локальной ЭЦП для будущей отправки ЭСФ и налоговых документов.</p>
+
+        <div class="ncalayer-card__actions">
+            <button id="ncalayerCheck" class="btn" type="button" data-ncalayer-action>
+                Проверить NCALayer
+            </button>
+            <button id="ncalayerSignTest" class="btn" type="button" data-ncalayer-action>
+                Подписать тестовый XML
+            </button>
+            <button id="ncalayerDownloadSignature" class="btn" type="button" hidden>
+                Скачать результат
+            </button>
+        </div>
+
+        <p id="ncalayerStatus" class="ncalayer-card__status" data-state="neutral">
+            Запустите NCALayer на компьютере и нажмите «Проверить NCALayer».
+        </p>
+
+        <textarea id="ncalayerSignatureResult" readonly hidden
+                  aria-label="Результат тестовой подписи"></textarea>
+
+        <p class="ncalayer-card__note">
+            Тестовый документ подписывается только на вашем компьютере. Ключ, пароль и результат
+            подписи не передаются на сервер Nika и не отправляются в ИС ЭСФ.
+        </p>
+    </div>
 
     <div class="card">
         <h3>ККМ</h3>
@@ -53,4 +151,8 @@
 
 </div>
 
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/ncalayer.js') }}"></script>
 {% endblock %}
