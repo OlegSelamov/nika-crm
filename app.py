@@ -40,6 +40,8 @@ from routes.storefront_settings import storefront_settings_bp
 from routes.storefront_manage import storefront_manage_bp
 from routes.whatsapp import whatsapp_bp
 from routes.mobile_api import mobile_api_bp
+from routes.esf import esf_bp
+from routes.bcc import bcc_bp
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
@@ -47,7 +49,7 @@ app = Flask(
     template_folder=os.path.join(BASE_DIR, "templates"),
     static_folder=os.path.join(BASE_DIR, "static")
 )
-app.secret_key = "nika_super_secret_key"
+app.secret_key = os.getenv("SECRET_KEY", "nika_super_secret_key")
 
 from datetime import timedelta
 
@@ -85,6 +87,8 @@ app.register_blueprint(storefront_settings_bp)
 app.register_blueprint(storefront_manage_bp)
 app.register_blueprint(whatsapp_bp)
 app.register_blueprint(mobile_api_bp)
+app.register_blueprint(esf_bp)
+app.register_blueprint(bcc_bp)
     
 # Какой URL относится к какому платному модулю.
 # Более длинные пути ставим выше коротких, чтобы проверка была точной.

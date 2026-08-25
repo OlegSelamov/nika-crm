@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+.bcc-page{max-width:1180px;margin:0 auto;padding:4px 0 42px;color:#202434}.bcc-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}.bcc-head h1{margin:0;font-size:29px;color:#202434!important}.bcc-head p{margin:6px 0 0;color:#7b8294;font-size:13px}.bcc-env{padding:8px 12px;border-radius:999px;background:#eef4ff;color:#3468bd;font-size:11px;font-weight:800;text-transform:uppercase}.bcc-card{padding:22px;margin-bottom:15px;border:1px solid #e5e8ef;border-radius:20px;background:#fff;box-shadow:0 12px 32px rgba(40,44,72,.07)}.bcc-status{display:flex;align-items:center;gap:10px;margin-bottom:15px;font-size:14px;font-weight:800}.bcc-dot{width:10px;height:10px;border-radius:50%;background:#a2a8b4}.bcc-dot.on{background:#22a866;box-shadow:0 0 0 5px rgba(34,168,102,.12)}.bcc-note{padding:13px 15px;border-radius:13px;background:#f6f7fb;color:#60687a;font-size:12px;line-height:1.55}.bcc-note.error{background:#fff1f1;color:#a23c3c}.bcc-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.bcc-btn{border:0;border-radius:12px;padding:11px 17px;background:#18a866;color:#fff;font-weight:800;cursor:pointer;text-decoration:none}.bcc-btn.secondary{background:#edf4ff;color:#3468bd}.bcc-btn.danger{background:#fff0f0;color:#b43e3e}.bcc-btn:disabled{opacity:.55;cursor:wait}.bcc-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:15px}.bcc-meta div{padding:12px;border-radius:12px;background:#f8f9fc}.bcc-meta small{display:block;color:#8b92a2;margin-bottom:4px}.bcc-meta strong{font-size:12px}.bcc-table-wrap{overflow:auto;margin-top:15px}.bcc-table{width:100%;border-collapse:collapse;min-width:720px}.bcc-table th,.bcc-table td{padding:11px 9px;border-bottom:1px solid #edf0f4;text-align:left;font-size:12px}.bcc-table th{color:#7c8495;font-size:10px;text-transform:uppercase}.bcc-amount.in{color:#168c56;font-weight:800}.bcc-amount.out{color:#c54b4b;font-weight:800}.bcc-filters{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-top:15px}.bcc-filters label{display:grid;gap:5px;color:#7b8294;font-size:10px;font-weight:800;text-transform:uppercase}.bcc-filters input{padding:10px;border:1px solid #dfe3eb;border-radius:10px}.bcc-hidden{display:none}.bcc-empty{padding:24px;text-align:center;color:#858c9b}.bcc-spinner{padding:22px;text-align:center;color:#758096}@media(max-width:700px){.bcc-head{display:block}.bcc-env{display:inline-block;margin-top:10px}.bcc-card{padding:15px;border-radius:16px}.bcc-meta{grid-template-columns:1fr}.bcc-head h1{font-size:24px}}
+</style>
+
+<div class="bcc-page">
+  <div class="bcc-head">
+    <div><h1>🏦 Bank CenterCredit</h1><p>Прямое подключение банковских счетов к Nika Business</p></div>
+    <span class="bcc-env">{{ bcc_config.environment }}</span>
+  </div>
+
+  {% if request.args.get('connected') %}<div class="bcc-note" style="background:#eaf8f0;color:#187c4c;margin-bottom:14px">✅ BCC успешно подключён к организации.</div>{% endif %}
+  {% if request.args.get('disconnected') %}<div class="bcc-note" style="margin-bottom:14px">Доступ BCC отключён.</div>{% endif %}
+  {% if request.args.get('error') %}<div class="bcc-note error" style="margin-bottom:14px">Не удалось завершить подключение. Проверьте данные и повторите попытку.</div>{% endif %}
+
+  <section class="bcc-card">
+    <div class="bcc-status"><span class="bcc-dot {% if bcc and bcc.status == 'connected' %}on{% endif %}"></span>{% if bcc and bcc.status == 'connected' %}BCC подключён{% else %}BCC не подключён{% endif %}</div>
+
+    {% if not bcc_config.configured %}
+      <div class="bcc-note error">Сервер ещё не настроен. Добавьте переменные окружения: {{ bcc_config.missing|join(', ') }}.</div>
+    {% elif not company or not company.bin %}
+      <div class="bcc-note error">Сначала укажите БИН организации в профиле компании.</div>
+    {% elif not bcc or bcc.status != 'connected' %}
+      <div class="bcc-note">После нажатия BCC откроет свою страницу. Владелец компании войдёт в банк и лично подтвердит доступ. Логин и пароль интернет-банка Nika не получает.</div>
+      {% if bcc and bcc.last_error %}<div class="bcc-note error" style="margin-top:10px">{{ bcc.last_error }}</div>{% endif %}
+      <form class="bcc-actions" method="post" action="/api/integrations/bcc/connect">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="bcc-btn" type="submit">Подключить BCC</button>
+      </form>
+    {% else %}
+      <div class="bcc-meta">
+        <div><small>Организация</small><strong>{{ company.name }}</strong></div>
+        <div><small>БИН</small><strong>{{ bcc.client_idn }}</strong></div>
+        <div><small>Последняя синхронизация</small><strong>{{ bcc.last_sync_at or 'ещё не выполнялась' }}</strong></div>
+      </div>
+      {% if bcc.last_error %}<div class="bcc-note error" style="margin-top:12px">{{ bcc.last_error }}</div>{% endif %}
+      <div class="bcc-actions">
+        <button id="loadAccounts" class="bcc-btn" type="button">Загрузить счета</button>
+        <form method="post" action="/api/integrations/bcc/disconnect" onsubmit="return confirm('Отключить доступ BCC для этой организации?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="bcc-btn danger" type="submit">Отключить банк</button>
+        </form>
+      </div>
+    {% endif %}
+  </section>
+
+  {% if bcc and bcc.status == 'connected' %}
+  <section class="bcc-card">
+    <h3 style="margin:0">Счета организации</h3>
+    <div id="accountsBox" class="bcc-empty">Нажмите «Загрузить счета»</div>
+  </section>
+
+  <section id="statementCard" class="bcc-card bcc-hidden">
+    <h3 style="margin:0">Банковская выписка</h3>
+    <div class="bcc-filters">
+      <label>С даты<input id="dateFrom" type="date"></label>
+      <label>По дату<input id="dateTo" type="date"></label>
+      <button id="loadStatement" class="bcc-btn secondary" type="button">Получить выписку</button>
+    </div>
+    <div id="statementBox"></div>
+  </section>
+  {% endif %}
+</div>
+
+{% if bcc and bcc.status == 'connected' %}
+<script>
+(() => {
+  const accountsBox = document.getElementById('accountsBox');
+  const statementCard = document.getElementById('statementCard');
+  const statementBox = document.getElementById('statementBox');
+  let selectedAccount = null;
+  const esc = value => String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+  const money = value => new Intl.NumberFormat('ru-KZ', {maximumFractionDigits:2}).format(Number(value || 0));
+  const today = new Date();
+  const from = new Date(); from.setDate(from.getDate() - 30);
+  document.getElementById('dateTo').value = today.toISOString().slice(0,10);
+  document.getElementById('dateFrom').value = from.toISOString().slice(0,10);
+
+  document.getElementById('loadAccounts').addEventListener('click', async event => {
+    const button = event.currentTarget; button.disabled = true;
+    accountsBox.className = 'bcc-spinner'; accountsBox.textContent = 'Получаем счета из BCC…';
+    try {
+      const response = await fetch('/api/integrations/bcc/accounts', {headers:{'Accept':'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка BCC');
+      const accounts = Array.isArray(result.accounts) ? result.accounts : (result.accounts?.accounts || result.accounts?.data || []);
+      if (!accounts.length) { accountsBox.className='bcc-empty'; accountsBox.textContent='BCC не вернул доступных счетов'; return; }
+      accountsBox.className='bcc-table-wrap';
+      accountsBox.innerHTML = `<table class="bcc-table"><thead><tr><th>Счёт</th><th>Название</th><th>Валюта</th><th>Статус</th><th></th></tr></thead><tbody>${accounts.map((a,i)=>`<tr><td><strong>${esc(a.iban)}</strong>${a.is_main?' · основной':''}</td><td>${esc(a.name || a.description)}</td><td>${esc(a.currency)}</td><td>${esc(a.status)}</td><td><button class="bcc-btn secondary statement-open" data-index="${i}" type="button">Выписка</button></td></tr>`).join('')}</tbody></table>`;
+      accountsBox.querySelectorAll('.statement-open').forEach(btn => btn.addEventListener('click', () => {
+        selectedAccount = accounts[Number(btn.dataset.index)]; statementCard.classList.remove('bcc-hidden'); statementBox.innerHTML=''; statementCard.scrollIntoView({behavior:'smooth'});
+      }));
+    } catch (error) { accountsBox.className='bcc-note error'; accountsBox.textContent=error.message; }
+    finally { button.disabled=false; }
+  });
+
+  document.getElementById('loadStatement').addEventListener('click', async event => {
+    if (!selectedAccount) return;
+    const button=event.currentTarget; button.disabled=true; statementBox.className='bcc-spinner'; statementBox.textContent='Формируем выписку…';
+    const params = new URLSearchParams({iban:selectedAccount.iban,currency:selectedAccount.currency || 'KZT',date_from:document.getElementById('dateFrom').value,date_to:document.getElementById('dateTo').value});
+    try {
+      const response=await fetch('/api/integrations/bcc/statements?'+params.toString(),{headers:{'Accept':'application/json'}}); const result=await response.json();
+      if(!response.ok || !result.success) throw new Error(result.error || 'Ошибка BCC');
+      const data=result.statement || {}; const transactions=Array.isArray(data.transactions)?data.transactions:(data.content || data.data?.transactions || []); const info=data.info || {}; const out=data.outBalance || {};
+      statementBox.className=''; statementBox.innerHTML=`<div class="bcc-meta"><div><small>Счёт</small><strong>${esc(info.accountNumber || selectedAccount.iban)}</strong></div><div><small>Исходящий остаток</small><strong>${money(out.amount)} ${esc(out.currency || selectedAccount.currency)}</strong></div><div><small>Операций</small><strong>${transactions.length}</strong></div></div>${transactions.length?`<div class="bcc-table-wrap"><table class="bcc-table"><thead><tr><th>Дата</th><th>Контрагент</th><th>Назначение</th><th>Сумма</th></tr></thead><tbody>${transactions.map(t=>{const debit=String(t.dbcrfl)==='1';return `<tr><td>${esc(t.entryDate || t.valueDate || t.execdate)}</td><td>${esc(t.partyName || t.corrName)}</td><td>${esc(t.purpose || t.poTypeDesc)}</td><td class="bcc-amount ${debit?'out':'in'}">${debit?'−':'+'}${money(t.amount)} ${esc(t.eqCurrency || selectedAccount.currency)}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="bcc-empty">За выбранный период операций нет</div>'}`;
+    } catch(error) { statementBox.className='bcc-note error'; statementBox.textContent=error.message; }
+    finally { button.disabled=false; }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1398,6 +1398,34 @@ def init_db():
     cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS ai_processed_at TIMESTAMP")
     cur.execute("ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS ai_error TEXT")
 
+    # ================== BCC OPEN API ==================
+    # Ключ и пароль приложения BCC хранятся только в окружении сервера.
+    # В базе находятся зашифрованные клиентские токены каждой организации.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bcc_integrations (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL UNIQUE,
+            environment TEXT NOT NULL DEFAULT 'sandbox',
+            client_idn TEXT,
+            access_token_encrypted TEXT,
+            refresh_token_encrypted TEXT,
+            token_type TEXT,
+            token_expires_at TIMESTAMPTZ,
+            scope TEXT,
+            status TEXT NOT NULL DEFAULT 'disconnected',
+            connected_at TIMESTAMPTZ,
+            last_sync_at TIMESTAMPTZ,
+            last_error TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bcc_integrations_company
+        ON bcc_integrations(company_id)
+    """)
+
     # Nika AI: история диалогов хранится отдельно для каждой компании и пользователя.
     cur.execute("""
         CREATE TABLE IF NOT EXISTS ai_conversations (
