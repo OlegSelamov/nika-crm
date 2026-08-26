@@ -257,6 +257,15 @@ def _initial_payload(source):
             "document_date": date,
             "contract_num": client.get("contract_number") or "",
             "contract_date": _date_text(client.get("contract_date")),
+            # С 10.07.2026 поле E28 «Способ расчета» обязательно.
+            # Только полностью наличная продажа = CASH; карта/Kaspi/смешанная = NON_CASH.
+            "payment_form": (
+                "CASH"
+                if (sale.get("sale_type") or "cash") == "cash"
+                and _number(sale.get("card_amount")) <= 0
+                and _number(sale.get("kaspi_amount")) <= 0
+                else "NON_CASH"
+            ),
         },
         "tax": {"nds_rate": "0"},
         "products": products,
@@ -268,6 +277,7 @@ def _validation_errors(payload):
     invoice = payload.get("invoice") or {}
     seller = payload.get("seller") or {}
     customer = payload.get("customer") or {}
+    delivery = payload.get("delivery") or {}
     products = payload.get("products") or []
 
     required = (
@@ -287,6 +297,8 @@ def _validation_errors(payload):
     customer_tin = str(customer.get("tin") or "")
     if customer_tin and not re.fullmatch(r"\d{8,20}", customer_tin):
         errors.append("ИИН/БИН получателя должен содержать 8–20 цифр.")
+    if str(delivery.get("payment_form") or "") not in {"CASH", "NON_CASH"}:
+        errors.append("Укажите способ расчета: наличный или безналичный.")
     if not products:
         errors.append("В продаже нет товаров или услуг.")
     for index, product in enumerate(products, 1):
@@ -343,11 +355,17 @@ def _build_invoice_xml(payload):
 
     _add(root, "deliveryDocDate", _date_text(delivery.get("document_date")))
     _add(root, "deliveryDocNum", delivery.get("document_num"))
-    if delivery.get("contract_num") or delivery.get("contract_date"):
-        term = ET.SubElement(root, "deliveryTerm")
+
+    # В актуальном INVOICEV2 раздел E (deliveryTerm) содержит обязательный
+    # paymentForm. После обновления ИС ЭСФ 10.07.2026 допустимы только
+    # CASH (наличный) и NON_CASH (безналичный).
+    has_contract = bool(delivery.get("contract_num") or delivery.get("contract_date"))
+    term = ET.SubElement(root, "deliveryTerm")
+    if has_contract:
         _add(term, "contractDate", _date_text(delivery.get("contract_date")))
         _add(term, "contractNum", delivery.get("contract_num"))
-        _add(term, "hasContract", "true")
+    _add(term, "hasContract", "true" if has_contract else "false", True)
+    _add(term, "paymentForm", delivery.get("payment_form"), True)
 
     product_set = ET.SubElement(root, "productSet")
     _add(product_set, "currencyCode", "KZT", True)
@@ -435,7 +453,7 @@ def _document_view(row, fallback_payload):
         ),
         "validation_errors": errors,
         "can_sign": bool(row and row.get("invoice_xml") and not errors and status in {"draft", "prepared", "signed", "failed"} and not has_external_id),
-        "can_send": bool(row and status in {"signed", "failed"} and row.get("signature") and row.get("x509_certificate") and not has_external_id),
+        "can_send": bool(row and status in {"signed", "failed"} and row.get("signature") and row.get("x509_certificate") and not errors and not has_external_id),
         "can_revoke": bool(row and has_external_id and status in {"sent", "accepted", "revoke_failed"}),
         "send_available": True,
     }
