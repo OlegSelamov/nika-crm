@@ -398,6 +398,10 @@ def get_sale(sale_id):
 def sales_history():
     all_history = request.args.get("scope") == "all"
     serial_number = (request.args.get("serial_number") or "").strip()
+    query = (request.args.get("q") or "").strip()
+    kind = (request.args.get("kind") or "all").strip().lower()
+    if kind not in {"all", "sales", "invoices", "refunds"}:
+        kind = "all"
 
     try:
         page = max(int(request.args.get("page", 0)), 0)
@@ -424,7 +428,7 @@ def sales_history():
                     SELECT
                         s.id, s.client_id, s.sale_number, s.total_amount,
                         s.sale_type, s.status, s.rekassa_shift_number,
-                        s.rekassa_znm, 'sale'::TEXT AS event_type,
+                        s.rekassa_znm, COALESCE(s.is_refunded, FALSE) AS sale_refunded, 'sale'::TEXT AS event_type,
                         s.created_at AS event_at
                     FROM sales s
                     WHERE s.company_id = %s
@@ -434,7 +438,7 @@ def sales_history():
                     SELECT
                         s.id, s.client_id, s.sale_number, s.total_amount,
                         s.sale_type, s.status, s.rekassa_shift_number,
-                        s.rekassa_znm, 'refund'::TEXT AS event_type,
+                        s.rekassa_znm, COALESCE(s.is_refunded, FALSE) AS sale_refunded, 'refund'::TEXT AS event_type,
                         COALESCE(s.refunded_at, s.created_at) AS event_at
                     FROM sales s
                     WHERE s.company_id = %s
@@ -443,12 +447,25 @@ def sales_history():
                 SELECT journal.*, clients.full_name
                 FROM journal
                 LEFT JOIN clients ON journal.client_id = clients.id
+                WHERE (
+                    %s = ''
+                    OR COALESCE(journal.sale_number::TEXT, journal.id::TEXT) ILIKE '%%' || %s || '%%'
+                    OR COALESCE(clients.full_name, 'Частное лицо') ILIKE '%%' || %s || '%%'
+                )
+                AND (
+                    %s = 'all'
+                    OR (%s = 'sales' AND journal.event_type = 'sale' AND journal.sale_type <> 'invoice')
+                    OR (%s = 'invoices' AND journal.event_type = 'sale' AND journal.sale_type = 'invoice')
+                    OR (%s = 'refunds' AND journal.event_type = 'refund')
+                )
                 ORDER BY journal.event_at DESC, journal.id DESC,
                          journal.event_type DESC
                 LIMIT %s OFFSET %s
             """, (
                 session.get("company_id"),
                 session.get("company_id"),
+                query, query, query,
+                kind, kind, kind, kind,
                 size,
                 page * size,
             ))
@@ -458,7 +475,7 @@ def sales_history():
                     SELECT
                         s.id, s.client_id, s.sale_number, s.total_amount,
                         s.sale_type, s.status, s.rekassa_shift_number,
-                        s.rekassa_znm, 'sale'::TEXT AS event_type,
+                        s.rekassa_znm, COALESCE(s.is_refunded, FALSE) AS sale_refunded, 'sale'::TEXT AS event_type,
                         s.created_at AS event_at
                     FROM sales s
                     WHERE s.company_id = %s
@@ -470,7 +487,7 @@ def sales_history():
                     SELECT
                         s.id, s.client_id, s.sale_number, s.total_amount,
                         s.sale_type, s.status, s.rekassa_shift_number,
-                        s.rekassa_znm, 'refund'::TEXT AS event_type,
+                        s.rekassa_znm, COALESCE(s.is_refunded, FALSE) AS sale_refunded, 'refund'::TEXT AS event_type,
                         COALESCE(s.refunded_at, s.created_at) AS event_at
                     FROM sales s
                     WHERE s.company_id = %s
@@ -533,6 +550,7 @@ def sales_history():
                 "refund_check_available": bool(
                     is_refund and sale["sale_type"] != "invoice"
                 ),
+                "sale_refunded": bool(sale.get("sale_refunded")),
             })
         return jsonify(result)
     finally:

@@ -1841,7 +1841,10 @@ const salesDocumentsHistoryState = {
     loaded: false,
     loading: null,
     generation: 0,
-    keys: new Set()
+    keys: new Set(),
+    records: new Map(),
+    query: "",
+    kind: "all"
 };
 
 let salesHistoryMode = "shifts";
@@ -2101,93 +2104,155 @@ function salesDocumentAction(label, title, onclick, tone = "") {
     `;
 }
 
-function salesDocumentActions(item) {
-    const id = Number(item.id);
-    if (!Number.isFinite(id)) return "";
+function salesDocumentButton(label, title, onclick, className = "") {
+    return `
+        <button type="button"
+                class="sales-doc-menu-item ${className}"
+                title="${escapeHtml(title)}"
+                onclick="${onclick}">
+            <span class="sales-doc-menu-item__icon" aria-hidden="true"></span>
+            <span>${escapeHtml(label)}</span>
+        </button>
+    `;
+}
 
+function salesDocumentRecordKey(item) {
+    return `${item.event_type || "sale"}:${item.id}:${item.event_at || item.created_at || ""}`;
+}
+
+function salesDocumentCenterSections(item, closeBeforeAction = false) {
+    const id = Number(item.id);
+    if (!Number.isFinite(id)) return [];
+
+    const prefix = closeBeforeAction ? "closeSalesDocumentCenter();" : "";
     const refundEvent = item.event_type === "refund" || item.is_refunded === true;
     const invoice = item.sale_type === "invoice";
     const refunded = Boolean(item.sale_refunded);
     const pendingInvoice = invoice && item.status === "Счёт выставлен" && !refunded;
-    const actions = [];
+    const sections = [];
 
     if (refundEvent) {
         if (item.refund_check_available !== false && !invoice) {
-            actions.push(salesDocumentAction(
-                "Чек возврата",
-                "Открыть чек возврата",
-                `openRefundCheckModal(${id})`,
-                "is-refund"
-            ));
+            sections.push({
+                title: "Возврат",
+                items: [salesDocumentButton("Чек возврата", "Открыть чек возврата", `${prefix}openRefundCheckModal(${id})`, "is-refund")]
+            });
         }
-        return actions.join("");
+        return sections;
     }
 
-    if (invoice) {
-        actions.push(salesDocumentAction(
-            "Счёт",
-            "Открыть счёт на оплату",
-            `openInvoiceModal(${id})`,
-            "is-primary"
-        ));
-    } else {
-        actions.push(salesDocumentAction(
-            "Чек",
-            "Открыть кассовый чек",
-            `openSaleModal(${id})`,
-            "is-primary"
-        ));
-    }
+    sections.push({
+        title: "Основной документ",
+        items: [invoice
+            ? salesDocumentButton("Счёт на оплату", "Открыть счёт на оплату", `${prefix}openInvoiceModal(${id})`, "is-primary")
+            : salesDocumentButton("Кассовый чек", "Открыть кассовый чек", `${prefix}openSaleModal(${id})`, "is-primary")]
+    });
 
     if (!pendingInvoice) {
-        actions.push(salesDocumentAction(
-            "Накладная",
-            "Сформировать накладную",
-            `openDocumentModal(${id}, 'nakladnaya')`
-        ));
-        actions.push(salesDocumentAction(
-            "Счёт-фактура",
-            "Сформировать счёт-фактуру",
-            `openDocumentModal(${id}, 'schetFactura')`
-        ));
-        actions.push(salesDocumentAction(
-            "Акт",
-            "Сформировать акт выполненных работ",
-            `openDocumentModal(${id}, 'act')`
-        ));
+        sections.push({
+            title: "Документы по продаже",
+            items: [
+                salesDocumentButton("Накладная", "Сформировать накладную", `${prefix}openDocumentModal(${id}, 'nakladnaya')`, "is-document"),
+                salesDocumentButton("Счёт-фактура", "Сформировать счёт-фактуру", `${prefix}openDocumentModal(${id}, 'schetFactura')`, "is-document"),
+                salesDocumentButton("Акт выполненных работ", "Сформировать акт выполненных работ", `${prefix}openDocumentModal(${id}, 'act')`, "is-document")
+            ]
+        });
     }
 
-    actions.push(salesDocumentAction(
-        "ЭСФ",
-        "Сформировать электронный счёт-фактуру",
-        `openEsfModal(${id})`,
-        "is-esf"
-    ));
+    sections.push({
+        title: "Электронные документы",
+        items: [salesDocumentButton("ЭСФ · Электронный счёт-фактура", "Сформировать электронный счёт-фактуру", `${prefix}openEsfModal(${id})`, "is-esf")]
+    });
 
-    if (pendingInvoice) {
-        actions.push(salesDocumentAction(
-            "Подтвердить оплату",
-            "Подтвердить оплату счёта",
-            `confirmInvoicePayment(${id}, this)`,
-            "is-confirm"
-        ));
-    } else if (!refunded) {
-        actions.push(salesDocumentAction(
-            "Возврат",
-            "Оформить возврат продажи",
-            `refundSale(${id})`,
-            "is-refund"
-        ));
-    } else if (!invoice) {
-        actions.push(salesDocumentAction(
-            "Чек возврата",
-            "Открыть чек возврата",
-            `openRefundCheckModal(${id})`,
-            "is-refund"
-        ));
+    const operation = pendingInvoice
+        ? salesDocumentButton("Подтвердить оплату", "Подтвердить оплату счёта", `${prefix}confirmInvoicePayment(${id}, this)`, "is-confirm")
+        : (!refunded
+            ? salesDocumentButton("Оформить возврат", "Оформить возврат продажи", `${prefix}refundSale(${id})`, "is-refund")
+            : (!invoice
+                ? salesDocumentButton("Чек возврата", "Открыть чек возврата", `${prefix}openRefundCheckModal(${id})`, "is-refund")
+                : ""));
+    if (operation) sections.push({ title: "Действия", items: [operation] });
+
+    return sections;
+}
+
+function salesDocumentActions(item) {
+    const id = Number(item.id);
+    if (!Number.isFinite(id)) return "";
+    const refundEvent = item.event_type === "refund" || item.is_refunded === true;
+    const invoice = item.sale_type === "invoice";
+
+    if (refundEvent) {
+        if (item.refund_check_available === false || invoice) return '<span class="sales-doc-empty">Нет действий</span>';
+        return salesDocumentButton("Чек возврата", "Открыть чек возврата", `openRefundCheckModal(${id})`, "is-refund");
     }
 
-    return actions.join("");
+    const primary = invoice
+        ? salesDocumentButton("Открыть счёт", "Открыть счёт на оплату", `openInvoiceModal(${id})`, "is-primary")
+        : salesDocumentButton("Открыть чек", "Открыть кассовый чек", `openSaleModal(${id})`, "is-primary");
+    const count = salesDocumentCenterSections(item, false).reduce((sum, section) => sum + section.items.length, 0);
+    const key = escapeHtml(salesDocumentRecordKey(item));
+    const center = `
+        <button type="button" class="sales-doc-center-btn" onclick="openSalesDocumentCenter('${key}')">
+            Документы <span>${count}</span>
+        </button>
+    `;
+    return `${primary}${center}`;
+}
+
+function ensureSalesDocumentCenter() {
+    let modal = document.getElementById("salesDocumentCenterModal");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "salesDocumentCenterModal";
+    modal.className = "sales-document-center";
+    modal.hidden = true;
+    modal.innerHTML = `
+        <div class="sales-document-center__backdrop" onclick="closeSalesDocumentCenter()"></div>
+        <section class="sales-document-center__dialog" role="dialog" aria-modal="true" aria-labelledby="salesDocumentCenterTitle">
+            <header class="sales-document-center__header">
+                <div>
+                    <span class="sales-document-center__kicker">Документы продажи</span>
+                    <h3 id="salesDocumentCenterTitle">Документы</h3>
+                    <p id="salesDocumentCenterMeta"></p>
+                </div>
+                <button type="button" class="sales-document-center__close" onclick="closeSalesDocumentCenter()" aria-label="Закрыть">×</button>
+            </header>
+            <div id="salesDocumentCenterBody" class="sales-document-center__body"></div>
+        </section>
+    `;
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function openSalesDocumentCenter(key) {
+    const item = salesDocumentsHistoryState.records.get(String(key));
+    if (!item) return;
+    const modal = ensureSalesDocumentCenter();
+    const title = document.getElementById("salesDocumentCenterTitle");
+    const meta = document.getElementById("salesDocumentCenterMeta");
+    const body = document.getElementById("salesDocumentCenterBody");
+    const refund = item.event_type === "refund" || item.is_refunded === true;
+    const amount = `${refund ? "−" : ""}${salesShiftMoney(item.total || 0)}`;
+
+    title.textContent = `${salesDocumentOperationLabel(item)} №${item.sale_number || item.id}`;
+    meta.textContent = `${item.client_name || "Частное лицо"} · ${item.created_at_display || salesShiftDate(item.event_at || item.created_at)} · ${amount}`;
+    const sections = salesDocumentCenterSections(item, true);
+    body.innerHTML = sections.map(section => `
+        <div class="sales-document-center__group">
+            <strong>${escapeHtml(section.title)}</strong>
+            <div class="sales-document-center__actions">${section.items.join("")}</div>
+        </div>
+    `).join("") || '<div class="sales-documents-message">Для этой операции нет доступных документов</div>';
+
+    modal.hidden = false;
+    document.body.classList.add("sales-document-center-open");
+}
+
+function closeSalesDocumentCenter() {
+    const modal = document.getElementById("salesDocumentCenterModal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("sales-document-center-open");
 }
 
 function salesDocumentStatus(item) {
@@ -2196,18 +2261,37 @@ function salesDocumentStatus(item) {
     return item.status || "Продажа";
 }
 
+function salesDocumentOperationLabel(item) {
+    if (item.event_type === "refund" || item.is_refunded === true) return "Возврат";
+    return item.sale_type === "invoice" ? "Счёт" : "Продажа";
+}
+
 function renderSalesDocumentRow(item) {
     const refund = item.event_type === "refund" || item.is_refunded === true;
     const status = salesDocumentStatus(item);
     const amount = `${refund ? "−" : ""}${salesShiftMoney(item.total || 0)}`;
+    const number = escapeHtml(item.sale_number || item.id);
+    const date = escapeHtml(item.created_at_display || salesShiftDate(item.event_at || item.created_at));
+    const client = escapeHtml(item.client_name || "Частное лицо");
+    const payment = escapeHtml(item.payment_type || "—");
+    const kind = escapeHtml(salesDocumentOperationLabel(item));
 
     return `
-        <tr class="${item.sale_type === "invoice" ? "invoice-history-row" : ""}${refund ? " refund-history-row" : ""}">
-            <td>${escapeHtml(item.sale_number || item.id)}</td>
-            <td>${escapeHtml(item.created_at_display || salesShiftDate(item.event_at || item.created_at))}</td>
-            <td title="${escapeHtml(item.client_name || "Частное лицо")}">${escapeHtml(item.client_name || "Частное лицо")}</td>
-            <td><strong>${escapeHtml(amount)}</strong></td>
-            <td>${escapeHtml(item.payment_type || "—")}</td>
+        <tr class="sales-journal-row${item.sale_type === "invoice" ? " is-invoice" : ""}${refund ? " is-refund" : ""}">
+            <td>
+                <div class="sales-journal-operation">
+                    <span class="sales-journal-operation__kind${refund ? " is-refund" : ""}">${kind}</span>
+                    <strong>№${number}</strong>
+                    <small>${date}</small>
+                </div>
+            </td>
+            <td><div class="sales-journal-client" title="${client}">${client}</div></td>
+            <td>
+                <div class="sales-journal-money">
+                    <strong>${escapeHtml(amount)}</strong>
+                    <small>${payment}</small>
+                </div>
+            </td>
             <td><span class="sale-status-badge ${getSaleStatusClass(status)}">${escapeHtml(status)}</span></td>
             <td><div class="sales-document-actions">${salesDocumentActions(item)}</div></td>
         </tr>
@@ -2218,13 +2302,15 @@ function renderMobileSalesDocument(item) {
     const refund = item.event_type === "refund" || item.is_refunded === true;
     const status = salesDocumentStatus(item);
     const amount = `${refund ? "−" : ""}${salesShiftMoney(item.total || 0)}`;
+    const kind = salesDocumentOperationLabel(item);
 
     return `
-        <article class="mobile-sale-card${refund ? " is-refund" : ""}">
+        <article class="mobile-sale-card sales-journal-mobile${refund ? " is-refund" : ""}">
             <div class="mobile-sale-top">
                 <div>
+                    <div class="sales-journal-mobile__number"><span>${escapeHtml(kind)}</span> №${escapeHtml(item.sale_number || item.id)}</div>
                     <div class="mobile-sale-client">${escapeHtml(item.client_name || "Частное лицо")}</div>
-                    <div class="mobile-sale-date">№${escapeHtml(item.sale_number || item.id)} · ${escapeHtml(item.created_at_display || salesShiftDate(item.event_at || item.created_at))}</div>
+                    <div class="mobile-sale-date">${escapeHtml(item.created_at_display || salesShiftDate(item.event_at || item.created_at))}</div>
                 </div>
                 <div class="mobile-sale-sum">${escapeHtml(amount)}</div>
             </div>
@@ -2250,7 +2336,8 @@ async function loadSalesDocuments(append = false) {
     if (!append) {
         salesDocumentsHistoryState.page = 0;
         salesDocumentsHistoryState.keys.clear();
-        table.innerHTML = '<tr><td colspan="7" class="sales-documents-message">Загрузка документов…</td></tr>';
+        salesDocumentsHistoryState.records.clear();
+        table.innerHTML = '<tr><td colspan="5" class="sales-documents-message">Загрузка журнала…</td></tr>';
         mobile.innerHTML = '<div class="sales-documents-message">Загрузка документов…</div>';
     }
 
@@ -2261,7 +2348,9 @@ async function loadSalesDocuments(append = false) {
             const params = new URLSearchParams({
                 scope: "all",
                 page: String(page),
-                size: String(salesDocumentsHistoryState.size)
+                size: String(salesDocumentsHistoryState.size),
+                q: salesDocumentsHistoryState.query,
+                kind: salesDocumentsHistoryState.kind
             });
             const data = await salesHistoryJson(`/api/sales/history?${params.toString()}`);
             if (generation !== salesDocumentsHistoryState.generation) return;
@@ -2270,6 +2359,7 @@ async function loadSalesDocuments(append = false) {
                 const key = `${item.event_type || "sale"}:${item.id}:${item.event_at || item.created_at || ""}`;
                 if (salesDocumentsHistoryState.keys.has(key)) return false;
                 salesDocumentsHistoryState.keys.add(key);
+                salesDocumentsHistoryState.records.set(key, item);
                 return true;
             });
             const rows = items.map(renderSalesDocumentRow).join("");
@@ -2279,7 +2369,7 @@ async function loadSalesDocuments(append = false) {
                 table.insertAdjacentHTML("beforeend", rows);
                 mobile.insertAdjacentHTML("beforeend", cards);
             } else {
-                table.innerHTML = rows || '<tr><td colspan="7" class="sales-documents-message">Документов пока нет</td></tr>';
+                table.innerHTML = rows || '<tr><td colspan="5" class="sales-documents-message">Ничего не найдено</td></tr>';
                 mobile.innerHTML = cards || '<div class="sales-documents-message">Документов пока нет</div>';
             }
 
@@ -2290,7 +2380,7 @@ async function loadSalesDocuments(append = false) {
         } catch (error) {
             const message = escapeHtml(error.message);
             if (!append) {
-                table.innerHTML = `<tr><td colspan="7" class="sales-documents-message is-error">${message}</td></tr>`;
+                table.innerHTML = `<tr><td colspan="5" class="sales-documents-message is-error">${message}</td></tr>`;
                 mobile.innerHTML = `<div class="sales-documents-message is-error">${message}</div>`;
             }
             more.hidden = true;
@@ -2337,6 +2427,27 @@ async function loadSalesHistory() {
 }
 
 document.getElementById("salesDocumentsMore")?.addEventListener("click", () => loadSalesDocuments(true));
+
+let salesDocumentsSearchTimer = null;
+document.getElementById("salesDocumentsSearch")?.addEventListener("input", event => {
+    clearTimeout(salesDocumentsSearchTimer);
+    salesDocumentsSearchTimer = setTimeout(() => {
+        salesDocumentsHistoryState.query = String(event.target.value || "").trim();
+        salesDocumentsHistoryState.loaded = false;
+        loadSalesDocuments(false);
+    }, 250);
+});
+
+document.getElementById("salesDocumentsFilter")?.addEventListener("change", event => {
+    salesDocumentsHistoryState.kind = event.target.value || "all";
+    salesDocumentsHistoryState.loaded = false;
+    loadSalesDocuments(false);
+});
+
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeSalesDocumentCenter();
+});
+
 
 document.getElementById("salesHistoryBox")?.addEventListener("click", event => {
     const zButton = event.target.closest("[data-sales-z]");

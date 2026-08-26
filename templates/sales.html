@@ -124,15 +124,32 @@
 				</div>
 
 				<div id="salesDocumentsModeView" class="sales-documents-history" hidden>
+					<div class="sales-documents-toolbar">
+						<div class="sales-documents-toolbar__title">
+							<strong>Журнал продаж</strong>
+							<span>Чеки, счета и документы по каждой операции</span>
+						</div>
+						<div class="sales-documents-toolbar__controls">
+							<label class="sales-history-search">
+								<span aria-hidden="true">⌕</span>
+								<input type="search" id="salesDocumentsSearch" placeholder="№ продажи или клиент" autocomplete="off">
+							</label>
+							<select id="salesDocumentsFilter" class="sales-history-filter" aria-label="Фильтр истории продаж">
+								<option value="all">Все операции</option>
+								<option value="sales">Продажи</option>
+								<option value="invoices">Счета</option>
+								<option value="refunds">Возвраты</option>
+							</select>
+						</div>
+					</div>
+
 					<div class="table-wrapper sales-documents-table-wrap">
 						<table class="history-table sales-documents-table">
 							<thead>
 								<tr>
-									<th>№</th>
-									<th>Дата</th>
+									<th>Продажа</th>
 									<th>Клиент</th>
-									<th>Сумма</th>
-									<th>Оплата</th>
+									<th>Сумма / оплата</th>
 									<th>Статус</th>
 									<th>Документы</th>
 								</tr>
@@ -142,7 +159,7 @@
 					</div>
 					<div id="mobileSalesDocumentsHistory" class="mobile-sales-history"></div>
 					<button type="button" id="salesDocumentsMore" class="sales-shifts-more" hidden>
-						Показать ещё документы
+						Показать ещё
 					</button>
 				</div>
 
