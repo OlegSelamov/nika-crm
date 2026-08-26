@@ -121,7 +121,26 @@ def _number(value):
 
 
 def _decimal_text(value):
-    return format(_money(value), "f")
+    """Serialize XML decimal in plain notation without insignificant zeros.
+
+    ИС ЭСФ отклоняет значения вроде 1000.00 и 0.00 как содержащие
+    незначащие нули. При этом XML Schema decimal не допускает экспоненту.
+    """
+    text = format(_money(value), "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _number_text(value):
+    """Plain XML decimal for quantity: no exponent and no trailing zeros."""
+    try:
+        text = format(Decimal(str(value or 0)), "f")
+    except (InvalidOperation, ValueError, TypeError):
+        return "0"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
 
 
 def _date_text(value):
@@ -385,11 +404,12 @@ def _build_invoice_xml(payload):
         _add(product_el, "description", product.get("description"))
         _add(product_el, "gtinCode", product.get("gtin_code"))
         _add(product_el, "ndsAmount", _decimal_text(nds_amount), True)
-        if nds_rate:
-            _add(product_el, "ndsRate", str(nds_rate.quantize(Decimal("1"))), True)
+        # Для неплательщика НДС ИС ЭСФ требует явное значение 0,
+        # а не отсутствие элемента ndsRate.
+        _add(product_el, "ndsRate", _number_text(nds_rate), True)
         _add(product_el, "priceWithTax", _decimal_text(total_with_tax), True)
         _add(product_el, "priceWithoutTax", _decimal_text(total_without_tax), True)
-        _add(product_el, "quantity", str(quantity.normalize()), True)
+        _add(product_el, "quantity", _number_text(quantity), True)
         _add(product_el, "truOriginCode", product.get("tru_origin_code"), True)
         _add(product_el, "turnoverSize", _decimal_text(total_without_tax), True)
         _add(product_el, "unitCode", product.get("unit_code"))
@@ -399,7 +419,7 @@ def _build_invoice_xml(payload):
         totals["with_tax"] += total_with_tax
         totals["without_tax"] += total_without_tax
 
-    _add(product_set, "totalExciseAmount", "0.00", True)
+    _add(product_set, "totalExciseAmount", "0", True)
     _add(product_set, "totalNdsAmount", _decimal_text(totals["nds"]), True)
     _add(product_set, "totalPriceWithTax", _decimal_text(totals["with_tax"]), True)
     _add(product_set, "totalPriceWithoutTax", _decimal_text(totals["without_tax"]), True)
@@ -412,7 +432,11 @@ def _build_invoice_xml(payload):
     _add(seller_el, "bik", seller.get("bik"))
     _add(seller_el, "certificateNum", seller.get("certificate_num"))
     _add(seller_el, "certificateSeries", seller.get("certificate_series"))
-    _add(seller_el, "countryCode", seller.get("country_code") or "KZ")
+    # countryCode поставщика заполняется только для нерезидента.
+    # Для казахстанского ИП/ТОО элемент передавать нельзя.
+    seller_country = str(seller.get("country_code") or "KZ").strip().upper()
+    if seller_country and seller_country != "KZ":
+        _add(seller_el, "countryCode", seller_country)
     _add(seller_el, "iik", seller.get("iik"))
     _add(seller_el, "kbe", seller.get("kbe"))
     _add(seller_el, "name", seller.get("name"), True)
