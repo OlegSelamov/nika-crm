@@ -274,9 +274,10 @@ def _initial_payload(source):
                         item.get("gtin") or item.get("catalog_gtin") or "")
         products.append({
             "sale_item_id": item["id"],
-            # Для работ/услуг (признак происхождения 6) используется базовый
-            # идентификатор ТРУ «1». Для товаров ВС нужен реальный составной код ГСВС.
-            "catalog_tru_id": "1" if item_type == "service" else "",
+            # Поле catalogTruId обязательно в API ИС ЭСФ. Для обычных ТРУ,
+            # которые не ведутся на Виртуальном складе, используется значение «1».
+            # Для товара ВС пользователь может заменить его на реальный составной код ГСВС.
+            "catalog_tru_id": "1",
             "description": item.get("name") or "Товар",
             "quantity": str(item.get("quantity") or 1),
             "price_with_tax": _decimal_text(item.get("price")),
@@ -349,6 +350,11 @@ def _normalize_payload(payload):
     normalized = json.loads(json.dumps(payload, ensure_ascii=False))
     for product in normalized.get("products") or []:
         item_type = str(product.get("item_type") or "").strip().lower()
+        # catalogTruId обязателен в XML, но не должен быть обязательным реквизитом
+        # карточки товара в Nika. Если отдельный ID не задан, используем «1» —
+        # стандартное значение для ТРУ, не ведущихся на Виртуальном складе.
+        if not str(product.get("catalog_tru_id") or "").strip():
+            product["catalog_tru_id"] = "1"
         if item_type == "service":
             product["catalog_tru_id"] = "1"
             product["tru_origin_code"] = "6"
@@ -390,9 +396,9 @@ def _validation_errors(payload):
     if not products:
         errors.append("В продаже нет товаров или услуг.")
     for index, product in enumerate(products, 1):
-        catalog_tru_id = str(product.get("catalog_tru_id") or "").strip()
-        if not catalog_tru_id:
-            errors.append(f"Строка {index}: укажите реальный идентификатор ТРУ.")
+        # ID ТРУ не требуем хранить в карточке товара: перед формированием XML
+        # пустое значение нормализуется в «1». Для товара Виртуального склада
+        # пользователь указывает реальный составной код ГСВС в самой форме ЭСФ.
         origin_code = str(product.get("tru_origin_code") or "")
         if origin_code not in {"1", "2", "3", "4", "5", "6"}:
             errors.append(f"Строка {index}: выберите признак происхождения ТРУ (1–6).")
