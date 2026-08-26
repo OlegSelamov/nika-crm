@@ -208,18 +208,22 @@ def _initial_payload(source):
     date = _date_text(sale.get("created_at") or now_kz())
     products = []
     for index, item in enumerate(items, 1):
+        item_type = item.get("item_type") or "product"
         products.append({
             "sale_item_id": item["id"],
-            "catalog_tru_id": str(index),
+            # Никогда не подставляем номер строки как catalogTruId. На боевой
+            # ИС ЭСФ здесь должен быть реальный идентификатор ТРУ из классификатора.
+            "catalog_tru_id": "",
             "description": item.get("name") or "Товар",
             "quantity": str(item.get("quantity") or 1),
             "price_with_tax": _decimal_text(item.get("price")),
-            "tru_origin_code": "",
+            # Для работ/услуг признак происхождения по правилам ИС ЭСФ = 6.
+            "tru_origin_code": "6" if item_type == "service" else "",
             "unit_code": "",
             "unit_nomenclature": "796" if (item.get("unit") or "").lower() in {"шт", "шт."} else "",
             "unit_label": item.get("unit") or "шт",
             "gtin_code": item.get("gtin") or "",
-            "item_type": item.get("item_type") or "product",
+            "item_type": item_type,
         })
 
     return {
@@ -286,8 +290,16 @@ def _validation_errors(payload):
     if not products:
         errors.append("В продаже нет товаров или услуг.")
     for index, product in enumerate(products, 1):
-        if not str(product.get("catalog_tru_id") or "").strip():
-            errors.append(f"Строка {index}: укажите идентификатор ТРУ.")
+        catalog_tru_id = str(product.get("catalog_tru_id") or "").strip()
+        if not catalog_tru_id:
+            errors.append(f"Строка {index}: укажите реальный идентификатор ТРУ.")
+        elif catalog_tru_id == str(index):
+            # Старые версии Nika временно подставляли 1, 2, 3... как заглушку.
+            # Не даём такому черновику случайно уйти в production.
+            errors.append(
+                f"Строка {index}: ID ТРУ «{catalog_tru_id}» — служебная заглушка старой версии. "
+                "Укажите реальный идентификатор ТРУ и подпишите ЭСФ заново."
+            )
         if str(product.get("tru_origin_code") or "") not in {"1", "2", "3", "4", "5", "6"}:
             errors.append(f"Строка {index}: выберите признак происхождения ТРУ (1–6).")
         if _number(product.get("quantity")) <= 0:

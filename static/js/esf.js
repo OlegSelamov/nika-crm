@@ -193,8 +193,14 @@
 
     function confirmApiAction(action) {
         const production = documentState?.api_environment === "production";
-        const prefix = production ? "ВНИМАНИЕ: это БОЕВАЯ ИС ЭСФ. " : "Это тестовая ИС ЭСФ. ";
-        return window.confirm(`${prefix}${action}`);
+        const prefix = production ? "ВНИМАНИЕ: это БОЕВАЯ ИС ЭСФ." : "Это тестовая ИС ЭСФ.";
+        const seller = documentState?.payload?.seller || {};
+        const customer = documentState?.payload?.customer || {};
+        const parties = production
+            ? `\n\nПоставщик: ${seller.name || "—"} (${seller.tin || "—"})` +
+              `\nПолучатель: ${customer.name || "—"} (${customer.tin || "—"})`
+            : "";
+        return window.confirm(`${prefix}${parties}\n\n${action}`);
     }
 
     function friendlyOperationError(error) {
@@ -244,7 +250,7 @@
                 body: JSON.stringify(auth)
             });
             documentState = data.document;
-            showMessage(data.message, "success");
+            showMessage(`${data.message} Перед отзывом дождитесь появления ЭСФ в обычном кабинете ИС ЭСФ.`, "success");
         } catch (error) {
             showMessage(friendlyOperationError(error), "error");
         } finally {
