@@ -404,9 +404,13 @@ def _build_invoice_xml(payload):
         _add(product_el, "description", product.get("description"))
         _add(product_el, "gtinCode", product.get("gtin_code"))
         _add(product_el, "ndsAmount", _decimal_text(nds_amount), True)
-        # Для неплательщика НДС ИС ЭСФ требует явное значение 0,
-        # а не отсутствие элемента ndsRate.
-        _add(product_el, "ndsRate", _number_text(nds_rate), True)
+        # Для неплательщика НДС ставка в бланке означает «Без НДС».
+        # В API INVOICEV2 это не числовая ставка 0%: элемент ndsRate
+        # должен отсутствовать. Если передать <ndsRate>0</ndsRate>,
+        # боевая ИС ЭСФ возвращает ФЛК invoiceV2.product.ndsRate.exists.
+        # Числовой ndsRate отправляем только для реальной ставки НДС > 0.
+        if nds_rate > 0:
+            _add(product_el, "ndsRate", _number_text(nds_rate), True)
         _add(product_el, "priceWithTax", _decimal_text(total_with_tax), True)
         _add(product_el, "priceWithoutTax", _decimal_text(total_without_tax), True)
         _add(product_el, "quantity", _number_text(quantity), True)
