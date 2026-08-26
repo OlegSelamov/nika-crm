@@ -248,7 +248,8 @@ def _source_data(cur, company_id, sale_id):
     )
     client = cur.fetchone() or {}
     cur.execute("""
-        SELECT si.*, i.item_type
+        SELECT si.*, i.item_type,
+               i.ntin AS catalog_ntin, i.gtin AS catalog_gtin, i.unit AS catalog_unit
         FROM sale_items si
         LEFT JOIN items i ON i.id=si.item_id AND i.company_id=%s
         WHERE si.sale_id=%s
@@ -264,6 +265,13 @@ def _initial_payload(source):
     products = []
     for index, item in enumerate(items, 1):
         item_type = item.get("item_type") or "product"
+        unit_value = item.get("unit") or item.get("catalog_unit")
+        # В XSD INVOICEV2 историческое имя поля осталось gtinCode,
+        # но в актуальном бланке ИС ЭСФ это графа «Код товара».
+        # Для товаров с 2026 года сюда передаётся код НКТ NTIN/XTIN.
+        # Берём снимок из sale_items, а если его нет — актуальный NTIN из каталога.
+        product_code = (item.get("ntin") or item.get("catalog_ntin") or
+                        item.get("gtin") or item.get("catalog_gtin") or "")
         products.append({
             "sale_item_id": item["id"],
             # Для работ/услуг (признак происхождения 6) используется базовый
@@ -277,9 +285,9 @@ def _initial_payload(source):
             # В INVOICEV2 unitCode = код ТН ВЭД, а unitNomenclature =
             # код единицы измерения по классификатору (796=шт, 166=кг и т.д.).
             "unit_code": "",
-            "unit_nomenclature": _esf_unit_nomenclature(item.get("unit"), item_type),
-            "unit_label": item.get("unit") or ("услуга" if item_type == "service" else "шт"),
-            "gtin_code": item.get("gtin") or "",
+            "unit_nomenclature": _esf_unit_nomenclature(unit_value, item_type),
+            "unit_label": unit_value or ("услуга" if item_type == "service" else "шт"),
+            "gtin_code": "" if item_type == "service" else product_code,
             "item_type": item_type,
         })
 
@@ -344,6 +352,7 @@ def _normalize_payload(payload):
         if item_type == "service":
             product["catalog_tru_id"] = "1"
             product["tru_origin_code"] = "6"
+            product["gtin_code"] = ""
         if not str(product.get("unit_nomenclature") or "").strip():
             product["unit_nomenclature"] = _esf_unit_nomenclature(
                 product.get("unit_label"), item_type
@@ -387,10 +396,21 @@ def _validation_errors(payload):
         origin_code = str(product.get("tru_origin_code") or "")
         if origin_code not in {"1", "2", "3", "4", "5", "6"}:
             errors.append(f"Строка {index}: выберите признак происхождения ТРУ (1–6).")
+        product_code = str(product.get("gtin_code") or "").strip()
+        item_type = str(product.get("item_type") or "").strip().lower()
+        # NTIN/XTIN пока не делаем обязательным для каждого товара.
+        # Если код есть в карточке/черновике — передаём его в ИС ЭСФ;
+        # если поля нет — элемент gtinCode просто не формируется.
+        # Валидацию формата выполняем только для заполненного значения.
+        if item_type != "service" and origin_code != "6" and product_code:
+            if not re.fullmatch(r"(?:02\d{11}|004\d{10})", product_code):
+                errors.append(
+                    f"Строка {index}: код товара должен быть NTIN (02 + 11 цифр) "
+                    "или XTIN (004 + 10 цифр), всего 13 цифр."
+                )
         unit_nom = str(product.get("unit_nomenclature") or "").strip()
         # Для товаров единица измерения обязательна. Для работ/услуг (код 6)
-        # правила допускают отсутствие, но Nika по умолчанию ставит 796 (шт),
-        # чтобы единица была видна в кабинете ИС ЭСФ.
+        # Nika по умолчанию ставит 5114 «Одна услуга».
         if origin_code in {"1", "2", "3", "4", "5"} and not unit_nom:
             errors.append(f"Строка {index}: укажите единицу измерения ЭСФ.")
         if unit_nom and not re.fullmatch(r"[A-Za-z0-9]{1,10}", unit_nom):

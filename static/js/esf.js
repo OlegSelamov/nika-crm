@@ -330,6 +330,7 @@
                 <td><input data-product-field="description" value="${escapeHtml(product.description)}" aria-label="Наименование"></td>
                 <td><div class="esf-quantity"><input data-product-field="quantity" type="number" min="0.000001" step="0.001" value="${escapeHtml(product.quantity)}"><span>${escapeHtml(product.unit_label || "")}</span></div></td>
                 <td><input data-product-field="price_with_tax" type="number" min="0" step="0.01" value="${escapeHtml(product.price_with_tax)}"></td>
+                <td><input data-product-field="gtin_code" inputmode="numeric" maxlength="13" value="${escapeHtml(product.item_type === "service" ? "" : (product.gtin_code || ""))}" placeholder="NTIN / XTIN" aria-label="Код товара NTIN или XTIN" ${product.item_type === "service" ? 'readonly title="Для услуг код НКТ не передаётся"' : 'title="Необязательно. Если NTIN/XTIN есть в карточке товара, Nika передаст его в ИС ЭСФ"'}></td>
                 <td><input data-product-field="catalog_tru_id" value="${escapeHtml(product.item_type === "service" ? "1" : product.catalog_tru_id)}" aria-label="Идентификатор ТРУ" ${product.item_type === "service" ? 'readonly title="Для работ и услуг Nika использует ID ТРУ 1"' : 'title="Для товара ВС укажите реальный составной код ГСВС; для обычного товара используйте корректный ID ТРУ"'}></td>
                 <td>
                     <select data-product-field="tru_origin_code" aria-label="Признак происхождения">
