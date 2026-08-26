@@ -178,16 +178,34 @@
         return JSON.stringify(result, null, 2);
     }
 
+    function certificateString(value) {
+        if (typeof value === "string") return value.trim();
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                const found = certificateString(item);
+                if (found) return found;
+            }
+            return "";
+        }
+        if (!value || typeof value !== "object") return "";
+        for (const key of ["value", "pem", "base64", "data", "certificate", "cert", "x509Certificate"]) {
+            const found = certificateString(value[key]);
+            if (found) return found;
+        }
+        return "";
+    }
+
     function certificateValue(result) {
         if (!result || typeof result !== "object") return "";
-        if (typeof result.certificate === "string") return result.certificate;
-        if (typeof result.cert === "string") return result.cert;
-        if (typeof result.x509Certificate === "string") return result.x509Certificate;
-        if (Array.isArray(result.certificates) && result.certificates.length) {
-            return String(result.certificates[0] || "");
+        for (const key of ["certificate", "certificates", "cert", "certs", "x509Certificate", "x509Certificates"]) {
+            const found = certificateString(result[key]);
+            if (found) return found;
         }
-        if (Array.isArray(result.signatures) && result.signatures.length) {
-            return certificateValue(result.signatures[0]);
+        if (Array.isArray(result.signatures)) {
+            for (const signature of result.signatures) {
+                const found = certificateValue(signature);
+                if (found) return found;
+            }
         }
         if (result.signature && typeof result.signature === "object") {
             return certificateValue(result.signature);
@@ -249,9 +267,17 @@
                 locale: "ru"
             }
         });
+        const certificate = certificateValue(result);
+        if (!certificate) {
+            const responseShape = result && typeof result === "object"
+                ? Object.keys(result).join(", ")
+                : typeof result;
+            console.warn("NCALayer CMS response has no recognized certificate field. Keys:", responseShape);
+            throw new Error(`NCALayer подписал документ, но не вернул сертификат. Поля ответа: ${responseShape || "пусто"}.`);
+        }
         return {
             signature: signedValue(result),
-            certificate: certificateValue(result),
+            certificate,
             certificateSubject: certificateSubjectValue(result),
             raw: result
         };
