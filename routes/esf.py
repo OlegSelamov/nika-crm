@@ -412,7 +412,15 @@ def _document_view(row, fallback_payload):
         "registration_number": row.get("registration_number") if row else None,
         "error_message": row.get("error_message") if row else None,
         "revoke_reason": row.get("revoke_reason") if row else None,
-        "api_environment": row.get("api_environment") if row and row.get("api_environment") else api_config.environment,
+        # До фактической отправки показываем текущую настроенную среду API.
+        # Это важно после неудачной попытки на test: старая запись не должна
+        # заставлять интерфейс продолжать показывать "ТЕСТОВАЯ ИС ЭСФ",
+        # когда сервер уже переключён на production.
+        "api_environment": (
+            row.get("api_environment")
+            if row and has_external_id and row.get("api_environment")
+            else api_config.environment
+        ),
         "validation_errors": errors,
         "can_sign": bool(row and row.get("invoice_xml") and not errors and status in {"draft", "prepared", "signed", "failed"} and not has_external_id),
         "can_send": bool(row and status in {"signed", "failed"} and row.get("signature") and row.get("x509_certificate") and not has_external_id),
@@ -607,6 +615,65 @@ def get_sale_esf_auth_ticket(sale_id):
             "api_environment": esf_api_configuration().environment,
         })
     finally:
+        conn.rollback()
+        cur.close()
+        pool.putconn(conn)
+
+
+@esf_bp.route("/api/sales/<int:sale_id>/esf/auth-check", methods=["POST"])
+def check_sale_esf_auth(sale_id):
+    """Open and immediately close an IS ESF API session without sending a document."""
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    cur = conn.cursor()
+    api_session_id = None
+    api_auth = None
+    try:
+        _ensure_esf_schema(cur)
+        cur.execute(
+            "SELECT * FROM esf_documents WHERE company_id=%s AND sale_id=%s",
+            (company_id, sale_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Сначала сохраните ЭСФ"}), 404
+
+        try:
+            api_auth = _api_auth_payload(
+                data,
+                (row.get("payload") or {}).get("seller", {}).get("tin"),
+            )
+        except ValueError as error:
+            return jsonify({"success": False, "error": str(error)}), 400
+
+        config = esf_api_configuration()
+        try:
+            api_session_id = create_signed_session(**api_auth)
+        except EsfApiError as error:
+            return _api_error_json(error)
+
+        return jsonify({
+            "success": True,
+            "api_environment": config.environment,
+            "message": (
+                "Авторизация в боевой ИС ЭСФ успешна. API-сессия открыта и закрыта; "
+                "ЭСФ не отправлялась."
+                if config.environment == "production"
+                else
+                "Авторизация в тестовой ИС ЭСФ успешна. API-сессия открыта и закрыта; "
+                "ЭСФ не отправлялась."
+            ),
+        })
+    finally:
+        close_session(
+            api_session_id,
+            iin=(api_auth or {}).get("iin"),
+            password=(api_auth or {}).get("password"),
+        )
         conn.rollback()
         cur.close()
         pool.putconn(conn)
@@ -810,6 +877,16 @@ def revoke_sale_esf(sale_id):
 
         previous_status = row["status"]
         config = esf_api_configuration()
+        document_environment = str(row.get("api_environment") or "").strip().lower()
+        if document_environment and document_environment != config.environment:
+            return jsonify({
+                "success": False,
+                "error": (
+                    f"Эта ЭСФ была отправлена в среду {document_environment}, "
+                    f"а Nika сейчас подключена к {config.environment}. "
+                    "Переключите среду перед отзывом документа."
+                ),
+            }), 409
         cur.execute(
             "UPDATE esf_documents SET status='revoking',revoke_reason=%s,error_message=NULL,updated_at=%s WHERE id=%s",
             (reason, now_kz(), row["id"]),

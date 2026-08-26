@@ -3129,6 +3129,9 @@ body.esf-modal-open { overflow: hidden; }
 .esf-api-fields input:focus,
 .esf-api-fields select:focus,
 .esf-revoke-panel textarea:focus { border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, .12); }
+.esf-api-check-row { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; }
+.esf-api-check-row .esf-btn { flex: 0 0 auto; }
+.esf-api-check-row small { color: #64748b; font-size: 11px; line-height: 1.4; }
 .esf-revoke-panel { border-color: #fecaca; background: #fffafa; }
 .esf-revoke-panel textarea { min-height: 72px; margin: 10px 0 5px; resize: vertical; }
 .esf-footer-meta { display: grid; gap: 3px; }

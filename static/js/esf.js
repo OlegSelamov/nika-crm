@@ -81,7 +81,7 @@
 
     function setBusy(value, label) {
         busy = value;
-        ["esfSaveDraft", "esfSign", "esfSend", "esfRevoke"].forEach((id) => {
+        ["esfSaveDraft", "esfSign", "esfCheckAuth", "esfSend", "esfRevoke"].forEach((id) => {
             const button = element(id);
             if (button) button.disabled = value;
         });
@@ -101,7 +101,10 @@
         revoke.hidden = !documentData?.can_revoke;
         revoke.disabled = busy || !documentData?.can_revoke;
         const authPanel = element("esfApiPanel");
-        if (authPanel) authPanel.hidden = !(documentData?.can_send || documentData?.can_revoke);
+        const authAvailable = Boolean(documentData?.can_send || documentData?.can_revoke);
+        if (authPanel) authPanel.hidden = !authAvailable;
+        const checkAuth = element("esfCheckAuth");
+        if (checkAuth) checkAuth.disabled = busy || !authAvailable;
         const revokePanel = element("esfRevokePanel");
         if (revokePanel) revokePanel.hidden = !documentData?.can_revoke;
         document.querySelectorAll("#esfForm input, #esfForm select").forEach((input) => {
@@ -176,6 +179,10 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ iin: credentials.iin })
         });
+        if (documentState && ticket.api_environment) {
+            documentState.api_environment = ticket.api_environment;
+            renderStatus(documentState);
+        }
         element("esfFooterStatus").textContent = "Подпишите тикет авторизации в NCALayer…";
         const signedTicket = await window.NikaNCALayer.signXml(ticket.auth_ticket_xml);
         if (!signedTicket.signedXml || !String(signedTicket.signedXml).includes("Signature")) {
@@ -195,6 +202,32 @@
         return window.NikaNCALayer?.friendlyError
             ? window.NikaNCALayer.friendlyError(error)
             : (error?.message || "Не удалось выполнить операцию.");
+    }
+
+    async function checkEsfAuth() {
+        if (!saleId || busy || !(documentState?.can_send || documentState?.can_revoke)) return;
+        setBusy(true, "Проверяем авторизацию в ИС ЭСФ…");
+        showMessage("Проверяем только вход в ИС ЭСФ. Документ отправлен не будет.", "info");
+        try {
+            const auth = await authorize();
+            element("esfFooterStatus").textContent = "Открываем проверочную API-сессию…";
+            const data = await requestJson(`/api/sales/${saleId}/esf/auth-check`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(auth)
+            });
+            if (documentState && data.api_environment) {
+                documentState.api_environment = data.api_environment;
+            }
+            showMessage(data.message, "success");
+            element("esfFooterStatus").textContent = "Авторизация проверена. Документ не отправлялся.";
+        } catch (error) {
+            showMessage(friendlyOperationError(error), "error");
+        } finally {
+            if (element("esfAuthPassword")) element("esfAuthPassword").value = "";
+            setBusy(false);
+            renderStatus(documentState);
+        }
     }
 
     async function sendEsf() {
@@ -424,6 +457,7 @@
         loadAuthPreferences();
         element("esfSaveDraft")?.addEventListener("click", () => saveDraft());
         element("esfSign")?.addEventListener("click", signDraft);
+        element("esfCheckAuth")?.addEventListener("click", checkEsfAuth);
         element("esfSend")?.addEventListener("click", sendEsf);
         element("esfRevoke")?.addEventListener("click", revokeEsf);
         element("esfModal")?.addEventListener("click", (event) => {

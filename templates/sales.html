@@ -306,7 +306,7 @@
                         <strong>Авторизация в ИС ЭСФ</strong>
                         <span>Нужна только при отправке или отзыве</span>
                     </div>
-                    <span id="esfApiEnvironment" class="esf-environment-badge">Тестовый сервер</span>
+                    <span id="esfApiEnvironment" class="esf-environment-badge">ИС ЭСФ</span>
                 </div>
                 <div class="esf-api-fields">
                     <label>ИИН пользователя
@@ -323,6 +323,10 @@
                             <option value="ENTREPRENEUR_USER">Сотрудник ИП</option>
                         </select>
                     </label>
+                </div>
+                <div class="esf-api-check-row">
+                    <button id="esfCheckAuth" type="button" class="esf-btn is-secondary">Проверить вход в ИС ЭСФ</button>
+                    <small>Проверка только открывает и сразу закрывает API-сессию. Документ в ИС ЭСФ не отправляется.</small>
                 </div>
                 <small>Пароль передаётся в ИС ЭСФ только для открытия кратковременной API-сессии и в базе Nika не сохраняется.</small>
             </section>

@@ -47,7 +47,7 @@ class EsfApiConfig:
 
 
 def configuration():
-    environment = str(os.getenv("ESF_API_ENV", "test")).strip().lower()
+    environment = str(os.getenv("ESF_API_ENV", "production")).strip().lower()
     if environment in {"prod", "production", "live"}:
         environment = "production"
     else:
