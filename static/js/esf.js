@@ -306,21 +306,47 @@
 
     function renderProducts() {
         const body = element("esfProductsBody");
-        body.innerHTML = products.map((product, index) => `
+        const originLabels = {
+            1: "1 — импорт, перечень",
+            2: "2 — импорт, вне перечня",
+            3: "3 — Казахстан, перечень",
+            4: "4 — Казахстан, вне перечня",
+            5: "5 — прочий товар",
+            6: "6 — работа / услуга"
+        };
+        const unitOptions = [
+            ["5114", "Одна услуга — 5114"],
+            ["796", "шт — 796"], ["166", "кг — 166"], ["163", "г — 163"],
+            ["112", "л — 112"], ["111", "мл — 111"], ["006", "м — 006"],
+            ["055", "м² — 055"], ["113", "м³ — 113"], ["356", "час — 356"],
+            ["359", "сутки — 359"], ["362", "месяц — 362"], ["366", "год — 366"],
+            ["715", "пара — 715"]
+        ];
+        body.innerHTML = products.map((product, index) => {
+            const currentUnit = String(product.unit_nomenclature || "");
+            const hasKnownUnit = unitOptions.some(([value]) => value === currentUnit);
+            return `
             <tr data-esf-product="${index}">
                 <td><input data-product-field="description" value="${escapeHtml(product.description)}" aria-label="Наименование"></td>
                 <td><div class="esf-quantity"><input data-product-field="quantity" type="number" min="0.000001" step="0.001" value="${escapeHtml(product.quantity)}"><span>${escapeHtml(product.unit_label || "")}</span></div></td>
                 <td><input data-product-field="price_with_tax" type="number" min="0" step="0.01" value="${escapeHtml(product.price_with_tax)}"></td>
-                <td><input data-product-field="catalog_tru_id" value="${escapeHtml(product.item_type === "service" ? "1" : product.catalog_tru_id)}" aria-label="Идентификатор ТРУ" ${product.item_type === "service" ? 'readonly title="Для работ и услуг Nika использует ID ТРУ 1"' : 'title="Для товара ВС укажите реальный составной код ГСВС; для товара вне ВС допустимо значение, предусмотренное ИС ЭСФ"'}></td>
+                <td><input data-product-field="catalog_tru_id" value="${escapeHtml(product.item_type === "service" ? "1" : product.catalog_tru_id)}" aria-label="Идентификатор ТРУ" ${product.item_type === "service" ? 'readonly title="Для работ и услуг Nika использует ID ТРУ 1"' : 'title="Для товара ВС укажите реальный составной код ГСВС; для обычного товара используйте корректный ID ТРУ"'}></td>
                 <td>
                     <select data-product-field="tru_origin_code" aria-label="Признак происхождения">
                         <option value="">Выберите</option>
-                        ${[1, 2, 3, 4, 5, 6].map((code) => `<option value="${code}" ${String(product.tru_origin_code) === String(code) ? "selected" : ""}>Код ${code}</option>`).join("")}
+                        ${Object.entries(originLabels).map(([code, label]) => `<option value="${code}" ${String(product.tru_origin_code) === String(code) ? "selected" : ""}>${label}</option>`).join("")}
                     </select>
                 </td>
-                <td><input data-product-field="unit_code" inputmode="numeric" maxlength="10" value="${escapeHtml(product.unit_code)}" placeholder="необязательно"></td>
-            </tr>
-        `).join("");
+                <td>
+                    <select data-product-field="unit_nomenclature" aria-label="Единица измерения ЭСФ" title="Код единицы измерения по классификатору ИС ЭСФ">
+                        <option value="">Не указывать</option>
+                        ${!hasKnownUnit && currentUnit ? `<option value="${escapeHtml(currentUnit)}" selected>${escapeHtml(currentUnit)}</option>` : ""}
+                        ${unitOptions.map(([value, label]) => `<option value="${value}" ${currentUnit === value ? "selected" : ""}>${label}</option>`).join("")}
+                    </select>
+                </td>
+                <td><input data-product-field="unit_code" inputmode="numeric" maxlength="10" value="${escapeHtml(product.unit_code)}" placeholder="необязательно" title="Код ТН ВЭД ЕАЭС (10 цифр), если требуется по признаку происхождения"></td>
+            </tr>`;
+        }).join("");
     }
 
     function fillForm(payload) {

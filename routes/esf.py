@@ -189,6 +189,42 @@ def _api_error_json(error):
     return jsonify(payload), 502
 
 
+
+_ESF_UNIT_NOMENCLATURE = {
+    # МКЕИ / классификатор единиц измерения, используемый ИС ЭСФ.
+    "услуга": "5114", "услуги": "5114", "одна услуга": "5114",
+    "шт": "796", "шт.": "796", "штука": "796", "штук": "796",
+    "кг": "166", "килограмм": "166", "килограммы": "166",
+    "г": "163", "гр": "163", "грамм": "163",
+    "л": "112", "л.": "112", "литр": "112", "литры": "112",
+    "мл": "111", "миллилитр": "111",
+    "м": "006", "метр": "006", "метры": "006",
+    "м2": "055", "м²": "055", "кв.м": "055", "кв. м": "055",
+    "м3": "113", "м³": "113", "куб.м": "113", "куб. м": "113",
+    "час": "356", "ч": "356", "часов": "356",
+    "сут": "359", "сутки": "359", "день": "359", "дней": "359",
+    "мес": "362", "месяц": "362", "месяцев": "362",
+    "год": "366", "лет": "366",
+    "пара": "715", "пар": "715",
+}
+
+
+def _esf_unit_nomenclature(unit, item_type=None):
+    """Return the classifier code used by INVOICEV2 unitNomenclature.
+
+    For services, Kazakhstan's measurement classifier contains the dedicated
+    unit 'Одна услуга' with code 5114. Use it for the Nika catalog values
+    'услуга'/'услуги' and as the default when a service has no unit set.
+    The field itself remains editable in the ESF form.
+    """
+    raw = str(unit or "").strip().lower().replace("ё", "е")
+    raw = re.sub(r"\s+", " ", raw)
+    if raw in {"услуга", "услуги", "одна услуга"}:
+        return "5114"
+    if not raw and str(item_type or "").strip().lower() == "service":
+        return "5114"
+    return _ESF_UNIT_NOMENCLATURE.get(raw, "")
+
 def _invoice_number(sale):
     candidate = str(sale.get("sale_number") or "")
     digits = "".join(re.findall(r"\d+", candidate))
@@ -238,9 +274,11 @@ def _initial_payload(source):
             "price_with_tax": _decimal_text(item.get("price")),
             # Для работ/услуг признак происхождения по правилам ИС ЭСФ = 6.
             "tru_origin_code": "6" if item_type == "service" else "",
+            # В INVOICEV2 unitCode = код ТН ВЭД, а unitNomenclature =
+            # код единицы измерения по классификатору (796=шт, 166=кг и т.д.).
             "unit_code": "",
-            "unit_nomenclature": "796" if (item.get("unit") or "").lower() in {"шт", "шт."} else "",
-            "unit_label": item.get("unit") or "шт",
+            "unit_nomenclature": _esf_unit_nomenclature(item.get("unit"), item_type),
+            "unit_label": item.get("unit") or ("услуга" if item_type == "service" else "шт"),
             "gtin_code": item.get("gtin") or "",
             "item_type": item_type,
         })
@@ -302,9 +340,14 @@ def _normalize_payload(payload):
         return payload
     normalized = json.loads(json.dumps(payload, ensure_ascii=False))
     for product in normalized.get("products") or []:
-        if str(product.get("item_type") or "").strip().lower() == "service":
+        item_type = str(product.get("item_type") or "").strip().lower()
+        if item_type == "service":
             product["catalog_tru_id"] = "1"
             product["tru_origin_code"] = "6"
+        if not str(product.get("unit_nomenclature") or "").strip():
+            product["unit_nomenclature"] = _esf_unit_nomenclature(
+                product.get("unit_label"), item_type
+            )
     return normalized
 
 
@@ -341,8 +384,17 @@ def _validation_errors(payload):
         catalog_tru_id = str(product.get("catalog_tru_id") or "").strip()
         if not catalog_tru_id:
             errors.append(f"Строка {index}: укажите реальный идентификатор ТРУ.")
-        if str(product.get("tru_origin_code") or "") not in {"1", "2", "3", "4", "5", "6"}:
+        origin_code = str(product.get("tru_origin_code") or "")
+        if origin_code not in {"1", "2", "3", "4", "5", "6"}:
             errors.append(f"Строка {index}: выберите признак происхождения ТРУ (1–6).")
+        unit_nom = str(product.get("unit_nomenclature") or "").strip()
+        # Для товаров единица измерения обязательна. Для работ/услуг (код 6)
+        # правила допускают отсутствие, но Nika по умолчанию ставит 796 (шт),
+        # чтобы единица была видна в кабинете ИС ЭСФ.
+        if origin_code in {"1", "2", "3", "4", "5"} and not unit_nom:
+            errors.append(f"Строка {index}: укажите единицу измерения ЭСФ.")
+        if unit_nom and not re.fullmatch(r"[A-Za-z0-9]{1,10}", unit_nom):
+            errors.append(f"Строка {index}: некорректный код единицы измерения ЭСФ.")
         if _number(product.get("quantity")) <= 0:
             errors.append(f"Строка {index}: количество должно быть больше нуля.")
     return errors
