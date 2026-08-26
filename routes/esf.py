@@ -524,6 +524,11 @@ def save_sale_esf_signature(sale_id):
     subject = str(data.get("certificate_subject") or "").strip()
     if len(signature) < 64:
         return jsonify({"success": False, "error": "NCALayer не вернул подпись"}), 400
+    if len(signature) > 400:
+        return jsonify({
+            "success": False,
+            "error": "Получен CMS-контейнер вместо подписи ИС ЭСФ. Обновите страницу и подпишите документ заново.",
+        }), 400
     if len(certificate) < 100:
         return jsonify({
             "success": False,
@@ -779,7 +784,7 @@ def revoke_sale_esf(sale_id):
     revoke_certificate = str(data.get("revoke_certificate") or "").strip()
     if len(reason) < 3 or len(reason) > 1000:
         return jsonify({"success": False, "error": "Укажите корректную причину отзыва."}), 400
-    if len(revoke_signature) < 64 or len(revoke_certificate) < 100:
+    if len(revoke_signature) < 64 or len(revoke_signature) > 400 or len(revoke_certificate) < 100:
         return jsonify({"success": False, "error": "NCALayer не вернул подпись и сертификат для отзыва."}), 400
 
     conn = get_db()

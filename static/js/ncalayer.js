@@ -4,7 +4,10 @@
     const SOCKET_URL = "wss://127.0.0.1:13579/";
     const SIGNING_OID = "1.3.6.1.5.5.7.3.4";
     const REQUEST_TIMEOUT_MS = 180000;
+    const HANDSHAKE_TIMEOUT_MS = 15000;
     let socket = null;
+    let connectPromise = null;
+    let handshakeComplete = false;
     let lastSignedXml = "";
 
     function statusElement() {
@@ -40,30 +43,77 @@
     }
 
     function connect() {
-        if (socket && socket.readyState === WebSocket.OPEN) {
+        if (socket && socket.readyState === WebSocket.OPEN && handshakeComplete) {
             return Promise.resolve(socket);
         }
-        if (socket && socket.readyState === WebSocket.CONNECTING) {
-            return new Promise((resolve, reject) => {
-                socket.addEventListener("open", () => resolve(socket), { once: true });
-                socket.addEventListener("error", () => rejectConnection(reject), { once: true });
-            });
-        }
+        if (connectPromise) return connectPromise;
 
-        return new Promise((resolve, reject) => {
+        handshakeComplete = false;
+        connectPromise = new Promise((resolve, reject) => {
+            let settled = false;
+            let currentSocket;
             try {
-                socket = new WebSocket(SOCKET_URL);
+                currentSocket = new WebSocket(SOCKET_URL);
+                socket = currentSocket;
             } catch (error) {
+                connectPromise = null;
                 reject(connectionError(error));
                 return;
             }
 
-            socket.addEventListener("open", () => resolve(socket), { once: true });
-            socket.addEventListener("error", () => rejectConnection(reject), { once: true });
-            socket.addEventListener("close", () => {
-                socket = null;
+            const timeoutId = window.setTimeout(() => {
+                finishError(connectionError(new Error("NCALayer не прислал приветствие с версией.")));
+            }, HANDSHAKE_TIMEOUT_MS);
+
+            function cleanup() {
+                window.clearTimeout(timeoutId);
+                currentSocket.removeEventListener("message", onHandshake);
+                currentSocket.removeEventListener("error", onError);
+            }
+
+            function finishError(error) {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                connectPromise = null;
+                handshakeComplete = false;
+                if (socket === currentSocket) socket = null;
+                try { currentSocket.close(); } catch (_) { /* уже закрыт */ }
+                reject(error);
+            }
+
+            function onError(event) {
+                finishError(connectionError(event));
+            }
+
+            function onHandshake(event) {
+                if (settled) return;
+                let response;
+                try {
+                    response = JSON.parse(event.data);
+                } catch (error) {
+                    finishError(new Error("NCALayer вернул неверное приветствие."));
+                    return;
+                }
+                const version = versionValue(response);
+                if (!version) return;
+                settled = true;
+                cleanup();
+                handshakeComplete = true;
+                connectPromise = null;
+                resolve(currentSocket);
+            }
+
+            currentSocket.addEventListener("message", onHandshake);
+            currentSocket.addEventListener("error", onError);
+            currentSocket.addEventListener("close", () => {
+                if (!settled) finishError(connectionError());
+                if (socket === currentSocket) socket = null;
+                handshakeComplete = false;
+                connectPromise = null;
             }, { once: true });
         });
+        return connectPromise;
     }
 
     function connectionError(cause) {
@@ -73,9 +123,22 @@
         return error;
     }
 
-    function rejectConnection(reject) {
-        socket = null;
-        reject(connectionError());
+    function versionValue(response) {
+        const candidates = [
+            response?.result?.version,
+            response?.body?.result?.version,
+            response?.body?.version,
+            response?.version
+        ];
+        for (const candidate of candidates) {
+            if (candidate) return String(candidate);
+        }
+
+        const directResult = response?.body?.result ?? response?.result;
+        if (typeof directResult !== "string" || directResult.length > 100) return "";
+        return /ncalayer|^v?\d+(?:\.\d+){1,3}/i.test(directResult.trim())
+            ? directResult.trim()
+            : "";
     }
 
     async function sendRequest(payload) {
@@ -122,8 +185,13 @@
                     return;
                 }
 
-                cleanup();
-                if (response.status !== true) {
+                // Some NCALayer builds repeat the service/version message after
+                // the first request. It is not the operation result, so keep
+                // waiting instead of forcing the user to click Sign twice.
+                if (versionValue(response)) return;
+
+                if (response.status === false) {
+                    cleanup();
                     const error = new Error(response.message || response.code || "NCALayer не выполнил операцию.");
                     error.code = response.code || "NCALAYER_ERROR";
                     error.details = response.details;
@@ -131,9 +199,33 @@
                     return;
                 }
 
-                resolve(response.body && Object.prototype.hasOwnProperty.call(response.body, "result")
-                    ? response.body.result
-                    : response.body);
+                if (response.status === true) {
+                    cleanup();
+                    resolve(response.body && Object.prototype.hasOwnProperty.call(response.body, "result")
+                        ? response.body.result
+                        : response.body);
+                    return;
+                }
+
+                // Compatibility with builds that return a direct result without
+                // the top-level status flag.
+                if (response.body && Object.prototype.hasOwnProperty.call(response.body, "result")) {
+                    cleanup();
+                    resolve(response.body.result);
+                    return;
+                }
+                if (Object.prototype.hasOwnProperty.call(response, "result")) {
+                    cleanup();
+                    resolve(response.result);
+                    return;
+                }
+                if (response.code || response.message) {
+                    cleanup();
+                    const error = new Error(response.message || response.code);
+                    error.code = response.code || "NCALAYER_ERROR";
+                    error.details = response.details;
+                    reject(error);
+                }
             }
 
             webSocket.addEventListener("message", onMessage);
@@ -197,6 +289,14 @@
 
     function certificateValue(result) {
         if (!result || typeof result !== "object") return "";
+        if (Array.isArray(result)) {
+            for (const item of result) {
+                if (!item || typeof item !== "object") continue;
+                const found = certificateValue(item);
+                if (found) return found;
+            }
+            return "";
+        }
         for (const key of ["certificate", "certificates", "cert", "certs", "x509Certificate", "x509Certificates"]) {
             const found = certificateString(result[key]);
             if (found) return found;
@@ -215,6 +315,13 @@
 
     function certificateSubjectValue(result) {
         if (!result || typeof result !== "object") return "";
+        if (Array.isArray(result)) {
+            for (const item of result) {
+                const found = certificateSubjectValue(item);
+                if (found) return found;
+            }
+            return "";
+        }
         const value = result.certificateSubject || result.subject || result.subjectDn;
         if (value) return String(value);
         if (Array.isArray(result.signatures) && result.signatures.length) {
@@ -246,18 +353,17 @@
         };
     }
 
-    async function signCmsDetached(data) {
+    async function signRaw(data) {
         const result = await sendRequest({
             module: "kz.gov.pki.knca.basics",
             method: "sign",
             args: {
-                format: "cms",
+                // IS ESF expects the raw signature (max 400 characters) and
+                // the X.509 certificate in a separate request field.
+                format: "raw",
                 data,
                 signingParams: {
                     decode: false,
-                    encapsulate: false,
-                    digested: false,
-                    tsaProfile: null,
                     outputCert: true
                 },
                 signerParams: {
@@ -272,11 +378,15 @@
             const responseShape = result && typeof result === "object"
                 ? Object.keys(result).join(", ")
                 : typeof result;
-            console.warn("NCALayer CMS response has no recognized certificate field. Keys:", responseShape);
+            console.warn("NCALayer raw-sign response has no recognized certificate field. Keys:", responseShape);
             throw new Error(`NCALayer подписал документ, но не вернул сертификат. Поля ответа: ${responseShape || "пусто"}.`);
         }
+        const signature = signedValue(result);
+        if (!signature || signature.length > 400) {
+            throw new Error("NCALayer вернул подпись не в формате ИС ЭСФ. Обновите страницу и подпишите документ заново.");
+        }
         return {
-            signature: signedValue(result),
+            signature,
             certificate,
             certificateSubject: certificateSubjectValue(result),
             raw: result
@@ -338,7 +448,9 @@
         check: connect,
         friendlyError,
         signXml,
-        signCmsDetached
+        signRaw,
+        // Kept temporarily for pages from an older browser cache.
+        signCmsDetached: signRaw
     });
 
     document.addEventListener("DOMContentLoaded", () => {

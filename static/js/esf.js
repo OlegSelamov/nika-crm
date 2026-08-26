@@ -239,7 +239,7 @@
                 body: JSON.stringify({ reason })
             });
             element("esfFooterStatus").textContent = "Подпишите заявление на отзыв в NCALayer…";
-            const signed = await window.NikaNCALayer.signCmsDetached(prepared.signable_xml);
+            const signed = await window.NikaNCALayer.signRaw(prepared.signable_xml);
             if (!signed.signature || !signed.certificate) {
                 throw new Error("NCALayer не вернул подпись и сертификат для отзыва.");
             }
@@ -362,7 +362,7 @@
         setBusy(true, "Ожидаем выбор ключа в NCALayer…");
         showMessage("Откроется NCALayer. Выберите ключ компании и подтвердите подпись.", "info");
         try {
-            const signed = await window.NikaNCALayer.signCmsDetached(saved.invoice_xml);
+            const signed = await window.NikaNCALayer.signRaw(saved.invoice_xml);
             const data = await requestJson(`/api/sales/${saleId}/esf/signature`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
