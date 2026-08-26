@@ -14,12 +14,29 @@ from xml.etree import ElementTree as ET
 from flask import Blueprint, Response, jsonify, request, session
 
 from models import get_db, pool
+from services.esf_service import (
+    EsfApiError,
+    build_revoke_signable,
+    close_session,
+    configuration as esf_api_configuration,
+    create_auth_ticket,
+    create_signed_session,
+    revoke_invoice,
+    send_invoice,
+)
 from utils.timezone import now_kz
 
 
 esf_bp = Blueprint("esf", __name__)
 ESF_VERSION = "InvoiceV2"
 MONEY = Decimal("0.01")
+ESF_PROFILE_TYPES = {
+    "ADMIN_ENTERPRISE",
+    "USER",
+    "ENTREPRENEUR",
+    "ENTREPRENEUR_USER",
+    "INDIVIDUAL",
+}
 
 
 def _ensure_esf_schema(cur):
@@ -41,10 +58,16 @@ def _ensure_esf_schema(cur):
             registration_number TEXT,
             response_payload JSONB,
             error_message TEXT,
+            api_environment VARCHAR(20),
+            revoke_reason TEXT,
+            revoke_signature TEXT,
+            revoke_certificate TEXT,
+            revoke_response JSONB,
             prepared_at TIMESTAMP,
             signed_at TIMESTAMP,
             sent_at TIMESTAMP,
             accepted_at TIMESTAMP,
+            revoked_at TIMESTAMP,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
             UNIQUE (company_id, sale_id)
@@ -54,6 +77,12 @@ def _ensure_esf_schema(cur):
         CREATE INDEX IF NOT EXISTS idx_esf_documents_company_status
         ON esf_documents (company_id, status, updated_at DESC)
     """)
+    cur.execute("ALTER TABLE esf_documents ADD COLUMN IF NOT EXISTS api_environment VARCHAR(20)")
+    cur.execute("ALTER TABLE esf_documents ADD COLUMN IF NOT EXISTS revoke_reason TEXT")
+    cur.execute("ALTER TABLE esf_documents ADD COLUMN IF NOT EXISTS revoke_signature TEXT")
+    cur.execute("ALTER TABLE esf_documents ADD COLUMN IF NOT EXISTS revoke_certificate TEXT")
+    cur.execute("ALTER TABLE esf_documents ADD COLUMN IF NOT EXISTS revoke_response JSONB")
+    cur.execute("ALTER TABLE esf_documents ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMP")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS esf_document_events (
             id SERIAL PRIMARY KEY,
@@ -105,6 +134,40 @@ def _date_text(value):
         except ValueError:
             continue
     return text
+
+
+def _api_auth_payload(data, seller_tin):
+    iin = str(data.get("iin") or "").strip()
+    password = str(data.get("password") or "")
+    signed_ticket = str(data.get("signed_auth_ticket") or "").strip()
+    profile_type = str(data.get("profile_type") or "ADMIN_ENTERPRISE").strip().upper()
+    if not re.fullmatch(r"\d{12}", iin):
+        raise ValueError("Укажите ИИН пользователя ИС ЭСФ — ровно 12 цифр.")
+    if not password:
+        raise ValueError("Введите пароль пользователя ИС ЭСФ.")
+    if len(password) > 256:
+        raise ValueError("Пароль пользователя ИС ЭСФ слишком длинный.")
+    if len(signed_ticket) < 200 or "Signature" not in signed_ticket:
+        raise ValueError("Тикет авторизации не подписан через NCALayer.")
+    if profile_type not in ESF_PROFILE_TYPES:
+        raise ValueError("Выбран неподдерживаемый профиль ИС ЭСФ.")
+    tin = str(seller_tin or "").strip()
+    if not re.fullmatch(r"\d{12}", tin):
+        raise ValueError("В реквизитах поставщика должен быть указан БИН/ИИН из 12 цифр.")
+    return {
+        "tin": tin,
+        "iin": iin,
+        "password": password,
+        "signed_auth_ticket": signed_ticket,
+        "profile_type": profile_type,
+    }
+
+
+def _api_error_json(error):
+    payload = {"success": False, "error": str(error)}
+    if getattr(error, "details", None):
+        payload["details"] = error.details
+    return jsonify(payload), 502
 
 
 def _invoice_number(sale):
@@ -332,19 +395,29 @@ def _build_invoice_xml(payload):
 def _document_view(row, fallback_payload):
     payload = row.get("payload") if row else fallback_payload
     errors = _validation_errors(payload)
+    api_config = esf_api_configuration()
+    status = row.get("status") if row else "new"
+    has_external_id = bool(row and row.get("external_id"))
     return {
         "id": row.get("id") if row else None,
         "sale_id": row.get("sale_id") if row else None,
         "version": row.get("version") if row else ESF_VERSION,
-        "status": row.get("status") if row else "new",
+        "status": status,
         "payload": payload,
         "payload_hash": row.get("payload_hash") if row else None,
         "signed_at": _json_value(row.get("signed_at")) if row else None,
+        "sent_at": _json_value(row.get("sent_at")) if row else None,
+        "revoked_at": _json_value(row.get("revoked_at")) if row else None,
+        "external_id": row.get("external_id") if row else None,
         "registration_number": row.get("registration_number") if row else None,
+        "error_message": row.get("error_message") if row else None,
+        "revoke_reason": row.get("revoke_reason") if row else None,
+        "api_environment": row.get("api_environment") if row and row.get("api_environment") else api_config.environment,
         "validation_errors": errors,
-        "can_sign": bool(row and row.get("invoice_xml") and not errors and row.get("status") in {"draft", "prepared", "signed", "failed"}),
-        "can_send": bool(row and row.get("status") == "signed" and row.get("signature")),
-        "send_available": False,
+        "can_sign": bool(row and row.get("invoice_xml") and not errors and status in {"draft", "prepared", "signed", "failed"} and not has_external_id),
+        "can_send": bool(row and status in {"signed", "failed"} and row.get("signature") and row.get("x509_certificate") and not has_external_id),
+        "can_revoke": bool(row and has_external_id and status in {"sent", "accepted", "revoke_failed"}),
+        "send_available": True,
     }
 
 
@@ -390,6 +463,13 @@ def save_sale_esf_draft(sale_id):
             return jsonify({"success": False, "error": "Продажа не найдена"}), 404
         cur.execute("SELECT id,status FROM esf_documents WHERE company_id=%s AND sale_id=%s", (company_id, sale_id))
         previous = cur.fetchone()
+        if previous and previous.get("status") in {
+            "sending", "sent", "accepted", "revoke_pending", "revoked", "revoke_failed"
+        }:
+            return jsonify({
+                "success": False,
+                "error": "Отправленную ЭСФ нельзя перезаписать. Для неё доступны только просмотр статуса и отзыв.",
+            }), 409
         cur.execute("""
             INSERT INTO esf_documents (
                 company_id,sale_id,user_id,version,status,payload,invoice_xml,
@@ -400,7 +480,10 @@ def save_sale_esf_draft(sale_id):
                 payload=EXCLUDED.payload,invoice_xml=EXCLUDED.invoice_xml,
                 payload_hash=EXCLUDED.payload_hash,signature=NULL,x509_certificate=NULL,
                 certificate_subject=NULL,error_message=NULL,prepared_at=EXCLUDED.prepared_at,
-                signed_at=NULL,updated_at=EXCLUDED.updated_at
+                signed_at=NULL,external_id=NULL,registration_number=NULL,response_payload=NULL,
+                api_environment=NULL,revoke_reason=NULL,revoke_signature=NULL,
+                revoke_certificate=NULL,revoke_response=NULL,sent_at=NULL,accepted_at=NULL,
+                revoked_at=NULL,updated_at=EXCLUDED.updated_at
             RETURNING *
         """, (company_id, sale_id, session.get("user_id"), ESF_VERSION, status,
               json.dumps(payload, ensure_ascii=False), invoice_xml, payload_hash,
@@ -424,6 +507,7 @@ def save_sale_esf_draft(sale_id):
         conn.rollback()
         raise
     finally:
+        conn.rollback()
         cur.close()
         pool.putconn(conn)
 
@@ -440,6 +524,11 @@ def save_sale_esf_signature(sale_id):
     subject = str(data.get("certificate_subject") or "").strip()
     if len(signature) < 64:
         return jsonify({"success": False, "error": "NCALayer не вернул подпись"}), 400
+    if len(certificate) < 100:
+        return jsonify({
+            "success": False,
+            "error": "NCALayer не вернул сертификат подписи. Повторите подпись обновлённой кнопкой.",
+        }), 400
 
     conn = get_db()
     cur = conn.cursor()
@@ -449,6 +538,10 @@ def save_sale_esf_signature(sale_id):
         row = cur.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Сначала сохраните черновик ЭСФ"}), 404
+        if row.get("external_id") or row.get("status") in {
+            "sending", "sent", "accepted", "revoke_pending", "revoked", "revoke_failed"
+        }:
+            return jsonify({"success": False, "error": "ЭСФ уже передана в ИС ЭСФ и не может быть подписана заново"}), 409
         errors = _validation_errors(row["payload"])
         if errors:
             return jsonify({"success": False, "error": "Заполните обязательные поля", "validation_errors": errors}), 409
@@ -476,6 +569,329 @@ def save_sale_esf_signature(sale_id):
         conn.rollback()
         raise
     finally:
+        conn.rollback()
+        cur.close()
+        pool.putconn(conn)
+
+
+@esf_bp.route("/api/sales/<int:sale_id>/esf/auth-ticket", methods=["POST"])
+def get_sale_esf_auth_ticket(sale_id):
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+    data = request.get_json(silent=True) or {}
+    iin = str(data.get("iin") or "").strip()
+    if not re.fullmatch(r"\d{12}", iin):
+        return jsonify({"success": False, "error": "Укажите ИИН пользователя ИС ЭСФ — ровно 12 цифр."}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_esf_schema(cur)
+        cur.execute("SELECT id FROM esf_documents WHERE company_id=%s AND sale_id=%s", (company_id, sale_id))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Сначала сохраните и подпишите ЭСФ"}), 404
+        conn.commit()
+        try:
+            ticket = create_auth_ticket(iin, ttl_minutes=15)
+        except EsfApiError as error:
+            return _api_error_json(error)
+        return jsonify({
+            "success": True,
+            "auth_ticket_xml": ticket,
+            "api_environment": esf_api_configuration().environment,
+        })
+    finally:
+        conn.rollback()
+        cur.close()
+        pool.putconn(conn)
+
+
+@esf_bp.route("/api/sales/<int:sale_id>/esf/send", methods=["POST"])
+def send_sale_esf(sale_id):
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    cur = conn.cursor()
+    api_session_id = None
+    api_auth = None
+    try:
+        _ensure_esf_schema(cur)
+        cur.execute(
+            "SELECT * FROM esf_documents WHERE company_id=%s AND sale_id=%s FOR UPDATE",
+            (company_id, sale_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "ЭСФ не найдена"}), 404
+        if row.get("external_id"):
+            return jsonify({"success": False, "error": "ЭСФ уже передана в ИС ЭСФ"}), 409
+        if row.get("status") not in {"signed", "failed"} or not row.get("signature"):
+            return jsonify({"success": False, "error": "Сначала подпишите ЭСФ через NCALayer"}), 409
+        if not row.get("x509_certificate"):
+            return jsonify({"success": False, "error": "В подписи отсутствует сертификат. Подпишите ЭСФ заново"}), 409
+        try:
+            auth = _api_auth_payload(data, (row.get("payload") or {}).get("seller", {}).get("tin"))
+            api_auth = auth
+        except ValueError as error:
+            return jsonify({"success": False, "error": str(error)}), 400
+
+        previous_status = row["status"]
+        config = esf_api_configuration()
+        cur.execute(
+            "UPDATE esf_documents SET status='sending',api_environment=%s,error_message=NULL,updated_at=%s WHERE id=%s",
+            (config.environment, now_kz(), row["id"]),
+        )
+        conn.commit()
+
+        try:
+            api_session_id = create_signed_session(**auth)
+            result = send_invoice(
+                session_id=api_session_id,
+                invoice_xml=row["invoice_xml"],
+                signature=row["signature"],
+                certificate=row["x509_certificate"],
+                version=row.get("version") or ESF_VERSION,
+            )
+        except EsfApiError as error:
+            error_text = str(error)
+            if error.details:
+                error_text = f"{error_text} {'; '.join(error.details)}"
+            cur.execute(
+                "UPDATE esf_documents SET status='failed',error_message=%s,response_payload=%s,updated_at=%s WHERE id=%s",
+                (
+                    error_text[:4000],
+                    json.dumps({"error": str(error), "details": error.details}, ensure_ascii=False),
+                    now_kz(),
+                    row["id"],
+                ),
+            )
+            cur.execute("""
+                INSERT INTO esf_document_events (
+                    esf_document_id,company_id,user_id,event_type,from_status,to_status,details,created_at
+                ) VALUES (%s,%s,%s,'send_failed',%s,'failed',%s,%s)
+            """, (
+                row["id"], company_id, session.get("user_id"), previous_status,
+                json.dumps({"error": str(error), "details": error.details}, ensure_ascii=False), now_kz(),
+            ))
+            conn.commit()
+            return _api_error_json(error)
+        finally:
+            close_session(
+                api_session_id,
+                iin=(api_auth or {}).get("iin"),
+                password=(api_auth or {}).get("password"),
+            )
+            api_session_id = None
+
+        external_id = str(result.get("id") or "").strip()
+        if not external_id:
+            error = EsfApiError("ИС ЭСФ приняла запрос, но не вернула ID документа. Проверьте журнал ИС ЭСФ.")
+            cur.execute(
+                "UPDATE esf_documents SET status='failed',error_message=%s,response_payload=%s,updated_at=%s WHERE id=%s",
+                (str(error), json.dumps(result, ensure_ascii=False), now_kz(), row["id"]),
+            )
+            conn.commit()
+            return _api_error_json(error)
+        cur.execute("""
+            UPDATE esf_documents SET status='sent',external_id=%s,response_payload=%s,
+                sent_at=%s,updated_at=%s,error_message=NULL WHERE id=%s RETURNING *
+        """, (
+            external_id,
+            json.dumps(result, ensure_ascii=False),
+            now_kz(), now_kz(), row["id"],
+        ))
+        sent = cur.fetchone()
+        cur.execute("""
+            INSERT INTO esf_document_events (
+                esf_document_id,company_id,user_id,event_type,from_status,to_status,details,created_at
+            ) VALUES (%s,%s,%s,'sent',%s,'sent',%s,%s)
+        """, (
+            row["id"], company_id, session.get("user_id"), previous_status,
+            json.dumps({"external_id": external_id, "api_environment": config.environment}, ensure_ascii=False),
+            now_kz(),
+        ))
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "document": _document_view(sent, sent["payload"]),
+            "message": "ЭСФ передана в очередь ИС ЭСФ. ID документа сохранён в Nika.",
+        })
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        close_session(
+            api_session_id,
+            iin=(api_auth or {}).get("iin"),
+            password=(api_auth or {}).get("password"),
+        )
+        conn.rollback()
+        cur.close()
+        pool.putconn(conn)
+
+
+@esf_bp.route("/api/sales/<int:sale_id>/esf/revoke/prepare", methods=["POST"])
+def prepare_sale_esf_revoke(sale_id):
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+    reason = str((request.get_json(silent=True) or {}).get("reason") or "").strip()
+    if len(reason) < 3:
+        return jsonify({"success": False, "error": "Укажите причину отзыва — минимум 3 символа."}), 400
+    if len(reason) > 1000:
+        return jsonify({"success": False, "error": "Причина отзыва не должна превышать 1000 символов."}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_esf_schema(cur)
+        cur.execute(
+            "SELECT * FROM esf_documents WHERE company_id=%s AND sale_id=%s",
+            (company_id, sale_id),
+        )
+        row = cur.fetchone()
+        if not row or not row.get("external_id"):
+            return jsonify({"success": False, "error": "Сначала отправьте ЭСФ и получите её ID"}), 409
+        if row.get("status") not in {"sent", "accepted", "revoke_failed"}:
+            return jsonify({"success": False, "error": "Текущий статус ЭСФ не позволяет оформить отзыв"}), 409
+        return jsonify({
+            "success": True,
+            "signable_xml": build_revoke_signable(row["external_id"], reason),
+            "external_id": row["external_id"],
+            "reason": reason,
+        })
+    finally:
+        conn.commit()
+        cur.close()
+        pool.putconn(conn)
+
+
+@esf_bp.route("/api/sales/<int:sale_id>/esf/revoke", methods=["POST"])
+def revoke_sale_esf(sale_id):
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+    data = request.get_json(silent=True) or {}
+    reason = str(data.get("reason") or "").strip()
+    revoke_signature = str(data.get("revoke_signature") or "").strip()
+    revoke_certificate = str(data.get("revoke_certificate") or "").strip()
+    if len(reason) < 3 or len(reason) > 1000:
+        return jsonify({"success": False, "error": "Укажите корректную причину отзыва."}), 400
+    if len(revoke_signature) < 64 or len(revoke_certificate) < 100:
+        return jsonify({"success": False, "error": "NCALayer не вернул подпись и сертификат для отзыва."}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    api_session_id = None
+    api_auth = None
+    try:
+        _ensure_esf_schema(cur)
+        cur.execute(
+            "SELECT * FROM esf_documents WHERE company_id=%s AND sale_id=%s FOR UPDATE",
+            (company_id, sale_id),
+        )
+        row = cur.fetchone()
+        if not row or not row.get("external_id"):
+            return jsonify({"success": False, "error": "Отправленная ЭСФ не найдена"}), 404
+        if row.get("status") not in {"sent", "accepted", "revoke_failed"}:
+            return jsonify({"success": False, "error": "Текущий статус ЭСФ не позволяет оформить отзыв"}), 409
+        try:
+            auth = _api_auth_payload(data, (row.get("payload") or {}).get("seller", {}).get("tin"))
+            api_auth = auth
+        except ValueError as error:
+            return jsonify({"success": False, "error": str(error)}), 400
+
+        previous_status = row["status"]
+        config = esf_api_configuration()
+        cur.execute(
+            "UPDATE esf_documents SET status='revoking',revoke_reason=%s,error_message=NULL,updated_at=%s WHERE id=%s",
+            (reason, now_kz(), row["id"]),
+        )
+        conn.commit()
+        try:
+            api_session_id = create_signed_session(**auth)
+            result = revoke_invoice(
+                session_id=api_session_id,
+                invoice_id=row["external_id"],
+                reason=reason,
+                signature=revoke_signature,
+                certificate=revoke_certificate,
+            )
+        except EsfApiError as error:
+            error_text = str(error)
+            if error.details:
+                error_text = f"{error_text} {'; '.join(error.details)}"
+            cur.execute("""
+                UPDATE esf_documents SET status='revoke_failed',error_message=%s,
+                    revoke_response=%s,updated_at=%s WHERE id=%s
+            """, (
+                error_text[:4000],
+                json.dumps({"error": str(error), "details": error.details}, ensure_ascii=False),
+                now_kz(), row["id"],
+            ))
+            cur.execute("""
+                INSERT INTO esf_document_events (
+                    esf_document_id,company_id,user_id,event_type,from_status,to_status,details,created_at
+                ) VALUES (%s,%s,%s,'revoke_failed',%s,'revoke_failed',%s,%s)
+            """, (
+                row["id"], company_id, session.get("user_id"), previous_status,
+                json.dumps({"error": str(error), "details": error.details}, ensure_ascii=False), now_kz(),
+            ))
+            conn.commit()
+            return _api_error_json(error)
+        finally:
+            close_session(
+                api_session_id,
+                iin=(api_auth or {}).get("iin"),
+                password=(api_auth or {}).get("password"),
+            )
+            api_session_id = None
+
+        upstream_status = result.get("status") or ""
+        next_status = "revoke_pending" if upstream_status == "WAITING_CUSTOMER_REVOKE_CONFIRMATION" else "revoked"
+        cur.execute("""
+            UPDATE esf_documents SET status=%s,registration_number=COALESCE(NULLIF(%s,''),registration_number),
+                revoke_reason=%s,revoke_signature=%s,revoke_certificate=%s,revoke_response=%s,
+                revoked_at=%s,api_environment=%s,updated_at=%s,error_message=NULL
+            WHERE id=%s RETURNING *
+        """, (
+            next_status, result.get("registration_number") or "", reason,
+            revoke_signature, revoke_certificate, json.dumps(result, ensure_ascii=False),
+            now_kz() if next_status == "revoked" else None,
+            config.environment, now_kz(), row["id"],
+        ))
+        revoked = cur.fetchone()
+        cur.execute("""
+            INSERT INTO esf_document_events (
+                esf_document_id,company_id,user_id,event_type,from_status,to_status,details,created_at
+            ) VALUES (%s,%s,%s,'revoke_requested',%s,%s,%s,%s)
+        """, (
+            row["id"], company_id, session.get("user_id"), previous_status, next_status,
+            json.dumps({"upstream_status": upstream_status, "reason": reason}, ensure_ascii=False), now_kz(),
+        ))
+        conn.commit()
+        message = (
+            "Отзыв отправлен. Ожидается подтверждение получателя."
+            if next_status == "revoke_pending"
+            else "ЭСФ успешно отозвана в ИС ЭСФ."
+        )
+        return jsonify({
+            "success": True,
+            "document": _document_view(revoked, revoked["payload"]),
+            "message": message,
+        })
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        close_session(
+            api_session_id,
+            iin=(api_auth or {}).get("iin"),
+            password=(api_auth or {}).get("password"),
+        )
+        conn.rollback()
         cur.close()
         pool.putconn(conn)
 

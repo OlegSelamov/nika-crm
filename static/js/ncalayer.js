@@ -172,6 +172,9 @@
             return result.signatures.map(signedValue).join("\n");
         }
         if (result && typeof result.signatures === "string") return result.signatures;
+        if (result && typeof result.signature === "string") return result.signature;
+        if (result && typeof result.signedXml === "string") return result.signedXml;
+        if (result && typeof result.signedData === "string") return result.signedData;
         return JSON.stringify(result, null, 2);
     }
 
@@ -183,12 +186,23 @@
         if (Array.isArray(result.certificates) && result.certificates.length) {
             return String(result.certificates[0] || "");
         }
+        if (Array.isArray(result.signatures) && result.signatures.length) {
+            return certificateValue(result.signatures[0]);
+        }
+        if (result.signature && typeof result.signature === "object") {
+            return certificateValue(result.signature);
+        }
         return "";
     }
 
     function certificateSubjectValue(result) {
         if (!result || typeof result !== "object") return "";
-        return String(result.certificateSubject || result.subject || result.subjectDn || "");
+        const value = result.certificateSubject || result.subject || result.subjectDn;
+        if (value) return String(value);
+        if (Array.isArray(result.signatures) && result.signatures.length) {
+            return certificateSubjectValue(result.signatures[0]);
+        }
+        return "";
     }
 
     async function signXml(xml) {

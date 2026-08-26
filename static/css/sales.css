@@ -3063,8 +3063,15 @@ body.esf-modal-open { overflow: hidden; }
 }
 .esf-status-badge[data-status="prepared"] { background: #eff6ff; color: #1d4ed8; }
 .esf-status-badge[data-status="signed"] { background: #ecfdf5; color: #047857; }
+.esf-status-badge[data-status="sending"],
+.esf-status-badge[data-status="revoking"] { background: #fff7ed; color: #c2410c; }
+.esf-status-badge[data-status="sent"],
+.esf-status-badge[data-status="accepted"] { background: #ecfeff; color: #0e7490; }
+.esf-status-badge[data-status="revoke_pending"] { background: #fffbeb; color: #a16207; }
+.esf-status-badge[data-status="revoked"] { background: #f1f5f9; color: #475569; }
 .esf-status-badge[data-status="failed"],
-.esf-status-badge[data-status="rejected"] { background: #fef2f2; color: #b91c1c; }
+.esf-status-badge[data-status="rejected"],
+.esf-status-badge[data-status="revoke_failed"] { background: #fef2f2; color: #b91c1c; }
 
 .esf-modal-body { flex: 1 1 auto; overflow: auto; padding: 20px 22px 28px; }
 .esf-notice,
@@ -3085,6 +3092,47 @@ body.esf-modal-open { overflow: hidden; }
 .esf-message.is-info { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; }
 .esf-validation { border-color: #fed7aa; background: #fff7ed; color: #9a3412; }
 .esf-validation ul { margin: 7px 0 0; padding-left: 20px; }
+
+.esf-api-panel,
+.esf-revoke-panel {
+    margin-bottom: 16px;
+    padding: 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    background: #fff;
+}
+.esf-api-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.esf-api-panel-head > div { display: grid; gap: 3px; }
+.esf-api-panel-head strong,
+.esf-revoke-panel > strong { color: #0f172a; font-size: 14px; }
+.esf-api-panel-head span:not(.esf-environment-badge),
+.esf-api-panel > small,
+.esf-revoke-panel > small { color: #64748b; font-size: 11px; line-height: 1.45; }
+.esf-environment-badge { padding: 5px 9px; border-radius: 999px; background: #eef2ff; color: #4338ca; font-size: 10px; font-weight: 800; }
+.esf-environment-badge.is-production { background: #fef2f2; color: #b91c1c; }
+.esf-api-fields { display: grid; grid-template-columns: 1fr 1fr 1.15fr; gap: 10px; }
+.esf-api-fields label { display: grid; gap: 5px; color: #475569; font-size: 11px; font-weight: 750; }
+.esf-api-fields input,
+.esf-api-fields select,
+.esf-revoke-panel textarea {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    outline: none;
+    background: #fff;
+    color: #0f172a;
+    font: inherit;
+    font-size: 13px;
+}
+.esf-api-fields input:focus,
+.esf-api-fields select:focus,
+.esf-revoke-panel textarea:focus { border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, .12); }
+.esf-revoke-panel { border-color: #fecaca; background: #fffafa; }
+.esf-revoke-panel textarea { min-height: 72px; margin: 10px 0 5px; resize: vertical; }
+.esf-footer-meta { display: grid; gap: 3px; }
+.esf-footer-meta small { color: #64748b; font-size: 10px; }
 
 .esf-form { display: grid; gap: 16px; }
 .esf-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -3142,6 +3190,7 @@ body.esf-modal-open { overflow: hidden; }
 .esf-btn.is-secondary { border-color: #cbd5e1; background: #fff; color: #334155; }
 .esf-btn.is-primary { background: #7c3aed; color: #fff; }
 .esf-btn.is-send { background: #059669; color: #fff; }
+.esf-btn.is-revoke { background: #dc2626; color: #fff; }
 .esf-btn:disabled { opacity: .48; cursor: not-allowed; }
 
 @media (max-width: 820px) {
@@ -3149,6 +3198,9 @@ body.esf-modal-open { overflow: hidden; }
     .esf-modal-dialog { width: 100%; height: 100%; max-height: none; border-radius: 0; }
     .esf-columns { grid-template-columns: 1fr; }
     .esf-fields-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .esf-api-fields { grid-template-columns: 1fr; }
+    .esf-api-panel-head { align-items: stretch; flex-direction: column; }
+    .esf-environment-badge { align-self: flex-start; }
     .esf-modal-footer { align-items: stretch; flex-direction: column; padding: 12px 14px; }
     .esf-footer-actions { display: grid; grid-template-columns: 1fr 1fr; }
     .esf-modal-body { padding: 14px; }

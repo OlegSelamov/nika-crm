@@ -291,7 +291,7 @@
             <div class="esf-notice">
                 <strong>Ключ ЭЦП остаётся на вашем компьютере.</strong>
                 Nika сохраняет черновик и результат подписи, но не получает файл ключа или пароль.
-                Подписание пока не отправляет документ в ИС ЭСФ.
+                Отправка и отзыв выполняются напрямую через официальный API ИС ЭСФ.
             </div>
 
             <div id="esfMessage" class="esf-message" hidden></div>
@@ -299,6 +299,39 @@
                 <strong>Нужно заполнить перед подписью:</strong>
                 <ul id="esfValidationList"></ul>
             </div>
+
+            <section id="esfApiPanel" class="esf-api-panel" hidden>
+                <div class="esf-api-panel-head">
+                    <div>
+                        <strong>Авторизация в ИС ЭСФ</strong>
+                        <span>Нужна только при отправке или отзыве</span>
+                    </div>
+                    <span id="esfApiEnvironment" class="esf-environment-badge">Тестовый сервер</span>
+                </div>
+                <div class="esf-api-fields">
+                    <label>ИИН пользователя
+                        <input id="esfAuthIin" inputmode="numeric" maxlength="12" autocomplete="username" placeholder="12 цифр">
+                    </label>
+                    <label>Пароль ИС ЭСФ
+                        <input id="esfAuthPassword" type="password" maxlength="256" autocomplete="current-password" placeholder="Не сохраняется в Nika">
+                    </label>
+                    <label>Профиль
+                        <select id="esfAuthProfile">
+                            <option value="ADMIN_ENTERPRISE">Руководитель ТОО</option>
+                            <option value="ENTREPRENEUR">Индивидуальный предприниматель</option>
+                            <option value="USER">Сотрудник ТОО</option>
+                            <option value="ENTREPRENEUR_USER">Сотрудник ИП</option>
+                        </select>
+                    </label>
+                </div>
+                <small>Пароль передаётся в ИС ЭСФ только для открытия кратковременной API-сессии и в базе Nika не сохраняется.</small>
+            </section>
+
+            <section id="esfRevokePanel" class="esf-revoke-panel" hidden>
+                <strong>Причина отзыва ЭСФ</strong>
+                <textarea id="esfRevokeReason" maxlength="1000" placeholder="Например: ЭСФ отправлена ошибочно"></textarea>
+                <small>Для отзыва NCALayer попросит подписать причину отдельной подписью.</small>
+            </section>
 
             <div id="esfForm" class="esf-form">
                 <section class="esf-section">
@@ -364,12 +397,14 @@
         <div class="esf-modal-footer">
             <div class="esf-footer-meta">
                 <span id="esfFooterStatus">Изменения ещё не сохранены</span>
+                <small id="esfRemoteMeta" hidden></small>
             </div>
             <div class="esf-footer-actions">
                 <a id="esfDownloadXml" class="esf-btn is-secondary" href="#" hidden>Скачать XML</a>
                 <button id="esfSaveDraft" type="button" class="esf-btn is-secondary">Сохранить черновик</button>
                 <button id="esfSign" type="button" class="esf-btn is-primary">Подписать ЭЦП</button>
-                <button id="esfSend" type="button" class="esf-btn is-send" disabled title="Будет включено после подключения API ИС ЭСФ">Отправить в ИС ЭСФ</button>
+                <button id="esfSend" type="button" class="esf-btn is-send" disabled>Отправить в ИС ЭСФ</button>
+                <button id="esfRevoke" type="button" class="esf-btn is-revoke" hidden>Отозвать ЭСФ</button>
             </div>
         </div>
     </div>
