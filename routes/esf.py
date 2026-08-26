@@ -230,9 +230,9 @@ def _initial_payload(source):
         item_type = item.get("item_type") or "product"
         products.append({
             "sale_item_id": item["id"],
-            # Никогда не подставляем номер строки как catalogTruId. На боевой
-            # ИС ЭСФ здесь должен быть реальный идентификатор ТРУ из классификатора.
-            "catalog_tru_id": "",
+            # Для работ/услуг (признак происхождения 6) используется базовый
+            # идентификатор ТРУ «1». Для товаров ВС нужен реальный составной код ГСВС.
+            "catalog_tru_id": "1" if item_type == "service" else "",
             "description": item.get("name") or "Товар",
             "quantity": str(item.get("quantity") or 1),
             "price_with_tax": _decimal_text(item.get("price")),
@@ -291,6 +291,23 @@ def _initial_payload(source):
     }
 
 
+def _normalize_payload(payload):
+    """Normalize fields that are deterministic from the Nika item type.
+
+    For services/works IS ESF uses origin code 6. They are not Virtual Warehouse
+    stock lots, so Nika must not send an arbitrary composite GSVS code entered in
+    an old draft. The generic TRU identifier is 1.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    normalized = json.loads(json.dumps(payload, ensure_ascii=False))
+    for product in normalized.get("products") or []:
+        if str(product.get("item_type") or "").strip().lower() == "service":
+            product["catalog_tru_id"] = "1"
+            product["tru_origin_code"] = "6"
+    return normalized
+
+
 def _validation_errors(payload):
     errors = []
     invoice = payload.get("invoice") or {}
@@ -324,13 +341,6 @@ def _validation_errors(payload):
         catalog_tru_id = str(product.get("catalog_tru_id") or "").strip()
         if not catalog_tru_id:
             errors.append(f"Строка {index}: укажите реальный идентификатор ТРУ.")
-        elif catalog_tru_id == str(index):
-            # Старые версии Nika временно подставляли 1, 2, 3... как заглушку.
-            # Не даём такому черновику случайно уйти в production.
-            errors.append(
-                f"Строка {index}: ID ТРУ «{catalog_tru_id}» — служебная заглушка старой версии. "
-                "Укажите реальный идентификатор ТРУ и подпишите ЭСФ заново."
-            )
         if str(product.get("tru_origin_code") or "") not in {"1", "2", "3", "4", "5", "6"}:
             errors.append(f"Строка {index}: выберите признак происхождения ТРУ (1–6).")
         if _number(product.get("quantity")) <= 0:
@@ -347,6 +357,7 @@ def _add(parent, name, value, required=False):
 
 
 def _build_invoice_xml(payload):
+    payload = _normalize_payload(payload)
     ET.register_namespace("v2", "v2.esf")
     root = ET.Element("{v2.esf}invoice", {"xmlns:a": "abstractInvoice.esf"})
     invoice = payload.get("invoice") or {}
@@ -451,7 +462,7 @@ def _build_invoice_xml(payload):
 
 
 def _document_view(row, fallback_payload):
-    payload = row.get("payload") if row else fallback_payload
+    payload = _normalize_payload(row.get("payload") if row else fallback_payload)
     errors = _validation_errors(payload)
     api_config = esf_api_configuration()
     status = row.get("status") if row else "new"
@@ -517,6 +528,7 @@ def save_sale_esf_draft(sale_id):
     if not isinstance(payload, dict):
         return jsonify({"success": False, "error": "Не переданы данные ЭСФ"}), 400
 
+    payload = _normalize_payload(payload)
     invoice_xml = _build_invoice_xml(payload)
     payload_hash = sha256(invoice_xml.encode("utf-8")).hexdigest()
     errors = _validation_errors(payload)
