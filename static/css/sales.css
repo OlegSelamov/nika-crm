@@ -3930,3 +3930,81 @@ body.sales-document-center-open { overflow: hidden !important; }
     .sales-document-center__group > strong { font-size: 11px; }
     .sales-document-center__actions .sales-doc-menu-item { font-size: 12px; }
 }
+
+/* ===== Продажи: финальная раскладка журнала документов =====
+   Приоритет компании/ИП, вторым рядом — ФИО клиента. Кнопки документов
+   идут вертикально, чтобы длинные подписи не обрезались. */
+@media (min-width: 769px) {
+    #salesHistoryBox .sales-documents-table th:nth-child(1),
+    #salesHistoryBox .sales-documents-table td:nth-child(1) { width: 15%; }
+    #salesHistoryBox .sales-documents-table th:nth-child(2),
+    #salesHistoryBox .sales-documents-table td:nth-child(2) { width: 25%; }
+    #salesHistoryBox .sales-documents-table th:nth-child(3),
+    #salesHistoryBox .sales-documents-table td:nth-child(3) { width: 16%; }
+    #salesHistoryBox .sales-documents-table th:nth-child(4),
+    #salesHistoryBox .sales-documents-table td:nth-child(4) { width: 14%; }
+    #salesHistoryBox .sales-documents-table th:nth-child(5),
+    #salesHistoryBox .sales-documents-table td:nth-child(5) { width: 30%; }
+
+    .sales-journal-row td {
+        height: auto;
+        min-height: 96px;
+        vertical-align: middle;
+    }
+
+    .sales-document-actions {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+    }
+
+    .sales-document-actions > .sales-doc-menu-item,
+    .sales-document-actions > .sales-doc-center-btn {
+        min-height: 36px;
+        padding: 7px 10px;
+        justify-content: center;
+        font-size: 10.5px;
+        line-height: 1.2;
+        text-align: center;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+}
+
+.sales-journal-client {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+}
+
+.sales-journal-client strong {
+    color: #252e3f;
+    font-size: 11.5px;
+    font-weight: 850;
+    line-height: 1.28;
+    overflow-wrap: anywhere;
+}
+
+.sales-journal-client small {
+    color: #7f8999;
+    font-size: 9.5px;
+    font-weight: 650;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.mobile-sale-client {
+    display: grid;
+    gap: 2px;
+}
+.mobile-sale-client strong {
+    font-size: inherit;
+    line-height: 1.3;
+}
+.mobile-sale-client small {
+    color: #8a93a3;
+    font-size: 10px;
+    line-height: 1.3;
+}

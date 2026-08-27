@@ -443,6 +443,7 @@ def sales_history():
                 SELECT
                     journal.*,
                     clients.full_name,
+                    clients.company_name,
                     COALESCE(doc_mix.product_count, 0) AS product_count,
                     COALESCE(doc_mix.service_count, 0) AS service_count,
                     COALESCE(doc_mix.product_total, 0) AS product_total,
@@ -463,6 +464,7 @@ def sales_history():
                     %s = ''
                     OR COALESCE(journal.sale_number::TEXT, journal.id::TEXT) ILIKE '%%' || %s || '%%'
                     OR COALESCE(clients.full_name, 'Частное лицо') ILIKE '%%' || %s || '%%'
+                    OR COALESCE(clients.company_name, '') ILIKE '%%' || %s || '%%'
                 )
                 AND (
                     %s = 'all'
@@ -474,7 +476,7 @@ def sales_history():
                 LIMIT %s OFFSET %s
             """, (
                 session.get("company_id"),
-                query, query, query,
+                query, query, query, query,
                 kind, kind, kind, kind,
                 size,
                 page * size,
@@ -508,6 +510,7 @@ def sales_history():
                 SELECT
                     journal.*,
                     clients.full_name,
+                    clients.company_name,
                     COALESCE(doc_mix.product_count, 0) AS product_count,
                     COALESCE(doc_mix.service_count, 0) AS service_count,
                     COALESCE(doc_mix.product_total, 0) AS product_total,
@@ -565,7 +568,9 @@ def sales_history():
                 "created_at_display": (
                     event_at.strftime("%d.%m.%Y, %H:%M") if event_at else "—"
                 ),
-                "client_name": sale["full_name"] or "Частное лицо",
+                "client_name": sale.get("company_name") or sale.get("full_name") or "Частное лицо",
+                "client_company_name": sale.get("company_name") or "",
+                "client_contact_name": sale.get("full_name") or "",
                 "total": sale["total_amount"],
                 "payment_type": payment_type,
                 "sale_type": sale["sale_type"],

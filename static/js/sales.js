@@ -1957,6 +1957,19 @@ function renderSalesShiftCard(item, current = false) {
     `;
 }
 
+function salesClientPresentation(item) {
+    const company = String(item?.client_company_name || "").trim();
+    const contact = String(item?.client_contact_name || "").trim();
+    const fallback = String(item?.client_name || "Частное лицо").trim() || "Частное лицо";
+    const normalize = value => value.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ").trim();
+
+    if (company && normalize(company) !== "частное лицо") {
+        const secondary = contact && normalize(contact) !== normalize(company) ? contact : "";
+        return { primary: company, secondary };
+    }
+    return { primary: contact || fallback, secondary: "" };
+}
+
 function renderSalesReceipt(item) {
     const refund = item.event_type === "refund" || item.status === "Возврат";
     const invoice = item.sale_type === "invoice";
@@ -1967,13 +1980,14 @@ function renderSalesReceipt(item) {
         ? `openRefundCheckModal(${id})`
         : (invoice ? `openInvoiceModal(${id})` : `openSaleModal(${id})`);
     const actionLabel = refund ? "Чек возврата" : (invoice ? "Счёт" : "Открыть чек");
+    const client = salesClientPresentation(item);
 
     return `
         <div class="sales-receipt-row${refund ? " is-refund" : ""}">
             <div class="sales-receipt-icon">${refund ? "↩" : "▤"}</div>
             <div class="sales-receipt-main">
                 <strong>${refund ? "Возврат" : "Продажа"} · чек №${escapeHtml(item.sale_number || item.id)}</strong>
-                <span>${escapeHtml(item.client_name || "Частное лицо")} · ${escapeHtml(item.payment_type || "—")}</span>
+                <span>${escapeHtml(client.primary)}${client.secondary ? ` · ${escapeHtml(client.secondary)}` : ""} · ${escapeHtml(item.payment_type || "—")}</span>
             </div>
             <div class="sales-receipt-meta">
                 <strong>${escapeHtml(amount)}</strong>
@@ -2291,7 +2305,9 @@ function openSalesDocumentCenter(key) {
     const returnedMeta = item.sale_refunded && item.refunded_at_display
         ? ` · возврат ${item.refunded_at_display}`
         : "";
-    meta.textContent = `${item.client_name || "Частное лицо"} · ${item.created_at_display || salesShiftDate(item.event_at || item.created_at)} · ${amount}${returnedMeta}`;
+    const client = salesClientPresentation(item);
+    const clientMeta = client.secondary ? `${client.primary} · ${client.secondary}` : client.primary;
+    meta.textContent = `${clientMeta} · ${item.created_at_display || salesShiftDate(item.event_at || item.created_at)} · ${amount}${returnedMeta}`;
     const sections = salesDocumentCenterSections(item, true);
     body.innerHTML = sections.map(section => `
         <div class="sales-document-center__group">
@@ -2351,7 +2367,10 @@ function renderSalesDocumentRow(item) {
     const amount = `${refund ? "−" : ""}${salesShiftMoney(item.total || 0)}`;
     const number = escapeHtml(item.sale_number || item.id);
     const date = escapeHtml(item.created_at_display || salesShiftDate(item.event_at || item.created_at));
-    const client = escapeHtml(item.client_name || "Частное лицо");
+    const client = salesClientPresentation(item);
+    const clientPrimary = escapeHtml(client.primary);
+    const clientSecondary = escapeHtml(client.secondary);
+    const clientTitle = escapeHtml([client.primary, client.secondary].filter(Boolean).join(" — "));
     const payment = escapeHtml(item.payment_type || "—");
     const kind = escapeHtml(salesDocumentOperationLabel(item));
 
@@ -2364,7 +2383,12 @@ function renderSalesDocumentRow(item) {
                     <small>${date}</small>
                 </div>
             </td>
-            <td><div class="sales-journal-client" title="${client}">${client}</div></td>
+            <td>
+                <div class="sales-journal-client" title="${clientTitle}">
+                    <strong>${clientPrimary}</strong>
+                    ${clientSecondary ? `<small>${clientSecondary}</small>` : ""}
+                </div>
+            </td>
             <td>
                 <div class="sales-journal-money">
                     <strong>${escapeHtml(amount)}</strong>
@@ -2382,13 +2406,17 @@ function renderMobileSalesDocument(item) {
     const status = salesDocumentStatus(item);
     const amount = `${refund ? "−" : ""}${salesShiftMoney(item.total || 0)}`;
     const kind = salesDocumentOperationLabel(item);
+    const client = salesClientPresentation(item);
 
     return `
         <article class="mobile-sale-card sales-journal-mobile${refund ? " is-refund" : ""}">
             <div class="mobile-sale-top">
                 <div>
                     <div class="sales-journal-mobile__number"><span>${escapeHtml(kind)}</span> №${escapeHtml(item.sale_number || item.id)}</div>
-                    <div class="mobile-sale-client">${escapeHtml(item.client_name || "Частное лицо")}</div>
+                    <div class="mobile-sale-client">
+                        <strong>${escapeHtml(client.primary)}</strong>
+                        ${client.secondary ? `<small>${escapeHtml(client.secondary)}</small>` : ""}
+                    </div>
                     <div class="mobile-sale-date">${escapeHtml(item.created_at_display || salesShiftDate(item.event_at || item.created_at))}</div>
                 </div>
                 <div class="mobile-sale-sum">${escapeHtml(amount)}</div>
