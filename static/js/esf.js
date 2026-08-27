@@ -484,6 +484,7 @@
         modal.hidden = true;
         modal.setAttribute("aria-hidden", "true");
         document.body.classList.remove("esf-modal-open");
+        window.resumeSalesDocumentCenter?.();
     }
 
     document.addEventListener("DOMContentLoaded", () => {

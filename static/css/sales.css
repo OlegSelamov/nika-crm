@@ -3345,15 +3345,15 @@ body.esf-modal-open { overflow: hidden; }
 }
 
 #salesHistoryBox .sales-documents-table th:nth-child(1),
-#salesHistoryBox .sales-documents-table td:nth-child(1) { width: 18%; }
+#salesHistoryBox .sales-documents-table td:nth-child(1) { width: 16%; }
 #salesHistoryBox .sales-documents-table th:nth-child(2),
-#salesHistoryBox .sales-documents-table td:nth-child(2) { width: 23%; }
+#salesHistoryBox .sales-documents-table td:nth-child(2) { width: 20%; }
 #salesHistoryBox .sales-documents-table th:nth-child(3),
-#salesHistoryBox .sales-documents-table td:nth-child(3) { width: 18%; }
+#salesHistoryBox .sales-documents-table td:nth-child(3) { width: 17%; }
 #salesHistoryBox .sales-documents-table th:nth-child(4),
 #salesHistoryBox .sales-documents-table td:nth-child(4) { width: 15%; }
 #salesHistoryBox .sales-documents-table th:nth-child(5),
-#salesHistoryBox .sales-documents-table td:nth-child(5) { width: 26%; }
+#salesHistoryBox .sales-documents-table td:nth-child(5) { width: 32%; }
 
 .sales-journal-row td {
     height: 68px;
@@ -3417,11 +3417,27 @@ body.esf-modal-open { overflow: hidden; }
 
 .sales-document-actions {
     position: relative;
-    display: flex;
-    flex-wrap: nowrap;
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: center;
     gap: 5px;
     overflow: visible;
+}
+
+.sales-document-actions > button,
+.sales-document-actions > .sales-doc-menu-item,
+.sales-document-actions > .sales-doc-center-btn {
+    width: 100%;
+    min-width: 0;
+}
+
+.sales-document-actions > .sales-doc-menu-item,
+.sales-document-actions > .sales-doc-center-btn {
+    padding-left: 7px;
+    padding-right: 7px;
+    font-size: 8.5px;
 }
 
 .sales-doc-menu-item {
@@ -3568,15 +3584,15 @@ body.esf-modal-open { overflow: hidden; }
     .sales-documents-toolbar__title span { display: none; }
     .sales-history-search { width: 170px; }
     #salesHistoryBox .sales-documents-table th:nth-child(1),
-    #salesHistoryBox .sales-documents-table td:nth-child(1) { width: 19%; }
+    #salesHistoryBox .sales-documents-table td:nth-child(1) { width: 16%; }
     #salesHistoryBox .sales-documents-table th:nth-child(2),
-    #salesHistoryBox .sales-documents-table td:nth-child(2) { width: 20%; }
+    #salesHistoryBox .sales-documents-table td:nth-child(2) { width: 19%; }
     #salesHistoryBox .sales-documents-table th:nth-child(3),
-    #salesHistoryBox .sales-documents-table td:nth-child(3) { width: 18%; }
+    #salesHistoryBox .sales-documents-table td:nth-child(3) { width: 17%; }
     #salesHistoryBox .sales-documents-table th:nth-child(4),
-    #salesHistoryBox .sales-documents-table td:nth-child(4) { width: 16%; }
+    #salesHistoryBox .sales-documents-table td:nth-child(4) { width: 15%; }
     #salesHistoryBox .sales-documents-table th:nth-child(5),
-    #salesHistoryBox .sales-documents-table td:nth-child(5) { width: 27%; }
+    #salesHistoryBox .sales-documents-table td:nth-child(5) { width: 33%; }
 }
 
 @media (max-width: 768px) {
@@ -3608,6 +3624,7 @@ body.esf-modal-open { overflow: hidden; }
         color: #6557d9;
     }
     .sales-journal-mobile .sales-document-actions {
+        display: flex;
         overflow: visible;
     }
     .sales-journal-mobile .sales-doc-menu-item,

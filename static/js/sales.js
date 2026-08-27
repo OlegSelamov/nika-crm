@@ -890,6 +890,7 @@ function closeSaleModal() {
     modal.style.display = "none";
     modal.classList.remove("invoice-mode");
     document.getElementById("saleBody").innerHTML = "Загрузка...";
+    resumeSalesDocumentCenter();
 }
 
 function formatDate(dateStr) {
@@ -2124,7 +2125,11 @@ function salesDocumentCenterSections(item, closeBeforeAction = false) {
     const id = Number(item.id);
     if (!Number.isFinite(id)) return [];
 
-    const prefix = closeBeforeAction ? "closeSalesDocumentCenter();" : "";
+    // Документы открываем поверх выбранной продажи, а после закрытия возвращаем
+    // пользователя в этот же центр документов. Для операций (возврат/оплата)
+    // центр закрывается окончательно.
+    const documentPrefix = closeBeforeAction ? "suspendSalesDocumentCenter();" : "";
+    const operationPrefix = closeBeforeAction ? "closeSalesDocumentCenter();" : "";
     const refundEvent = item.event_type === "refund" || item.is_refunded === true;
     const invoice = item.sale_type === "invoice";
     const refunded = Boolean(item.sale_refunded);
@@ -2135,7 +2140,7 @@ function salesDocumentCenterSections(item, closeBeforeAction = false) {
         if (item.refund_check_available !== false && !invoice) {
             sections.push({
                 title: "Возврат",
-                items: [salesDocumentButton("Чек возврата", "Открыть чек возврата", `${prefix}openRefundCheckModal(${id})`, "is-refund")]
+                items: [salesDocumentButton("Чек возврата", "Открыть чек возврата", `${documentPrefix}openRefundCheckModal(${id})`, "is-refund")]
             });
         }
         return sections;
@@ -2144,32 +2149,32 @@ function salesDocumentCenterSections(item, closeBeforeAction = false) {
     sections.push({
         title: "Основной документ",
         items: [invoice
-            ? salesDocumentButton("Счёт на оплату", "Открыть счёт на оплату", `${prefix}openInvoiceModal(${id})`, "is-primary")
-            : salesDocumentButton("Кассовый чек", "Открыть кассовый чек", `${prefix}openSaleModal(${id})`, "is-primary")]
+            ? salesDocumentButton("Счёт на оплату", "Открыть счёт на оплату", `${documentPrefix}openInvoiceModal(${id})`, "is-primary")
+            : salesDocumentButton("Кассовый чек", "Открыть кассовый чек", `${documentPrefix}openSaleModal(${id})`, "is-primary")]
     });
 
     if (!pendingInvoice) {
         sections.push({
             title: "Документы по продаже",
             items: [
-                salesDocumentButton("Накладная", "Сформировать накладную", `${prefix}openDocumentModal(${id}, 'nakladnaya')`, "is-document"),
-                salesDocumentButton("Счёт-фактура", "Сформировать счёт-фактуру", `${prefix}openDocumentModal(${id}, 'schetFactura')`, "is-document"),
-                salesDocumentButton("Акт выполненных работ", "Сформировать акт выполненных работ", `${prefix}openDocumentModal(${id}, 'act')`, "is-document")
+                salesDocumentButton("Накладная", "Сформировать накладную", `${documentPrefix}openDocumentModal(${id}, 'nakladnaya')`, "is-document"),
+                salesDocumentButton("Счёт-фактура", "Сформировать счёт-фактуру", `${documentPrefix}openDocumentModal(${id}, 'schetFactura')`, "is-document"),
+                salesDocumentButton("Акт выполненных работ", "Сформировать акт выполненных работ", `${documentPrefix}openDocumentModal(${id}, 'act')`, "is-document")
             ]
         });
     }
 
     sections.push({
         title: "Электронные документы",
-        items: [salesDocumentButton("ЭСФ · Электронный счёт-фактура", "Сформировать электронный счёт-фактуру", `${prefix}openEsfModal(${id})`, "is-esf")]
+        items: [salesDocumentButton("ЭСФ · Электронный счёт-фактура", "Сформировать электронный счёт-фактуру", `${documentPrefix}openEsfModal(${id})`, "is-esf")]
     });
 
     const operation = pendingInvoice
-        ? salesDocumentButton("Подтвердить оплату", "Подтвердить оплату счёта", `${prefix}confirmInvoicePayment(${id}, this)`, "is-confirm")
+        ? salesDocumentButton("Подтвердить оплату", "Подтвердить оплату счёта", `${operationPrefix}confirmInvoicePayment(${id}, this)`, "is-confirm")
         : (!refunded
-            ? salesDocumentButton("Оформить возврат", "Оформить возврат продажи", `${prefix}refundSale(${id})`, "is-refund")
+            ? salesDocumentButton("Оформить возврат", "Оформить возврат продажи", `${operationPrefix}refundSale(${id})`, "is-refund")
             : (!invoice
-                ? salesDocumentButton("Чек возврата", "Открыть чек возврата", `${prefix}openRefundCheckModal(${id})`, "is-refund")
+                ? salesDocumentButton("Чек возврата", "Открыть чек возврата", `${documentPrefix}openRefundCheckModal(${id})`, "is-refund")
                 : ""));
     if (operation) sections.push({ title: "Действия", items: [operation] });
 
@@ -2229,6 +2234,8 @@ function openSalesDocumentCenter(key) {
     const item = salesDocumentsHistoryState.records.get(String(key));
     if (!item) return;
     const modal = ensureSalesDocumentCenter();
+    modal.dataset.recordKey = String(key);
+    modal.dataset.returnPending = "false";
     const title = document.getElementById("salesDocumentCenterTitle");
     const meta = document.getElementById("salesDocumentCenterMeta");
     const body = document.getElementById("salesDocumentCenterBody");
@@ -2249,11 +2256,35 @@ function openSalesDocumentCenter(key) {
     document.body.classList.add("sales-document-center-open");
 }
 
-function closeSalesDocumentCenter() {
+function suspendSalesDocumentCenter() {
     const modal = document.getElementById("salesDocumentCenterModal");
-    if (modal) modal.hidden = true;
+    if (!modal || modal.hidden) return;
+    modal.dataset.returnPending = "true";
+    modal.hidden = true;
     document.body.classList.remove("sales-document-center-open");
 }
+
+function resumeSalesDocumentCenter() {
+    const modal = document.getElementById("salesDocumentCenterModal");
+    if (!modal || modal.dataset.returnPending !== "true") return;
+    const key = modal.dataset.recordKey || "";
+    modal.dataset.returnPending = "false";
+    if (key && salesDocumentsHistoryState.records.has(String(key))) {
+        openSalesDocumentCenter(key);
+    }
+}
+
+function closeSalesDocumentCenter() {
+    const modal = document.getElementById("salesDocumentCenterModal");
+    if (modal) {
+        modal.hidden = true;
+        modal.dataset.returnPending = "false";
+    }
+    document.body.classList.remove("sales-document-center-open");
+}
+
+window.suspendSalesDocumentCenter = suspendSalesDocumentCenter;
+window.resumeSalesDocumentCenter = resumeSalesDocumentCenter;
 
 function salesDocumentStatus(item) {
     if (item.event_type === "refund" || item.is_refunded === true) return "Возврат";
