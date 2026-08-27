@@ -3795,3 +3795,138 @@ body.sales-document-center-open { overflow: hidden !important; }
     .sales-doc-center-btn,
     .sales-journal-mobile .sales-doc-menu-item { min-height: 40px; flex: 1 1 auto; font-size: 10px; }
 }
+
+/* ===== Продажи: повышенная читаемость истории и модальных окон =====
+   Увеличиваем только текст и кликабельные зоны истории продаж, не меняя
+   бизнес-логику и плотность основной кассовой формы. */
+
+/* Переключатель "По сменам / Все документы" */
+.sales-history-mode-switch button {
+    min-height: 42px;
+    font-size: 12.5px;
+    line-height: 1.25;
+}
+
+/* Режим "Все документы" */
+.sales-documents-toolbar__title strong { font-size: 14px; }
+.sales-documents-toolbar__title span { font-size: 10.5px; line-height: 1.35; }
+.sales-history-search,
+.sales-history-filter { height: 39px; }
+.sales-history-search input,
+.sales-history-filter { font-size: 11.5px; }
+
+#salesHistoryBox .sales-documents-table thead th {
+    padding-top: 11px;
+    padding-bottom: 11px;
+    font-size: 11px;
+    line-height: 1.25;
+}
+#salesHistoryBox .sales-documents-table tbody td {
+    padding-top: 11px;
+    padding-bottom: 11px;
+    font-size: 11.5px;
+    line-height: 1.3;
+}
+.sales-journal-row td { height: 74px; }
+.sales-journal-operation strong,
+.sales-journal-money strong { font-size: 12.5px; }
+.sales-journal-operation small,
+.sales-journal-money small { font-size: 10px; line-height: 1.3; }
+.sales-journal-operation__kind {
+    padding: 3px 7px;
+    font-size: 8.5px;
+}
+.sales-journal-client { font-size: 11.5px; line-height: 1.3; }
+.sales-doc-center-btn,
+.sales-doc-menu-item,
+.sales-doc-menu > summary {
+    min-height: 34px;
+    font-size: 10.5px;
+}
+.sales-document-actions > .sales-doc-menu-item,
+.sales-document-actions > .sales-doc-center-btn { font-size: 10px; }
+.sales-doc-center-btn span,
+.sales-doc-menu > summary span { font-size: 9px; }
+.sales-doc-menu-group small { font-size: 9px; }
+.sales-doc-empty { font-size: 10.5px; }
+
+/* Режим "По сменам" */
+.sales-shifts-section-head strong { font-size: 14px; }
+.sales-shifts-section-head span { font-size: 11px; line-height: 1.35; }
+.sales-shift-summary {
+    min-height: 70px;
+    padding-top: 11px;
+    padding-bottom: 11px;
+}
+.sales-shift-title { font-size: 13.5px; }
+.sales-shift-period { font-size: 10.5px; line-height: 1.35; }
+.sales-shift-badge { font-size: 9px; }
+.sales-shift-totals strong { font-size: 12px; }
+.sales-shift-totals span { font-size: 10px; }
+.sales-shift-z,
+.sales-receipt-open,
+.sales-receipt-refund {
+    min-height: 36px;
+    font-size: 10.5px;
+}
+.sales-receipt-row {
+    min-height: 58px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+}
+.sales-receipt-main strong,
+.sales-receipt-meta strong { font-size: 11.5px; }
+.sales-receipt-main span { font-size: 10px; line-height: 1.3; }
+.sales-receipt-meta span { font-size: 9.5px; line-height: 1.3; }
+.sales-shifts-loading,
+.sales-shifts-empty,
+.sales-shifts-error { font-size: 11.5px; line-height: 1.45; }
+.sales-shifts-more,
+.sales-receipts-more,
+.shift-history-more { font-size: 12px; }
+
+/* Небольшие модалки истории смен */
+.shift-modal-head strong { font-size: 16px; }
+.shift-modal-actions button,
+.shift-history-open { font-size: 11.5px; }
+.shift-history-code { font-size: 11px; }
+.shift-history-main strong { font-size: 12.5px; }
+.shift-history-main span { font-size: 10.5px; line-height: 1.35; }
+.shift-history-empty { font-size: 12px; }
+.shift-close-confirm p { font-size: 13px; }
+.shift-close-confirm label { font-size: 12px; }
+.shift-close-confirm small { font-size: 10.5px; }
+.shift-close-error { font-size: 11.5px; }
+.shift-confirm-danger { font-size: 12.5px; }
+
+/* Центр документов конкретной продажи */
+.sales-document-center__kicker { font-size: 9.5px; }
+.sales-document-center__header h3 { font-size: 20px; }
+.sales-document-center__header p { font-size: 12px; line-height: 1.45; }
+.sales-document-center__group > strong { font-size: 10.5px; }
+.sales-document-center__actions .sales-doc-menu-item {
+    min-height: 48px;
+    padding: 10px 12px;
+    font-size: 11.5px;
+    line-height: 1.3;
+}
+
+/* Обычная модалка просмотра документов */
+.modal-header b { font-size: 19px; }
+.modal-footer button { font-size: 13px; }
+
+@media (max-width: 768px) {
+    .sales-history-mode-switch button { font-size: 13px; }
+    .sales-documents-toolbar__title strong { font-size: 15px; }
+    .sales-documents-toolbar__title span { font-size: 11px; }
+    .sales-history-search input,
+    .sales-history-filter { font-size: 12px; }
+    .sales-journal-mobile__number { font-size: 10.5px; }
+    .sales-journal-mobile .sales-doc-menu-item,
+    .sales-journal-mobile .sales-doc-menu > summary,
+    .sales-doc-center-btn { font-size: 11.5px; }
+    .sales-document-center__header h3 { font-size: 20px; }
+    .sales-document-center__header p { font-size: 12px; }
+    .sales-document-center__group > strong { font-size: 11px; }
+    .sales-document-center__actions .sales-doc-menu-item { font-size: 12px; }
+}
