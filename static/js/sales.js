@@ -2133,6 +2133,7 @@ function salesDocumentCenterSections(item, closeBeforeAction = false) {
     const refundEvent = item.event_type === "refund" || item.is_refunded === true;
     const invoice = item.sale_type === "invoice";
     const refunded = Boolean(item.sale_refunded);
+    const returnedSale = refunded && !invoice && !refundEvent;
     const pendingInvoice = invoice && item.status === "Счёт выставлен" && !refunded;
     const sections = [];
 
@@ -2150,16 +2151,59 @@ function salesDocumentCenterSections(item, closeBeforeAction = false) {
         title: "Основной документ",
         items: [invoice
             ? salesDocumentButton("Счёт на оплату", "Открыть счёт на оплату", `${documentPrefix}openInvoiceModal(${id})`, "is-primary")
-            : salesDocumentButton("Кассовый чек", "Открыть кассовый чек", `${documentPrefix}openSaleModal(${id})`, "is-primary")]
+            : (returnedSale
+                ? salesDocumentButton("Чек возврата", "Открыть чек возврата", `${documentPrefix}openRefundCheckModal(${id})`, "is-refund")
+                : salesDocumentButton("Кассовый чек", "Открыть кассовый чек", `${documentPrefix}openSaleModal(${id})`, "is-primary"))]
     });
 
     if (!pendingInvoice) {
+        const hasProducts = item.has_products !== undefined
+            ? Boolean(item.has_products)
+            : Number(item.product_count || 0) > 0;
+        const hasServices = item.has_services !== undefined
+            ? Boolean(item.has_services)
+            : Number(item.service_count || 0) > 0;
+        const productTotal = Number(item.product_total || 0);
+        const serviceTotal = Number(item.service_total || 0);
+        const productCount = Number(item.product_count || 0);
+        const serviceCount = Number(item.service_count || 0);
+
+        if (hasProducts) {
+            const productMeta = [
+                productTotal > 0 ? salesShiftMoney(productTotal) : "",
+                productCount > 0 ? `${productCount} поз.` : ""
+            ].filter(Boolean).join(" · ");
+            sections.push({
+                title: "Документы по товарам",
+                items: [salesDocumentButton(
+                    `Накладная${productMeta ? ` · ${productMeta}` : ""}`,
+                    "Сформировать накладную только по товарам этой продажи",
+                    `${documentPrefix}openDocumentModal(${id}, 'nakladnaya')`,
+                    "is-document"
+                )]
+            });
+        }
+
+        if (hasServices) {
+            const serviceMeta = [
+                serviceTotal > 0 ? salesShiftMoney(serviceTotal) : "",
+                serviceCount > 0 ? `${serviceCount} поз.` : ""
+            ].filter(Boolean).join(" · ");
+            sections.push({
+                title: "Документы по услугам",
+                items: [salesDocumentButton(
+                    `АВР${serviceMeta ? ` · ${serviceMeta}` : ""}`,
+                    "Сформировать акт выполненных работ только по услугам этой продажи",
+                    `${documentPrefix}openDocumentModal(${id}, 'act')`,
+                    "is-document"
+                )]
+            });
+        }
+
         sections.push({
-            title: "Документы по продаже",
+            title: "Общие документы",
             items: [
-                salesDocumentButton("Накладная", "Сформировать накладную", `${documentPrefix}openDocumentModal(${id}, 'nakladnaya')`, "is-document"),
-                salesDocumentButton("Счёт-фактура", "Сформировать счёт-фактуру", `${documentPrefix}openDocumentModal(${id}, 'schetFactura')`, "is-document"),
-                salesDocumentButton("Акт выполненных работ", "Сформировать акт выполненных работ", `${documentPrefix}openDocumentModal(${id}, 'act')`, "is-document")
+                salesDocumentButton("Счёт-фактура", "Сформировать счёт-фактуру по всей продаже", `${documentPrefix}openDocumentModal(${id}, 'schetFactura')`, "is-document")
             ]
         });
     }
@@ -2173,9 +2217,7 @@ function salesDocumentCenterSections(item, closeBeforeAction = false) {
         ? salesDocumentButton("Подтвердить оплату", "Подтвердить оплату счёта", `${operationPrefix}confirmInvoicePayment(${id}, this)`, "is-confirm")
         : (!refunded
             ? salesDocumentButton("Оформить возврат", "Оформить возврат продажи", `${operationPrefix}refundSale(${id})`, "is-refund")
-            : (!invoice
-                ? salesDocumentButton("Чек возврата", "Открыть чек возврата", `${documentPrefix}openRefundCheckModal(${id})`, "is-refund")
-                : ""));
+            : "");
     if (operation) sections.push({ title: "Действия", items: [operation] });
 
     return sections;
@@ -2186,6 +2228,7 @@ function salesDocumentActions(item) {
     if (!Number.isFinite(id)) return "";
     const refundEvent = item.event_type === "refund" || item.is_refunded === true;
     const invoice = item.sale_type === "invoice";
+    const returnedSale = Boolean(item.sale_refunded) && !invoice && !refundEvent;
 
     if (refundEvent) {
         if (item.refund_check_available === false || invoice) return '<span class="sales-doc-empty">Нет действий</span>';
@@ -2194,7 +2237,9 @@ function salesDocumentActions(item) {
 
     const primary = invoice
         ? salesDocumentButton("Открыть счёт", "Открыть счёт на оплату", `openInvoiceModal(${id})`, "is-primary")
-        : salesDocumentButton("Открыть чек", "Открыть кассовый чек", `openSaleModal(${id})`, "is-primary");
+        : (returnedSale
+            ? salesDocumentButton("Чек возврата", "Открыть чек возврата", `openRefundCheckModal(${id})`, "is-refund")
+            : salesDocumentButton("Открыть чек", "Открыть кассовый чек", `openSaleModal(${id})`, "is-primary"));
     const count = salesDocumentCenterSections(item, false).reduce((sum, section) => sum + section.items.length, 0);
     const key = escapeHtml(salesDocumentRecordKey(item));
     const center = `
@@ -2243,7 +2288,10 @@ function openSalesDocumentCenter(key) {
     const amount = `${refund ? "−" : ""}${salesShiftMoney(item.total || 0)}`;
 
     title.textContent = `${salesDocumentOperationLabel(item)} №${item.sale_number || item.id}`;
-    meta.textContent = `${item.client_name || "Частное лицо"} · ${item.created_at_display || salesShiftDate(item.event_at || item.created_at)} · ${amount}`;
+    const returnedMeta = item.sale_refunded && item.refunded_at_display
+        ? ` · возврат ${item.refunded_at_display}`
+        : "";
+    meta.textContent = `${item.client_name || "Частное лицо"} · ${item.created_at_display || salesShiftDate(item.event_at || item.created_at)} · ${amount}${returnedMeta}`;
     const sections = salesDocumentCenterSections(item, true);
     body.innerHTML = sections.map(section => `
         <div class="sales-document-center__group">

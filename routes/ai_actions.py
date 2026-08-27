@@ -1267,7 +1267,7 @@ def _execute(cur, action: str, data: dict[str, Any]) -> dict[str, Any]:
         sale_lines = []
         total = Decimal("0")
         for line in data["items"]:
-            item = _row(cur, "SELECT id,name,unit,retail_price FROM items WHERE id=%s AND company_id=%s", (line["item_id"], company_id), "Позиция продажи не найдена")
+            item = _row(cur, "SELECT id,name,unit,retail_price,COALESCE(item_type,'product') AS item_type FROM items WHERE id=%s AND company_id=%s", (line["item_id"], company_id), "Позиция продажи не найдена")
             quantity = Decimal(line["quantity"]); price = Decimal(line["price"]) if line.get("price") else Decimal(str(item.get("retail_price") or 0))
             line_total = quantity * price; total += line_total
             sale_lines.append((item, quantity, price, line_total))
@@ -1283,8 +1283,8 @@ def _execute(cur, action: str, data: dict[str, Any]) -> dict[str, Any]:
         after = dict(cur.fetchone()); target_id = after["id"]; target_type = "sale"
         for item, quantity, price, line_total in sale_lines:
             cur.execute(
-                "INSERT INTO sale_items (sale_id,item_id,name,price,quantity,total,unit) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (target_id, item["id"], item["name"], price, quantity, line_total, item.get("unit") or "шт"),
+                "INSERT INTO sale_items (sale_id,item_id,name,price,quantity,total,unit,item_type) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (target_id, item["id"], item["name"], price, quantity, line_total, item.get("unit") or "шт", item.get("item_type") or "product"),
             )
         after["client_name"] = client["full_name"]
 

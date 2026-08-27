@@ -184,7 +184,7 @@ def pay_sale():
         for item in cart:
 
             cur.execute(
-                "SELECT unit FROM items WHERE id = %s",
+                "SELECT unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s",
                 (item.get("id"),)
             )
 
@@ -195,6 +195,7 @@ def pay_sale():
                 if db_item and db_item["unit"]
                 else "шт"
             )
+            item_type = (db_item["item_type"] if db_item else "product") or "product"
 
             cur.execute("""
                 INSERT INTO sale_items (
@@ -207,9 +208,10 @@ def pay_sale():
                     unit,
                     gtin,
                     ntin,
-                    excise_stamp
+                    excise_stamp,
+                    item_type
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 sale_id,
                 item.get("id"),
@@ -220,7 +222,8 @@ def pay_sale():
                 unit,
                 item.get("gtin"),
                 item.get("ntin"),
-                item.get("excise_stamp")
+                item.get("excise_stamp"),
+                item_type
             ))
 
         process_sale(conn, sale_id)
@@ -423,30 +426,39 @@ def sales_history():
     cur = conn.cursor()
     try:
         if all_history:
+            # В режиме «Все документы» одна продажа = одна строка журнала.
+            # Возврат не создаёт отдельную запись: исходная продажа просто
+            # помечается как возвращённая и начинает открывать чек возврата.
             cur.execute("""
                 WITH journal AS (
                     SELECT
                         s.id, s.client_id, s.sale_number, s.total_amount,
                         s.sale_type, s.status, s.rekassa_shift_number,
-                        s.rekassa_znm, COALESCE(s.is_refunded, FALSE) AS sale_refunded, 'sale'::TEXT AS event_type,
-                        s.created_at AS event_at
+                        s.rekassa_znm, COALESCE(s.is_refunded, FALSE) AS sale_refunded,
+                        'sale'::TEXT AS event_type, s.created_at AS event_at,
+                        s.refunded_at
                     FROM sales s
                     WHERE s.company_id = %s
-
-                    UNION ALL
-
-                    SELECT
-                        s.id, s.client_id, s.sale_number, s.total_amount,
-                        s.sale_type, s.status, s.rekassa_shift_number,
-                        s.rekassa_znm, COALESCE(s.is_refunded, FALSE) AS sale_refunded, 'refund'::TEXT AS event_type,
-                        COALESCE(s.refunded_at, s.created_at) AS event_at
-                    FROM sales s
-                    WHERE s.company_id = %s
-                      AND COALESCE(s.is_refunded, FALSE) = TRUE
                 )
-                SELECT journal.*, clients.full_name
+                SELECT
+                    journal.*,
+                    clients.full_name,
+                    COALESCE(doc_mix.product_count, 0) AS product_count,
+                    COALESCE(doc_mix.service_count, 0) AS service_count,
+                    COALESCE(doc_mix.product_total, 0) AS product_total,
+                    COALESCE(doc_mix.service_total, 0) AS service_total
                 FROM journal
                 LEFT JOIN clients ON journal.client_id = clients.id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service') AS product_count,
+                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service') AS service_count,
+                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service'), 0) AS product_total,
+                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service'), 0) AS service_total
+                    FROM sale_items si
+                    LEFT JOIN items i ON i.id = si.item_id
+                    WHERE si.sale_id = journal.id
+                ) doc_mix ON TRUE
                 WHERE (
                     %s = ''
                     OR COALESCE(journal.sale_number::TEXT, journal.id::TEXT) ILIKE '%%' || %s || '%%'
@@ -454,15 +466,13 @@ def sales_history():
                 )
                 AND (
                     %s = 'all'
-                    OR (%s = 'sales' AND journal.event_type = 'sale' AND journal.sale_type <> 'invoice')
-                    OR (%s = 'invoices' AND journal.event_type = 'sale' AND journal.sale_type = 'invoice')
-                    OR (%s = 'refunds' AND journal.event_type = 'refund')
+                    OR (%s = 'sales' AND journal.sale_type <> 'invoice' AND journal.sale_refunded = FALSE)
+                    OR (%s = 'invoices' AND journal.sale_type = 'invoice')
+                    OR (%s = 'refunds' AND journal.sale_refunded = TRUE)
                 )
-                ORDER BY journal.event_at DESC, journal.id DESC,
-                         journal.event_type DESC
+                ORDER BY journal.event_at DESC, journal.id DESC
                 LIMIT %s OFFSET %s
             """, (
-                session.get("company_id"),
                 session.get("company_id"),
                 query, query, query,
                 kind, kind, kind, kind,
@@ -495,9 +505,25 @@ def sales_history():
                       AND (%s = '' OR s.rekassa_znm = %s)
                       AND COALESCE(s.is_refunded, FALSE) = TRUE
                 )
-                SELECT journal.*, clients.full_name
+                SELECT
+                    journal.*,
+                    clients.full_name,
+                    COALESCE(doc_mix.product_count, 0) AS product_count,
+                    COALESCE(doc_mix.service_count, 0) AS service_count,
+                    COALESCE(doc_mix.product_total, 0) AS product_total,
+                    COALESCE(doc_mix.service_total, 0) AS service_total
                 FROM journal
                 LEFT JOIN clients ON journal.client_id = clients.id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service') AS product_count,
+                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service') AS service_count,
+                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service'), 0) AS product_total,
+                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service'), 0) AS service_total
+                    FROM sale_items si
+                    LEFT JOIN items i ON i.id = si.item_id
+                    WHERE si.sale_id = journal.id
+                ) doc_mix ON TRUE
                 ORDER BY journal.event_at DESC, journal.id DESC,
                          journal.event_type DESC
                 LIMIT %s OFFSET %s
@@ -548,9 +574,23 @@ def sales_history():
                 "shift_number": sale.get("rekassa_shift_number"),
                 "serial_number": sale.get("rekassa_znm") or "",
                 "refund_check_available": bool(
-                    is_refund and sale["sale_type"] != "invoice"
+                    sale.get("sale_refunded") and sale["sale_type"] != "invoice"
                 ),
                 "sale_refunded": bool(sale.get("sale_refunded")),
+                "product_count": int(sale.get("product_count") or 0),
+                "service_count": int(sale.get("service_count") or 0),
+                "product_total": float(sale.get("product_total") or 0),
+                "service_total": float(sale.get("service_total") or 0),
+                "has_products": int(sale.get("product_count") or 0) > 0,
+                "has_services": int(sale.get("service_count") or 0) > 0,
+                "refunded_at": (
+                    sale.get("refunded_at").isoformat()
+                    if sale.get("refunded_at") else ""
+                ),
+                "refunded_at_display": (
+                    sale.get("refunded_at").strftime("%d.%m.%Y, %H:%M")
+                    if sale.get("refunded_at") else ""
+                ),
             })
         return jsonify(result)
     finally:
@@ -603,7 +643,7 @@ def smart_sale(payload=None):
         return jsonify({"success": False, "error": f"client not found: {client_name}"})
 
     cur.execute(
-        "SELECT id, retail_price, name FROM items WHERE company_id = %s",
+        "SELECT id, retail_price, name, COALESCE(item_type, 'product') AS item_type FROM items WHERE company_id = %s",
         (session.get("company_id"),)
     )
 
@@ -664,15 +704,16 @@ def smart_sale(payload=None):
     sale_id = cur.fetchone()["id"]
 
     cur.execute("""
-        INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, item_type)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     """, (
         sale_id,
         item["id"] if hasattr(item, "keys") else item[0],
         item["name"] if hasattr(item, "keys") else item[2],
         item["retail_price"] if hasattr(item, "keys") else item[1],
         1,
-        item["retail_price"] if hasattr(item, "keys") else item[1]
+        item["retail_price"] if hasattr(item, "keys") else item[1],
+        (item.get("item_type") if hasattr(item, "get") else "product") or "product"
     ))
 
     conn.commit()
@@ -753,7 +794,7 @@ def create_invoice():
 
     for item in cart:
         cur.execute(
-            "SELECT name, unit FROM items WHERE id = %s",
+            "SELECT name, unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s",
             (item.get("id"),)
         )
 
@@ -761,13 +802,14 @@ def create_invoice():
 
         name = db_item["name"] if db_item else "Товар"
         unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
+        item_type = (db_item["item_type"] if db_item else "product") or "product"
 
         qty = item.get("qty", 1)
         price = item.get("price", 0)
 
         cur.execute("""
-            INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, unit)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, unit, item_type)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             sale_id,
             item.get("id"),
@@ -775,7 +817,8 @@ def create_invoice():
             price,
             qty,
             price * qty,
-            unit
+            unit,
+            item_type
         ))
 
     conn.commit()
@@ -798,10 +841,15 @@ def get_sale_data(sale_id):
     
     sale = cur.fetchone()
 
-    cur.execute(
-        "SELECT * FROM sale_items WHERE sale_id = %s",
-        (sale_id,)
-    )
+    cur.execute("""
+        SELECT
+            si.*,
+            COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') AS document_item_type
+        FROM sale_items si
+        LEFT JOIN items i ON i.id = si.item_id
+        WHERE si.sale_id = %s
+        ORDER BY si.id
+    """, (sale_id,))
     
     items = cur.fetchall()
 
@@ -883,11 +931,13 @@ def process_sale(conn, sale_id):
             UPDATE sale_items
             SET
                 unit = %s,
-                profit = %s
+                profit = %s,
+                item_type = COALESCE(NULLIF(item_type, ''), %s)
             WHERE id = %s
         """, (
             unit,
             profit,
+            item_type,
             item["id"]
         ))
 
@@ -1343,6 +1393,13 @@ def refund_check(sale_id):
 def nakladnaya(sale_id):
 
     sale, items, client = get_sale_data(sale_id)
+    items = [
+        i for i in items
+        if (i.get("document_item_type") or "product") != "service"
+    ]
+
+    if not items:
+        return "В этой продаже нет товаров для накладной", 400
 
     # ❌ запрещаем до оплаты
     if sale["status"] != "Оплачено":
@@ -2536,16 +2593,29 @@ def act(sale_id):
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT * FROM sales WHERE id = %s",
-        (sale_id,)
+        "SELECT * FROM sales WHERE id = %s AND company_id = %s",
+        (sale_id, session.get("company_id"))
     )
     sale = cur.fetchone()
+    if not sale:
+        pool.putconn(conn)
+        return "Продажа не найдена", 404
 
-    cur.execute(
-        "SELECT * FROM sale_items WHERE sale_id = %s",
-        (sale_id,)
-    )
+    cur.execute("""
+        SELECT
+            si.*,
+            COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') AS document_item_type
+        FROM sale_items si
+        LEFT JOIN items i ON i.id = si.item_id
+        WHERE si.sale_id = %s
+          AND COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service'
+        ORDER BY si.id
+    """, (sale_id,))
     items = cur.fetchall()
+
+    if not items:
+        pool.putconn(conn)
+        return "В этой продаже нет услуг для акта выполненных работ", 400
 
     cur.execute(
         "SELECT * FROM companies WHERE id = %s",
@@ -2554,8 +2624,8 @@ def act(sale_id):
     company = cur.fetchone()
 
     cur.execute(
-        "SELECT * FROM clients WHERE id = %s",
-        (sale["client_id"],)
+        "SELECT * FROM clients WHERE id = %s AND company_id = %s",
+        (sale["client_id"], session.get("company_id"))
     )
     client = cur.fetchone()
 

@@ -138,7 +138,8 @@ def init_db():
         price NUMERIC(12,2),
         quantity NUMERIC(12,3),
         total NUMERIC(12,2),
-        profit NUMERIC(12,2) DEFAULT 0
+        profit NUMERIC(12,2) DEFAULT 0,
+        item_type TEXT
     )
     """)
     
@@ -586,6 +587,24 @@ def init_db():
     except:
         conn.rollback()
         
+    try:
+        cur.execute("ALTER TABLE sale_items ADD COLUMN item_type TEXT;")
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
+        cur.execute("""
+            UPDATE sale_items si
+            SET item_type = COALESCE(i.item_type, 'product')
+            FROM items i
+            WHERE si.item_id = i.id
+              AND (si.item_type IS NULL OR si.item_type = '')
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
     try:
         cur.execute("ALTER TABLE sale_items ADD COLUMN gtin TEXT;")
         conn.commit()
