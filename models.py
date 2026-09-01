@@ -879,7 +879,7 @@ def init_db():
         ('expenses', 'Расходы', 'Учет расходов и движения денежных средств.', 'Финансы', 990, '/expenses', '/static/icons/rashod.png', False, 100),
         ('warehouse', 'Склад', 'Остатки, приход, списание и движение товара.', 'Склад', 990, '/stock', '/static/icons/stock.png', False, 110),
         ('clients', 'Клиенты', 'Клиентская база, статусы, история и документы.', 'CRM', 990, '/clients', '/static/icons/clients.png', False, 120),
-        ('school', 'Школа', 'Классные руководители, ежедневное питание и отчёты.', 'Школа', 1490, '/school', '/static/icons/tasks.png', False, 130),
+        ('school', 'Школа', 'Классные руководители, ежедневное питание и отчёты.', 'Школа', 1490, '/school', '/static/icons/school.png', False, 130),
         ('settings', 'Настройки', 'Настройки компании и интеграций.', 'Система', 0, '/settings', '/static/icons/settings.png', True, 200)
     ]
 

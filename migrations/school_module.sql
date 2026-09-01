@@ -1,7 +1,7 @@
 BEGIN;
 
 INSERT INTO modules(code,name,description,category,monthly_price,route_prefix,icon,is_core,is_active,sort_order)
-VALUES('school','Школа','Классные руководители, ежедневное питание и отчёты.','Школа',1490,'/school','/static/icons/tasks.png',FALSE,TRUE,130)
+VALUES('school','Школа','Классные руководители, ежедневное питание и отчёты.','Школа',1490,'/school','/static/icons/school.png',FALSE,TRUE,130)
 ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,category=EXCLUDED.category,monthly_price=EXCLUDED.monthly_price,route_prefix=EXCLUDED.route_prefix,icon=EXCLUDED.icon,is_active=TRUE,sort_order=EXCLUDED.sort_order;
 
 CREATE TABLE IF NOT EXISTS school_classes(id SERIAL PRIMARY KEY,company_id INTEGER NOT NULL,name TEXT NOT NULL,sort_order INTEGER DEFAULT 100,is_active BOOLEAN DEFAULT TRUE,created_at TIMESTAMP DEFAULT NOW(),UNIQUE(company_id,name));
