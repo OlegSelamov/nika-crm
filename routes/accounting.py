@@ -41,6 +41,7 @@ DOCUMENT_TYPES = {
     "payment": "Платёжный документ",
     "check": "Кассовый чек",
     "refund_check": "Чек возврата",
+    "esf": "ЭСФ",
     "other": "Прочее",
 }
 
@@ -574,6 +575,160 @@ def _operation_view(row):
         "document_url": row["document_url"],
     }
 
+def _accounting_sale_groups(cur, company_id):
+    """Единый журнал продаж для бухгалтерии: одна продажа = одна строка.
+
+    Первичные документы не выводятся отдельными строками. Они собираются
+    внутри продажи, а продажи делятся только на кассовые и выставленные
+    через счёт на оплату.
+    """
+    if not _table_exists(cur, "sales"):
+        return []
+
+    has_is_refunded = _column_exists(cur, "sales", "is_refunded")
+    has_refunded_at = _column_exists(cur, "sales", "refunded_at")
+    has_sale_number = _column_exists(cur, "sales", "sale_number")
+    has_sale_type = _column_exists(cur, "sales", "sale_type")
+    has_esf = _table_exists(cur, "esf_documents")
+    has_sale_item_type = _column_exists(cur, "sale_items", "item_type")
+    item_type_expr = (
+        "COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product')"
+        if has_sale_item_type
+        else "COALESCE(i.item_type, 'product')"
+    )
+
+    refunded_sql = "COALESCE(s.is_refunded, FALSE)" if has_is_refunded else "FALSE"
+    refunded_at_sql = "s.refunded_at" if has_refunded_at else "NULL::timestamp"
+    sale_number_sql = "s.sale_number" if has_sale_number else "NULL::integer"
+    sale_type_sql = "COALESCE(s.sale_type, 'cash')" if has_sale_type else "'cash'::text"
+    esf_join = ""
+    esf_select = "NULL::text AS esf_status, NULL::text AS esf_external_id, NULL::text AS esf_registration_number"
+    if has_esf:
+        esf_join = "LEFT JOIN esf_documents ed ON ed.company_id = s.company_id AND ed.sale_id = s.id"
+        esf_select = "ed.status AS esf_status, ed.external_id AS esf_external_id, ed.registration_number AS esf_registration_number"
+
+    cur.execute(f"""
+        SELECT
+            s.id,
+            {sale_number_sql} AS sale_number,
+            s.client_id,
+            s.total_amount,
+            s.paid_amount,
+            s.status,
+            {sale_type_sql} AS sale_type,
+            s.created_at,
+            {refunded_sql} AS is_refunded,
+            {refunded_at_sql} AS refunded_at,
+            c.full_name AS client_full_name,
+            c.company_name AS client_company_name,
+            COALESCE(doc_mix.product_count, 0) AS product_count,
+            COALESCE(doc_mix.service_count, 0) AS service_count,
+            COALESCE(doc_mix.product_total, 0) AS product_total,
+            COALESCE(doc_mix.service_total, 0) AS service_total,
+            {esf_select}
+        FROM sales s
+        LEFT JOIN clients c ON c.id = s.client_id
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(*) FILTER (WHERE {item_type_expr} <> 'service') AS product_count,
+                COUNT(*) FILTER (WHERE {item_type_expr} = 'service') AS service_count,
+                COALESCE(SUM(si.total) FILTER (WHERE {item_type_expr} <> 'service'), 0) AS product_total,
+                COALESCE(SUM(si.total) FILTER (WHERE {item_type_expr} = 'service'), 0) AS service_total
+            FROM sale_items si
+            LEFT JOIN items i ON i.id = si.item_id
+            WHERE si.sale_id = s.id
+        ) doc_mix ON TRUE
+        {esf_join}
+        WHERE s.company_id = %s
+        ORDER BY s.created_at DESC, s.id DESC
+        LIMIT 250
+    """, (company_id,))
+
+    payment_labels = {
+        "cash": "Наличные",
+        "card": "Карта",
+        "kaspi": "Kaspi POS",
+        "invoice": "Счёт на оплату",
+    }
+    esf_labels = {
+        "draft": "Черновик",
+        "prepared": "Готова к подписи",
+        "signed": "Подписана",
+        "sending": "Отправляется",
+        "sent": "Отправлена",
+        "accepted": "Принята",
+        "failed": "Ошибка",
+        "revoke_pending": "Отзыв ожидает",
+        "revoking": "Отзывается",
+        "revoked": "Отозвана",
+        "revoke_failed": "Ошибка отзыва",
+    }
+
+    result = []
+    for row in cur.fetchall():
+        sale_id = row["id"]
+        sale_number = row.get("sale_number") or sale_id
+        sale_type = row.get("sale_type") or "cash"
+        is_invoice = sale_type == "invoice"
+        is_refunded = bool(row.get("is_refunded")) or row.get("status") == "Возврат"
+        client_company = (row.get("client_company_name") or "").strip()
+        client_name = (row.get("client_full_name") or "").strip()
+        client_primary = client_company or client_name or "Частное лицо"
+        client_secondary = client_name if client_company and client_name and client_name != client_company else ""
+
+        if is_invoice:
+            main_label = "Открыть счёт"
+            main_title = "Счёт на оплату"
+            main_url = f"/docs/invoice/{sale_id}"
+        elif is_refunded:
+            main_label = "Чек возврата"
+            main_title = "Чек возврата"
+            main_url = f"/docs/refund-check/{sale_id}"
+        else:
+            main_label = "Открыть чек"
+            main_title = "Кассовый чек"
+            main_url = f"/docs/check/{sale_id}"
+
+        status_label = "Возвращён" if is_refunded else (row.get("status") or ("Выставлен" if is_invoice else "Продажа"))
+        esf_status = row.get("esf_status") or ""
+        product_count = int(row.get("product_count") or 0)
+        service_count = int(row.get("service_count") or 0)
+        # Основной документ + счёт-фактура + ЭСФ + документы по типам строк.
+        documents_count = 3 + (1 if product_count else 0) + (1 if service_count else 0)
+
+        created_at = row.get("created_at")
+        result.append({
+            "id": sale_id,
+            "number": str(sale_number),
+            "bucket": "invoice" if is_invoice else "receipt",
+            "date": created_at.strftime("%d.%m.%Y") if created_at else "—",
+            "time": created_at.strftime("%H:%M") if created_at else "",
+            "amount": float(row.get("total_amount") or 0),
+            "payment_method": payment_labels.get(sale_type, sale_type or "—"),
+            "status": "refunded" if is_refunded else ("invoice" if is_invoice else "completed"),
+            "status_label": status_label,
+            "client_primary": client_primary,
+            "client_secondary": client_secondary,
+            "main_label": main_label,
+            "main_title": main_title,
+            "main_url": main_url,
+            "product_count": product_count,
+            "service_count": service_count,
+            "product_total": float(row.get("product_total") or 0),
+            "service_total": float(row.get("service_total") or 0),
+            "documents_count": documents_count,
+            "waybill_url": f"/docs/nakladnaya/{sale_id}" if product_count else "",
+            "act_url": f"/docs/act/{sale_id}" if service_count else "",
+            "invoice_facture_url": f"/docs/schet-factura/{sale_id}",
+            "esf_status": esf_status,
+            "esf_status_label": esf_labels.get(esf_status, "Не создана"),
+            "esf_external_id": row.get("esf_external_id") or "",
+            "esf_registration_number": row.get("esf_registration_number") or "",
+            "esf_url": f"/sales?esf_sale={sale_id}",
+        })
+    return result
+
+
 def _document_view(row):
     status = row["status"] or "active"
     status_labels = {
@@ -904,6 +1059,10 @@ def accounting():
         year_start = today.replace(month=1, day=1)
         year_end = today.replace(month=12, day=31)
 
+        sale_groups = _accounting_sale_groups(cur, company_id)
+        receipt_sales_count = sum(1 for sale in sale_groups if sale["bucket"] == "receipt")
+        invoice_sales_count = sum(1 for sale in sale_groups if sale["bucket"] == "invoice")
+
         cur.execute("""
             SELECT *
             FROM accounting_operations
@@ -916,6 +1075,7 @@ def accounting():
         cur.execute("""
             SELECT * FROM accounting_documents
             WHERE company_id = %s
+              AND source_type IS NULL
             ORDER BY document_date DESC, id DESC
             LIMIT 200
         """, (company_id,))
@@ -1064,6 +1224,9 @@ def accounting():
             debts=debts,
             operations=operations,
             documents=documents,
+            sale_groups=sale_groups,
+            receipt_sales_count=receipt_sales_count,
+            invoice_sales_count=invoice_sales_count,
             tax_calculation=tax_calculation,
             tax_users=tax_users,
             filings=filings,

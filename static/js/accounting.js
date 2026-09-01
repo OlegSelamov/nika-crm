@@ -139,3 +139,147 @@ function openEditDocumentModal(documentId) {
 
     openAccountingModal('documentModal');
 }
+// --- Единый журнал продаж и документов ---
+let accountingSaleMode = 'receipt';
+let accountingSalesCache = null;
+
+function getAccountingSalesData() {
+    if (accountingSalesCache) return accountingSalesCache;
+    const node = document.getElementById('accountingSalesData');
+    if (!node) return [];
+    try {
+        accountingSalesCache = JSON.parse(node.textContent || '[]');
+    } catch (error) {
+        console.error('ACCOUNTING SALES DATA ERROR', error);
+        accountingSalesCache = [];
+    }
+    return accountingSalesCache;
+}
+
+function accountingEscape(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function accountingMoney(value) {
+    const amount = Number(value || 0);
+    return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(amount) + ' ₸';
+}
+
+function switchAccountingSaleMode(mode) {
+    accountingSaleMode = mode === 'invoice' ? 'invoice' : 'receipt';
+    document.querySelectorAll('[data-accounting-sale-mode]').forEach(function (button) {
+        const active = button.dataset.accountingSaleMode === accountingSaleMode;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    filterAccountingSales();
+}
+
+function filterAccountingSales() {
+    const search = document.getElementById('accountingSaleSearch');
+    const query = search ? search.value.trim().toLowerCase() : '';
+    const rows = document.querySelectorAll('.accounting-sale-row');
+    let visible = 0;
+
+    rows.forEach(function (row) {
+        const matchesMode = row.dataset.mode === accountingSaleMode;
+        const matchesSearch = !query || (row.dataset.search || '').toLowerCase().includes(query);
+        const show = matchesMode && matchesSearch;
+        row.style.display = show ? '' : 'none';
+        if (show) visible += 1;
+    });
+
+    const empty = document.getElementById('accountingSalesEmpty');
+    if (empty) empty.style.display = visible === 0 ? 'grid' : 'none';
+}
+
+function accountingDocumentButton(url, title, meta, kind) {
+    if (!url) return '';
+    return `
+        <a class="accounting-sale-document ${kind ? 'accounting-sale-document--' + kind : ''}"
+           href="${accountingEscape(url)}" target="_blank" rel="noopener">
+            <span class="accounting-sale-document__icon">${kind === 'esf' ? 'ЭСФ' : '📄'}</span>
+            <span class="accounting-sale-document__text">
+                <strong>${accountingEscape(title)}</strong>
+                ${meta ? `<small>${accountingEscape(meta)}</small>` : ''}
+            </span>
+            <span class="accounting-sale-document__arrow">›</span>
+        </a>`;
+}
+
+function openAccountingSaleDocuments(saleId) {
+    const sale = getAccountingSalesData().find(function (item) {
+        return Number(item.id) === Number(saleId);
+    });
+    if (!sale) return;
+
+    const title = document.getElementById('saleDocumentsModalTitle');
+    const subtitle = document.getElementById('saleDocumentsModalSubtitle');
+    const body = document.getElementById('saleDocumentsModalBody');
+    if (!title || !subtitle || !body) return;
+
+    title.textContent = `Продажа №${sale.number}`;
+    subtitle.textContent = `${sale.client_primary} · ${sale.date} · ${accountingMoney(sale.amount)}`;
+
+    const productBlock = Number(sale.product_count || 0) > 0 ? `
+        <section class="accounting-sale-doc-section">
+            <div class="accounting-sale-doc-section__title">
+                <strong>Документы по товарам</strong>
+                <span>${sale.product_count} поз. · ${accountingMoney(sale.product_total)}</span>
+            </div>
+            <div class="accounting-sale-doc-grid">
+                ${accountingDocumentButton(sale.waybill_url, 'Накладная', `${sale.product_count} товарных позиций`, 'product')}
+            </div>
+        </section>` : '';
+
+    const serviceBlock = Number(sale.service_count || 0) > 0 ? `
+        <section class="accounting-sale-doc-section">
+            <div class="accounting-sale-doc-section__title">
+                <strong>Документы по услугам</strong>
+                <span>${sale.service_count} поз. · ${accountingMoney(sale.service_total)}</span>
+            </div>
+            <div class="accounting-sale-doc-grid">
+                ${accountingDocumentButton(sale.act_url, 'Акт выполненных работ', `${sale.service_count} услуг`, 'service')}
+            </div>
+        </section>` : '';
+
+    const esfMetaParts = [];
+    if (sale.esf_status_label) esfMetaParts.push(sale.esf_status_label);
+    if (sale.esf_registration_number) esfMetaParts.push(`№ ${sale.esf_registration_number}`);
+    else if (sale.esf_external_id) esfMetaParts.push(`ID ${sale.esf_external_id}`);
+    const esfTitle = sale.esf_status ? 'ЭСФ' : 'Сформировать ЭСФ';
+
+    body.innerHTML = `
+        <section class="accounting-sale-doc-section">
+            <div class="accounting-sale-doc-section__title"><strong>Основной документ</strong></div>
+            <div class="accounting-sale-doc-grid">
+                ${accountingDocumentButton(sale.main_url, sale.main_title, sale.status_label, 'main')}
+            </div>
+        </section>
+        ${productBlock}
+        ${serviceBlock}
+        <section class="accounting-sale-doc-section">
+            <div class="accounting-sale-doc-section__title"><strong>Общие документы</strong><span>На всю продажу</span></div>
+            <div class="accounting-sale-doc-grid">
+                ${accountingDocumentButton(sale.invoice_facture_url, 'Счёт-фактура', accountingMoney(sale.amount), 'common')}
+            </div>
+        </section>
+        <section class="accounting-sale-doc-section">
+            <div class="accounting-sale-doc-section__title"><strong>Электронные документы</strong><span>ИС ЭСФ</span></div>
+            <div class="accounting-sale-doc-grid">
+                ${accountingDocumentButton(sale.esf_url, esfTitle, esfMetaParts.join(' · '), 'esf')}
+            </div>
+        </section>`;
+
+    openAccountingModal('saleDocumentsModal');
+}
+
+// Страница открывается сразу в привычном режиме «Чеки».
+document.addEventListener('DOMContentLoaded', function () {
+    switchAccountingSaleMode('receipt');
+});

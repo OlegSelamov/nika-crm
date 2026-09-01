@@ -500,6 +500,11 @@
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape" && !element("esfModal")?.hidden) closeEsfModal();
         });
+
+        const requestedSaleId = Number(new URLSearchParams(window.location.search).get("esf_sale"));
+        if (Number.isFinite(requestedSaleId) && requestedSaleId > 0) {
+            window.setTimeout(() => openEsfModal(requestedSaleId), 180);
+        }
     });
 
     window.openEsfModal = openEsfModal;

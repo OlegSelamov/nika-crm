@@ -1195,3 +1195,456 @@ body.accounting-modal-open {
         justify-content: center;
     }
 }
+/* =========================================================
+   Бухгалтерия: единый журнал продаж и документов
+   ========================================================= */
+.accounting-sales-ledger {
+    margin-bottom: 14px;
+}
+
+.accounting-sales-ledger__head {
+    align-items: center;
+}
+
+.accounting-sales-search {
+    width: min(360px, 100%);
+    min-width: 280px;
+}
+
+.accounting-sales-switch {
+    width: fit-content;
+    display: inline-grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin: 2px 0 14px;
+    padding: 4px;
+    border: 1px solid var(--acc-border);
+    border-radius: 14px;
+    background: #f2f3f8;
+}
+
+.accounting-sales-switch__btn {
+    min-width: 160px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 10px;
+    color: #697083;
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: .18s ease;
+}
+
+.accounting-sales-switch__btn b {
+    min-width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    color: #777d8d;
+    background: #e3e5ec;
+    font-size: 10px;
+}
+
+.accounting-sales-switch__btn.is-active {
+    color: #fff;
+    background: linear-gradient(135deg, var(--acc-purple), #8d5de6);
+    box-shadow: 0 7px 16px rgba(114, 87, 255, .20);
+}
+
+.accounting-sales-switch__btn.is-active b {
+    color: #624be0;
+    background: #fff;
+}
+
+.accounting-sales-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--acc-border);
+    border-radius: 14px;
+    background: #fff;
+}
+
+.accounting-sales-table {
+    width: 100%;
+    min-width: 870px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.accounting-sales-table th,
+.accounting-sales-table td {
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--acc-border);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.accounting-sales-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.accounting-sales-table th {
+    color: #7b8191;
+    background: #fafafe;
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+.accounting-sales-table th:nth-child(1) { width: 15%; }
+.accounting-sales-table th:nth-child(2) { width: 28%; }
+.accounting-sales-table th:nth-child(3) { width: 18%; }
+.accounting-sales-table th:nth-child(4) { width: 14%; }
+.accounting-sales-table th:nth-child(5) { width: 25%; }
+
+.accounting-sale-ident,
+.accounting-sale-client,
+.accounting-sale-amount {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.accounting-sale-ident strong,
+.accounting-sale-client strong,
+.accounting-sale-amount strong {
+    color: var(--acc-text);
+    font-size: 13px;
+    line-height: 1.25;
+}
+
+.accounting-sale-client strong {
+    overflow-wrap: anywhere;
+}
+
+.accounting-sale-ident span,
+.accounting-sale-client span,
+.accounting-sale-amount span {
+    color: var(--acc-muted);
+    font-size: 10px;
+    line-height: 1.3;
+}
+
+.accounting-sale-status {
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    border-radius: 999px;
+    color: #197454;
+    background: #e8f7f1;
+    font-size: 10px;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+.accounting-sale-status--invoice {
+    color: #6149d4;
+    background: #efecff;
+}
+
+.accounting-sale-status--refunded {
+    color: #c94646;
+    background: #fdecec;
+}
+
+.accounting-sale-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 7px;
+}
+
+.accounting-sale-main-btn,
+.accounting-sale-docs-btn {
+    min-width: 0;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 10px;
+    border: 1px solid #d9d2ff;
+    border-radius: 10px;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 850;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: normal;
+}
+
+.accounting-sale-main-btn {
+    color: var(--acc-purple);
+    background: #f2efff;
+}
+
+.accounting-sale-docs-btn {
+    color: #fff;
+    background: linear-gradient(135deg, var(--acc-purple), #8d5de6);
+    border-color: transparent;
+}
+
+.accounting-sales-mobile {
+    display: none;
+}
+
+.accounting-quick-nav {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 14px;
+}
+
+.accounting-quick-nav button {
+    min-width: 0;
+    min-height: 62px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    padding: 9px 11px;
+    border: 1px solid var(--acc-border);
+    border-radius: 12px;
+    color: var(--acc-text);
+    background: #fff;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: .16s ease;
+}
+
+.accounting-quick-nav button:hover {
+    transform: translateY(-1px);
+    border-color: #d5ceff;
+    box-shadow: 0 6px 16px rgba(65, 57, 110, .07);
+}
+
+.accounting-quick-nav strong {
+    font-size: 11px;
+}
+
+.accounting-quick-nav span {
+    color: var(--acc-muted);
+    font-size: 9px;
+    line-height: 1.25;
+}
+
+.accounting-other-documents {
+    margin-top: 14px;
+}
+
+.accounting-modal__dialog--sale-docs {
+    width: min(720px, calc(100vw - 32px));
+}
+
+.accounting-sale-doc-center {
+    display: grid;
+    gap: 16px;
+}
+
+.accounting-sale-doc-section {
+    display: grid;
+    gap: 9px;
+}
+
+.accounting-sale-doc-section + .accounting-sale-doc-section {
+    padding-top: 14px;
+    border-top: 1px solid var(--acc-border);
+}
+
+.accounting-sale-doc-section__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.accounting-sale-doc-section__title strong {
+    color: var(--acc-text);
+    font-size: 12px;
+}
+
+.accounting-sale-doc-section__title span {
+    color: var(--acc-muted);
+    font-size: 10px;
+}
+
+.accounting-sale-doc-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.accounting-sale-document {
+    min-width: 0;
+    min-height: 66px;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 20px;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border: 1px solid var(--acc-border);
+    border-radius: 12px;
+    color: var(--acc-text);
+    background: #fff;
+    text-decoration: none;
+    transition: .16s ease;
+}
+
+.accounting-sale-document:hover {
+    transform: translateY(-1px);
+    border-color: #d8d1ff;
+    box-shadow: 0 7px 18px rgba(65, 57, 110, .07);
+}
+
+.accounting-sale-document__icon {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.accounting-sale-document__text {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.accounting-sale-document__text strong {
+    overflow-wrap: anywhere;
+    font-size: 11px;
+}
+
+.accounting-sale-document__text small {
+    color: var(--acc-muted);
+    font-size: 9px;
+    line-height: 1.25;
+}
+
+.accounting-sale-document__arrow {
+    color: #aaa4ca;
+    font-size: 22px;
+}
+
+.accounting-sale-document--product .accounting-sale-document__icon {
+    color: #9a6519;
+    background: #fff3df;
+}
+
+.accounting-sale-document--service .accounting-sale-document__icon {
+    color: #167861;
+    background: #e8f7f1;
+}
+
+.accounting-sale-document--esf {
+    border-color: #d8d1ff;
+    background: #fbfaff;
+}
+
+.accounting-sale-document--esf .accounting-sale-document__icon {
+    color: #fff;
+    background: linear-gradient(135deg, var(--acc-purple), #8d5de6);
+}
+
+@media (max-width: 1100px) {
+    .accounting-quick-nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .accounting-sales-ledger__head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .accounting-sales-search {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .accounting-sales-switch {
+        width: 100%;
+    }
+
+    .accounting-sales-switch__btn {
+        min-width: 0;
+        padding: 0 8px;
+        font-size: 11px;
+    }
+
+    .accounting-sales-table-wrap {
+        display: none;
+    }
+
+    .accounting-sales-mobile {
+        display: grid;
+        gap: 9px;
+    }
+
+    .accounting-sale-card {
+        display: grid;
+        gap: 11px;
+        padding: 13px;
+        border: 1px solid var(--acc-border);
+        border-radius: 13px;
+        background: #fff;
+    }
+
+    .accounting-sale-card__top,
+    .accounting-sale-card__sum {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .accounting-sale-card__sum strong {
+        font-size: 16px;
+    }
+
+    .accounting-sale-card__sum span {
+        color: var(--acc-muted);
+        font-size: 10px;
+    }
+
+    .accounting-quick-nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .accounting-sale-doc-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .accounting-sale-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .accounting-sale-main-btn,
+    .accounting-sale-docs-btn {
+        min-height: 40px;
+        font-size: 11px;
+    }
+
+    .accounting-quick-nav {
+        grid-template-columns: 1fr 1fr;
+    }
+}

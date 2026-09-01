@@ -14,6 +14,9 @@
 {% set debts = debts|default([]) %}
 {% set documents = documents|default([]) %}
 {% set operations = operations|default([]) %}
+{% set sale_groups = sale_groups|default([]) %}
+{% set receipt_sales_count = receipt_sales_count|default(0) %}
+{% set invoice_sales_count = invoice_sales_count|default(0) %}
 
 <div class="accounting-page">
     <div class="page-header accounting-header">
@@ -42,212 +45,143 @@
     </div>
     {% endif %}
 
-    <div class="accounting-stats">
-        <article class="accounting-stat accounting-stat--violet">
-            <div class="accounting-stat__icon">₸</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Налогов к оплате</span>
-                <strong class="accounting-stat__value">
-                    {{ "{:,.0f}".format(accounting_summary.get("taxes_due", 0)).replace(",", " ") }} ₸
-                </strong>
-                <small>За текущий период</small>
-            </div>
-        </article>
-
-        <article class="accounting-stat accounting-stat--cyan">
-            <div class="accounting-stat__icon">✓</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Оплачено налогов</span>
-                <strong class="accounting-stat__value">
-                    {{ "{:,.0f}".format(accounting_summary.get("taxes_paid", 0)).replace(",", " ") }} ₸
-                </strong>
-                <small>За текущий период</small>
-            </div>
-        </article>
-
-        <article class="accounting-stat accounting-stat--orange">
-            <div class="accounting-stat__icon">!</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Задолженность</span>
-                <strong class="accounting-stat__value">
-                    {{ "{:,.0f}".format(accounting_summary.get("debt_total", 0)).replace(",", " ") }} ₸
-                </strong>
-                <small>{{ accounting_summary.get("debt_count", 0) }} обязательств</small>
-            </div>
-        </article>
-
-        <article class="accounting-stat accounting-stat--green">
-            <div class="accounting-stat__icon">📄</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Документы</span>
-                <strong class="accounting-stat__value">{{ accounting_summary.get("documents_count", documents|length) }}</strong>
-                <small>В бухгалтерском архиве</small>
-            </div>
-        </article>
-    </div>
-
-    <div class="accounting-stats accounting-finance-stats">
-        <article class="accounting-stat accounting-stat--green">
-            <div class="accounting-stat__icon">ККМ</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Фискальные продажи</span>
-                <strong class="accounting-stat__value">{{ "{:,.0f}".format(accounting_summary.get("fiscal_sales", 0)).replace(",", " ") }} ₸</strong>
-                <small>По чекам reKassa</small>
-            </div>
-        </article>
-        <article class="accounting-stat accounting-stat--orange">
-            <div class="accounting-stat__icon">↩</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Фискальные возвраты</span>
-                <strong class="accounting-stat__value">{{ "{:,.0f}".format(accounting_summary.get("fiscal_refunds", 0)).replace(",", " ") }} ₸</strong>
-                <small>По чекам возврата</small>
-            </div>
-        </article>
-        <article class="accounting-stat accounting-stat--violet">
-            <div class="accounting-stat__icon">=</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Чистая выручка ККМ</span>
-                <strong class="accounting-stat__value">{{ "{:,.0f}".format(accounting_summary.get("fiscal_net", 0)).replace(",", " ") }} ₸</strong>
-                <small>Продажи − возвраты</small>
-            </div>
-        </article>
-        <article class="accounting-stat accounting-stat--cyan">
-            <div class="accounting-stat__icon">₸</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">К получению</span>
-                <strong class="accounting-stat__value">{{ "{:,.0f}".format(accounting_summary.get("receivables", 0)).replace(",", " ") }} ₸</strong>
-                <small>Не входит в кассовую выручку</small>
-            </div>
-        </article>
-    </div>
-
-    <div class="accounting-stats accounting-finance-stats">
-        <article class="accounting-stat accounting-stat--green">
-            <div class="accounting-stat__icon">＋</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Доходы</span>
-                <strong class="accounting-stat__value">
-                    {{ "{:,.0f}".format(accounting_summary.get("income_total", 0)).replace(",", " ") }} ₸
-                </strong>
-                <small>Автоматически из продаж</small>
-            </div>
-        </article>
-
-        <article class="accounting-stat accounting-stat--orange">
-            <div class="accounting-stat__icon">−</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Расходы</span>
-                <strong class="accounting-stat__value">
-                    {{ "{:,.0f}".format(accounting_summary.get("expense_total", 0)).replace(",", " ") }} ₸
-                </strong>
-                <small>Автоматически из расходов</small>
-            </div>
-        </article>
-
-        <article class="accounting-stat accounting-stat--orange">
-            <div class="accounting-stat__icon">↩</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Возвраты</span>
-                <strong class="accounting-stat__value">
-                    {{ "{:,.0f}".format(accounting_summary.get("refund_total", 0)).replace(",", " ") }} ₸
-                </strong>
-                <small>Возвраты по продажам</small>
-            </div>
-        </article>
-
-        <article class="accounting-stat accounting-stat--violet">
-            <div class="accounting-stat__icon">=</div>
-            <div class="accounting-stat__body">
-                <span class="accounting-stat__label">Денежный результат</span>
-                <strong class="accounting-stat__value">
-                    {{ "{:,.0f}".format(accounting_summary.get("balance", 0)).replace(",", " ") }} ₸
-                </strong>
-                <small>Доходы − расходы − возвраты</small>
-            </div>
-        </article>
-    </div>
-
-    <section class="accounting-section">
-        <div class="accounting-section__head">
+    <section class="accounting-section accounting-sales-ledger" id="salesDocumentsBlock">
+        <div class="accounting-section__head accounting-sales-ledger__head">
             <div>
-                <h2>Инструменты бухгалтера</h2>
-                <p>Основные формы и разделы бухгалтерского учёта</p>
+                <h2>Продажи и документы</h2>
+                <p>Одна продажа — одна запись. Чек или счёт и все связанные документы собраны внутри.</p>
             </div>
+
+            <label class="accounting-search accounting-sales-search">
+                <span>⌕</span>
+                <input id="accountingSaleSearch" type="search"
+                       placeholder="№ продажи, клиент, ИП или ТОО"
+                       oninput="filterAccountingSales()">
+            </label>
         </div>
 
-        <div class="accounting-tools">
-            <button class="accounting-tool accounting-tool--purple" type="button"
-                    onclick="openReportModal('910', 'Форма 910.00')">
-                <span class="accounting-tool__icon">910</span>
-                <span class="accounting-tool__content">
-                    <strong>Форма 910.00</strong>
-                    <small>Упрощённая декларация</small>
-                </span>
-                <span class="accounting-tool__arrow">›</span>
+        <div class="accounting-sales-switch" role="group" aria-label="Вид продаж">
+            <button class="accounting-sales-switch__btn is-active" type="button"
+                    data-accounting-sale-mode="receipt"
+                    onclick="switchAccountingSaleMode('receipt')">
+                <span>Чеки</span>
+                <b>{{ receipt_sales_count }}</b>
             </button>
-
-            <button class="accounting-tool accounting-tool--blue" type="button"
-                    onclick="openReportModal('200', 'Форма 200.00')">
-                <span class="accounting-tool__icon">200</span>
-                <span class="accounting-tool__content">
-                    <strong>Форма 200.00</strong>
-                    <small>ИПН и социальный налог</small>
-                </span>
-                <span class="accounting-tool__arrow">›</span>
-            </button>
-
-            <button class="accounting-tool accounting-tool--cyan" type="button"
-                    onclick="scrollToAccountingBlock('taxCalendarBlock')">
-                <span class="accounting-tool__icon">📅</span>
-                <span class="accounting-tool__content">
-                    <strong>Налоговый календарь</strong>
-                    <small>Сроки отчётности и платежей</small>
-                </span>
-                <span class="accounting-tool__arrow">›</span>
-            </button>
-
-            <button class="accounting-tool accounting-tool--orange" type="button"
-                    onclick="scrollToAccountingBlock('debtsBlock')">
-                <span class="accounting-tool__icon">₸</span>
-                <span class="accounting-tool__content">
-                    <strong>Задолженности</strong>
-                    <small>Контроль обязательств</small>
-                </span>
-                <span class="accounting-tool__arrow">›</span>
-            </button>
-
-            <button class="accounting-tool accounting-tool--green" type="button"
-                    onclick="scrollToAccountingBlock('documentsBlock')">
-                <span class="accounting-tool__icon">📁</span>
-                <span class="accounting-tool__content">
-                    <strong>Документы</strong>
-                    <small>Накладные, акты и счета</small>
-                </span>
-                <span class="accounting-tool__arrow">›</span>
-            </button>
-
-            <button class="accounting-tool accounting-tool--purple" type="button"
-                    onclick="scrollToAccountingBlock('taxesBlock')">
-                <span class="accounting-tool__icon">₸%</span>
-                <span class="accounting-tool__content">
-                    <strong>Налоги и зарплата</strong>
-                    <small>Расчёт ИП и работников</small>
-                </span>
-                <span class="accounting-tool__arrow">›</span>
-            </button>
-
-            <button class="accounting-tool accounting-tool--pink" type="button"
-                    onclick="setDocumentFilter('archive')">
-                <span class="accounting-tool__icon">🗄</span>
-                <span class="accounting-tool__content">
-                    <strong>Архив</strong>
-                    <small>Закрытые периоды и документы</small>
-                </span>
-                <span class="accounting-tool__arrow">›</span>
+            <button class="accounting-sales-switch__btn" type="button"
+                    data-accounting-sale-mode="invoice"
+                    onclick="switchAccountingSaleMode('invoice')">
+                <span>Счета на оплату</span>
+                <b>{{ invoice_sales_count }}</b>
             </button>
         </div>
+
+        {% if sale_groups %}
+        <div class="accounting-sales-table-wrap">
+            <table class="accounting-sales-table">
+                <thead>
+                    <tr>
+                        <th>Продажа</th>
+                        <th>Клиент</th>
+                        <th>Сумма</th>
+                        <th>Статус</th>
+                        <th>Документы</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sale_groups %}
+                    <tr class="accounting-sale-row"
+                        data-mode="{{ sale.bucket }}"
+                        data-search="{{ (sale.number ~ ' ' ~ sale.client_primary ~ ' ' ~ sale.client_secondary ~ ' ' ~ sale.payment_method)|lower }}">
+                        <td>
+                            <div class="accounting-sale-ident">
+                                <strong>№{{ sale.number }}</strong>
+                                <span>{{ sale.date }}{% if sale.time %} · {{ sale.time }}{% endif %}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="accounting-sale-client">
+                                <strong>{{ sale.client_primary }}</strong>
+                                {% if sale.client_secondary %}<span>{{ sale.client_secondary }}</span>{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="accounting-sale-amount">
+                                <strong>{{ "{:,.0f}".format(sale.amount).replace(",", " ") }} ₸</strong>
+                                <span>{{ sale.payment_method }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="accounting-sale-status accounting-sale-status--{{ sale.status }}">
+                                {{ sale.status_label }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="accounting-sale-actions">
+                                <a class="accounting-sale-main-btn" href="{{ sale.main_url }}" target="_blank" rel="noopener">
+                                    {{ sale.main_label }}
+                                </a>
+                                <button class="accounting-sale-docs-btn" type="button"
+                                        onclick="openAccountingSaleDocuments({{ sale.id }})">
+                                    Документы {{ sale.documents_count }}
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="accounting-sales-mobile">
+            {% for sale in sale_groups %}
+            <article class="accounting-sale-card accounting-sale-row"
+                     data-mode="{{ sale.bucket }}"
+                     data-search="{{ (sale.number ~ ' ' ~ sale.client_primary ~ ' ' ~ sale.client_secondary ~ ' ' ~ sale.payment_method)|lower }}">
+                <div class="accounting-sale-card__top">
+                    <div class="accounting-sale-ident">
+                        <strong>№{{ sale.number }}</strong>
+                        <span>{{ sale.date }}{% if sale.time %} · {{ sale.time }}{% endif %}</span>
+                    </div>
+                    <span class="accounting-sale-status accounting-sale-status--{{ sale.status }}">{{ sale.status_label }}</span>
+                </div>
+                <div class="accounting-sale-client">
+                    <strong>{{ sale.client_primary }}</strong>
+                    {% if sale.client_secondary %}<span>{{ sale.client_secondary }}</span>{% endif %}
+                </div>
+                <div class="accounting-sale-card__sum">
+                    <strong>{{ "{:,.0f}".format(sale.amount).replace(",", " ") }} ₸</strong>
+                    <span>{{ sale.payment_method }}</span>
+                </div>
+                <div class="accounting-sale-actions">
+                    <a class="accounting-sale-main-btn" href="{{ sale.main_url }}" target="_blank" rel="noopener">{{ sale.main_label }}</a>
+                    <button class="accounting-sale-docs-btn" type="button" onclick="openAccountingSaleDocuments({{ sale.id }})">Документы {{ sale.documents_count }}</button>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+
+        <div class="accounting-empty accounting-empty--hidden" id="accountingSalesEmpty">
+            <span>⌕</span>
+            <strong>Продажи не найдены</strong>
+            <p>Измените режим или поисковый запрос.</p>
+        </div>
+        {% else %}
+        <div class="accounting-empty">
+            <span>₸</span>
+            <strong>Продаж пока нет</strong>
+            <p>После продажи чек или счёт и связанные документы появятся здесь автоматически.</p>
+        </div>
+        {% endif %}
     </section>
 
+    <nav class="accounting-quick-nav" aria-label="Разделы бухгалтерии">
+        <button type="button" onclick="openReportModal('910', 'Форма 910.00')"><strong>910.00</strong><span>Декларация</span></button>
+        <button type="button" onclick="openReportModal('200', 'Форма 200.00')"><strong>200.00</strong><span>ИПН и соц. платежи</span></button>
+        <button type="button" onclick="scrollToAccountingBlock('taxesBlock')"><strong>Налоги</strong><span>Расчёт и зарплата</span></button>
+        <button type="button" onclick="scrollToAccountingBlock('taxCalendarBlock')"><strong>Календарь</strong><span>Сроки платежей</span></button>
+        <button type="button" onclick="scrollToAccountingBlock('debtsBlock')"><strong>Задолженности</strong><span>Обязательства</span></button>
+        <button type="button" onclick="scrollToAccountingBlock('documentsBlock')"><strong>Другие документы</strong><span>Загруженные файлы</span></button>
+    </nav>
 
     <section class="accounting-section" id="filingsBlock">
         <div class="accounting-section__head">
@@ -502,221 +436,52 @@
         </section>
     </div>
 
-    <section class="accounting-section" id="operationsBlock">
+    <section class="accounting-section accounting-other-documents" id="documentsBlock">
         <div class="accounting-section__head accounting-docs-head">
             <div>
-                <h2>Финансовые операции</h2>
-                <p>Продажи, расходы и возвраты синхронизируются автоматически</p>
-            </div>
-
-            <div class="accounting-doc-actions">
-                <label class="accounting-search">
-                    <span>⌕</span>
-                    <input id="accountingOperationSearch" type="search"
-                           placeholder="Поиск операций"
-                           oninput="filterAccountingOperations()">
-                </label>
-
-                <select id="accountingOperationFilter" onchange="filterAccountingOperations()">
-                    <option value="all">Все операции</option>
-                    <option value="income">Доходы</option>
-                    <option value="expense">Расходы</option>
-                    <option value="refund">Возвраты</option>
-                </select>
-            </div>
-        </div>
-
-        {% if operations %}
-        <div class="accounting-doc-table-wrap">
-            <table class="accounting-doc-table accounting-operations-table">
-                <thead>
-                    <tr>
-                        <th>Операция</th>
-                        <th>Тип</th>
-                        <th>Дата</th>
-                        <th>Оплата</th>
-                        <th>Сумма</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for operation in operations %}
-                    <tr class="accounting-operation-row"
-                        data-type="{{ operation.type }}"
-                        data-search="{{ (operation.title ~ ' ' ~ operation.counterparty ~ ' ' ~ operation.payment_method)|lower }}">
-                        <td>
-                            <div class="document-name">
-                                <span class="document-name__icon">
-                                    {% if operation.type == 'income' %}＋{% elif operation.type == 'expense' %}−{% else %}↩{% endif %}
-                                </span>
-                                <div>
-                                    <strong>{{ operation.title }}</strong>
-                                    <small>{{ operation.counterparty }}</small>
-                                </div>
-                            </div>
-                        </td>
-                        <td>
-                            <span class="status-badge operation-badge--{{ operation.type }}">
-                                {{ operation.type_label }}
-                            </span>
-                        </td>
-                        <td>{{ operation.date }}</td>
-                        <td>{{ operation.payment_method }}</td>
-                        <td>
-                            <strong class="operation-amount operation-amount--{{ operation.type }}">
-                                {% if operation.type == 'income' %}+{% else %}−{% endif %}
-                                {{ "{:,.0f}".format(operation.amount).replace(",", " ") }} ₸
-                            </strong>
-                        </td>
-                        <td>
-                            {% if operation.document_url %}
-                            <a class="operation-open-link" href="{{ operation.document_url }}" target="_blank">Открыть</a>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="accounting-mobile-documents">
-            {% for operation in operations %}
-            <article class="mobile-document-card accounting-operation-row"
-                     data-type="{{ operation.type }}"
-                     data-search="{{ (operation.title ~ ' ' ~ operation.counterparty ~ ' ' ~ operation.payment_method)|lower }}">
-                <div class="mobile-document-card__top">
-                    <div class="document-name">
-                        <span class="document-name__icon">
-                            {% if operation.type == 'income' %}＋{% elif operation.type == 'expense' %}−{% else %}↩{% endif %}
-                        </span>
-                        <div>
-                            <strong>{{ operation.title }}</strong>
-                            <small>{{ operation.counterparty }}</small>
-                        </div>
-                    </div>
-                    <span class="status-badge operation-badge--{{ operation.type }}">{{ operation.type_label }}</span>
-                </div>
-                <div class="mobile-document-card__info">
-                    <span><small>Дата</small>{{ operation.date }}</span>
-                    <span><small>Оплата</small>{{ operation.payment_method }}</span>
-                    <span><small>Сумма</small>{{ "{:,.0f}".format(operation.amount).replace(",", " ") }} ₸</span>
-                </div>
-                {% if operation.document_url %}
-                <div class="mobile-document-card__actions">
-                    <a href="{{ operation.document_url }}" target="_blank">Открыть документ</a>
-                </div>
-                {% endif %}
-            </article>
-            {% endfor %}
-        </div>
-
-        <div class="accounting-empty accounting-empty--hidden" id="accountingOperationsEmpty">
-            <span>⌕</span>
-            <strong>Операции не найдены</strong>
-            <p>Измените поиск или фильтр.</p>
-        </div>
-        {% else %}
-        <div class="accounting-empty">
-            <span>₸</span>
-            <strong>Финансовых операций пока нет</strong>
-            <p>Продажи, расходы и возвраты появятся здесь автоматически.</p>
-        </div>
-        {% endif %}
-    </section>
-
-    <section class="accounting-section" id="documentsBlock">
-        <div class="accounting-section__head accounting-docs-head">
-            <div>
-                <h2>Документы</h2>
-                <p>Бухгалтерские документы и прикреплённые файлы</p>
+                <h2>Другие документы</h2>
+                <p>Только документы, которые вы добавили вручную. Документы продаж находятся внутри самих продаж выше.</p>
             </div>
 
             <div class="accounting-doc-actions">
                 <label class="accounting-search">
                     <span>⌕</span>
                     <input id="accountingDocumentSearch" type="search"
-                           placeholder="Поиск документов"
+                           placeholder="Поиск файлов"
                            oninput="filterAccountingDocuments()">
                 </label>
-
                 <select id="accountingDocumentFilter" onchange="filterAccountingDocuments()">
-                    <option value="all">Все документы</option>
-                    <option value="invoice">Счета</option>
-                    <option value="act">Акты</option>
-                    <option value="waybill">Накладные</option>
-                    <option value="invoice_facture">Счета-фактуры</option>
+                    <option value="all">Все</option>
                     <option value="report">Отчётность</option>
+                    <option value="payment">Платёжные</option>
+                    <option value="other">Прочее</option>
                     <option value="archive">Архив</option>
                 </select>
-
-                <button class="accounting-primary-btn accounting-primary-btn--small"
-                        type="button" onclick="openAccountingModal('documentModal')">
-                    ＋ Добавить
-                </button>
+                <button class="accounting-primary-btn accounting-primary-btn--small" type="button" onclick="openAccountingModal('documentModal')">＋ Добавить</button>
             </div>
         </div>
 
         {% if documents %}
         <div class="accounting-doc-table-wrap">
             <table class="accounting-doc-table">
-                <thead>
-                    <tr>
-                        <th>Документ</th>
-                        <th>Тип</th>
-                        <th>Дата</th>
-                        <th>Сумма</th>
-                        <th>Статус</th>
-                        <th></th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Документ</th><th>Тип</th><th>Дата</th><th>Сумма</th><th>Статус</th><th></th></tr></thead>
                 <tbody id="accountingDocumentsBody">
                     {% for document in documents %}
                     <tr class="accounting-document-row"
                         data-type="{{ document.type|default('other') }}"
                         data-search="{{ (document.title ~ ' ' ~ document.number|default('') ~ ' ' ~ document.type_label|default(''))|lower }}">
-                        <td>
-                            <div class="document-name">
-                                <span class="document-name__icon">📄</span>
-                                <div>
-                                    <strong>{{ document.title }}</strong>
-                                    <small>{{ document.number|default('Без номера') }}</small>
-                                </div>
-                            </div>
-                        </td>
+                        <td><div class="document-name"><span class="document-name__icon">📄</span><div><strong>{{ document.title }}</strong><small>{{ document.number|default('Без номера') }}</small></div></div></td>
                         <td>{{ document.type_label|default('Документ') }}</td>
                         <td>{{ document.date }}</td>
+                        <td>{% if document.amount is not none %}{{ "{:,.0f}".format(document.amount).replace(",", " ") }} ₸{% else %}—{% endif %}</td>
+                        <td><span class="status-badge status-badge--{{ document.status|default('planned') }}">{{ document.status_label|default('Добавлен') }}</span></td>
                         <td>
-                            {% if document.amount is not none %}
-                                {{ "{:,.0f}".format(document.amount).replace(",", " ") }} ₸
-                            {% else %}
-                                —
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="status-badge status-badge--{{ document.status|default('planned') }}">
-                                {{ document.status_label|default('Добавлен') }}
-                            </span>
-                        </td>
-                        <td>
-                            <button class="document-menu-btn" type="button"
-                                    onclick="toggleDocumentMenu(this)">•••</button>
+                            <button class="document-menu-btn" type="button" onclick="toggleDocumentMenu(this)">•••</button>
                             <div class="document-menu">
-                                {% if document.file_url %}
-                                <a href="{{ document.file_url }}" target="_blank" rel="noopener">Открыть</a>
-                                {% endif %}
-                                <button type="button"
-                                        onclick="openEditDocumentModal({{ document.id|tojson }})">
-                                    Редактировать
-                                </button>
-                                <form method="post"
-                                      action="/accounting/documents/{{ document.id }}/archive">
-                                    <button type="submit">В архив</button>
-                                </form>
-                                <form method="post"
-                                      action="/accounting/documents/{{ document.id }}/delete"
-                                      onsubmit="return confirm('Удалить документ?')">
-                                    <button type="submit" class="danger-action">Удалить</button>
-                                </form>
+                                {% if document.file_url %}<a href="{{ document.file_url }}" target="_blank" rel="noopener">Открыть</a>{% endif %}
+                                <button type="button" onclick="openEditDocumentModal({{ document.id|tojson }})">Редактировать</button>
+                                <form method="post" action="/accounting/documents/{{ document.id }}/archive"><button type="submit">В архив</button></form>
+                                <form method="post" action="/accounting/documents/{{ document.id }}/delete" onsubmit="return confirm('Удалить документ?')"><button type="submit" class="danger-action">Удалить</button></form>
                             </div>
                         </td>
                     </tr>
@@ -724,63 +489,34 @@
                 </tbody>
             </table>
         </div>
-
-        <div class="accounting-mobile-documents" id="accountingMobileDocuments">
-            {% for document in documents %}
-            <article class="mobile-document-card accounting-document-row"
-                     data-type="{{ document.type|default('other') }}"
-                     data-search="{{ (document.title ~ ' ' ~ document.number|default('') ~ ' ' ~ document.type_label|default(''))|lower }}">
-                <div class="mobile-document-card__top">
-                    <div class="document-name">
-                        <span class="document-name__icon">📄</span>
-                        <div>
-                            <strong>{{ document.title }}</strong>
-                            <small>{{ document.number|default('Без номера') }}</small>
-                        </div>
-                    </div>
-                    <span class="status-badge status-badge--{{ document.status|default('planned') }}">
-                        {{ document.status_label|default('Добавлен') }}
-                    </span>
-                </div>
-                <div class="mobile-document-card__info">
-                    <span><small>Тип</small>{{ document.type_label|default('Документ') }}</span>
-                    <span><small>Дата</small>{{ document.date }}</span>
-                    <span><small>Сумма</small>
-                        {% if document.amount is not none %}
-                            {{ "{:,.0f}".format(document.amount).replace(",", " ") }} ₸
-                        {% else %}
-                            —
-                        {% endif %}
-                    </span>
-                </div>
-                <div class="mobile-document-card__actions">
-                    {% if document.file_url %}
-                    <a href="{{ document.file_url }}" target="_blank" rel="noopener">Открыть</a>
-                    {% endif %}
-                    <button type="button" onclick="openEditDocumentModal({{ document.id|tojson }})">
-                        Изменить
-                    </button>
-                </div>
-            </article>
-            {% endfor %}
-        </div>
-
-        <div class="accounting-empty accounting-empty--hidden" id="accountingFilteredEmpty">
-            <span>⌕</span>
-            <strong>Ничего не найдено</strong>
-            <p>Измените поисковый запрос или фильтр.</p>
-        </div>
+        <div class="accounting-empty accounting-empty--hidden" id="accountingFilteredEmpty"><span>⌕</span><strong>Ничего не найдено</strong><p>Измените поиск или фильтр.</p></div>
         {% else %}
-        <div class="accounting-empty">
+        <div class="accounting-empty accounting-empty--compact">
             <span>📁</span>
-            <strong>Документов пока нет</strong>
-            <p>Добавьте первый счёт, акт, накладную или налоговый документ.</p>
-            <button type="button" onclick="openAccountingModal('documentModal')">
-                Добавить документ
-            </button>
+            <strong>Дополнительных документов нет</strong>
+            <p>Чеки, счета, накладные, АВР, счета-фактуры и ЭСФ уже собраны внутри продаж.</p>
+            <button type="button" onclick="openAccountingModal('documentModal')">Добавить файл вручную</button>
         </div>
         {% endif %}
     </section>
+</div>
+
+<!-- Данные продаж для модалки документов -->
+<script type="application/json" id="accountingSalesData">{{ sale_groups|tojson }}</script>
+
+<!-- Документы продажи -->
+<div class="accounting-modal" id="saleDocumentsModal" aria-hidden="true">
+    <div class="accounting-modal__backdrop" onclick="closeAccountingModal('saleDocumentsModal')"></div>
+    <div class="accounting-modal__dialog accounting-modal__dialog--sale-docs" role="dialog" aria-modal="true">
+        <div class="accounting-modal__head">
+            <div>
+                <h3 id="saleDocumentsModalTitle">Документы продажи</h3>
+                <p id="saleDocumentsModalSubtitle"></p>
+            </div>
+            <button type="button" onclick="closeAccountingModal('saleDocumentsModal')">×</button>
+        </div>
+        <div class="accounting-modal__body accounting-sale-doc-center" id="saleDocumentsModalBody"></div>
+    </div>
 </div>
 
 <!-- Документ -->
