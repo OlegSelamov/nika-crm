@@ -42,6 +42,7 @@ from routes.whatsapp import whatsapp_bp
 from routes.mobile_api import mobile_api_bp
 from routes.esf import esf_bp
 from routes.bcc import bcc_bp
+from routes.school import school_bp
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
@@ -89,10 +90,12 @@ app.register_blueprint(whatsapp_bp)
 app.register_blueprint(mobile_api_bp)
 app.register_blueprint(esf_bp)
 app.register_blueprint(bcc_bp)
+app.register_blueprint(school_bp)
     
 # Какой URL относится к какому платному модулю.
 # Более длинные пути ставим выше коротких, чтобы проверка была точной.
 MODULE_PATHS = (
+    ("/school", "school"),
     ("/api/mobile/accounting", "accounting"),
     ("/api/mobile/expenses", "expenses"),
     ("/api/mobile/tasks", "tasks"),

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.school-page{padding:8px 4px 30px}.school-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}.school-head h1{margin:0;font-size:28px}.school-head p{margin:7px 0;color:#64748b}.school-tabs{display:flex;gap:8px;margin:16px 0}.school-tabs a{padding:10px 15px;border-radius:12px;background:#fff;color:#475569;text-decoration:none;font-weight:700}.school-tabs a.active{background:#312e81;color:#fff}.school-card{background:rgba(255,255,255,.93);border:1px solid #e5e7eb;border-radius:18px;padding:18px;box-shadow:0 10px 30px rgba(15,23,42,.07);margin-bottom:16px}.school-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.school-input{height:42px;border:1px solid #dbe1ea;border-radius:10px;padding:0 12px;min-width:150px;background:white}.school-btn{height:42px;border:0;border-radius:10px;padding:0 16px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;background:#eef2ff;color:#312e81}.school-btn.primary{background:#4f46e5;color:white}.school-btn.danger{background:#fee2e2;color:#b91c1c}.school-table-wrap{overflow:auto}.school-table{width:100%;border-collapse:collapse;min-width:780px}.school-table th,.school-table td{padding:12px 10px;border-bottom:1px solid #edf0f5;text-align:left}.school-table th{font-size:12px;color:#64748b;text-transform:uppercase}.notice{padding:11px 14px;border-radius:10px;margin-bottom:12px}.notice.ok{background:#dcfce7;color:#166534}.notice.err{background:#fee2e2;color:#991b1b}.leader-form{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px}.muted{color:#94a3b8;font-size:13px}@media(max-width:900px){.leader-form{grid-template-columns:1fr}.school-head{display:block}}
+</style>
+<div class="school-page">
+  <div class="school-head"><div><h1>🏫 Школа</h1><p>Классные руководители и ежедневный учёт питания</p></div></div>
+  <nav class="school-tabs"><a class="active" href="{{ url_for('school.leaders') }}">Классные руководители</a><a href="{{ url_for('school.meals') }}">Питание</a></nav>
+  {% if request.args.get('success') %}<div class="notice ok">{{ request.args.get('success') }}</div>{% endif %}
+  {% if request.args.get('error') %}<div class="notice err">{{ request.args.get('error') }}</div>{% endif %}
+  <section class="school-card">
+    <h3 id="formTitle">Добавить классного руководителя</h3>
+    <form class="leader-form" method="post" action="{{ url_for('school.save_leader') }}">
+      <input type="hidden" name="id" id="leaderId">
+      <input class="school-input" required name="full_name" id="leaderName" placeholder="ФИО">
+      <input class="school-input" name="class_name" id="leaderClass" list="classList" placeholder="Класс, например 5А">
+      <datalist id="classList">{% for item in classes %}<option value="{{ item.name }}">{% endfor %}</datalist>
+      <input class="school-input" name="room" id="leaderRoom" placeholder="Кабинет">
+      <input class="school-input" name="phone" id="leaderPhone" placeholder="Телефон">
+      <button class="school-btn primary">Сохранить</button>
+    </form>
+  </section>
+  <section class="school-card">
+    <div class="school-tools">
+      <form class="school-tools" method="get"><input class="school-input" name="q" value="{{ search }}" placeholder="Поиск по ФИО, классу, телефону"><button class="school-btn">Найти</button></form>
+      <form class="school-tools" method="post" action="{{ url_for('school.import_leaders') }}" enctype="multipart/form-data"><input class="school-input" type="file" name="file" accept=".docx,.xlsx" required><button class="school-btn">Загрузить Word / Excel</button></form>
+      <a class="school-btn" href="{{ url_for('school.export_leaders') }}">Выгрузить Excel</a>
+    </div>
+    <p class="muted">При повторной загрузке запись того же класса обновляется.</p>
+  </section>
+  <section class="school-card school-table-wrap">
+    <table class="school-table"><thead><tr><th>№</th><th>ФИО</th><th>Класс</th><th>Кабинет</th><th>Телефон</th><th></th></tr></thead><tbody>
+    {% for row in leaders %}<tr><td>{{ loop.index }}</td><td><b>{{ row.full_name }}</b></td><td>{{ row.class_name or '—' }}</td><td>{{ row.room or '—' }}</td><td>{{ row.phone or '—' }}</td><td><div class="school-tools"><button type="button" class="school-btn" onclick='editLeader({{ row|tojson }})'>Изменить</button><form method="post" action="{{ url_for('school.delete_leader', leader_id=row.id) }}" onsubmit="return confirm('Удалить руководителя?')"><button class="school-btn danger">Удалить</button></form></div></td></tr>{% else %}<tr><td colspan="6">Данных пока нет. Загрузите приложенный Word-файл.</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
+</div>
+<script>
+function editLeader(row){document.getElementById('leaderId').value=row.id;document.getElementById('leaderName').value=row.full_name||'';document.getElementById('leaderClass').value=row.class_name||'';document.getElementById('leaderRoom').value=row.room||'';document.getElementById('leaderPhone').value=row.phone||'';document.getElementById('formTitle').textContent='Изменить классного руководителя';window.scrollTo({top:0,behavior:'smooth'});}
+</script>
+{% endblock %}
