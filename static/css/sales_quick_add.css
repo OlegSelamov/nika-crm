@@ -1,0 +1,178 @@
+#addItemModal{
+    padding:18px;
+    backdrop-filter:blur(5px);
+    -webkit-backdrop-filter:blur(5px);
+}
+
+#addItemModal > div{
+    width:min(430px,100%) !important;
+    max-height:calc(100vh - 36px);
+    overflow:visible;
+    padding:22px !important;
+    border-radius:20px !important;
+    box-shadow:0 24px 70px rgba(15,23,42,.28);
+}
+
+#addItemModal input,
+#addItemModal select{
+    display:block;
+    width:100%;
+    min-height:44px;
+    margin:0 0 10px;
+    padding:10px 12px;
+    border:1px solid #dfe5ed;
+    border-radius:12px;
+    background:#fff;
+    color:#172033;
+    font-size:13px;
+}
+
+#addItemModal label{
+    display:block;
+    margin:10px 0 6px;
+    color:#687386;
+    font-size:11px;
+    font-weight:800;
+}
+
+#addItemModal > div > button:not(.add-item-close){
+    width:100%;
+    min-height:44px;
+    margin-top:8px;
+    border:0;
+    border-radius:12px;
+    background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    color:#fff;
+    font-size:13px;
+    font-weight:850;
+    cursor:pointer;
+    box-shadow:0 9px 22px rgba(99,102,241,.22);
+}
+
+#addItemModal > div > button:not(.add-item-close):disabled{
+    opacity:.6;
+    cursor:wait;
+}
+
+#addItemModal .add-item-close{
+    position:absolute;
+    top:12px;
+    right:12px;
+    z-index:5;
+}
+
+#addItemModal .category-wrapper{
+    position:relative;
+    z-index:30;
+}
+
+#addItemModal .category-dropdown{
+    position:absolute;
+    top:calc(100% - 8px);
+    left:0;
+    right:0;
+    z-index:100;
+    display:none;
+    max-height:220px;
+    overflow-y:auto;
+    padding:6px;
+    border:1px solid #e0e6ef;
+    border-radius:13px;
+    background:#fff;
+    box-shadow:0 16px 38px rgba(15,23,42,.18);
+}
+
+#addItemModal .category-dropdown.open{
+    display:block !important;
+}
+
+#addItemModal .quick-category-option{
+    width:100%;
+    min-height:40px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:8px 10px;
+    border:0;
+    border-radius:9px;
+    background:transparent;
+    color:#273147;
+    text-align:left;
+    cursor:pointer;
+}
+
+#addItemModal .quick-category-option:hover{
+    background:#f1efff;
+    color:#5648df;
+}
+
+#addItemModal .quick-category-option span{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:12px;
+    font-weight:750;
+}
+
+#addItemModal .quick-category-option small{
+    flex:0 0 auto;
+    padding:3px 6px;
+    border-radius:999px;
+    background:#f1f5f9;
+    color:#7c8798;
+    font-size:9px;
+    font-weight:800;
+}
+
+#addItemModal .quick-category-empty{
+    padding:12px;
+    color:#8b95a6;
+    font-size:11px;
+    text-align:center;
+}
+
+/* Старый sales.js может успеть нарисовать category-option до нового контроллера.
+   Не даём им разваливаться обычным текстом поверх модалки. */
+#addItemModal .category-dropdown > .category-option{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    min-height:40px;
+    padding:8px 10px;
+    border-radius:9px;
+    color:#273147;
+    cursor:pointer;
+}
+
+#addItemModal .category-dropdown > .category-option:hover{
+    background:#f1efff;
+}
+
+#addItemModal .category-dropdown > .category-option .markup{
+    margin-left:8px;
+    color:#7c8798;
+    font-size:9px;
+}
+
+@media(max-width:600px){
+    #addItemModal{
+        align-items:flex-end !important;
+        padding:0;
+    }
+    #addItemModal > div{
+        width:100% !important;
+        max-height:92vh;
+        overflow-y:auto;
+        border-radius:20px 20px 0 0 !important;
+        padding:20px 16px 24px !important;
+    }
+    #addItemModal .category-dropdown{
+        position:relative;
+        top:auto;
+        margin-top:-6px;
+        margin-bottom:10px;
+        box-shadow:none;
+    }
+}
