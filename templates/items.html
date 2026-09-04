@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/items.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/items.css') }}?v=20260904-3">
 {% endblock %}
 
 {% block content %}
@@ -589,9 +589,30 @@
     </div>
 </div>
 
+<div class="catalog-label-preview-modal" id="catalogLabelPreviewModal" aria-hidden="true">
+    <div class="catalog-label-preview-modal__backdrop" onclick="closeLabelPrintPreview()"></div>
+    <div class="catalog-label-preview-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="catalogLabelPreviewTitle">
+        <div class="nika-data-modal__head">
+            <div>
+                <span class="nika-data-modal__eyebrow">ПРЕДПРОСМОТР</span>
+                <h2 id="catalogLabelPreviewTitle">Этикетки перед печатью</h2>
+                <p id="catalogLabelPreviewSubtitle">Проверьте расположение и запустите печать.</p>
+            </div>
+            <button type="button" class="nika-data-modal__close" onclick="closeLabelPrintPreview()" aria-label="Закрыть">×</button>
+        </div>
+        <div class="catalog-label-preview-modal__body">
+            <iframe id="catalogLabelPreviewFrame" title="Предпросмотр этикеток"></iframe>
+        </div>
+        <div class="catalog-label-preview-modal__footer">
+            <button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeLabelPrintPreview()">Назад</button>
+            <button type="button" class="nika-data-btn nika-data-btn--primary" onclick="printLabelsFromPreview()">Печатать</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block page_js %}
 
-<script charset="UTF-8" src="{{ url_for('static', filename='js/items.js') }}"></script>
+<script charset="UTF-8" src="{{ url_for('static', filename='js/items.js') }}?v=20260904-2"></script>
 {% endblock %}

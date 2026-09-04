@@ -293,14 +293,14 @@ body.catalog-modal-open { overflow:hidden; }
 .catalog-label-select-all input,.catalog-label-check{width:17px;height:17px;accent-color:var(--cat-purple)}
 .catalog-label-count{margin-left:auto;color:var(--cat-purple);font-size:11px;font-weight:850}
 .catalog-label-list{min-height:220px;overflow-y:auto;padding:10px 20px}
-.catalog-label-row{display:grid;grid-template-columns:24px minmax(0,1fr) 110px 82px;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--cat-border)}
+.catalog-label-row{display:grid;grid-template-columns:24px minmax(0,1fr) 110px 112px;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--cat-border)}
 .catalog-label-row.is-missing{opacity:.62}
 .catalog-label-row__info{min-width:0;display:grid;gap:3px}
 .catalog-label-row__info b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .catalog-label-row__info small{color:var(--cat-muted);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:10px}
 .catalog-label-row>strong{text-align:right;font-size:12px}
-.catalog-label-quantity{display:grid;grid-template-columns:auto 46px;align-items:center;gap:5px;color:var(--cat-muted);font-size:9px}
-.catalog-label-quantity input{width:46px;min-height:34px;padding:0 5px;border:1px solid var(--cat-border);border-radius:8px;text-align:center;font:inherit}
+.catalog-label-quantity{display:grid;grid-template-columns:auto 62px;align-items:center;gap:7px;color:var(--cat-muted);font-size:11px;font-weight:800}
+.catalog-label-quantity input{width:62px;min-height:42px;padding:0 5px;border:1px solid #cfc8f3;border-radius:10px;color:var(--cat-text);background:#fff;text-align:center;font:inherit;font-size:16px;font-weight:900;line-height:1}
 .catalog-label-empty{min-height:220px;display:grid;place-items:center;color:var(--cat-muted);font-size:12px}
 .catalog-label-empty.is-error{color:var(--cat-red)}
 .catalog-label-note{min-height:18px;padding:0 20px;color:var(--cat-green);font-size:10px;font-weight:750}
@@ -325,6 +325,7 @@ body.catalog-label-modal-open{overflow:hidden}
     .catalog-label-row{grid-template-columns:22px minmax(0,1fr) 65px;gap:7px;padding:10px 3px}
     .catalog-label-row>strong{font-size:10px}
     .catalog-label-quantity{grid-column:2/-1;justify-content:end}
+    .catalog-label-quantity input{width:68px;min-height:44px;font-size:17px}
     .catalog-label-footer{display:grid;grid-template-columns:1fr 1fr;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
     .catalog-mobile-card__actions:has(.catalog-mobile-label-btn){grid-template-columns:repeat(3,minmax(0,1fr))}
     .catalog-barcode-generate{width:100%}
