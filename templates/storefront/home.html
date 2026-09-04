@@ -231,6 +231,43 @@
     .sf-category-chips{max-height:78px}
     .sf-category-toggle{padding:9px 10px}
 }
+
+/* Mobile MVP product catalogue */
+@media(max-width:620px){
+    .sf-wrap{padding:8px 12px 34px}
+    .sf-slider{margin-top:2px;border-radius:18px;box-shadow:0 8px 22px rgba(15,23,42,.07)}
+    .sf-category-filter-row{padding-top:10px;display:block}
+    .sf-category-filter-row .sf-chips,.sf-chips{gap:7px;padding-top:10px;flex-wrap:nowrap !important;overflow-x:auto !important;max-height:none !important}
+    .sf-category-toggle{display:none !important}
+    .sf-chip{padding:10px 15px;border-radius:14px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.05);font-size:10px}
+    .sf-chip.active{box-shadow:0 7px 16px color-mix(in srgb,var(--brand) 20%,transparent)}
+    .sf-section{margin-top:14px}
+    .sf-section-head{margin-bottom:8px}
+    .sf-section h2{font-size:18px}
+    .sf-meta{font-size:9px}
+    .sf-grid{gap:10px}
+    .sf-card.rounded,.sf-card.compact{border-radius:18px}
+    .sf-card{border-color:#e7e9ef;box-shadow:0 5px 18px rgba(15,23,42,.045)}
+    .sf-card:hover{transform:none;box-shadow:0 5px 18px rgba(15,23,42,.045)}
+    .sf-media{position:relative;aspect-ratio:1/1.05;background:#fff}
+    .sf-media img{object-fit:contain;padding:7px}
+    .sf-favorite{position:absolute;z-index:3;top:8px;right:8px;width:30px;height:30px;border:0;background:rgba(255,255,255,.9);border-radius:50%;color:#78849a;font-size:23px;line-height:1;display:grid;place-items:center;box-shadow:0 3px 10px rgba(15,23,42,.07)}
+    .sf-favorite.active{color:var(--brand)}
+    .sf-card-body{padding:8px 9px 10px;gap:5px}
+    .sf-cat{display:inline-flex;align-self:flex-start;padding:3px 6px;border-radius:7px;background:#f4f5f8;font-size:8px}
+    .sf-name{font-size:12px;line-height:1.28;min-height:31px}
+    .sf-price{font-size:18px;color:var(--brand-deep)}
+    .sf-stock{font-size:9px}
+    .sf-stock:not(.out):before{content:"●";margin-right:4px;color:#16a675}
+    .sf-card-actions{display:grid;grid-template-columns:minmax(74px,.8fr) minmax(0,1.35fr);gap:6px;margin-top:3px}
+    .sf-card-stepper.sf-card-stepper-always{display:grid !important;grid-template-columns:27px minmax(24px,1fr) 27px;border-radius:11px}
+    .sf-card-stepper button{width:27px;height:38px;background:#fff;font-size:15px}
+    .sf-card-stepper span{height:38px;font-size:10px}
+    .sf-card-add.sf-card-add-wide{width:100%;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:10px;padding:0 7px;white-space:nowrap}
+    .sf-card-add-wide svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .sf-more{min-height:40px}
+}
+
 </style>
 {% endblock %}
 
