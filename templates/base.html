@@ -150,6 +150,12 @@
 
         <div class="menu-section">
             <div class="menu-caption">Система</div>
+            {% if session.get("username") == "admin" %}
+            <a href="/admin/" class="{% if request.path == '/admin/' or request.path == '/admin' or request.path.startswith('/admin/') %}active-menu-item{% endif %}">
+                <img src="/static/icons/settings.png" class="menu-icon">
+                <span class="text">Админка</span>
+            </a>
+            {% endif %}
             {% if session.get("is_super_admin") %}
             <a href="/companies"><img src="/static/icons/company.png" class="menu-icon"><span class="text">Организации</span></a>
             {% endif %}
