@@ -1,7 +1,10 @@
 import os
 from dotenv import load_dotenv
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 env_file = os.getenv("NIKA_ENV_FILE", ".env")
+if not os.path.isabs(env_file):
+    env_file = os.path.join(BASE_DIR, env_file)
 load_dotenv(env_file, override=True)
 APP_MODE = os.getenv("APP_MODE", "test")
 
@@ -43,7 +46,6 @@ from routes.bcc import bcc_bp
 from routes.school import school_bp
 from datetime import timedelta
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"), static_folder=os.path.join(BASE_DIR, "static"))
 app.secret_key = os.getenv("SECRET_KEY", "nika_super_secret_key")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
@@ -145,6 +147,8 @@ def inject_storefront_workflow_assets(response):
             html = html.replace("</head>", '<link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-1">\n</head>', 1)
         if "storefront_workflow.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/storefront_workflow.js?v=20260904-1"></script>\n</body>', 1)
+        if "ai_error_patch.js" not in html and "</body>" in html:
+            html = html.replace("</body>", '<script src="/static/js/ai_error_patch.js?v=20260904-1"></script>\n</body>', 1)
         if request.path == "/sales" and "sales_hid_scanner.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/sales_hid_scanner.js?v=20260904-3"></script>\n</body>', 1)
         scanner_pages = {"/items", "/stock", "/stock/income", "/stock/writeoff", "/stock/movements", "/clients"}
