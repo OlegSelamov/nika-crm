@@ -420,3 +420,72 @@ body.sf-lock{overflow:hidden}
     }
     .sf-customer-types{grid-template-columns:1fr}
 }
+
+
+/* Modern mobile storefront navigation */
+@media(max-width:620px){
+    body{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+    .sf-mobile{
+        min-height:68px !important;
+        padding:5px 10px calc(5px + env(safe-area-inset-bottom)) !important;
+        gap:4px;
+        background:color-mix(in srgb,#fff 94%,var(--brand) 6%) !important;
+        border-top:1px solid color-mix(in srgb,var(--brand) 10%,#e5e7eb) !important;
+        box-shadow:0 -10px 30px rgba(15,23,42,.09) !important;
+    }
+    .sf-mobile .sf-mobile-item{
+        position:relative;
+        min-height:56px !important;
+        padding:5px 3px !important;
+        border-radius:15px !important;
+        color:#8b93a4 !important;
+        transition:background .18s ease,color .18s ease,transform .18s ease;
+        -webkit-tap-highlight-color:transparent;
+    }
+    .sf-mobile .sf-mobile-item:active{transform:scale(.96)}
+    .sf-mobile .sf-mobile-item.active{
+        color:var(--brand) !important;
+        background:var(--brand-soft) !important;
+    }
+    .sf-mobile .sf-mobile-item.active:after{
+        content:"";
+        position:absolute;
+        left:50%;bottom:3px;
+        width:20px;height:3px;
+        border-radius:999px;
+        transform:translateX(-50%);
+        background:var(--brand);
+    }
+    .sf-mobile .sf-mobile-icon{
+        width:25px;height:25px;min-height:25px !important;
+        display:grid;place-items:center;
+        position:relative;
+        font-size:0 !important;
+    }
+    .sf-mobile .sf-mobile-icon svg{
+        width:24px;height:24px;
+        fill:none;
+        stroke:currentColor;
+        stroke-width:1.9;
+        stroke-linecap:round;
+        stroke-linejoin:round;
+    }
+    .sf-mobile .sf-mobile-home .sf-mobile-icon svg path:first-child{
+        fill:color-mix(in srgb,currentColor 10%,transparent);
+    }
+    .sf-mobile .sf-mobile-item b{
+        font-size:10px !important;
+        font-weight:800 !important;
+        line-height:1 !important;
+    }
+    .sf-mobile .sf-mobile-icon i{
+        top:-6px !important;right:-10px !important;
+        min-width:18px !important;height:18px !important;
+        padding:0 4px !important;
+        border:2px solid #fff !important;
+        background:var(--brand) !important;
+        color:#fff !important;
+        font-size:8px !important;
+    }
+    .sf-mobile .sf-mobile-icon i[hidden]{display:none !important}
+}
