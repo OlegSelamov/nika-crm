@@ -8,6 +8,7 @@
     <link rel="apple-touch-icon" href="/static/img/logo-mini.png">
     <meta name="description" content="Nika Business — CRM система для продаж, клиентов и автоматизации бизнеса">
     <meta name="theme-color" content="#2d6cdf">
+    <link rel="preload" href="/static/img/crm-bg.jpg" as="image">
 
     <script>
         (function () {
@@ -20,6 +21,23 @@
     </script>
 
     <style>
+        /* Критический фон убирает белую вспышку между полными переходами. */
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            background-color: #f4f7fb;
+        }
+
+        /* Chromium/Electron: держим старый кадр до готовности новой страницы. */
+        @view-transition {
+            navigation: auto;
+        }
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+            animation-duration: 110ms;
+            animation-timing-function: ease-out;
+        }
+
         /* Не показываем sidebar в позиции 0 до мгновенного восстановления scrollTop. */
         html:not(.sidebar-scroll-restored) .sidebar { visibility: hidden; }
     </style>
@@ -149,7 +167,6 @@
     </div>
 
     <script>
-        /* Восстанавливаем внутреннюю прокрутку sidebar до того, как браузер его покажет. */
         (function () {
             try {
                 const sidebar = document.getElementById('sidebar');
