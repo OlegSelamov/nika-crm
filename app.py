@@ -110,6 +110,7 @@ MODULE_PATHS = (
     ("/api/mobile/expenses", "expenses"),
     ("/api/mobile/tasks", "tasks"),
     ("/api/mobile/cto", "cto"),
+    ("/storefront", "storefront"),
     ("/accounting", "accounting"),
     ("/analytics", "analytics"),
     ("/reports", "reports"),
