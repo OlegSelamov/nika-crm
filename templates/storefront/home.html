@@ -335,6 +335,7 @@
                  data-search="{{ (item.name or '')|lower }} {{ (item.category or '')|lower }} {{ (item.description or '')|lower }}">
 
             <div class="sf-media" data-open-product="{{ item.id }}">
+                <button class="sf-favorite" type="button" data-favorite="{{ item.id }}" aria-label="В избранное">♡</button>
                 {% if item.image %}
                     <img src="{{ item.image }}" alt="{{ item.name }}">
                 {% else %}
@@ -366,22 +367,20 @@
                 {% endif %}
 
                 <div class="sf-card-actions">
-                    <button class="sf-more" type="button" data-open-product="{{ item.id }}">
-                        Подробнее
-                    </button>
-
                     {% if item.quantity is none or item.quantity>0 %}
-                    <button class="sf-card-add"
-                            type="button"
-                            data-card-add="{{ item.id }}">
-                        +
-                    </button>
-
-                    <div class="sf-card-stepper" data-card-stepper>
+                    <div class="sf-card-stepper sf-card-stepper-always" data-card-stepper>
                         <button type="button" data-card-minus="{{ item.id }}">−</button>
-                        <span data-card-qty>0</span>
+                        <span data-card-qty>1</span>
                         <button type="button" data-card-plus="{{ item.id }}">+</button>
                     </div>
+                    <button class="sf-card-add sf-card-add-wide"
+                            type="button"
+                            data-card-add="{{ item.id }}">
+                        <svg viewBox="0 0 24 24"><path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L20.3 8H6.1"/><circle cx="9.5" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>
+                        <span>В корзину</span>
+                    </button>
+                    {% else %}
+                    <button class="sf-more" type="button" data-open-product="{{ item.id }}">Подробнее</button>
                     {% endif %}
                 </div>
             </div>
