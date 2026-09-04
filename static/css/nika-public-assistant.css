@@ -7,6 +7,8 @@
     position: fixed;
     right: 22px;
     bottom: 22px;
+    width: auto !important;
+    max-width: calc(100vw - 44px);
     z-index: 12001;
     display: flex;
     align-items: center;
@@ -319,9 +321,14 @@
     .nika-public-fab {
         right: 14px;
         bottom: 14px;
+        width: 54px !important;
+        min-width: 54px;
+        max-width: 54px;
+        height: 54px;
         min-height: 54px;
         padding: 6px;
         border-radius: 18px;
+        justify-content: center;
     }
 
     .nika-public-fab__copy {
