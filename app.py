@@ -8,6 +8,10 @@ if not os.path.isabs(env_file):
 load_dotenv(env_file, override=True)
 APP_MODE = os.getenv("APP_MODE", "test")
 
+# Explicitly apply early network setup. Python does not reliably auto-load the
+# project-local sitecustomize module under this Gunicorn/venv deployment.
+import sitecustomize  # noqa: F401, E402
+
 from flask import Flask, render_template, request, redirect, session, g, jsonify
 from routes.dashboard import dashboard_bp
 from routes.clients import clients_bp
