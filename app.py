@@ -208,6 +208,17 @@ def inject_storefront_workflow_assets(response):
                 1,
             )
 
+        # HID/USB/Bluetooth barcode scanners work as keyboards. Load a small
+        # helper only on the sales screen so a completed scan is sent directly
+        # to the existing handleBarcode() logic even when the scanner does not
+        # append Enter (some models append Tab or no suffix at all).
+        if request.path == "/sales" and "sales_hid_scanner.js" not in html and "</body>" in html:
+            html = html.replace(
+                "</body>",
+                '<script src="/static/js/sales_hid_scanner.js?v=20260904-1"></script>\n</body>',
+                1,
+            )
+
         response.set_data(html)
     except Exception as exc:
         print("STOREFRONT WORKFLOW ASSET INJECT ERROR:", exc)
