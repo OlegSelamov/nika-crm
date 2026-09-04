@@ -568,3 +568,43 @@ body.sf-lock{overflow:hidden}
         box-shadow:none !important;
     }
 }
+
+
+/* Nika-style vector navigation icons */
+@media(max-width:620px){
+  .sf-mobile-three .sf-mobile-item:not(.sf-mobile-cart) .sf-mobile-icon{
+    width:42px!important;height:42px!important;border-radius:14px;
+    background:linear-gradient(145deg,#fff,color-mix(in srgb,var(--brand) 7%,#fff));
+    box-shadow:0 6px 16px rgba(15,23,42,.08),inset 0 1px 0 rgba(255,255,255,.95);
+  }
+  .sf-mobile-three .sf-mobile-item:not(.sf-mobile-cart) .sf-mobile-icon svg{
+    width:26px!important;height:26px!important;
+    stroke:var(--brand)!important;stroke-width:2.15!important;
+    filter:drop-shadow(0 2px 3px color-mix(in srgb,var(--brand) 22%,transparent));
+  }
+  .sf-mobile-three .sf-mobile-cart .sf-mobile-icon{
+    width:62px!important;height:62px!important;border-radius:50%!important;
+    background:
+      radial-gradient(circle at 32% 24%,rgba(255,255,255,.28),transparent 28%),
+      linear-gradient(145deg,color-mix(in srgb,var(--brand) 72%,#22d3ee),var(--brand-dark))!important;
+    border:1px solid rgba(255,255,255,.5);
+    box-shadow:0 11px 25px color-mix(in srgb,var(--brand) 40%,transparent),inset 0 1px 1px rgba(255,255,255,.4)!important;
+  }
+  .sf-mobile-three .sf-mobile-cart .sf-mobile-icon svg{
+    width:32px!important;height:32px!important;stroke:#fff!important;stroke-width:2!important;
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,.12));
+  }
+  .sf-mobile-three .sf-mobile-cart .sf-mobile-icon i{
+    top:-5px!important;right:-7px!important;min-width:20px!important;height:20px!important;
+    background:#ff4055!important;border:2px solid #fff!important;font-size:9px!important;
+    box-shadow:0 4px 10px rgba(255,64,85,.3);
+  }
+  .sf-mobile-three [data-mobile-nav="favorites"].active .sf-mobile-icon{
+    background:linear-gradient(145deg,color-mix(in srgb,var(--brand) 75%,#22d3ee),var(--brand-dark));
+  }
+  .sf-mobile-three [data-mobile-nav="favorites"].active .sf-mobile-icon svg,
+  .sf-mobile-three [data-mobile-nav="profile"].active .sf-mobile-icon svg{stroke:#fff!important}
+  .sf-mobile-three [data-mobile-nav="profile"].active .sf-mobile-icon{
+    background:linear-gradient(145deg,color-mix(in srgb,var(--brand) 75%,#22d3ee),var(--brand-dark));
+  }
+}
