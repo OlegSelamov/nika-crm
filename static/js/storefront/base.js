@@ -783,7 +783,7 @@ function sfCustomerOpen(id){
 function sfAuthHtml(message='Войдите, чтобы видеть историю и сохранять данные'){
  return `<div class="sf-auth-card"><h3>Личный кабинет</h3><p>${message}</p>
  <div class="sf-auth-tabs"><button class="active" data-auth-mode="login">Войти</button><button data-auth-mode="register">Регистрация</button></div>
- <div id="sfAuthNameWrap" style="display:none"><input id="sfAuthName" placeholder="Ваше имя"></div>
+ <div class="sf-customer-error" id="sfAuthError"></div><div id="sfAuthNameWrap" style="display:none"><input id="sfAuthName" placeholder="Ваше имя"></div>
  <input id="sfAuthPhone" inputmode="tel" placeholder="Телефон">
  <input id="sfAuthPassword" type="password" placeholder="Пароль">
  <button class="sf-primary" id="sfAuthSubmit">Войти</button></div>`;
@@ -803,10 +803,15 @@ function sfBindAuth(){
    fd.set('password',document.getElementById('sfAuthPassword').value);
    if(sfAuthMode==='register')fd.set('name',document.getElementById('sfAuthName').value);
    try{
+    const err=document.getElementById('sfAuthError'); if(err){err.classList.remove('show');err.textContent=''}
     await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/customer/${sfAuthMode}`,{method:'POST',body:fd});
     sfToast(sfAuthMode==='register'?'Профиль создан':'Вход выполнен');
     await sfLoadProfile();
-   }catch(e){sfToast(e.message,true)}
+   }catch(e){
+    const err=document.getElementById('sfAuthError');
+    if(err){err.textContent=e.message;err.classList.add('show')}
+    sfToast(e.message,true)
+   }
  };
 }
 async function sfLoadProfile(){
