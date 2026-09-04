@@ -366,14 +366,77 @@ def customer_profile_data(slug):
             ORDER BY b.booking_date DESC,b.booking_time DESC LIMIT 30
         """, (store["company_id"], account["client_id"]))
         bookings = [dict(x) for x in cur.fetchall()]
-        for rows in (orders, bookings):
+
+        documents = []
+        cur.execute("SELECT to_regclass('public.accounting_documents') AS tbl")
+        if cur.fetchone().get("tbl"):
+            cur.execute("""
+                SELECT d.id,d.title,d.document_type,d.document_number,d.document_date,
+                       d.amount,d.status,d.file_url,d.source_id
+                FROM accounting_documents d
+                WHERE d.company_id=%s
+                  AND d.status='active'
+                  AND d.source_type='sale'
+                  AND d.source_id IN (
+                    SELECT s.id FROM sales s
+                    WHERE s.company_id=%s AND s.client_id=%s
+                  )
+                ORDER BY d.document_date DESC,d.id DESC
+                LIMIT 50
+            """, (store["company_id"], store["company_id"], account["client_id"]))
+            documents = [dict(x) for x in cur.fetchall()]
+
+        for rows in (orders, bookings, documents):
             for row in rows:
                 for k,v in list(row.items()):
                     if isinstance(v, (datetime, date)) or hasattr(v, "isoformat"):
                         row[k] = v.isoformat()
                     elif isinstance(v, Decimal):
                         row[k] = float(v)
-        return jsonify({"ok": True, "authenticated": True, "profile": account, "orders": orders, "bookings": bookings, "documents": []})
+
+        spent = sum(float(x.get("total_amount") or 0) for x in orders if x.get("order_status") not in ("cancelled","rejected"))
+        upcoming = sum(1 for x in bookings if (x.get("status") or "") not in ("cancelled","rejected","completed"))
+        stats = {
+            "orders": len(orders),
+            "spent": spent,
+            "bookings": len(bookings),
+            "upcoming": upcoming,
+            "documents": len(documents),
+        }
+        return jsonify({"ok": True, "authenticated": True, "profile": account, "orders": orders, "bookings": bookings, "documents": documents, "stats": stats})
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/order/<int:order_id>")
+def customer_order_detail(slug, order_id):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+    account = _current_store_customer(store)
+    if not account:
+        return jsonify({"ok": False, "error": "Войдите в профиль"}), 401
+    conn=get_db(); cur=conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id,total_amount,payment_status,order_status,delivery_method,address,comment,created_at
+            FROM online_orders
+            WHERE id=%s AND company_id=%s AND customer_id=%s
+        """,(order_id,store["company_id"],account["client_id"]))
+        order=cur.fetchone()
+        if not order:
+            return jsonify({"ok":False,"error":"Заказ не найден"}),404
+        cur.execute("""
+            SELECT item_id,name,quantity,price,total
+            FROM online_order_items WHERE order_id=%s ORDER BY id
+        """,(order_id,))
+        items=[dict(x) for x in cur.fetchall()]
+        order=dict(order)
+        for row in [order,*items]:
+            for k,v in list(row.items()):
+                if isinstance(v,(datetime,date)) or hasattr(v,"isoformat"): row[k]=v.isoformat()
+                elif isinstance(v,Decimal): row[k]=float(v)
+        return jsonify({"ok":True,"order":order,"items":items})
     finally:
         cur.close(); pool.putconn(conn)
 
