@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}{{ store.title or store.company_name }}{% endblock %}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/storefront/base.css', v='20260802-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/storefront/base.css', v='20260904-1') }}">
 {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -115,14 +115,13 @@
     </aside>
 </div>
 
-
 <!-- CHECKOUT MODAL -->
 <div id="sfCheckoutOverlay" class="sf-overlay">
     <section class="sf-checkout-modal">
         <div class="sf-checkout-head">
             <div>
                 <h3>Оформление заказа</h3>
-                <p>Осталось совсем немного</p>
+                <p>Заполните контактные данные и способ получения</p>
             </div>
             <button class="sf-cart-close" type="button" data-close-checkout>×</button>
         </div>
@@ -132,14 +131,49 @@
                 <div class="sf-step-number">1</div>
                 <div class="sf-step-content">
                     <h4>Контактные данные</h4>
+
+                    <div class="sf-customer-types">
+                        <label class="sf-customer-type active" data-customer-type-card="private">
+                            <input type="radio" name="sfCustomerType" value="private" checked>
+                            <b>Физическое лицо</b>
+                            <span>Заказ для себя</span>
+                        </label>
+                        <label class="sf-customer-type" data-customer-type-card="business">
+                            <input type="radio" name="sfCustomerType" value="business">
+                            <b>ИП / ТОО</b>
+                            <span>Заказ на организацию</span>
+                        </label>
+                    </div>
+
                     <div class="sf-form-grid">
                         <div class="sf-form-field">
-                            <label>Имя</label>
-                            <input id="sfCustomerName" autocomplete="name" placeholder="Ваше имя">
+                            <label id="sfCustomerNameLabel">ФИО</label>
+                            <input id="sfCustomerName" autocomplete="name" placeholder="Фамилия Имя Отчество">
                         </div>
                         <div class="sf-form-field">
                             <label>Телефон</label>
-                            <input id="sfCustomerPhone" autocomplete="tel" placeholder="+7 777 000 00 00">
+                            <input id="sfCustomerPhone" autocomplete="tel" inputmode="tel" placeholder="+7 777 000 00 00">
+                        </div>
+                        <div class="sf-form-field">
+                            <label>Email</label>
+                            <input id="sfCustomerEmail" type="email" autocomplete="email" placeholder="name@example.com">
+                        </div>
+                        <div class="sf-form-field">
+                            <label id="sfCustomerIinBinLabel">ИИН (необязательно)</label>
+                            <input id="sfCustomerIinBin" inputmode="numeric" maxlength="12" placeholder="12 цифр">
+                        </div>
+                    </div>
+
+                    <div id="sfBusinessFields" class="sf-business-fields" style="display:none">
+                        <div class="sf-form-grid">
+                            <div class="sf-form-field full">
+                                <label>Название ИП / ТОО</label>
+                                <input id="sfCustomerCompany" autocomplete="organization" placeholder="Например: ТОО Nika Business">
+                            </div>
+                            <div class="sf-form-field full">
+                                <label>Юридический адрес</label>
+                                <input id="sfCustomerLegalAddress" autocomplete="street-address" placeholder="Город, улица, дом">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -178,7 +212,7 @@
 
                     <div id="sfAddressField" class="sf-form-field full" style="margin-top:10px;display:none">
                         <label>Адрес доставки</label>
-                        <input id="sfCustomerAddress" autocomplete="street-address" placeholder="Улица, дом, квартира">
+                        <input id="sfCustomerAddress" autocomplete="shipping street-address" placeholder="Улица, дом, квартира">
                     </div>
                 </div>
             </div>
@@ -239,6 +273,6 @@
 
 <div id="sfToast" class="sf-toast"></div>
 
-<script src="{{ url_for('static', filename='js/storefront/base.js', v='20260802-1') }}"></script>
+<script src="{{ url_for('static', filename='js/storefront/base.js', v='20260904-1') }}"></script>
 </body>
 </html>
