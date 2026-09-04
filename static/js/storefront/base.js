@@ -418,12 +418,29 @@ function sfRefreshCheckoutTotal(){
         sfMoney(subtotal + deliveryPrice);
 }
 
+async function sfPrefillCheckout(){
+    try{
+        const data = await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/customer/profile-data`);
+        if(!data.authenticated) return;
+        const p=data.profile||{};
+        const set=(id,value)=>{const el=document.getElementById(id);if(el && value && !el.value)el.value=value};
+        const type=p.customer_type||'private';
+        const radio=document.querySelector(`input[name="sfCustomerType"][value="${type}"]`);
+        if(radio) radio.checked=true;
+        set('sfCustomerName',p.full_name); set('sfCustomerPhone',p.phone); set('sfCustomerEmail',p.email);
+        set('sfCustomerIinBin',p.iin_bin); set('sfCustomerCompany',p.company_name);
+        set('sfCustomerLegalAddress',p.legal_address); set('sfCustomerAddress',p.delivery_address);
+        sfRefreshCustomerTypeUI();
+    }catch(e){}
+}
+
 function sfOpenCheckout(){
     if(!sfState.cart.items.length){
         sfToast('Корзина пуста', true);
         return;
     }
 
+    sfPrefillCheckout();
     document.getElementById('sfCartOverlay').classList.remove('open');
     document.getElementById('sfCheckoutOverlay').classList.add('open');
     document.body.classList.add('sf-lock');
