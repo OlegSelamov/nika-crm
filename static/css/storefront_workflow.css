@@ -347,3 +347,33 @@ body:has(#sfBookingModal) .sidebar a[href="/storefront/bookings"]{
         min-width:0;
     }
 }
+
+
+/* Mobile order notification card: actions span the text column instead of
+   inheriting the desktop icon offset, which squeezed labels letter-by-letter. */
+@media(max-width:768px){
+    .notification-item:has(.sfw-notification-actions){
+        grid-template-columns:52px minmax(0,1fr) !important;
+    }
+    .notification-item:has(.sfw-notification-actions) .sfw-notification-actions{
+        grid-column:1 / -1 !important;
+        display:flex !important;
+        flex-wrap:wrap !important;
+        align-items:stretch !important;
+        gap:7px !important;
+        width:100% !important;
+        margin:10px 0 0 !important;
+        padding:0 !important;
+    }
+    .notification-item:has(.sfw-notification-actions) .sfw-notification-action{
+        flex:1 1 calc(33.333% - 7px) !important;
+        width:auto !important;
+        min-width:88px !important;
+        min-height:38px !important;
+        padding:7px 8px !important;
+        white-space:nowrap !important;
+        overflow-wrap:normal !important;
+        word-break:normal !important;
+        line-height:1.15 !important;
+    }
+}
