@@ -87,8 +87,10 @@ function sfRenderCart(){
     const body = document.getElementById('sfCartBody');
     const foot = document.getElementById('sfCartFoot');
     const count = document.getElementById('sfCartCount');
+    const mobileCount = document.getElementById('sfMobileCartCount');
 
     if(count) count.textContent = sfQty(sfState.cart.count);
+    if(mobileCount) mobileCount.textContent = sfQty(sfState.cart.count);
 
     if(!sfState.cart.items.length){
         body.innerHTML = `
@@ -351,6 +353,27 @@ function sfSelectedDelivery(){
     return document.querySelector('input[name="sfDeliveryMethod"]:checked')?.value || 'pickup';
 }
 
+function sfSelectedCustomerType(){
+    return document.querySelector('input[name="sfCustomerType"]:checked')?.value || 'private';
+}
+
+function sfRefreshCustomerTypeUI(){
+    const type = sfSelectedCustomerType();
+    const isBusiness = type === 'business';
+
+    document.querySelectorAll('[data-customer-type-card]').forEach(card=>{
+        card.classList.toggle('active', card.dataset.customerTypeCard === type);
+    });
+
+    const businessFields = document.getElementById('sfBusinessFields');
+    if(businessFields) businessFields.style.display = isBusiness ? '' : 'none';
+
+    const nameLabel = document.getElementById('sfCustomerNameLabel');
+    const iinLabel = document.getElementById('sfCustomerIinBinLabel');
+    if(nameLabel) nameLabel.textContent = isBusiness ? 'Контактное лицо' : 'ФИО';
+    if(iinLabel) iinLabel.textContent = isBusiness ? 'БИН / ИИН' : 'ИИН (необязательно)';
+}
+
 function sfRefreshDeliveryUI(){
     const method = sfSelectedDelivery();
 
@@ -396,6 +419,7 @@ function sfOpenCheckout(){
     document.getElementById('sfCartOverlay').classList.remove('open');
     document.getElementById('sfCheckoutOverlay').classList.add('open');
     document.body.classList.add('sf-lock');
+    sfRefreshCustomerTypeUI();
     sfRefreshDeliveryUI();
 
     setTimeout(()=>{
@@ -413,8 +437,13 @@ async function sfSubmitCheckout(){
     const method = sfSelectedDelivery();
 
     const fd = new FormData();
+    fd.set('customer_type', sfSelectedCustomerType());
     fd.set('customer_name', document.getElementById('sfCustomerName').value.trim());
     fd.set('phone', document.getElementById('sfCustomerPhone').value.trim());
+    fd.set('email', document.getElementById('sfCustomerEmail').value.trim());
+    fd.set('iin_bin', document.getElementById('sfCustomerIinBin').value.trim());
+    fd.set('company_name', document.getElementById('sfCustomerCompany').value.trim());
+    fd.set('legal_address', document.getElementById('sfCustomerLegalAddress').value.trim());
     fd.set('delivery_method', method);
     fd.set(
         'address',
@@ -464,6 +493,10 @@ function sfCloseSuccess(){
 
 document.querySelectorAll('input[name="sfDeliveryMethod"]').forEach(input=>{
     input.addEventListener('change', sfRefreshDeliveryUI);
+});
+
+document.querySelectorAll('input[name="sfCustomerType"]').forEach(input=>{
+    input.addEventListener('change', sfRefreshCustomerTypeUI);
 });
 
 document.getElementById('sfOpenCheckout')?.addEventListener('click', sfOpenCheckout);

@@ -6,6 +6,7 @@ from models import get_db, pool
 from utils.timezone import now_kz
 
 storefront_bp = Blueprint("storefront", __name__, url_prefix="/s")
+storefront_customer_schema_ready = False
 
 
 # Фактический остаток считается по движениям склада. Поле items.quantity
@@ -69,12 +70,47 @@ def _cart_count(company_id):
     return total
 
 
-def _ensure_customer(cur, company_id, name, phone, address=None):
+def _ensure_storefront_customer_schema():
+    global storefront_customer_schema_ready
+    if storefront_customer_schema_ready:
+        return
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            ALTER TABLE online_orders
+            ADD COLUMN IF NOT EXISTS customer_type TEXT DEFAULT 'private',
+            ADD COLUMN IF NOT EXISTS customer_iin_bin TEXT,
+            ADD COLUMN IF NOT EXISTS customer_company TEXT,
+            ADD COLUMN IF NOT EXISTS customer_email TEXT,
+            ADD COLUMN IF NOT EXISTS customer_legal_address TEXT
+        """)
+        conn.commit()
+        storefront_customer_schema_ready = True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def _ensure_customer(
+    cur,
+    company_id,
+    name,
+    phone,
+    address=None,
+    iin_bin=None,
+    company_name=None,
+):
     cur.execute("""
         SELECT id
         FROM clients
         WHERE company_id = %s
-          AND phone = %s
+          AND RIGHT(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 10)
+              = RIGHT(regexp_replace(%s, '[^0-9]', '', 'g'), 10)
           AND COALESCE(is_deleted, FALSE) = FALSE
         ORDER BY id DESC
         LIMIT 1
@@ -85,19 +121,27 @@ def _ensure_customer(cur, company_id, name, phone, address=None):
         cur.execute("""
             UPDATE clients
             SET full_name = COALESCE(NULLIF(%s, ''), full_name),
-                address = COALESCE(NULLIF(%s, ''), address)
+                phone = COALESCE(NULLIF(%s, ''), phone),
+                address = COALESCE(NULLIF(%s, ''), address),
+                iin = COALESCE(NULLIF(%s, ''), iin),
+                company_name = COALESCE(NULLIF(%s, ''), company_name)
             WHERE id = %s
-        """, (name, address or "", row["id"]))
+        """, (
+            name, phone, address or "", iin_bin or "", company_name or "", row["id"]
+        ))
         return row["id"]
 
     cur.execute("""
         INSERT INTO clients (
-            company_id, full_name, phone, address, status, category,
+            company_id, full_name, phone, address, iin, company_name, status, category,
             created_at, is_deleted
         )
-        VALUES (%s, %s, %s, %s, 'Новый', 'Онлайн', %s, FALSE)
+        VALUES (%s, %s, %s, %s, %s, %s, 'Новый', 'Онлайн', %s, FALSE)
         RETURNING id
-    """, (company_id, name, phone, address or None, now_kz()))
+    """, (
+        company_id, name, phone, address or None, iin_bin or None,
+        company_name or None, now_kz()
+    ))
     return cur.fetchone()["id"]
 
 
@@ -560,6 +604,11 @@ def checkout_ajax(slug):
 
     name = (request.form.get("customer_name") or "").strip()
     phone = (request.form.get("phone") or "").strip()
+    customer_type = (request.form.get("customer_type") or "private").strip()
+    email = (request.form.get("email") or "").strip()
+    iin_bin = re.sub(r"\D", "", request.form.get("iin_bin") or "")
+    company_name = (request.form.get("company_name") or "").strip()
+    legal_address = (request.form.get("legal_address") or "").strip()
     address = (request.form.get("address") or "").strip()
     method = (request.form.get("delivery_method") or "pickup").strip()
     comment = (request.form.get("comment") or "").strip()
@@ -570,6 +619,25 @@ def checkout_ajax(slug):
     normalized_phone = re.sub(r"[^\d+]", "", phone)
     if len(re.sub(r"\D", "", normalized_phone)) < 10:
         return jsonify({"ok": False, "error": "Укажите корректный телефон"}), 400
+
+    if customer_type not in {"private", "business"}:
+        customer_type = "private"
+
+    if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        return jsonify({"ok": False, "error": "Укажите корректный email"}), 400
+
+    if iin_bin and len(iin_bin) != 12:
+        return jsonify({"ok": False, "error": "ИИН или БИН должен состоять из 12 цифр"}), 400
+
+    if customer_type == "business":
+        if len(company_name) < 2:
+            return jsonify({"ok": False, "error": "Укажите название ИП или ТОО"}), 400
+        if len(iin_bin) != 12:
+            return jsonify({"ok": False, "error": "Укажите БИН или ИИН из 12 цифр"}), 400
+        if len(legal_address) < 5:
+            return jsonify({"ok": False, "error": "Укажите юридический адрес"}), 400
+
+    _ensure_storefront_customer_schema()
 
     if method == "delivery":
         if not store.get("delivery_enabled"):
@@ -634,18 +702,22 @@ def checkout_ajax(slug):
             store["company_id"],
             name,
             phone,
-            address if method == "delivery" else None,
+            legal_address or (address if method == "delivery" else None),
+            iin_bin,
+            company_name if customer_type == "business" else None,
         )
 
         cur.execute("""
             INSERT INTO online_orders (
                 company_id, storefront_id, customer_id,
                 customer_name, phone, address,
+                customer_type, customer_iin_bin, customer_company,
+                customer_email, customer_legal_address,
                 delivery_method, comment, total_amount,
                 payment_status, order_status, source, created_at
             )
             VALUES (
-                %s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                 'unpaid','new','storefront',%s
             )
             RETURNING id, created_at
@@ -656,6 +728,11 @@ def checkout_ajax(slug):
             name,
             phone,
             address or None if method == "delivery" else None,
+            customer_type,
+            iin_bin or None,
+            company_name or None if customer_type == "business" else None,
+            email or None,
+            legal_address or None,
             method,
             comment or None,
             total,
@@ -690,6 +767,11 @@ def checkout_ajax(slug):
                 "id": order_id,
                 "customer_name": name,
                 "phone": phone,
+                "customer_type": customer_type,
+                "iin_bin": iin_bin,
+                "company_name": company_name if customer_type == "business" else "",
+                "email": email,
+                "legal_address": legal_address,
                 "delivery_method": method,
                 "address": address if method == "delivery" else "",
                 "subtotal": float(subtotal),
