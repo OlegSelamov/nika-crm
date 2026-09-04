@@ -130,13 +130,47 @@ def _page_context_instruction(raw_path):
 
 
 AI_TTS_INSTRUCTIONS = """
-Speak in Russian with a warm, confident adult female voice.
-Sound like Nika, a thoughtful personal business assistant speaking directly to one person.
-Use a calm, unhurried conversational pace, with natural pauses between ideas.
-Be expressive and friendly, but restrained and professional. Never sound like an announcer,
-a call-center script, a robot, or an advertisement. Clearly articulate names, numbers and amounts.
-Slightly emphasize the most useful result. Do not rush lists. Keep the delivery natural and human-like.
+Use a warm, confident adult female voice for Nika, a personal business assistant.
+Speak at a natural everyday conversational pace. Keep pauses between sentences short and fluid;
+do not insert dramatic pauses, do not stretch sentence endings, and do not slow down lists.
+Sound friendly, clear and professional, never like an announcer, call-center script, robot or advertisement.
+Keep pitch, timbre and speaking style consistent throughout the whole response.
+Clearly articulate names, numbers and amounts without over-emphasizing them.
 """.strip()
+
+
+def _tts_instructions_for_text(text):
+    """Choose native pronunciation for the dominant language of the spoken text."""
+    value = str(text or "")
+    lower = value.lower()
+    kazakh_letters = set("әғқңөұүһі")
+    has_kazakh = any(ch in kazakh_letters for ch in lower)
+    has_cyrillic = bool(re.search(r"[а-яё]", lower))
+    has_latin = bool(re.search(r"[a-z]", lower))
+
+    if has_kazakh:
+        language = (
+            "Speak in natural native Kazakh with standard Kazakhstan pronunciation. "
+            "Use a clean Kazakh accent with no Russian, American or other foreign accent. "
+            "Pronounce Kazakh-specific letters and endings clearly and naturally."
+        )
+    elif has_cyrillic:
+        language = (
+            "Speak in natural native Russian with a neutral contemporary Russian pronunciation. "
+            "Use a clean Russian accent with no American, English or other foreign accent. "
+            "Do not anglicize Russian vowels, consonants, names or sentence melody."
+        )
+    elif has_latin:
+        language = (
+            "Speak in natural native English with a neutral international English pronunciation. "
+            "Do not add a Russian or Kazakh accent."
+        )
+    else:
+        language = (
+            "Use the natural native pronunciation appropriate to the language of the text."
+        )
+
+    return f"{language}\n{AI_TTS_INSTRUCTIONS}"
 
 
 # Переходы выполняются приложением, а не моделью. Так команда "открой продажи"
@@ -1935,9 +1969,9 @@ def ai_voice():
                 model=AI_TTS_MODEL,
                 voice=AI_TTS_VOICE,
                 input=text,
-                instructions=AI_TTS_INSTRUCTIONS,
+                instructions=_tts_instructions_for_text(text),
                 response_format="mp3",
-                speed=0.94,
+                speed=1.02,
             ) as audio_response:
                 for chunk in audio_response.iter_bytes(chunk_size=16384):
                     if chunk:
