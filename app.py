@@ -1,4 +1,5 @@
 import os
+import socket
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -8,9 +9,23 @@ if not os.path.isabs(env_file):
 load_dotenv(env_file, override=True)
 APP_MODE = os.getenv("APP_MODE", "test")
 
-# Explicitly apply early network setup. Python does not reliably auto-load the
-# project-local sitecustomize module under this Gunicorn/venv deployment.
-import sitecustomize  # noqa: F401, E402
+# The VPS has a broken IPv6 route to api.openai.com while IPv4 works normally.
+# Apply the workaround directly here before importing any route that creates
+# an OpenAI/httpx client. Only api.openai.com is affected.
+_original_getaddrinfo = socket.getaddrinfo
+
+def _openai_ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    try:
+        hostname = host.decode("ascii", "ignore") if isinstance(host, bytes) else str(host or "")
+    except Exception:
+        hostname = ""
+
+    if hostname.rstrip(".").lower() == "api.openai.com" and family in (0, socket.AF_UNSPEC):
+        family = socket.AF_INET
+
+    return _original_getaddrinfo(host, port, family, type, proto, flags)
+
+socket.getaddrinfo = _openai_ipv4_getaddrinfo
 
 from flask import Flask, render_template, request, redirect, session, g, jsonify
 from routes.dashboard import dashboard_bp
