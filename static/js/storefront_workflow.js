@@ -36,8 +36,8 @@
             return link;
         };
 
-        const orders = makeLink('/storefront/orders', '/static/icons/sales-history.png', 'Заказы');
-        const bookings = makeLink('/storefront/bookings', '/static/icons/calendar-date.png', 'Записи');
+        const orders = makeLink('/storefront/orders', '/static/icons/orders.svg', 'Заказы');
+        const bookings = makeLink('/storefront/bookings', '/static/icons/bookings.svg', 'Записи');
 
         storefrontLink.insertAdjacentElement('afterend', bookings);
         storefrontLink.insertAdjacentElement('afterend', orders);
