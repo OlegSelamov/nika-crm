@@ -614,11 +614,17 @@
     <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
 </audio>
 
+{% if imported_order %}
+<script type="application/json" id="salesImportedStorefrontOrder">{{ imported_order|tojson }}</script>
+{% elif import_error %}
+<script type="application/json" id="salesImportedStorefrontOrderError">{{ import_error|tojson }}</script>
+{% endif %}
+
 {% endblock %}
 
 {% block page_js %}
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260826-4"></script>
-<script src="{{ url_for('static', filename='js/sales.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20260904-storefront-order-1') }}"></script>
 {% endblock %}

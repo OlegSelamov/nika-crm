@@ -188,6 +188,77 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт"
     document.getElementById("search").value = "";
 }
 
+function importStorefrontOrderToSales() {
+    const payloadNode = document.getElementById("salesImportedStorefrontOrder");
+    const errorNode = document.getElementById("salesImportedStorefrontOrderError");
+
+    if (errorNode) {
+        try {
+            alert(JSON.parse(errorNode.textContent || '"Не удалось загрузить онлайн-заказ"'));
+        } catch (error) {
+            alert("Не удалось загрузить онлайн-заказ");
+        }
+        window.history.replaceState({}, document.title, "/sales");
+        return false;
+    }
+
+    if (!payloadNode) return false;
+
+    let order;
+    try {
+        order = JSON.parse(payloadNode.textContent || "{}");
+    } catch (error) {
+        console.error("STOREFRONT ORDER CART ERROR:", error);
+        alert("Не удалось прочитать состав онлайн-заказа");
+        window.history.replaceState({}, document.title, "/sales");
+        return false;
+    }
+
+    const importedItems = Array.isArray(order.items) ? order.items : [];
+    if (!importedItems.length) {
+        alert("В заказе нет доступных позиций для переноса в продажу");
+        window.history.replaceState({}, document.title, "/sales");
+        return false;
+    }
+
+    cart = importedItems.map(item => ({
+        id: Number(item.id),
+        name: item.name || `Товар #${item.id}`,
+        price: Number(item.price || 0),
+        qty: Number(item.qty || 0),
+        unit: item.unit || "шт",
+        gtin: item.gtin || "",
+        ntin: item.ntin || ""
+    })).filter(item => item.id && item.qty > 0);
+
+    renderCart();
+    switchSalesTab("cart");
+
+    let clientWasMatched = false;
+    if (order.client && order.client.id) {
+        selectedClientData = order.client;
+        selectedClient = order.client.id;
+        const clientInput = document.getElementById("clientSearch");
+        if (clientInput) {
+            clientInput.value = order.client.company_name || order.client.full_name || order.customer_name || "Клиент заказа";
+        }
+        clientWasMatched = true;
+    }
+
+    window.history.replaceState({}, document.title, "/sales");
+
+    const warnings = [];
+    if (Array.isArray(order.missing_items) && order.missing_items.length) {
+        warnings.push(`Не перенесены удалённые позиции: ${order.missing_items.join(", ")}`);
+    }
+    const message = `Заказ #${order.id} добавлен в корзину.` +
+        (clientWasMatched ? " Клиент найден по телефону." : " Проверьте клиента перед оплатой.") +
+        (warnings.length ? `\n\n${warnings.join("\n")}` : "");
+    window.setTimeout(() => alert(message), 80);
+
+    return clientWasMatched;
+}
+
 function formatQuantity(qty, unit) {
     const value = Number(qty || 0);
     const formatted = value.toLocaleString("ru-RU", { maximumFractionDigits: 3 });
@@ -1782,7 +1853,8 @@ window.addEventListener("load", function () {
 window.addEventListener("load", () => {
 
     loadItems();
-    selectDefaultPrivateClient();
+    const importedClientMatched = importStorefrontOrderToSales();
+    if (!importedClientMatched && !selectedClient) selectDefaultPrivateClient();
 
 });
 

@@ -57,7 +57,98 @@ def sales():
     # История подгружается порциями через /api/sales/history только после
     # открытия вкладки и конкретной смены. Не читаем всю таблицу продаж при
     # каждом открытии кассы — это заметно ускоряет страницу на больших базах.
-    return render_template("sales.html")
+    imported_order = None
+    import_error = None
+    order_id = request.args.get("storefront_order", type=int)
+    company_id = session.get("company_id")
+
+    if order_id and company_id:
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT id, customer_name, phone, delivery_method,
+                       total_amount, order_status
+                FROM online_orders
+                WHERE id = %s AND company_id = %s
+                LIMIT 1
+            """, (order_id, company_id))
+            order = cur.fetchone()
+
+            if not order:
+                import_error = "Онлайн-заказ не найден"
+            elif (order.get("order_status") or "") == "cancelled":
+                import_error = "Отменённый заказ нельзя перенести в продажу"
+            else:
+                cur.execute("""
+                    SELECT
+                        oi.item_id,
+                        oi.name,
+                        oi.quantity,
+                        oi.price,
+                        i.id AS catalog_item_id,
+                        COALESCE(i.unit, 'шт') AS unit,
+                        COALESCE(i.gtin, '') AS gtin,
+                        COALESCE(i.ntin, '') AS ntin
+                    FROM online_order_items oi
+                    LEFT JOIN items i
+                      ON i.id = oi.item_id
+                     AND i.company_id = %s
+                    WHERE oi.order_id = %s
+                    ORDER BY oi.id
+                """, (company_id, order_id))
+                order_items = cur.fetchall()
+
+                valid_items = [item for item in order_items if item.get("catalog_item_id")]
+                missing_items = [item.get("name") or "Удалённая позиция" for item in order_items if not item.get("catalog_item_id")]
+
+                matched_client = None
+                phone = (order.get("phone") or "").strip()
+                if phone:
+                    cur.execute("""
+                        SELECT id, full_name, phone, iin, company_name, address
+                        FROM clients
+                        WHERE company_id = %s
+                          AND COALESCE(is_deleted, FALSE) = FALSE
+                          AND RIGHT(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 10)
+                              = RIGHT(regexp_replace(%s, '[^0-9]', '', 'g'), 10)
+                        ORDER BY id DESC
+                        LIMIT 1
+                    """, (company_id, phone))
+                    matched_client = cur.fetchone()
+
+                imported_order = {
+                    "id": order["id"],
+                    "customer_name": order.get("customer_name") or "",
+                    "phone": phone,
+                    "total_amount": float(order.get("total_amount") or 0),
+                    "items": [
+                        {
+                            "id": item["catalog_item_id"],
+                            "name": item.get("name") or f"Товар #{item['catalog_item_id']}",
+                            "qty": float(item.get("quantity") or 0),
+                            "price": float(item.get("price") or 0),
+                            "unit": item.get("unit") or "шт",
+                            "gtin": item.get("gtin") or "",
+                            "ntin": item.get("ntin") or "",
+                        }
+                        for item in valid_items
+                    ],
+                    "missing_items": missing_items,
+                    "client": dict(matched_client) if matched_client else None,
+                }
+        except Exception as exc:
+            print("STOREFRONT ORDER IMPORT ERROR:", exc)
+            import_error = "Не удалось загрузить онлайн-заказ"
+        finally:
+            cur.close()
+            pool.putconn(conn)
+
+    return render_template(
+        "sales.html",
+        imported_order=imported_order,
+        import_error=import_error,
+    )
 
 
 @sales_bp.route("/sales/add", methods=["POST"])
