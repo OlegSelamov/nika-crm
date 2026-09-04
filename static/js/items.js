@@ -27,10 +27,14 @@
     }
 
     document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') {
-            closeItemModal();
-            closeLabelManager();
+        if (event.key !== 'Escape') return;
+        var preview = document.getElementById('catalogLabelPreviewModal');
+        if (preview && preview.classList.contains('is-open')) {
+            closeLabelPrintPreview();
+            return;
         }
+        closeItemModal();
+        closeLabelManager();
     });
 })();
 
@@ -38,6 +42,7 @@ document.addEventListener('DOMContentLoaded', function () {
     mountItemModalToBody();
     mountCategoryManagerToBody();
     mountLabelManagerToBody();
+    mountLabelPreviewToBody();
     filterItemCategoryOptions('product');
 
     document.addEventListener('keydown', function (event) {
@@ -1551,6 +1556,60 @@ function selectedLabelItems() {
     return selected;
 }
 
+function buildLabelPrintDocument(items, format) {
+    var size = format === '50x30' ? { width: 50, height: 30 } : { width: 58, height: 40 };
+    var a4 = format === 'a4';
+    var labels = items.map(function (item) {
+        return '<article class="label"><div class="label-name">' + escapeCatalogHtml(item.name) + '</div>' +
+            '<div class="label-price">' + formatCatalogPrice(item.retail_price) + '</div>' +
+            barcodeSvg(item.barcode) + '<div class="label-code">' + escapeCatalogHtml(item.barcode) + '</div></article>';
+    }).join('');
+
+    var totalHeight = Math.max(size.height, size.height * items.length);
+    var pageRule = a4
+        ? '@page{size:A4 portrait;margin:8mm}'
+        : '@page{size:' + size.width + 'mm ' + totalHeight + 'mm;margin:0}';
+    var sheetRule = a4
+        ? '.sheet{display:grid;grid-template-columns:repeat(3,58mm);gap:3mm;align-content:start}.label{width:58mm;height:40mm;break-inside:avoid}'
+        : '.sheet{width:' + size.width + 'mm;display:flex;flex-direction:column}.label{flex:0 0 ' + size.height + 'mm;width:' + size.width + 'mm;height:' + size.height + 'mm}';
+
+    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Предпросмотр этикеток</title><style>' +
+        pageRule + '*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:Arial,sans-serif;color:#000}' + sheetRule +
+        '.label{display:grid;grid-template-rows:auto auto 1fr auto;align-items:center;padding:2.2mm;overflow:hidden;background:#fff;text-align:center}' +
+        '.label-name{min-height:4.5mm;font-size:9pt;font-weight:700;line-height:1.05;overflow:hidden}.label-price{font-size:13pt;font-weight:900;line-height:1.05}' +
+        '.label-barcode{width:100%;height:16mm;display:block;shape-rendering:crispEdges}.label-code{font-size:8pt;letter-spacing:1.2px;line-height:1}.barcode-unavailable{font-size:7pt}' +
+        '@media screen{html,body{min-height:100%;background:#e8e9ef}.sheet{margin:14px auto;background:#fff;box-shadow:0 8px 28px rgba(20,20,40,.18)}.label{outline:1px dashed #bbb}}' +
+        '@media print{html,body{width:' + (a4 ? 'auto' : size.width + 'mm') + ';background:#fff}.sheet{margin:0;box-shadow:none}.label{outline:0}}' +
+        '</style></head><body><main class="sheet">' + labels + '</main></body></html>';
+}
+
+function mountLabelPreviewToBody() {
+    var modal = document.getElementById('catalogLabelPreviewModal');
+    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+    return modal;
+}
+
+function closeLabelPrintPreview() {
+    var modal = document.getElementById('catalogLabelPreviewModal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    var frame = document.getElementById('catalogLabelPreviewFrame');
+    if (frame) frame.srcdoc = '';
+}
+
+function printLabelsFromPreview() {
+    var frame = document.getElementById('catalogLabelPreviewFrame');
+    if (!frame || !frame.contentWindow) return;
+    try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+    } catch (error) {
+        console.error('LABEL PRINT ERROR', error);
+        alert('Не удалось открыть печать этикеток');
+    }
+}
+
 function printSelectedLabels() {
     var items = selectedLabelItems();
     if (!items.length) {
@@ -1565,32 +1624,15 @@ function printSelectedLabels() {
 
     var formatSelect = document.getElementById('catalogLabelFormat');
     var format = formatSelect ? formatSelect.value : '58x40';
-    var size = format === '50x30' ? { width: 50, height: 30 } : { width: 58, height: 40 };
-    var a4 = format === 'a4';
-    var labels = items.map(function (item) {
-        return '<article class="label"><div class="label-name">' + escapeCatalogHtml(item.name) + '</div>' +
-            '<div class="label-price">' + formatCatalogPrice(item.retail_price) + '</div>' +
-            barcodeSvg(item.barcode) + '<div class="label-code">' + escapeCatalogHtml(item.barcode) + '</div></article>';
-    }).join('');
-
-    var printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (!printWindow) {
-        alert('Браузер заблокировал окно печати. Разрешите всплывающие окна для сайта.');
-        return;
+    var modal = mountLabelPreviewToBody();
+    var frame = document.getElementById('catalogLabelPreviewFrame');
+    var subtitle = document.getElementById('catalogLabelPreviewSubtitle');
+    if (!modal || !frame) return;
+    frame.srcdoc = buildLabelPrintDocument(items, format);
+    if (subtitle) {
+        var formatLabel = format === 'a4' ? 'A4' : (format === '50x30' ? 'лента 50 × 30 мм' : 'лента 58 × 40 мм');
+        subtitle.textContent = items.length + ' этикеток · ' + formatLabel;
     }
-    var pageRule = a4 ? '@page{size:A4 portrait;margin:8mm}' : '@page{size:' + size.width + 'mm ' + size.height + 'mm;margin:0}';
-    var sheetRule = a4
-        ? '.sheet{display:grid;grid-template-columns:repeat(3,58mm);gap:3mm;align-content:start}.label{width:58mm;height:40mm;break-inside:avoid}'
-        : '.sheet{display:block}.label{width:' + size.width + 'mm;height:' + size.height + 'mm;page-break-after:always}.label:last-child{page-break-after:auto}';
-
-    printWindow.document.open();
-    printWindow.document.write('<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Печать этикеток</title><style>' +
-        pageRule + '*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:Arial,sans-serif;color:#000}' + sheetRule +
-        '.label{display:grid;grid-template-rows:auto auto 1fr auto;align-items:center;padding:2.2mm;overflow:hidden;background:#fff;text-align:center}' +
-        '.label-name{min-height:4.5mm;font-size:9pt;font-weight:700;line-height:1.05;overflow:hidden}.label-price{font-size:13pt;font-weight:900;line-height:1.05}' +
-        '.label-barcode{width:100%;height:16mm;display:block;shape-rendering:crispEdges}.label-code{font-size:8pt;letter-spacing:1.2px;line-height:1}.barcode-unavailable{font-size:7pt}' +
-        '@media screen{body{padding:10px;background:#ddd}.sheet{margin:auto;background:#fff}.label{outline:1px dashed #bbb}}' +
-        '@media print{body{background:#fff}}' +
-        '</style></head><body><main class="sheet">' + labels + '</main><script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
-    printWindow.document.close();
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
 }
