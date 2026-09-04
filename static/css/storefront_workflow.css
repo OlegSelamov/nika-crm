@@ -253,6 +253,23 @@ body.sfw-modal-open{overflow:hidden}
 
 .sfw-order-error b{font-size:14px;color:#b42318}
 
+/* Active state for the standalone storefront work sections. */
+body:has(#sfOrdersBody) .sidebar a[href="/storefront/"],
+body:has(#sfBookingModal) .sidebar a[href="/storefront/"]{
+    background:transparent !important;
+    color:var(--text-light) !important;
+    box-shadow:none !important;
+    border-color:transparent !important;
+}
+
+body:has(#sfOrdersBody) .sidebar a[href="/storefront/orders"],
+body:has(#sfBookingModal) .sidebar a[href="/storefront/bookings"]{
+    background:linear-gradient(90deg,var(--accent-1),var(--accent-2)) !important;
+    color:#fff !important;
+    box-shadow:0 10px 22px rgba(99,102,241,.35) !important;
+    border-color:transparent !important;
+}
+
 @media(max-width:768px){
     .sfw-notification-actions{
         margin-left:0;
