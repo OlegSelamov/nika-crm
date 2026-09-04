@@ -1,7 +1,7 @@
 from datetime import datetime, date, timedelta
 import re
 from decimal import Decimal, InvalidOperation
-from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
+from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import get_db, pool
 from utils.timezone import now_kz
@@ -372,7 +372,7 @@ def customer_profile_data(slug):
         if cur.fetchone().get("tbl"):
             cur.execute("""
                 SELECT d.id,d.title,d.document_type,d.document_number,d.document_date,
-                       d.amount,d.status,d.file_url,d.source_id
+                       d.amount,d.status,d.file_url,d.source_id,d.stored_filename,d.original_filename
                 FROM accounting_documents d
                 WHERE d.company_id=%s
                   AND d.status='active'
@@ -385,6 +385,8 @@ def customer_profile_data(slug):
                 LIMIT 50
             """, (store["company_id"], store["company_id"], account["client_id"]))
             documents = [dict(x) for x in cur.fetchall()]
+            for document in documents:
+                document["customer_url"] = url_for("storefront.customer_document", slug=slug, document_id=document["id"])
 
         for rows in (orders, bookings, documents):
             for row in rows:
@@ -439,6 +441,263 @@ def customer_order_detail(slug, order_id):
         return jsonify({"ok":True,"order":order,"items":items})
     finally:
         cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/order/<int:order_id>/repeat", methods=["POST"])
+def customer_repeat_order(slug, order_id):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+    account = _current_store_customer(store)
+    if not account:
+        return jsonify({"ok": False, "error": "Войдите в профиль"}), 401
+
+    conn = get_db(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id FROM online_orders
+            WHERE id=%s AND company_id=%s AND customer_id=%s
+        """, (order_id, store["company_id"], account["client_id"]))
+        if not cur.fetchone():
+            return jsonify({"ok": False, "error": "Заказ не найден"}), 404
+
+        cur.execute("""
+            SELECT oi.item_id, oi.quantity, i.item_type,
+                   COALESCE(i.storefront_hidden,FALSE) AS hidden,
+                   COALESCE((
+                       SELECT SUM(CASE
+                           WHEN sm.movement_type IN ('income','refund') THEN sm.quantity
+                           WHEN sm.movement_type IN ('sale','writeoff') THEN -sm.quantity
+                           ELSE 0 END)
+                       FROM stock_movements sm
+                       WHERE sm.company_id=i.company_id AND sm.item_id=i.id
+                   ),0) AS stock
+            FROM online_order_items oi
+            JOIN items i ON i.id=oi.item_id
+            WHERE oi.order_id=%s AND i.company_id=%s
+        """, (order_id, store["company_id"]))
+        rows = cur.fetchall()
+        cart = dict(session.get(_cart_key(store["company_id"]), {}))
+        added = 0
+        skipped = 0
+        for row in rows:
+            if row.get("hidden"):
+                skipped += 1
+                continue
+            qty = Decimal(str(row.get("quantity") or 1))
+            if (row.get("item_type") or "product") != "service":
+                stock = Decimal(str(row.get("stock") or 0))
+                if stock <= 0:
+                    skipped += 1
+                    continue
+                qty = min(qty, stock)
+            if qty <= 0:
+                skipped += 1
+                continue
+            key = str(row["item_id"])
+            cart[key] = str(Decimal(str(cart.get(key, "0"))) + qty)
+            added += 1
+        session[_cart_key(store["company_id"])] = cart
+        session.modified = True
+        return jsonify({"ok": True, "added": added, "skipped": skipped, "cart": _cart_payload(store)})
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/booking/<int:booking_id>/cancel", methods=["POST"])
+def customer_cancel_booking(slug, booking_id):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+    account = _current_store_customer(store)
+    if not account:
+        return jsonify({"ok": False, "error": "Войдите в профиль"}), 401
+    conn=get_db(); cur=conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE bookings
+            SET status='cancelled', updated_at=%s
+            WHERE id=%s AND company_id=%s AND customer_id=%s
+              AND status NOT IN ('cancelled','completed','rejected')
+            RETURNING id
+        """,(now_kz(),booking_id,store["company_id"],account["client_id"]))
+        row=cur.fetchone()
+        if not row:
+            conn.rollback()
+            return jsonify({"ok":False,"error":"Эту запись уже нельзя отменить"}),409
+        conn.commit()
+        return jsonify({"ok":True})
+    except Exception:
+        conn.rollback(); raise
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/booking/<int:booking_id>/slots")
+def customer_booking_slots(slug, booking_id):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+    account = _current_store_customer(store)
+    if not account:
+        return jsonify({"ok": False, "error": "Войдите в профиль"}), 401
+    raw_date=(request.args.get("date") or date.today().isoformat()).strip()
+    try:
+        day=date.fromisoformat(raw_date)
+    except ValueError:
+        return jsonify({"ok":False,"error":"Некорректная дата"}),400
+    conn=get_db(); cur=conn.cursor()
+    try:
+        cur.execute("""
+            SELECT b.id,b.item_id,b.status,i.booking_duration_minutes
+            FROM bookings b JOIN items i ON i.id=b.item_id
+            WHERE b.id=%s AND b.company_id=%s AND b.customer_id=%s
+        """,(booking_id,store["company_id"],account["client_id"]))
+        booking=cur.fetchone()
+        if not booking:
+            return jsonify({"ok":False,"error":"Запись не найдена"}),404
+        service={"booking_duration_minutes": booking.get("booking_duration_minutes") or 60}
+        slots=_slots_for(store,service,day)
+        cur.execute("""
+            SELECT TO_CHAR(booking_time,'HH24:MI') AS t
+            FROM bookings
+            WHERE company_id=%s AND item_id=%s AND booking_date=%s
+              AND id<>%s AND status NOT IN ('cancelled','rejected')
+        """,(store["company_id"],booking["item_id"],day,booking_id))
+        busy={x["t"] for x in cur.fetchall()}
+        return jsonify({"ok":True,"date":day.isoformat(),"slots":[x for x in slots if x not in busy]})
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/booking/<int:booking_id>/reschedule", methods=["POST"])
+def customer_reschedule_booking(slug, booking_id):
+    store=get_store(slug)
+    if not store:
+        return jsonify({"ok":False,"error":"Витрина не найдена"}),404
+    account=_current_store_customer(store)
+    if not account:
+        return jsonify({"ok":False,"error":"Войдите в профиль"}),401
+    raw_date=(request.form.get("date") or "").strip()
+    raw_time=(request.form.get("time") or "").strip()
+    try:
+        day=date.fromisoformat(raw_date)
+    except ValueError:
+        return jsonify({"ok":False,"error":"Выберите дату"}),400
+    conn=get_db(); cur=conn.cursor()
+    try:
+        cur.execute("""
+            SELECT b.item_id,b.status,i.booking_duration_minutes
+            FROM bookings b JOIN items i ON i.id=b.item_id
+            WHERE b.id=%s AND b.company_id=%s AND b.customer_id=%s
+            FOR UPDATE
+        """,(booking_id,store["company_id"],account["client_id"]))
+        booking=cur.fetchone()
+        if not booking or booking.get("status") in ("cancelled","completed","rejected"):
+            return jsonify({"ok":False,"error":"Эту запись уже нельзя перенести"}),409
+        slots=_slots_for(store,{"booking_duration_minutes":booking.get("booking_duration_minutes") or 60},day)
+        cur.execute("""
+            SELECT TO_CHAR(booking_time,'HH24:MI') AS t FROM bookings
+            WHERE company_id=%s AND item_id=%s AND booking_date=%s AND id<>%s
+              AND status NOT IN ('cancelled','rejected')
+        """,(store["company_id"],booking["item_id"],day,booking_id))
+        busy={x["t"] for x in cur.fetchall()}
+        if raw_time not in [x for x in slots if x not in busy]:
+            return jsonify({"ok":False,"error":"Это время уже занято"}),409
+        cur.execute("""
+            UPDATE bookings SET booking_date=%s,booking_time=%s,updated_at=%s
+            WHERE id=%s
+        """,(day,raw_time,now_kz(),booking_id))
+        conn.commit()
+        return jsonify({"ok":True})
+    except Exception:
+        conn.rollback(); raise
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/document/<int:document_id>")
+def customer_document(slug, document_id):
+    store=get_store(slug)
+    if not store:
+        return "Витрина не найдена",404
+    account=_current_store_customer(store)
+    if not account:
+        return "Требуется вход",401
+    conn=get_db(); cur=conn.cursor()
+    try:
+        cur.execute("SELECT to_regclass('public.accounting_documents') AS tbl")
+        if not cur.fetchone().get("tbl"):
+            return "Документ не найден",404
+        cur.execute("""
+            SELECT d.stored_filename,d.original_filename,d.file_url,d.source_id,d.document_type
+            FROM accounting_documents d
+            WHERE d.id=%s AND d.company_id=%s AND d.status='active'
+              AND d.source_type='sale'
+              AND d.source_id IN (
+                SELECT s.id FROM sales s WHERE s.company_id=%s AND s.client_id=%s
+              )
+        """,(document_id,store["company_id"],store["company_id"],account["client_id"]))
+        document=cur.fetchone()
+        if not document:
+            return "Документ не найден",404
+        if document.get("stored_filename"):
+            from routes.accounting import _upload_directory
+            return send_from_directory(
+                _upload_directory(),
+                document["stored_filename"],
+                as_attachment=False,
+                download_name=document.get("original_filename") or document["stored_filename"],
+            )
+        # Generated sales documents are exposed through a customer-safe PDF route below.
+        doc_type_map={"invoice":"invoice","act":"act","waybill":"nakladnaya","invoice_facture":"schet-factura","check":"check"}
+        mapped=doc_type_map.get(document.get("document_type"))
+        if mapped and document.get("source_id"):
+            return redirect(url_for("storefront.customer_sale_pdf",slug=slug,document_type=mapped,sale_id=document["source_id"]))
+        return "У документа пока нет файла",404
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/sale/<int:sale_id>/pdf/<document_type>")
+def customer_sale_pdf(slug, sale_id, document_type):
+    store=get_store(slug)
+    if not store:
+        return "Витрина не найдена",404
+    account=_current_store_customer(store)
+    if not account:
+        return "Требуется вход",401
+    conn=get_db();cur=conn.cursor()
+    try:
+        cur.execute("SELECT id FROM sales WHERE id=%s AND company_id=%s AND client_id=%s",(sale_id,store["company_id"],account["client_id"]))
+        if not cur.fetchone():
+            return "Документ не найден",404
+    finally:
+        cur.close();pool.putconn(conn)
+
+    allowed={"check","invoice","nakladnaya","schet-factura","act"}
+    if document_type not in allowed:
+        return "Неизвестный документ",404
+    try:
+        from routes.sales import check, invoice, nakladnaya, schet_factura, act
+        from flask import make_response
+        from weasyprint import HTML
+        from io import BytesIO
+        from flask import send_file
+        funcs={"check":check,"invoice":invoice,"nakladnaya":nakladnaya,"schet-factura":schet_factura,"act":act}
+        old_company=session.get("company_id")
+        session["company_id"]=store["company_id"]
+        try:
+            rendered=make_response(funcs[document_type](sale_id))
+        finally:
+            if old_company is None: session.pop("company_id",None)
+            else: session["company_id"]=old_company
+        if rendered.status_code>=400:
+            return rendered
+        pdf=HTML(string=rendered.get_data(as_text=True),base_url=request.url_root,media_type="print").write_pdf()
+        return send_file(BytesIO(pdf),mimetype="application/pdf",as_attachment=False,download_name=f"{document_type}-{sale_id}.pdf",max_age=0)
+    except Exception:
+        return "Не удалось сформировать документ",500
 
 
 @storefront_bp.route("/<slug>/customer/profile", methods=["POST"])
