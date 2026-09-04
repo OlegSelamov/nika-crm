@@ -22,15 +22,22 @@
             </span>
         </a>
 
+        <div class="sf-header-actions">
+            <button class="sf-head-icon sf-head-search" type="button" data-focus-search aria-label="Поиск">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+            </button>
+            <button class="sf-head-icon sf-cart-button" type="button" data-open-cart aria-label="Корзина">
+                <svg viewBox="0 0 24 24"><path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L20.3 8H6.1"/><circle cx="9.5" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>
+                <span id="sfCartCount" class="sf-cart-count">{{ cart_count or 0 }}</span>
+            </button>
+        </div>
+    </div>
+    <div class="sf-mobile-search-wrap">
         <div class="sf-search">
-            <input id="sfLiveSearch" value="" placeholder="Найти товар или услугу" autocomplete="off">
+            <svg class="sf-search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+            <input id="sfLiveSearch" value="" placeholder="Найти товар или услугу..." autocomplete="off">
             <button id="sfSearchClear" class="sf-search-clear" type="button">×</button>
         </div>
-
-        <button class="sf-cart-button" type="button" data-open-cart>
-            Корзина
-            <span id="sfCartCount" class="sf-cart-count">{{ cart_count or 0 }}</span>
-        </button>
     </div>
 </header>
 
@@ -49,13 +56,21 @@
         </span>
         <b>Каталог</b>
     </a>
-    <button type="button" class="sf-mobile-item" data-open-cart data-mobile-nav="cart">
+    <button type="button" class="sf-mobile-item sf-mobile-cart" data-open-cart data-mobile-nav="cart">
         <span class="sf-mobile-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L20.3 8H6.1"/><circle cx="9.5" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>
             <i id="sfMobileCartCount" {% if not cart_count %}hidden{% endif %}>{{ cart_count or 0 }}</i>
         </span>
         <b>Корзина</b>
     </button>
+    {% if store.booking_enabled %}
+    <a href="/s/{{ store.slug }}/booking" class="sf-mobile-item" data-mobile-nav="booking">
+        <span class="sf-mobile-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M8 3v5M16 3v5M4 10h16"/></svg>
+        </span>
+        <b>Запись</b>
+    </a>
+    {% endif %}
 </nav>
 
 <!-- PRODUCT MODAL -->
