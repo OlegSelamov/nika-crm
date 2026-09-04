@@ -91,7 +91,7 @@
             <a href="/items"><img src="/static/icons/items.png" class="menu-icon"><span class="text">Каталог</span></a>
             {% endif %}
 
-            {% if session.get("is_super_admin") or session.get("role") in ["owner", "admin"] or "storefront" in session.get("employee_modules", []) %}
+            {% if session.get("is_super_admin") or "storefront" in session.get("employee_modules", []) %}
             <a href="/storefront/" class="{% if request.path == '/storefront/' or request.path == '/storefront' %}active-menu-item{% endif %}">
                 <img src="/static/icons/storefront.png" class="menu-icon" onerror="this.onerror=null;this.src='/static/icons/items.png';">
                 <span class="text">Онлайн-витрина</span>
