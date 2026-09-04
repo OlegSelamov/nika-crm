@@ -3118,7 +3118,7 @@ body.wa-modal-open {
 			
 {% if session.get("is_super_admin") or "tasks" in session.get("employee_modules", []) %}
 			<a href="/tasks">
-				<img src="/static/icons/school.png" class="menu-icon">
+				<img src="/static/icons/tasks.png" class="menu-icon">
 				<span class="text">Задачи</span>
 			</a>
 {% endif %}
@@ -3153,7 +3153,7 @@ body.wa-modal-open {
 
 {% if session.get("is_super_admin") or "school" in session.get("employee_modules", []) %}
 			<a href="/school">
-				<img src="/static/icons/tasks.png" class="menu-icon">
+				<img src="/static/icons/school.png" class="menu-icon">
 				<span class="text">Школа</span>
 			</a>
 {% endif %}

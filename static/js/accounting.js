@@ -7,6 +7,11 @@
 
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') {
+            var preview = document.getElementById('accountingDocumentPreviewModal');
+            if (preview && preview.classList.contains('is-open')) {
+                closeAccountingDocumentPreview();
+                return;
+            }
             document.querySelectorAll('.accounting-modal.is-open').forEach(function (modal) {
                 closeAccountingModal(modal.id);
             });
@@ -142,6 +147,7 @@ function openEditDocumentModal(documentId) {
 // --- Единый журнал продаж и документов ---
 let accountingSaleMode = 'receipt';
 let accountingSalesCache = null;
+let accountingDocumentState = null;
 
 function getAccountingSalesData() {
     if (accountingSalesCache) return accountingSalesCache;
@@ -198,24 +204,215 @@ function filterAccountingSales() {
     if (empty) empty.style.display = visible === 0 ? 'grid' : 'none';
 }
 
-function accountingDocumentButton(url, title, meta, kind) {
+function accountingDocumentButton(saleId, key, url, title, meta, kind) {
     if (!url) return '';
-    return `
-        <a class="accounting-sale-document ${kind ? 'accounting-sale-document--' + kind : ''}"
-           href="${accountingEscape(url)}" target="_blank" rel="noopener">
-            <span class="accounting-sale-document__icon">${kind === 'esf' ? 'ЭСФ' : '📄'}</span>
+    if (kind === 'esf') {
+        return `
+        <button type="button" class="accounting-sale-document accounting-sale-document--esf"
+                onclick="window.location.href='${accountingEscape(url)}'">
+            <span class="accounting-sale-document__icon">ЭСФ</span>
             <span class="accounting-sale-document__text">
                 <strong>${accountingEscape(title)}</strong>
                 ${meta ? `<small>${accountingEscape(meta)}</small>` : ''}
             </span>
             <span class="accounting-sale-document__arrow">›</span>
-        </a>`;
+        </button>`;
+    }
+    return `
+        <button type="button" class="accounting-sale-document ${kind ? 'accounting-sale-document--' + kind : ''}"
+                onclick="openAccountingDocumentFromSale(${Number(saleId)}, '${accountingEscape(key)}')">
+            <span class="accounting-sale-document__icon">📄</span>
+            <span class="accounting-sale-document__text">
+                <strong>${accountingEscape(title)}</strong>
+                ${meta ? `<small>${accountingEscape(meta)}</small>` : ''}
+            </span>
+            <span class="accounting-sale-document__arrow">›</span>
+        </button>`;
+}
+
+function getAccountingSale(saleId) {
+    return getAccountingSalesData().find(function (item) {
+        return Number(item.id) === Number(saleId);
+    });
+}
+
+function accountingSaleDocumentConfig(sale, key) {
+    if (!sale) return null;
+
+    const configs = {
+        waybill: {
+            url: sale.waybill_url,
+            title: 'Накладная',
+            type: 'nakladnaya',
+            filename: `nakladnaya-${sale.id}.pdf`
+        },
+        act: {
+            url: sale.act_url,
+            title: 'Акт выполненных работ',
+            type: 'act',
+            filename: `akt-vypolnennyh-rabot-${sale.id}.pdf`
+        },
+        invoiceFacture: {
+            url: sale.invoice_facture_url,
+            title: 'Счёт-фактура',
+            type: 'schet-factura',
+            filename: `schet-factura-${sale.id}.pdf`
+        }
+    };
+
+    if (key === 'main') {
+        let type = 'check';
+        let filename = `check-${sale.id}.pdf`;
+        if ((sale.main_url || '').includes('/refund-check/')) {
+            type = 'refund-check';
+            filename = `refund-check-${sale.id}.pdf`;
+        } else if ((sale.main_url || '').includes('/invoice/')) {
+            type = 'invoice';
+            filename = `schet-na-oplatu-${sale.id}.pdf`;
+        }
+        return {
+            url: sale.main_url,
+            title: sale.main_title || sale.main_label || 'Документ',
+            type: type,
+            filename: filename
+        };
+    }
+
+    return configs[key] || null;
+}
+
+function openAccountingSaleMain(saleId) {
+    openAccountingDocumentFromSale(saleId, 'main', false);
+}
+
+function openAccountingDocumentFromSale(saleId, key, returnToDocuments) {
+    const sale = getAccountingSale(saleId);
+    const config = accountingSaleDocumentConfig(sale, key);
+    if (!config || !config.url) return;
+
+    openAccountingDocumentPreview({
+        url: config.url,
+        pdfUrl: `/docs/pdf/${config.type}/${sale.id}`,
+        title: config.title,
+        subtitle: `Продажа №${sale.number} · ${sale.date}`,
+        filename: config.filename,
+        returnModalId: returnToDocuments === false ? '' : 'saleDocumentsModal'
+    });
+}
+
+function openAccountingFile(url, title) {
+    closeAllDocumentMenus();
+    const cleanUrl = String(url || '');
+    const rawFilename = decodeURIComponent(cleanUrl.split('/').pop() || 'document');
+    openAccountingDocumentPreview({
+        url: cleanUrl,
+        downloadUrl: cleanUrl,
+        title: title || 'Документ',
+        subtitle: 'Загруженный файл',
+        filename: rawFilename,
+        isUploadedFile: true
+    });
+}
+
+function openAccountingDocumentPreview(options) {
+    if (!options || !options.url) return;
+    const returnModalId = options.returnModalId || '';
+    if (returnModalId) closeAccountingModal(returnModalId);
+
+    accountingDocumentState = Object.assign({}, options);
+    const title = document.getElementById('accountingDocumentPreviewTitle');
+    const subtitle = document.getElementById('accountingDocumentPreviewSubtitle');
+    const body = document.getElementById('accountingDocumentPreviewBody');
+    const downloadBtn = document.getElementById('accountingDocumentDownloadBtn');
+
+    if (title) title.textContent = options.title || 'Документ';
+    if (subtitle) subtitle.textContent = options.subtitle || 'Предварительный просмотр';
+    if (downloadBtn) downloadBtn.textContent = options.isUploadedFile ? 'Скачать файл' : 'Скачать PDF';
+    if (body) {
+        body.innerHTML = '';
+        const frame = document.createElement('iframe');
+        frame.id = 'accountingDocumentFrame';
+        frame.title = options.title || 'Документ';
+        frame.src = options.url;
+        body.appendChild(frame);
+    }
+    openAccountingModal('accountingDocumentPreviewModal');
+}
+
+function closeAccountingDocumentPreview() {
+    const returnModalId = accountingDocumentState && accountingDocumentState.returnModalId;
+    closeAccountingModal('accountingDocumentPreviewModal');
+    const body = document.getElementById('accountingDocumentPreviewBody');
+    if (body) body.innerHTML = '<div class="accounting-document-modal__loading">Загрузка документа…</div>';
+    accountingDocumentState = null;
+    if (returnModalId) openAccountingModal(returnModalId);
+}
+
+function printAccountingDocument() {
+    const frame = document.getElementById('accountingDocumentFrame');
+    if (!frame || !frame.contentWindow) return;
+    try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+    } catch (error) {
+        console.error('ACCOUNTING DOCUMENT PRINT ERROR', error);
+        alert('Не удалось открыть печать документа');
+    }
+}
+
+async function fetchAccountingDocumentBlob() {
+    if (!accountingDocumentState) throw new Error('Документ не выбран');
+    const url = accountingDocumentState.pdfUrl || accountingDocumentState.downloadUrl || accountingDocumentState.url;
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error('Не удалось скачать документ');
+    return response.blob();
+}
+
+function downloadAccountingBlob(blob, filename) {
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename || 'document';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 1000);
+}
+
+async function downloadAccountingDocument() {
+    if (!accountingDocumentState) return;
+    try {
+        const blob = await fetchAccountingDocumentBlob();
+        downloadAccountingBlob(blob, accountingDocumentState.filename);
+    } catch (error) {
+        console.error('ACCOUNTING DOCUMENT DOWNLOAD ERROR', error);
+        alert(error.message || 'Не удалось скачать документ');
+    }
+}
+
+async function shareAccountingDocument() {
+    if (!accountingDocumentState) return;
+    try {
+        const blob = await fetchAccountingDocumentBlob();
+        const filename = accountingDocumentState.filename || 'document';
+        if (navigator.share && navigator.canShare && typeof File !== 'undefined') {
+            const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+            if (navigator.canShare({ files: [file] })) {
+                await navigator.share({ title: accountingDocumentState.title || 'Документ', files: [file] });
+                return;
+            }
+        }
+        downloadAccountingBlob(blob, filename);
+        alert('Системная отправка недоступна. Файл скачан — его можно отправить вручную.');
+    } catch (error) {
+        if (error && error.name === 'AbortError') return;
+        console.error('ACCOUNTING DOCUMENT SHARE ERROR', error);
+        alert(error.message || 'Не удалось подготовить документ');
+    }
 }
 
 function openAccountingSaleDocuments(saleId) {
-    const sale = getAccountingSalesData().find(function (item) {
-        return Number(item.id) === Number(saleId);
-    });
+    const sale = getAccountingSale(saleId);
     if (!sale) return;
 
     const title = document.getElementById('saleDocumentsModalTitle');
@@ -233,7 +430,7 @@ function openAccountingSaleDocuments(saleId) {
                 <span>${sale.product_count} поз. · ${accountingMoney(sale.product_total)}</span>
             </div>
             <div class="accounting-sale-doc-grid">
-                ${accountingDocumentButton(sale.waybill_url, 'Накладная', `${sale.product_count} товарных позиций`, 'product')}
+                ${accountingDocumentButton(sale.id, 'waybill', sale.waybill_url, 'Накладная', `${sale.product_count} товарных позиций`, 'product')}
             </div>
         </section>` : '';
 
@@ -244,7 +441,7 @@ function openAccountingSaleDocuments(saleId) {
                 <span>${sale.service_count} поз. · ${accountingMoney(sale.service_total)}</span>
             </div>
             <div class="accounting-sale-doc-grid">
-                ${accountingDocumentButton(sale.act_url, 'Акт выполненных работ', `${sale.service_count} услуг`, 'service')}
+                ${accountingDocumentButton(sale.id, 'act', sale.act_url, 'Акт выполненных работ', `${sale.service_count} услуг`, 'service')}
             </div>
         </section>` : '';
 
@@ -258,7 +455,7 @@ function openAccountingSaleDocuments(saleId) {
         <section class="accounting-sale-doc-section">
             <div class="accounting-sale-doc-section__title"><strong>Основной документ</strong></div>
             <div class="accounting-sale-doc-grid">
-                ${accountingDocumentButton(sale.main_url, sale.main_title, sale.status_label, 'main')}
+                ${accountingDocumentButton(sale.id, 'main', sale.main_url, sale.main_title, sale.status_label, 'main')}
             </div>
         </section>
         ${productBlock}
@@ -266,13 +463,13 @@ function openAccountingSaleDocuments(saleId) {
         <section class="accounting-sale-doc-section">
             <div class="accounting-sale-doc-section__title"><strong>Общие документы</strong><span>На всю продажу</span></div>
             <div class="accounting-sale-doc-grid">
-                ${accountingDocumentButton(sale.invoice_facture_url, 'Счёт-фактура', accountingMoney(sale.amount), 'common')}
+                ${accountingDocumentButton(sale.id, 'invoiceFacture', sale.invoice_facture_url, 'Счёт-фактура', accountingMoney(sale.amount), 'common')}
             </div>
         </section>
         <section class="accounting-sale-doc-section">
             <div class="accounting-sale-doc-section__title"><strong>Электронные документы</strong><span>ИС ЭСФ</span></div>
             <div class="accounting-sale-doc-grid">
-                ${accountingDocumentButton(sale.esf_url, esfTitle, esfMetaParts.join(' · '), 'esf')}
+                ${accountingDocumentButton(sale.id, 'esf', sale.esf_url, esfTitle, esfMetaParts.join(' · '), 'esf')}
             </div>
         </section>`;
 
