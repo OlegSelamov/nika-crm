@@ -632,3 +632,13 @@ body.sf-lock{overflow:hidden}
 .sf-toast.error{background:#b4233b!important}
 .sf-customer-error{display:none;margin:0 0 10px;padding:10px 12px;border-radius:12px;background:#fff0f2;color:#b4233b;font-size:11px;font-weight:750;border:1px solid #ffd7dd}
 .sf-customer-error.show{display:block}
+
+
+/* Advanced customer profile */
+.sf-profile-identity{min-width:0;flex:1}.sf-profile-identity small{display:block;color:var(--brand);font-size:9px;font-weight:850;margin-bottom:3px}.sf-profile-edit-toggle{border:0;background:var(--brand-soft);color:var(--brand);border-radius:11px;padding:9px 10px;font-size:9px;font-weight:850}
+.sf-profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 0 10px}.sf-profile-stats>div{background:#fff;border:1px solid #e9ebf1;border-radius:15px;padding:11px 6px;text-align:center}.sf-profile-stats strong,.sf-profile-stats span{display:block}.sf-profile-stats strong{font-size:13px;color:#18213a}.sf-profile-stats span{font-size:8px;color:#9098a8;margin-top:3px}
+.sf-profile-form{max-height:600px;overflow:hidden;transition:max-height .28s ease,padding .28s ease,border-width .28s ease,opacity .2s ease}.sf-profile-form.sf-profile-form-collapsed{max-height:0;padding-top:0;padding-bottom:0;border-width:0;opacity:0;margin-bottom:0}
+.sf-history-button{width:100%;border:1px solid #e9ebf1;text-align:left}.sf-history-button strong{white-space:nowrap}.sf-history-back{border:0;background:transparent;color:var(--brand);font-size:10px;font-weight:800;padding:7px 2px 11px}
+.sf-order-detail{background:#fff;border:1px solid #e9ebf1;border-radius:18px;padding:14px}.sf-order-detail-top{display:flex;justify-content:space-between;gap:10px;font-size:14px}.sf-order-detail-top strong{color:var(--brand-deep)}.sf-order-statuses{display:flex;gap:6px;margin:9px 0 12px}.sf-order-statuses span{background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:5px 8px;font-size:8px;font-weight:800}.sf-order-items{border-top:1px solid #edf0f4;border-bottom:1px solid #edf0f4;padding:7px 0}.sf-order-items div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:10px}.sf-order-detail p{font-size:10px;color:#687386}
+.sf-favorite-row small{display:block;margin-top:4px;color:#8c95a7;font-size:8px}
+#sfProductOverlay.sf-product-over-favorites{z-index:1800!important}.sf-customer-overlay{z-index:1300!important}
