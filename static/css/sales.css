@@ -4120,3 +4120,15 @@ body.sales-document-center-open { overflow: hidden !important; }
         height: 12px;
     }
 }
+
+
+/* Mobile sales: navigation must never be covered by the fixed payment panel */
+@media (max-width: 768px) {
+    body.sales-mobile-menu-open > .payment-box {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transform: translateY(100%) !important;
+        transition: opacity .16s ease, transform .16s ease, visibility .16s ease !important;
+    }
+}
