@@ -851,8 +851,8 @@ async function sfLoadProfile(){
     box.innerHTML=rows.map(x=>type==='orders'?
       `<button class="sf-history-row sf-history-button" data-customer-order="${x.id}"><div><b>Заказ №${x.id}</b><span>${(x.created_at||'').slice(0,10)} · ${sfEscape(x.order_status||'new')}</span></div><strong>${sfMoney(x.total_amount)} ›</strong></button>`:
       type==='documents'?
-      `<div class="sf-history-row"><div><b>${sfEscape(x.title||'Документ')}</b><span>${x.document_date||''} · ${sfEscape(x.document_number||'')}</span></div><strong>${x.amount?sfMoney(x.amount):'Документ'}</strong></div>`:
-      `<div class="sf-history-row"><div><b>${sfEscape(x.service_name||'Запись №'+x.id)}</b><span>${x.booking_date||''} · ${(x.booking_time||'').slice(0,5)}</span></div><strong>${sfEscape(x.status||'new')}</strong></div>`).join('');
+      `<button class="sf-history-row sf-history-button" data-customer-document="${x.customer_url||''}"><div><b>${sfEscape(x.title||'Документ')}</b><span>${x.document_date||''} · ${sfEscape(x.document_number||'')}</span></div><strong>${x.amount?sfMoney(x.amount):'Открыть'} ›</strong></button>`:
+      `<div class="sf-history-row sf-booking-history"><div><b>${sfEscape(x.service_name||'Запись №'+x.id)}</b><span>${x.booking_date||''} · ${(x.booking_time||'').slice(0,5)} · ${sfEscape(x.status||'new')}</span></div><div class="sf-booking-actions">${!['cancelled','rejected','completed'].includes(x.status)?`<button data-reschedule-booking="${x.id}">Перенести</button><button class="danger" data-cancel-booking="${x.id}">Отменить</button>`:''}</div></div>`).join('');
   };
   renderHistory('orders');
   document.querySelectorAll('[data-profile-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-profile-tab]').forEach(x=>x.classList.toggle('active',x===b));renderHistory(b.dataset.profileTab)});
@@ -907,6 +907,7 @@ async function sfOpenCustomerOrder(orderId){
    <div class="sf-order-items">${data.items.map(i=>`<div><span>${sfEscape(i.name)} × ${sfQty(i.quantity)}</span><b>${sfMoney(i.total)}</b></div>`).join('')}</div>
    ${o.address?`<p><b>Адрес:</b> ${sfEscape(o.address)}</p>`:''}
    ${o.comment?`<p><b>Комментарий:</b> ${sfEscape(o.comment)}</p>`:''}
+   <button class="sf-primary" data-repeat-order="${o.id}">Повторить заказ</button>
   </div>`;
   const box=document.getElementById('sfProfileHistory');box.innerHTML='<button class="sf-history-back" id="sfHistoryBack">← К списку заказов</button>'+html;
   document.getElementById('sfHistoryBack').onclick=()=>sfLoadProfile();
@@ -917,4 +918,47 @@ document.addEventListener('click',e=>{
  if(fp){e.preventDefault();sfOpenFavoriteProduct(fp.dataset.favoriteProduct);return}
  const order=e.target.closest('[data-customer-order]');
  if(order){e.preventDefault();sfOpenCustomerOrder(order.dataset.customerOrder);return}
+});
+
+
+async function sfRepeatCustomerOrder(id){
+ try{
+  const data=await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/customer/order/${id}/repeat`,{method:'POST'});
+  if(data.cart) sfApplyCart(data.cart);
+  sfToast(data.skipped?`Добавлено: ${data.added}. Недоступно: ${data.skipped}`:'Товары добавлены в корзину');
+  sfCustomerClose();
+  sfOpenCart();
+ }catch(e){sfToast(e.message,true)}
+}
+async function sfCancelCustomerBooking(id){
+ if(!confirm('Отменить эту запись?')) return;
+ try{
+  await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/customer/booking/${id}/cancel`,{method:'POST'});
+  sfToast('Запись отменена');sfLoadProfile();
+ }catch(e){sfToast(e.message,true)}
+}
+async function sfRescheduleCustomerBooking(id){
+ const box=document.getElementById('sfProfileHistory');
+ const today=new Date().toISOString().slice(0,10);
+ box.innerHTML=`<button class="sf-history-back" id="sfBookingBack">← Назад</button><div class="sf-reschedule-card"><h3>Перенести запись</h3><label>Новая дата<input type="date" id="sfMoveDate" min="${today}" value="${today}"></label><div id="sfMoveSlots" class="sf-move-slots"></div></div>`;
+ document.getElementById('sfBookingBack').onclick=()=>sfLoadProfile();
+ const load=async()=>{
+  const d=document.getElementById('sfMoveDate').value;
+  const data=await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/customer/booking/${id}/slots?date=${encodeURIComponent(d)}`);
+  const slots=document.getElementById('sfMoveSlots');
+  slots.innerHTML=data.slots.length?data.slots.map(t=>`<button data-move-time="${t}">${t}</button>`).join(''):'<p>Свободного времени нет</p>';
+ };
+ document.getElementById('sfMoveDate').onchange=load; await load();
+}
+async function sfSubmitReschedule(id,time){
+ const fd=new FormData();fd.set('date',document.getElementById('sfMoveDate').value);fd.set('time',time);
+ try{await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/customer/booking/${id}/reschedule`,{method:'POST',body:fd});sfToast('Запись перенесена');sfLoadProfile()}catch(e){sfToast(e.message,true)}
+}
+let sfMovingBookingId=null;
+document.addEventListener('click',e=>{
+ const repeat=e.target.closest('[data-repeat-order]');if(repeat){sfRepeatCustomerOrder(repeat.dataset.repeatOrder);return}
+ const cancel=e.target.closest('[data-cancel-booking]');if(cancel){sfCancelCustomerBooking(cancel.dataset.cancelBooking);return}
+ const move=e.target.closest('[data-reschedule-booking]');if(move){sfMovingBookingId=move.dataset.rescheduleBooking;sfRescheduleCustomerBooking(sfMovingBookingId);return}
+ const mt=e.target.closest('[data-move-time]');if(mt&&sfMovingBookingId){sfSubmitReschedule(sfMovingBookingId,mt.dataset.moveTime);return}
+ const doc=e.target.closest('[data-customer-document]');if(doc&&doc.dataset.customerDocument){window.open(doc.dataset.customerDocument,'_blank');return}
 });
