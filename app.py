@@ -38,6 +38,7 @@ from routes.onboarding import onboarding_bp
 from routes.storefront import storefront_bp
 from routes.storefront_settings import storefront_settings_bp
 from routes.storefront_manage import storefront_manage_bp
+from routes.storefront_notifications import storefront_notifications_bp
 from routes.whatsapp import whatsapp_bp
 from routes.mobile_api import mobile_api_bp
 from routes.esf import esf_bp
@@ -86,6 +87,7 @@ app.register_blueprint(onboarding_bp)
 app.register_blueprint(storefront_bp)
 app.register_blueprint(storefront_settings_bp)
 app.register_blueprint(storefront_manage_bp)
+app.register_blueprint(storefront_notifications_bp)
 app.register_blueprint(whatsapp_bp)
 app.register_blueprint(mobile_api_bp)
 app.register_blueprint(esf_bp)
@@ -177,6 +179,40 @@ def check_company_access():
             break
 
     return None
+
+
+@app.after_request
+def inject_storefront_workflow_assets(response):
+    """Подключаем рабочие действия витрины ко всей авторизованной оболочке CRM."""
+    if not session.get("user_id"):
+        return response
+
+    content_type = response.headers.get("Content-Type", "")
+    if "text/html" not in content_type.lower():
+        return response
+
+    try:
+        html = response.get_data(as_text=True)
+
+        if "storefront_workflow.css" not in html and "</head>" in html:
+            html = html.replace(
+                "</head>",
+                '<link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-1">\n</head>',
+                1,
+            )
+
+        if "storefront_workflow.js" not in html and "</body>" in html:
+            html = html.replace(
+                "</body>",
+                '<script src="/static/js/storefront_workflow.js?v=20260904-1"></script>\n</body>',
+                1,
+            )
+
+        response.set_data(html)
+    except Exception as exc:
+        print("STOREFRONT WORKFLOW ASSET INJECT ERROR:", exc)
+
+    return response
 
 
 @app.context_processor
