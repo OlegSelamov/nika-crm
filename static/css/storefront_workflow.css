@@ -270,6 +270,24 @@ body:has(#sfBookingModal) .sidebar a[href="/storefront/bookings"]{
     border-color:transparent !important;
 }
 
+/* Keep the sidebar visually stable while the user scrolls it.
+   Previously every link crossing the stationary mouse pointer received
+   :hover + translateX(4px), so the whole menu looked like it was shaking. */
+.sidebar a:hover,
+.sidebar .submenu:hover{
+    transform:none !important;
+}
+
+.sidebar a,
+.sidebar .submenu{
+    will-change:auto;
+}
+
+.sidebar{
+    overscroll-behavior:contain;
+    scroll-behavior:auto;
+}
+
 @media(max-width:768px){
     .sfw-notification-actions{
         margin-left:0;
