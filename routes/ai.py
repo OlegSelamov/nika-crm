@@ -1909,7 +1909,7 @@ def ai_action(action_id):
 
 @ai_bp.route("/api/ai/voice", methods=["POST"])
 def ai_voice():
-    """Создаёт естественную озвучку ответа; ключ OpenAI остаётся только на сервере."""
+    """Потоковая естественная озвучка ответа; ключ OpenAI остаётся на сервере."""
     company_id, user_id = _owner()
     if company_id is None or not user_id:
         return jsonify({"error": "Требуется вход в систему"}), 401
@@ -1924,30 +1924,34 @@ def ai_voice():
     if not os.getenv("OPENAI_API_KEY"):
         return jsonify({"error": "AI-озвучивание ещё не подключено"}), 503
 
-    try:
-        client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            timeout=45.0,
-            max_retries=1,
-        )
-        with client.audio.speech.with_streaming_response.create(
-            model=AI_TTS_MODEL,
-            voice=AI_TTS_VOICE,
-            input=text,
-            instructions=AI_TTS_INSTRUCTIONS,
-            response_format="mp3",
-            speed=0.94,
-        ) as audio_response:
-            audio_bytes = audio_response.read()
+    def generate_audio():
+        try:
+            client = OpenAI(
+                api_key=os.getenv("OPENAI_API_KEY"),
+                timeout=45.0,
+                max_retries=1,
+            )
+            with client.audio.speech.with_streaming_response.create(
+                model=AI_TTS_MODEL,
+                voice=AI_TTS_VOICE,
+                input=text,
+                instructions=AI_TTS_INSTRUCTIONS,
+                response_format="mp3",
+                speed=0.94,
+            ) as audio_response:
+                for chunk in audio_response.iter_bytes(chunk_size=16384):
+                    if chunk:
+                        yield chunk
+        except Exception:
+            current_app.logger.exception("Nika AI voice failed while streaming")
+            return
 
-        return Response(
-            audio_bytes,
-            mimetype="audio/mpeg",
-            headers={
-                "Cache-Control": "no-store",
-                "Content-Disposition": "inline; filename=nika-voice.mp3",
-            },
-        )
-    except Exception:
-        current_app.logger.exception("Nika AI voice failed")
-        return jsonify({"error": "AI-озвучивание временно недоступно"}), 503
+    return Response(
+        generate_audio(),
+        mimetype="audio/mpeg",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Content-Disposition": "inline; filename=nika-voice.mp3",
+            "X-Accel-Buffering": "no",
+        },
+    )
