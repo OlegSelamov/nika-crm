@@ -22,19 +22,39 @@
             </span>
         </a>
 
-        <div class="sf-header-actions"><button class="sf-head-icon sf-cart-button" type="button" data-open-cart aria-label="Корзина">
+        <div class="sf-mobile-search-wrap sf-header-search">
+            <div class="sf-search">
+                <svg class="sf-search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+                <input id="sfLiveSearch" value="" placeholder="Найти товар или услугу..." autocomplete="off">
+                <button id="sfSearchClear" class="sf-search-clear" type="button">×</button>
+            </div>
+        </div>
+
+        <div class="sf-header-actions">
+            <button class="sf-desktop-action" type="button" data-open-favorites>
+                <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                <span>Избранное</span>
+            </button>
+            <button class="sf-desktop-action" type="button" data-open-profile>
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>
+                <span>Профиль</span>
+            </button>
+            <button class="sf-head-icon sf-cart-button" type="button" data-open-cart aria-label="Корзина">
                 <svg viewBox="0 0 24 24"><path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L20.3 8H6.1"/><circle cx="9.5" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>
+                <span class="sf-cart-label">Корзина</span>
                 <span id="sfCartCount" class="sf-cart-count">{{ cart_count or 0 }}</span>
             </button>
         </div>
     </div>
-    <div class="sf-mobile-search-wrap">
-        <div class="sf-search">
-            <svg class="sf-search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
-            <input id="sfLiveSearch" value="" placeholder="Найти товар или услугу..." autocomplete="off">
-            <button id="sfSearchClear" class="sf-search-clear" type="button">×</button>
+
+    <nav class="sf-desktop-nav" aria-label="Навигация витрины">
+        <div class="sf-desktop-nav-inner">
+            <a href="/s/{{ store.slug }}">Главная</a>
+            {% if store.show_products %}<a href="/s/{{ store.slug }}?kind=products#sfCatalogStart">Каталог</a>{% endif %}
+            {% if store.show_services %}<a href="/s/{{ store.slug }}?kind=services#sfCatalogStart">Услуги</a>{% endif %}
+            {% if store.allow_booking %}<a href="/s/{{ store.slug }}?kind=services#sfCatalogStart">Онлайн-запись</a>{% endif %}
         </div>
-    </div>
+    </nav>
 </header>
 
 {% block content %}{% endblock %}
