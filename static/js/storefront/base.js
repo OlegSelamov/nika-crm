@@ -823,8 +823,13 @@ async function sfLoadProfile(){
   if(!data.authenticated){root.innerHTML=sfAuthHtml();sfBindAuth();return}
   const p=data.profile||{};
   root.innerHTML=`
-   <div class="sf-profile-card"><div class="sf-profile-avatar">${sfEscape((p.full_name||'К').charAt(0))}</div><div><b>${sfEscape(p.full_name||'Клиент')}</b><span>+${sfEscape(p.phone||'')}</span></div></div>
-   <div class="sf-profile-form">
+   <div class="sf-profile-card"><div class="sf-profile-avatar">${sfEscape((p.full_name||'К').charAt(0))}</div><div class="sf-profile-identity"><small>Постоянный клиент</small><b>${sfEscape(p.full_name||'Клиент')}</b><span>+${sfEscape(p.phone||'')}</span></div><button class="sf-profile-edit-toggle" id="spfEditToggle">Реквизиты</button></div>
+   <div class="sf-profile-stats">
+      <div><strong>${(data.stats||{}).orders||0}</strong><span>заказов</span></div>
+      <div><strong>${sfMoney((data.stats||{}).spent||0)}</strong><span>покупки</span></div>
+      <div><strong>${(data.stats||{}).upcoming||0}</strong><span>предстоит</span></div>
+   </div>
+   <div class="sf-profile-form sf-profile-form-collapsed" id="sfProfileForm">
     <input id="spfName" value="${sfEscape(p.full_name||'')}" placeholder="ФИО / контактное лицо">
     <input id="spfEmail" value="${sfEscape(p.email||'')}" placeholder="Email">
     <select id="spfType"><option value="private" ${p.customer_type==='private'?'selected':''}>Физическое лицо</option><option value="business" ${p.customer_type==='business'?'selected':''}>ИП / ТОО</option></select>
@@ -837,13 +842,16 @@ async function sfLoadProfile(){
    <div class="sf-profile-tabs"><button class="active" data-profile-tab="orders">Заказы <i>${data.orders.length}</i></button><button data-profile-tab="bookings">Записи <i>${data.bookings.length}</i></button><button data-profile-tab="documents">Документы <i>${data.documents.length}</i></button></div>
    <div id="sfProfileHistory"></div>
    <button class="sf-logout" id="sfLogout">Выйти из профиля</button>`;
+  document.getElementById('spfEditToggle').onclick=()=>document.getElementById('sfProfileForm').classList.toggle('sf-profile-form-collapsed');
   const histories={orders:data.orders,bookings:data.bookings,documents:data.documents};
   const renderHistory=type=>{
     const rows=histories[type]||[];
     const box=document.getElementById('sfProfileHistory');
     if(!rows.length){box.innerHTML='<div class="sf-empty-profile">Пока ничего нет</div>';return}
     box.innerHTML=rows.map(x=>type==='orders'?
-      `<div class="sf-history-row"><div><b>Заказ №${x.id}</b><span>${(x.created_at||'').slice(0,10)} · ${sfEscape(x.order_status||'new')}</span></div><strong>${sfMoney(x.total_amount)}</strong></div>`:
+      `<button class="sf-history-row sf-history-button" data-customer-order="${x.id}"><div><b>Заказ №${x.id}</b><span>${(x.created_at||'').slice(0,10)} · ${sfEscape(x.order_status||'new')}</span></div><strong>${sfMoney(x.total_amount)} ›</strong></button>`:
+      type==='documents'?
+      `<div class="sf-history-row"><div><b>${sfEscape(x.title||'Документ')}</b><span>${x.document_date||''} · ${sfEscape(x.document_number||'')}</span></div><strong>${x.amount?sfMoney(x.amount):'Документ'}</strong></div>`:
       `<div class="sf-history-row"><div><b>${sfEscape(x.service_name||'Запись №'+x.id)}</b><span>${x.booking_date||''} · ${(x.booking_time||'').slice(0,5)}</span></div><strong>${sfEscape(x.status||'new')}</strong></div>`).join('');
   };
   renderHistory('orders');
@@ -863,7 +871,7 @@ async function sfLoadFavorites(){
   const data=await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/favorites/data`);
   if(!data.authenticated){root.innerHTML=sfAuthHtml('Войдите, чтобы избранное сохранялось на всех устройствах');sfBindAuth();return}
   if(!data.items.length){root.innerHTML='<div class="sf-empty-profile">В избранном пока ничего нет</div>';return}
-  root.innerHTML='<div class="sf-favorites-list">'+data.items.map(x=>`<button class="sf-favorite-row" data-open-product="${x.id}"><span>${x.image?`<img src="${sfEscape(x.image)}">`:'♡'}</span><div><b>${sfEscape(x.name)}</b><strong>${sfMoney(x.price)}</strong></div></button>`).join('')+'</div>';
+  root.innerHTML='<div class="sf-favorites-list">'+data.items.map(x=>`<button class="sf-favorite-row" data-favorite-product="${x.id}"><span>${x.image?`<img src="${sfEscape(x.image)}">`:'♡'}</span><div><b>${sfEscape(x.name)}</b><strong>${sfMoney(x.price)}</strong><small>Подробнее ›</small></div></button>`).join('')+'</div>';
  }catch(e){root.innerHTML='<div class="sf-empty-profile">Не удалось загрузить избранное</div>'}
 }
 async function sfToggleFavorite(button){
@@ -876,4 +884,37 @@ document.addEventListener('click',e=>{
  if(e.target.closest('[data-open-profile]')){sfLoadProfile();return}
  if(e.target.closest('[data-open-favorites]')){sfLoadFavorites();return}
  if(e.target.closest('[data-close-customer]')){sfCustomerClose();return}
+});
+
+
+async function sfOpenFavoriteProduct(itemId){
+  const favorites=document.getElementById('sfFavoritesOverlay');
+  const wasOpen=favorites?.classList.contains('open');
+  await sfOpenProduct(itemId);
+  const product=document.getElementById('sfProductOverlay');
+  if(product){
+    product.classList.add('sf-product-over-favorites');
+    product.dataset.returnFavorites=wasOpen?'1':'';
+  }
+}
+async function sfOpenCustomerOrder(orderId){
+ try{
+  const data=await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/customer/order/${orderId}`);
+  const o=data.order;
+  const html=`<div class="sf-order-detail">
+   <div class="sf-order-detail-top"><span>Заказ №${o.id}</span><strong>${sfMoney(o.total_amount)}</strong></div>
+   <div class="sf-order-statuses"><span>${sfEscape(o.order_status||'new')}</span><span>${sfEscape(o.payment_status||'unpaid')}</span></div>
+   <div class="sf-order-items">${data.items.map(i=>`<div><span>${sfEscape(i.name)} × ${sfQty(i.quantity)}</span><b>${sfMoney(i.total)}</b></div>`).join('')}</div>
+   ${o.address?`<p><b>Адрес:</b> ${sfEscape(o.address)}</p>`:''}
+   ${o.comment?`<p><b>Комментарий:</b> ${sfEscape(o.comment)}</p>`:''}
+  </div>`;
+  const box=document.getElementById('sfProfileHistory');box.innerHTML='<button class="sf-history-back" id="sfHistoryBack">← К списку заказов</button>'+html;
+  document.getElementById('sfHistoryBack').onclick=()=>sfLoadProfile();
+ }catch(e){sfToast(e.message,true)}
+}
+document.addEventListener('click',e=>{
+ const fp=e.target.closest('[data-favorite-product]');
+ if(fp){e.preventDefault();sfOpenFavoriteProduct(fp.dataset.favoriteProduct);return}
+ const order=e.target.closest('[data-customer-order]');
+ if(order){e.preventDefault();sfOpenCustomerOrder(order.dataset.customerOrder);return}
 });
