@@ -1,4 +1,6 @@
 (function () {
+    mountAccountingDocumentPreview();
+
     document.querySelectorAll('.accounting-modal').forEach(function (modal) {
         if (modal.parentElement !== document.body) {
             document.body.appendChild(modal);
@@ -149,6 +151,38 @@ let accountingSaleMode = 'receipt';
 let accountingSalesCache = null;
 let accountingDocumentState = null;
 
+function mountAccountingDocumentPreview() {
+    let modal = document.getElementById('accountingDocumentPreviewModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'accounting-modal accounting-document-modal';
+        modal.id = 'accountingDocumentPreviewModal';
+        modal.setAttribute('aria-hidden', 'true');
+        modal.innerHTML = `
+            <div class="accounting-modal__backdrop" onclick="closeAccountingDocumentPreview()"></div>
+            <div class="accounting-modal__dialog accounting-modal__dialog--document" role="dialog" aria-modal="true" aria-labelledby="accountingDocumentPreviewTitle">
+                <div class="accounting-modal__head accounting-document-modal__head">
+                    <div>
+                        <h3 id="accountingDocumentPreviewTitle">Документ</h3>
+                        <p id="accountingDocumentPreviewSubtitle">Предварительный просмотр</p>
+                    </div>
+                    <button type="button" onclick="closeAccountingDocumentPreview()" aria-label="Закрыть">×</button>
+                </div>
+                <div class="accounting-document-modal__body" id="accountingDocumentPreviewBody">
+                    <div class="accounting-document-modal__loading">Загрузка документа…</div>
+                </div>
+                <div class="accounting-document-modal__footer">
+                    <button type="button" onclick="printAccountingDocument()">Печать</button>
+                    <button type="button" id="accountingDocumentDownloadBtn" onclick="downloadAccountingDocument()">Скачать PDF</button>
+                    <button type="button" onclick="shareAccountingDocument()">Поделиться</button>
+                    <button type="button" class="accounting-document-modal__close" onclick="closeAccountingDocumentPreview()">Закрыть</button>
+                </div>
+            </div>`;
+    }
+    if (modal.parentElement !== document.body) document.body.appendChild(modal);
+    return modal;
+}
+
 function getAccountingSalesData() {
     if (accountingSalesCache) return accountingSalesCache;
     const node = document.getElementById('accountingSalesData');
@@ -288,7 +322,10 @@ function openAccountingSaleMain(saleId) {
 function openAccountingDocumentFromSale(saleId, key, returnToDocuments) {
     const sale = getAccountingSale(saleId);
     const config = accountingSaleDocumentConfig(sale, key);
-    if (!config || !config.url) return;
+    if (!sale || !config || !config.url) {
+        alert('Документ продажи не найден. Обновите данные бухгалтерии и повторите попытку.');
+        return;
+    }
 
     openAccountingDocumentPreview({
         url: config.url,
@@ -300,22 +337,77 @@ function openAccountingDocumentFromSale(saleId, key, returnToDocuments) {
     });
 }
 
+function accountingDocumentConfigFromUrl(url, title, subtitle) {
+    const cleanUrl = String(url || '').trim();
+    if (!cleanUrl) return null;
+
+    let pathname = cleanUrl;
+    try {
+        pathname = new URL(cleanUrl, window.location.origin).pathname;
+    } catch (error) {
+        console.warn('ACCOUNTING DOCUMENT URL ERROR', error);
+    }
+
+    const match = pathname.match(/\/docs\/(check|refund-check|invoice|nakladnaya|schet-factura|act)\/(\d+)/);
+    if (!match) {
+        const rawFilename = decodeURIComponent(pathname.split('/').pop() || 'document');
+        return {
+            url: cleanUrl,
+            downloadUrl: cleanUrl,
+            title: title || 'Документ',
+            subtitle: subtitle || 'Загруженный файл',
+            filename: rawFilename,
+            isUploadedFile: true
+        };
+    }
+
+    const type = match[1];
+    const documentId = match[2];
+    const labels = {
+        'check': 'Чек',
+        'refund-check': 'Чек возврата',
+        'invoice': 'Счёт на оплату',
+        'nakladnaya': 'Накладная',
+        'schet-factura': 'Счёт-фактура',
+        'act': 'Акт выполненных работ'
+    };
+    const filenames = {
+        'check': `check-${documentId}.pdf`,
+        'refund-check': `refund-check-${documentId}.pdf`,
+        'invoice': `schet-na-oplatu-${documentId}.pdf`,
+        'nakladnaya': `nakladnaya-${documentId}.pdf`,
+        'schet-factura': `schet-factura-${documentId}.pdf`,
+        'act': `akt-vypolnennyh-rabot-${documentId}.pdf`
+    };
+    return {
+        url: cleanUrl,
+        pdfUrl: `/docs/pdf/${type}/${documentId}`,
+        title: title || labels[type] || 'Документ',
+        subtitle: subtitle || 'Предварительный просмотр',
+        filename: filenames[type] || `document-${documentId}.pdf`
+    };
+}
+
+function openAccountingUrlDocument(url, title, subtitle) {
+    const config = accountingDocumentConfigFromUrl(url, title, subtitle);
+    if (!config) {
+        alert('Ссылка на документ отсутствует.');
+        return;
+    }
+    openAccountingDocumentPreview(config);
+}
+
 function openAccountingFile(url, title) {
     closeAllDocumentMenus();
-    const cleanUrl = String(url || '');
-    const rawFilename = decodeURIComponent(cleanUrl.split('/').pop() || 'document');
-    openAccountingDocumentPreview({
-        url: cleanUrl,
-        downloadUrl: cleanUrl,
-        title: title || 'Документ',
-        subtitle: 'Загруженный файл',
-        filename: rawFilename,
-        isUploadedFile: true
-    });
+    openAccountingUrlDocument(url, title, 'Загруженный файл');
 }
 
 function openAccountingDocumentPreview(options) {
-    if (!options || !options.url) return;
+    if (!options || !options.url) {
+        alert('Не удалось определить адрес документа.');
+        return;
+    }
+    mountAccountingDocumentPreview();
     const returnModalId = options.returnModalId || '';
     if (returnModalId) closeAccountingModal(returnModalId);
 
@@ -413,12 +505,18 @@ async function shareAccountingDocument() {
 
 function openAccountingSaleDocuments(saleId) {
     const sale = getAccountingSale(saleId);
-    if (!sale) return;
+    if (!sale) {
+        alert('Продажа не найдена. Обновите страницу и повторите попытку.');
+        return;
+    }
 
     const title = document.getElementById('saleDocumentsModalTitle');
     const subtitle = document.getElementById('saleDocumentsModalSubtitle');
     const body = document.getElementById('saleDocumentsModalBody');
-    if (!title || !subtitle || !body) return;
+    if (!title || !subtitle || !body) {
+        alert('Не удалось открыть список документов. Обновите страницу и повторите попытку.');
+        return;
+    }
 
     title.textContent = `Продажа №${sale.number}`;
     subtitle.textContent = `${sale.client_primary} · ${sale.date} · ${accountingMoney(sale.amount)}`;

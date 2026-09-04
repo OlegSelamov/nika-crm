@@ -3,7 +3,7 @@
 {% block content %}
 
 
-{% block page_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/accounting.css') }}">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/accounting.css', v='20260904-2') }}">{% endblock %}
 
 
 
@@ -117,9 +117,9 @@
                         </td>
                         <td>
                             <div class="accounting-sale-actions">
-                                <a class="accounting-sale-main-btn" href="{{ sale.main_url }}" target="_blank" rel="noopener">
+                                <button class="accounting-sale-main-btn" type="button" onclick="openAccountingSaleMain({{ sale.id }})">
                                     {{ sale.main_label }}
-                                </a>
+                                </button>
                                 <button class="accounting-sale-docs-btn" type="button"
                                         onclick="openAccountingSaleDocuments({{ sale.id }})">
                                     Документы {{ sale.documents_count }}
@@ -153,7 +153,7 @@
                     <span>{{ sale.payment_method }}</span>
                 </div>
                 <div class="accounting-sale-actions">
-                    <a class="accounting-sale-main-btn" href="{{ sale.main_url }}" target="_blank" rel="noopener">{{ sale.main_label }}</a>
+                    <button class="accounting-sale-main-btn" type="button" onclick="openAccountingSaleMain({{ sale.id }})">{{ sale.main_label }}</button>
                     <button class="accounting-sale-docs-btn" type="button" onclick="openAccountingSaleDocuments({{ sale.id }})">Документы {{ sale.documents_count }}</button>
                 </div>
             </article>
@@ -478,7 +478,7 @@
                         <td>
                             <button class="document-menu-btn" type="button" onclick="toggleDocumentMenu(this)">•••</button>
                             <div class="document-menu">
-                                {% if document.file_url %}<a href="{{ document.file_url }}" target="_blank" rel="noopener">Открыть</a>{% endif %}
+                                {% if document.file_url %}<button type="button" onclick='openAccountingFile({{ document.file_url|tojson }}, {{ document.title|tojson }})'>Открыть</button>{% endif %}
                                 <button type="button" onclick="openEditDocumentModal({{ document.id|tojson }})">Редактировать</button>
                                 <form method="post" action="/accounting/documents/{{ document.id }}/archive"><button type="submit">В архив</button></form>
                                 <form method="post" action="/accounting/documents/{{ document.id }}/delete" onsubmit="return confirm('Удалить документ?')"><button type="submit" class="danger-action">Удалить</button></form>
@@ -499,6 +499,29 @@
         </div>
         {% endif %}
     </section>
+</div>
+
+<!-- Просмотр документа: такое же окно, как в разделе «Продажи» -->
+<div class="accounting-modal accounting-document-modal" id="accountingDocumentPreviewModal" aria-hidden="true">
+    <div class="accounting-modal__backdrop" onclick="closeAccountingDocumentPreview()"></div>
+    <div class="accounting-modal__dialog accounting-modal__dialog--document" role="dialog" aria-modal="true" aria-labelledby="accountingDocumentPreviewTitle">
+        <div class="accounting-modal__head accounting-document-modal__head">
+            <div>
+                <h3 id="accountingDocumentPreviewTitle">Документ</h3>
+                <p id="accountingDocumentPreviewSubtitle">Предварительный просмотр</p>
+            </div>
+            <button type="button" onclick="closeAccountingDocumentPreview()" aria-label="Закрыть">×</button>
+        </div>
+        <div class="accounting-document-modal__body" id="accountingDocumentPreviewBody">
+            <div class="accounting-document-modal__loading">Загрузка документа…</div>
+        </div>
+        <div class="accounting-document-modal__footer">
+            <button type="button" onclick="printAccountingDocument()">Печать</button>
+            <button type="button" id="accountingDocumentDownloadBtn" onclick="downloadAccountingDocument()">Скачать PDF</button>
+            <button type="button" onclick="shareAccountingDocument()">Поделиться</button>
+            <button type="button" class="accounting-document-modal__close" onclick="closeAccountingDocumentPreview()">Закрыть</button>
+        </div>
+    </div>
 </div>
 
 <!-- Данные продаж для модалки документов -->
@@ -781,6 +804,6 @@
     </div>
 </div>
 
-{% block page_js %}<script src="{{ url_for('static', filename='js/accounting.js') }}"></script>{% endblock %}
+{% block page_js %}<script src="{{ url_for('static', filename='js/accounting.js', v='20260904-2') }}"></script>{% endblock %}
 
 {% endblock %}
