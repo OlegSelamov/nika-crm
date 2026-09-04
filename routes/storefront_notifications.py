@@ -50,6 +50,7 @@ def _sync_orders(cur, company_id, user_id):
             o.created_at
         FROM online_orders o
         WHERE o.company_id = %s
+          AND COALESCE(o.order_status, 'new') = 'new'
           AND o.created_at >= NOW() - INTERVAL '7 days'
           AND NOT EXISTS (
               SELECT 1
@@ -117,6 +118,7 @@ def _sync_bookings(cur, company_id, user_id):
           ON i.id = b.item_id
          AND i.company_id = b.company_id
         WHERE b.company_id = %s
+          AND COALESCE(b.status, 'new') = 'new'
           AND b.created_at >= NOW() - INTERVAL '7 days'
           AND NOT EXISTS (
               SELECT 1
@@ -190,8 +192,7 @@ def sync_storefront_notifications():
         _ensure_notifications_table(cur)
         created = []
 
-        # В штатной установке обе таблицы витрины уже есть. Если модуль ещё не
-        # инициализирован, единичная ошибка синхронизации не должна ломать CRM.
+        # Подтягиваем только новые, ещё не обработанные события витрины.
         created.extend(_sync_orders(cur, company_id, user_id))
         created.extend(_sync_bookings(cur, company_id, user_id))
 
