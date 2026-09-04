@@ -524,3 +524,47 @@ body.sf-lock{overflow:hidden}
     .sf-mobile .sf-mobile-cart.active{background:transparent !important;color:var(--brand) !important;box-shadow:none}
     body{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
 }
+
+
+/* Three-action mobile storefront dock */
+@media(max-width:620px){
+    .sf-mobile.sf-mobile-three{
+        grid-template-columns:1fr 1fr 1fr !important;
+        min-height:76px !important;
+        padding-left:14px !important;
+        padding-right:14px !important;
+    }
+    .sf-mobile.sf-mobile-three .sf-mobile-item{
+        min-height:60px !important;
+        color:#18213a !important;
+        background:transparent !important;
+        box-shadow:none !important;
+    }
+    .sf-mobile.sf-mobile-three .sf-mobile-item:not(.sf-mobile-cart) .sf-mobile-icon{
+        width:29px;height:29px;
+    }
+    .sf-mobile.sf-mobile-three .sf-mobile-item:not(.sf-mobile-cart) .sf-mobile-icon svg{
+        width:27px;height:27px;stroke-width:1.75;
+    }
+    .sf-mobile.sf-mobile-three .sf-mobile-item b{
+        font-size:10px !important;
+        font-weight:700 !important;
+    }
+    .sf-mobile.sf-mobile-three .sf-mobile-cart{
+        color:#25304b !important;
+    }
+    .sf-mobile.sf-mobile-three .sf-mobile-cart .sf-mobile-icon{
+        width:58px;height:58px;margin-top:-31px;
+        background:linear-gradient(145deg,var(--brand),var(--brand-dark));
+        box-shadow:0 9px 22px color-mix(in srgb,var(--brand) 35%,transparent);
+    }
+    .sf-mobile.sf-mobile-three .sf-mobile-cart .sf-mobile-icon svg{
+        width:30px;height:30px;
+    }
+    .sf-mobile.sf-mobile-three .sf-mobile-cart b{margin-top:4px}
+    .sf-mobile.sf-mobile-three .sf-mobile-item.active{
+        color:var(--brand) !important;
+        background:transparent !important;
+        box-shadow:none !important;
+    }
+}
