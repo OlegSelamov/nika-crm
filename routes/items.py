@@ -27,6 +27,45 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 items_bp = Blueprint("items", __name__)
 
 
+def _ean13_check_digit(first_twelve):
+    digits = [int(value) for value in str(first_twelve)]
+    total = sum(digits[::2]) + 3 * sum(digits[1::2])
+    return str((10 - total % 10) % 10)
+
+
+def _generate_internal_barcode(cur):
+    """Create a globally unique internal EAN-13 in the reserved 20-prefix range."""
+    for _ in range(100):
+        payload = "20" + f"{uuid.uuid4().int % 10_000_000_000:010d}"
+        barcode = payload + _ean13_check_digit(payload)
+        cur.execute("SELECT 1 FROM items WHERE barcode = %s LIMIT 1", (barcode,))
+        if not cur.fetchone():
+            return barcode
+    raise RuntimeError("Не удалось создать уникальный штрихкод")
+
+
+def _internal_barcode_for_item(item_id, occupied):
+    payload = "20" + f"{int(item_id) % 10_000_000_000:010d}"
+    barcode = payload + _ean13_check_digit(payload)
+    if barcode not in occupied:
+        occupied.add(barcode)
+        return barcode
+    for _ in range(100):
+        payload = "20" + f"{uuid.uuid4().int % 10_000_000_000:010d}"
+        barcode = payload + _ean13_check_digit(payload)
+        if barcode not in occupied:
+            occupied.add(barcode)
+            return barcode
+    raise RuntimeError("Не удалось создать уникальный штрихкод")
+
+
+def _item_barcode(cur, value, item_type="product"):
+    barcode = str(value or "").strip()
+    if barcode or item_type == "service":
+        return barcode
+    return _generate_internal_barcode(cur)
+
+
 @items_bp.route("/items")
 def items():
     conn = get_db()
@@ -160,6 +199,131 @@ def api_catalog_items():
         "has_more": offset + len(rows) < total,
     })
 
+
+@items_bp.route("/api/items/barcodes/new")
+def api_new_item_barcode():
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        return jsonify({"success": True, "barcode": _generate_internal_barcode(cur)})
+    finally:
+        pool.putconn(conn)
+
+
+@items_bp.route("/api/items/labels")
+def api_item_labels():
+    company_id = session.get("company_id")
+    query = str(request.args.get("q") or "").strip()
+    params = [company_id]
+    search_sql = ""
+    if query:
+        search_sql = "AND (name ILIKE %s OR COALESCE(barcode, '') ILIKE %s)"
+        pattern = f"%{query}%"
+        params.extend([pattern, pattern])
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            SELECT id, name, retail_price, unit, barcode
+            FROM items
+            WHERE company_id = %s
+              AND COALESCE(item_type, 'product') = 'product'
+              {search_sql}
+            ORDER BY id DESC
+            LIMIT 250
+        """, tuple(params))
+        rows = []
+        for row in cur.fetchall():
+            rows.append({
+                "id": row["id"],
+                "name": row["name"] or "Товар",
+                "retail_price": float(row["retail_price"] or 0),
+                "unit": row["unit"] or "шт",
+                "barcode": row["barcode"] or "",
+            })
+        return jsonify({"success": True, "items": rows, "limited": len(rows) == 250})
+    finally:
+        pool.putconn(conn)
+
+
+@items_bp.route("/api/items/barcodes/generate-missing", methods=["POST"])
+def api_generate_missing_barcodes():
+    company_id = session.get("company_id")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id
+            FROM items
+            WHERE company_id = %s
+              AND COALESCE(item_type, 'product') = 'product'
+              AND COALESCE(TRIM(barcode), '') = ''
+            ORDER BY id
+        """, (company_id,))
+        item_ids = [row["id"] for row in cur.fetchall()]
+        cur.execute("""
+            SELECT barcode FROM items
+            WHERE company_id = %s AND COALESCE(TRIM(barcode), '') <> ''
+        """, (company_id,))
+        occupied = {str(row["barcode"]).strip() for row in cur.fetchall()}
+        updates = [(_internal_barcode_for_item(item_id, occupied), item_id) for item_id in item_ids]
+        for offset in range(0, len(updates), 500):
+            chunk = updates[offset:offset + 500]
+            placeholders = ",".join(["(%s,%s)"] * len(chunk))
+            params = []
+            for barcode, item_id in chunk:
+                params.extend([barcode, item_id])
+            params.append(company_id)
+            cur.execute(f"""
+                UPDATE items AS target
+                SET barcode = source.barcode
+                FROM (VALUES {placeholders}) AS source(barcode, item_id)
+                WHERE target.id = source.item_id
+                  AND target.company_id = %s
+                  AND COALESCE(TRIM(target.barcode), '') = ''
+            """, tuple(params))
+        conn.commit()
+        return jsonify({"success": True, "updated": len(item_ids)})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@items_bp.route("/api/items/<int:item_id>/barcode", methods=["POST"])
+def api_ensure_item_barcode(item_id):
+    company_id = session.get("company_id")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT barcode, COALESCE(item_type, 'product') AS item_type
+            FROM items
+            WHERE id = %s AND company_id = %s
+        """, (item_id, company_id))
+        item = cur.fetchone()
+        if not item:
+            return jsonify({"success": False, "message": "Товар не найден"}), 404
+        if item["item_type"] != "product":
+            return jsonify({"success": False, "message": "Этикетки доступны только для товаров"}), 400
+
+        barcode = str(item["barcode"] or "").strip()
+        if not barcode:
+            barcode = _generate_internal_barcode(cur)
+            cur.execute(
+                "UPDATE items SET barcode = %s WHERE id = %s AND company_id = %s",
+                (barcode, item_id, company_id),
+            )
+            conn.commit()
+        return jsonify({"success": True, "barcode": barcode})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
 @items_bp.route("/items/add", methods=["GET", "POST"])
 def add_item():
 
@@ -170,6 +334,8 @@ def add_item():
     if request.method == "POST":
 
         company_id = session.get("company_id")
+        item_type = "service" if request.form.get("item_type") == "service" else "product"
+        barcode = _item_barcode(cur, request.form.get("barcode"), item_type)
 
         cur.execute("""
             INSERT INTO items (
@@ -200,12 +366,12 @@ def add_item():
             float(request.form.get("wholesale_price") or 0),
             float(request.form.get("purchase_price") or 0),
             int(request.form.get("discount_percent") or 0),
-            request.form.get("barcode"),
+            barcode,
             request.form.get("gtin"),
             request.form.get("ntin"),
-            request.form.get("is_marked") == "1" if request.form.get("item_type", "product") == "product" else False,
-            request.form.get("item_type", "product"),
-            (request.form.get("service_sale_mode") or "order") if request.form.get("item_type", "product") == "service" else None,
+            request.form.get("is_marked") == "1" if item_type == "product" else False,
+            item_type,
+            (request.form.get("service_sale_mode") or "order") if item_type == "service" else None,
             company_id
         ))
 
@@ -280,6 +446,8 @@ def edit_item(item_id):
     cur = conn.cursor()
 
     if request.method == "POST":
+        item_type = "service" if request.form.get("item_type") == "service" else "product"
+        barcode = _item_barcode(cur, request.form.get("barcode"), item_type)
         cur.execute("""
             UPDATE items
             SET 
@@ -307,12 +475,12 @@ def edit_item(item_id):
             float(request.form.get("wholesale_price") or 0),
             float(request.form.get("purchase_price") or 0),
             int(request.form.get("discount_percent") or 0),
-            request.form.get("barcode"),
+            barcode,
             request.form.get("gtin"),
-            request.form.get("ntin") if request.form.get("item_type", "product") == "product" else "",
-            request.form.get("is_marked") == "1" if request.form.get("item_type", "product") == "product" else False,
-            request.form.get("item_type", "product"),
-            (request.form.get("service_sale_mode") or "order") if request.form.get("item_type", "product") == "service" else None,
+            request.form.get("ntin") if item_type == "product" else "",
+            request.form.get("is_marked") == "1" if item_type == "product" else False,
+            item_type,
+            (request.form.get("service_sale_mode") or "order") if item_type == "service" else None,
             item_id,
             session.get("company_id")
         ))
@@ -744,6 +912,7 @@ def api_create_item():
 
     conn = get_db()
     cur = conn.cursor()
+    barcode = _item_barcode(cur, data.get("barcode"), item_type)
 
     cur.execute("""
         INSERT INTO items (
@@ -777,7 +946,7 @@ def api_create_item():
         float(data.get("purchase_price") or 0),
         float(data.get("wholesale_price") or 0),
         int(data.get("discount_percent") or 0),
-        data.get("barcode", ""),
+        barcode,
         data.get("gtin", ""),
         data.get("ntin", ""),
         bool(data.get("is_marked", False)) if item_type == "product" else False,
@@ -851,6 +1020,7 @@ def api_update_item(item_id):
     conn = get_db()
     cur = conn.cursor()
     try:
+        barcode = _item_barcode(cur, data.get("barcode"), item_type)
         cur.execute("""
             UPDATE items SET
                 name=%s, category=%s, unit=%s, type=%s, description=%s,
@@ -869,7 +1039,7 @@ def api_update_item(item_id):
             float(data.get("purchase_price") or 0),
             float(data.get("wholesale_price") or 0),
             int(float(data.get("discount_percent") or 0)),
-            str(data.get("barcode") or "").strip(),
+            barcode,
             str(data.get("gtin") or "").strip() if item_type == "product" else "",
             str(data.get("ntin") or "").strip() if item_type == "product" else "",
             bool(data.get("is_marked", False)) if item_type == "product" else False,
@@ -1232,6 +1402,8 @@ def import_items_xlsx():
                     )
                     stats["updated"] += 1
                 else:
+                    if item_type == "product" and not barcode:
+                        barcode = _generate_internal_barcode(cur)
                     cur.execute("""
                         INSERT INTO items (
                             name, category, unit, description, retail_price,

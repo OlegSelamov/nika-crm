@@ -27,13 +27,17 @@
     }
 
     document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') closeItemModal();
+        if (event.key === 'Escape') {
+            closeItemModal();
+            closeLabelManager();
+        }
     });
 })();
 
 document.addEventListener('DOMContentLoaded', function () {
     mountItemModalToBody();
     mountCategoryManagerToBody();
+    mountLabelManagerToBody();
     filterItemCategoryOptions('product');
 
     document.addEventListener('keydown', function (event) {
@@ -137,6 +141,7 @@ function catalogDesktopRow(item) {
         '<td><span class="catalog-price">' + formatCatalogPrice(data.retail_price) + '</span></td>' +
         '<td><span class="catalog-unit">' + escapeCatalogHtml(data.unit) + '</span></td>' +
         '<td><div class="catalog-actions">' +
+            (itemType === 'product' ? '<button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку" data-catalog-label-id="' + id + '">▥</button>' : '') +
             '<button class="catalog-icon-btn" type="button" title="Редактировать" data-catalog-edit-id="' + id + '">' +
                 '<img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>' +
             '<a class="catalog-danger-btn" href="/items/' + id + '/delete" title="Удалить" data-catalog-delete-id="' + id + '">' +
@@ -164,12 +169,19 @@ function catalogMobileCard(item) {
             '<div><small>GTIN</small>' + escapeCatalogHtml(data.gtin || '—') + '</div>' +
             '<div><small>NTIN</small>' + escapeCatalogHtml(data.ntin || '—') + '</div></div>' +
         '<div class="catalog-mobile-card__actions">' +
+            (itemType === 'product' ? '<button type="button" class="catalog-mobile-label-btn" data-catalog-label-id="' + id + '">Этикетка</button>' : '') +
             '<button type="button" data-catalog-edit-id="' + id + '">Изменить</button>' +
             '<a href="/items/' + id + '/delete" data-catalog-delete-id="' + id + '">Удалить</a>' +
         '</div></article>';
 }
 
 function bindCatalogItemActions(root) {
+    (root || document).querySelectorAll('[data-catalog-label-id]').forEach(function (button) {
+        button.onclick = function () {
+            var item = catalogItemsById[decodeURIComponent(button.dataset.catalogLabelId)];
+            if (item) openQuickLabel(item);
+        };
+    });
     (root || document).querySelectorAll('[data-catalog-edit-id]').forEach(function (button) {
         button.onclick = function () {
             var item = catalogItemsById[decodeURIComponent(button.dataset.catalogEditId)];
@@ -447,6 +459,8 @@ function applyItemType(type) {
     if (barcodeButton) {
         barcodeButton.textContent = type === "service" ? "Найти услугу" : "Найти товар";
     }
+    var generateBarcodeButton = document.getElementById("barcodeGenerateButton");
+    if (generateBarcodeButton) generateBarcodeButton.style.display = type === "service" ? "none" : "";
 
     if (type === "service") {
         var marked = document.getElementById("itemIsMarked");
@@ -1330,3 +1344,253 @@ document.addEventListener('DOMContentLoaded', mountCatalogEnrichmentModal);
 document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closeCatalogEnrichmentModal();
 });
+
+// ===== Автогенерация штрихкодов и печать этикеток =====
+var catalogLabelItems = [];
+var catalogLabelSearchTimer = null;
+
+async function generateItemBarcode() {
+    var field = document.getElementById('itemBarcode');
+    var button = document.getElementById('barcodeGenerateButton');
+    if (!field) return;
+    if (field.value.trim() && !window.confirm('Заменить введённый штрихкод новым?')) return;
+
+    if (button) { button.disabled = true; button.textContent = 'Создание…'; }
+    try {
+        var response = await fetch('/api/items/barcodes/new', { headers: { 'Accept': 'application/json' } });
+        var data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Не удалось создать штрихкод');
+        field.value = data.barcode;
+        showBarcodeStatus('success', 'Создан внутренний EAN-13. Он сохранится вместе с товаром.');
+    } catch (error) {
+        showBarcodeStatus('error', error.message || 'Не удалось создать штрихкод');
+    } finally {
+        if (button) { button.disabled = false; button.textContent = 'Сгенерировать'; }
+    }
+}
+
+function mountLabelManagerToBody() {
+    var modal = document.getElementById('catalogLabelModal');
+    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+    return modal;
+}
+
+async function openLabelManager(preselectId) {
+    var modal = mountLabelManagerToBody();
+    if (!modal) return;
+    var search = document.getElementById('catalogLabelSearch');
+    if (search && !preselectId) search.value = '';
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('catalog-label-modal-open');
+    await loadLabelItems(preselectId);
+}
+
+function closeLabelManager() {
+    var modal = document.getElementById('catalogLabelModal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('catalog-label-modal-open');
+}
+
+async function openQuickLabel(item) {
+    if (!item || !item.id) return;
+    try {
+        if (!String(item.barcode || '').trim()) {
+            var response = await fetch('/api/items/' + encodeURIComponent(item.id) + '/barcode', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+            });
+            var data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || 'Не удалось создать штрихкод');
+            item.barcode = data.barcode;
+        }
+        var search = document.getElementById('catalogLabelSearch');
+        if (search) search.value = String(item.barcode || item.name || '');
+        await openLabelManager(item.id);
+    } catch (error) {
+        alert(error.message || 'Не удалось подготовить этикетку');
+    }
+}
+
+function scheduleLabelSearch() {
+    window.clearTimeout(catalogLabelSearchTimer);
+    catalogLabelSearchTimer = window.setTimeout(function () { loadLabelItems(); }, 250);
+}
+
+async function loadLabelItems(preselectId) {
+    var list = document.getElementById('catalogLabelList');
+    var search = document.getElementById('catalogLabelSearch');
+    var note = document.getElementById('catalogLabelNote');
+    if (!list) return;
+    list.innerHTML = '<div class="catalog-label-empty">Загрузка товаров…</div>';
+    if (note) note.textContent = '';
+
+    try {
+        var response = await fetch('/api/items/labels?q=' + encodeURIComponent(search ? search.value.trim() : ''), {
+            headers: { 'Accept': 'application/json' }
+        });
+        var data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Не удалось загрузить товары');
+        catalogLabelItems = Array.isArray(data.items) ? data.items : [];
+        renderLabelItems(preselectId);
+        if (note && data.limited) note.textContent = 'Показаны первые 250 товаров. Используйте поиск, чтобы найти остальные.';
+    } catch (error) {
+        list.innerHTML = '<div class="catalog-label-empty is-error">' + escapeCatalogHtml(error.message || 'Ошибка загрузки') + '</div>';
+    }
+}
+
+function renderLabelItems(preselectId) {
+    var list = document.getElementById('catalogLabelList');
+    if (!list) return;
+    if (!catalogLabelItems.length) {
+        list.innerHTML = '<div class="catalog-label-empty">Товары не найдены</div>';
+        updateLabelCount();
+        return;
+    }
+
+    list.innerHTML = catalogLabelItems.map(function (item) {
+        var selected = Number(item.id) === Number(preselectId);
+        var hasBarcode = Boolean(String(item.barcode || '').trim());
+        return '<div class="catalog-label-row ' + (!hasBarcode ? 'is-missing' : '') + '">' +
+            '<input class="catalog-label-check" type="checkbox" value="' + Number(item.id) + '" ' +
+                (selected && hasBarcode ? 'checked ' : '') + (hasBarcode ? '' : 'disabled ') + 'onchange="updateLabelCount()">' +
+            '<span class="catalog-label-row__info"><b>' + escapeCatalogHtml(item.name) + '</b><small>' +
+                (hasBarcode ? escapeCatalogHtml(item.barcode) : 'Штрихкод ещё не создан') + '</small></span>' +
+            '<strong>' + formatCatalogPrice(item.retail_price) + '</strong>' +
+            '<label class="catalog-label-quantity"><span>Копий</span><input type="number" min="1" max="999" value="1" data-label-quantity="' + Number(item.id) + '"></label>' +
+        '</div>';
+    }).join('');
+    var selectAll = document.getElementById('catalogLabelSelectAll');
+    if (selectAll) selectAll.checked = false;
+    updateLabelCount();
+}
+
+function toggleAllLabels(checked) {
+    document.querySelectorAll('#catalogLabelList .catalog-label-check:not(:disabled)').forEach(function (input) {
+        input.checked = checked;
+    });
+    updateLabelCount();
+}
+
+function updateLabelCount() {
+    var count = document.querySelectorAll('#catalogLabelList .catalog-label-check:checked').length;
+    var label = document.getElementById('catalogLabelCount');
+    if (label) label.textContent = 'Выбрано: ' + count;
+}
+
+async function generateMissingBarcodes(event) {
+    var button = event && event.currentTarget ? event.currentTarget : null;
+    if (button) { button.disabled = true; button.textContent = 'Создание…'; }
+    try {
+        var response = await fetch('/api/items/barcodes/generate-missing', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+        });
+        var data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Не удалось создать штрихкоды');
+        await loadLabelItems();
+        loadCatalogItems(1, false);
+        var note = document.getElementById('catalogLabelNote');
+        if (note) note.textContent = data.updated ? 'Создано штрихкодов: ' + data.updated : 'У всех товаров уже есть штрихкоды.';
+    } catch (error) {
+        alert(error.message || 'Не удалось создать штрихкоды');
+    } finally {
+        if (button) { button.disabled = false; button.textContent = 'Создать отсутствующие'; }
+    }
+}
+
+function eanBits(value) {
+    var code = String(value || '').replace(/\D/g, '');
+    var left = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+    var mixed = ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
+    var right = ['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'];
+    var parity = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+
+    if (code.length === 12) code = '0' + code;
+    if (code.length === 13) {
+        var bits = '101';
+        var modes = parity[Number(code[0])];
+        for (var index = 1; index <= 6; index += 1) {
+            bits += modes[index - 1] === 'L' ? left[Number(code[index])] : mixed[Number(code[index])];
+        }
+        bits += '01010';
+        for (var rightIndex = 7; rightIndex <= 12; rightIndex += 1) bits += right[Number(code[rightIndex])];
+        return '101' + bits.slice(3) + '101';
+    }
+    if (code.length === 8) {
+        var ean8 = '101';
+        for (var leftIndex = 0; leftIndex < 4; leftIndex += 1) ean8 += left[Number(code[leftIndex])];
+        ean8 += '01010';
+        for (var endIndex = 4; endIndex < 8; endIndex += 1) ean8 += right[Number(code[endIndex])];
+        return ean8 + '101';
+    }
+    return '';
+}
+
+function barcodeSvg(value) {
+    var bits = eanBits(value);
+    if (!bits) return '<div class="barcode-unavailable">Для печати нужен EAN-8 или EAN-13</div>';
+    var bars = '';
+    for (var index = 0; index < bits.length; index += 1) {
+        if (bits[index] === '1') bars += '<rect x="' + index + '" y="0" width="1" height="42"/>';
+    }
+    return '<svg class="label-barcode" viewBox="0 0 ' + bits.length + ' 42" preserveAspectRatio="none" aria-label="Штрихкод ' + escapeCatalogHtml(value) + '">' + bars + '</svg>';
+}
+
+function selectedLabelItems() {
+    var selected = [];
+    document.querySelectorAll('#catalogLabelList .catalog-label-check:checked').forEach(function (input) {
+        var item = catalogLabelItems.find(function (row) { return Number(row.id) === Number(input.value); });
+        if (!item) return;
+        var quantityInput = document.querySelector('[data-label-quantity="' + Number(item.id) + '"]');
+        var quantity = Math.min(999, Math.max(1, Number(quantityInput ? quantityInput.value : 1) || 1));
+        for (var copy = 0; copy < quantity; copy += 1) selected.push(item);
+    });
+    return selected;
+}
+
+function printSelectedLabels() {
+    var items = selectedLabelItems();
+    if (!items.length) {
+        alert('Выберите хотя бы один товар со штрихкодом');
+        return;
+    }
+    var unsupported = items.find(function (item) { return !eanBits(item.barcode); });
+    if (unsupported) {
+        alert('Штрихкод товара «' + unsupported.name + '» не является EAN-8 или EAN-13. Создайте для него внутренний код.');
+        return;
+    }
+
+    var formatSelect = document.getElementById('catalogLabelFormat');
+    var format = formatSelect ? formatSelect.value : '58x40';
+    var size = format === '50x30' ? { width: 50, height: 30 } : { width: 58, height: 40 };
+    var a4 = format === 'a4';
+    var labels = items.map(function (item) {
+        return '<article class="label"><div class="label-name">' + escapeCatalogHtml(item.name) + '</div>' +
+            '<div class="label-price">' + formatCatalogPrice(item.retail_price) + '</div>' +
+            barcodeSvg(item.barcode) + '<div class="label-code">' + escapeCatalogHtml(item.barcode) + '</div></article>';
+    }).join('');
+
+    var printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+        alert('Браузер заблокировал окно печати. Разрешите всплывающие окна для сайта.');
+        return;
+    }
+    var pageRule = a4 ? '@page{size:A4 portrait;margin:8mm}' : '@page{size:' + size.width + 'mm ' + size.height + 'mm;margin:0}';
+    var sheetRule = a4
+        ? '.sheet{display:grid;grid-template-columns:repeat(3,58mm);gap:3mm;align-content:start}.label{width:58mm;height:40mm;break-inside:avoid}'
+        : '.sheet{display:block}.label{width:' + size.width + 'mm;height:' + size.height + 'mm;page-break-after:always}.label:last-child{page-break-after:auto}';
+
+    printWindow.document.open();
+    printWindow.document.write('<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Печать этикеток</title><style>' +
+        pageRule + '*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:Arial,sans-serif;color:#000}' + sheetRule +
+        '.label{display:grid;grid-template-rows:auto auto 1fr auto;align-items:center;padding:2.2mm;overflow:hidden;background:#fff;text-align:center}' +
+        '.label-name{min-height:4.5mm;font-size:9pt;font-weight:700;line-height:1.05;overflow:hidden}.label-price{font-size:13pt;font-weight:900;line-height:1.05}' +
+        '.label-barcode{width:100%;height:16mm;display:block;shape-rendering:crispEdges}.label-code{font-size:8pt;letter-spacing:1.2px;line-height:1}.barcode-unavailable{font-size:7pt}' +
+        '@media screen{body{padding:10px;background:#ddd}.sheet{margin:auto;background:#fff}.label{outline:1px dashed #bbb}}' +
+        '@media print{body{background:#fff}}' +
+        '</style></head><body><main class="sheet">' + labels + '</main><script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>');
+    printWindow.document.close();
+}

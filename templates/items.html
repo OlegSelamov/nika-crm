@@ -26,6 +26,7 @@
             <div class="catalog-note">Товары и услуги, цены, категории, штрихкоды и единицы измерения</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="nika-data-trigger" type="button" onclick="openLabelManager()"><span class="nika-data-trigger__icon">▥</span>Этикетки</button>
             <button class="nika-data-trigger" type="button" onclick="openCatalogDataModal()"><span class="nika-data-trigger__icon">▤</span>Данные</button>
             <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()"><img src="/static/icons/add.png" class="catalog-btn-icon" alt="">Добавить позицию</button>
         </div>
@@ -101,6 +102,10 @@
                         <td><span class="catalog-unit">{{ i.unit or 'шт' }}</span></td>
                         <td>
                             <div class="catalog-actions">
+                                {% if item_type == 'product' %}
+                                <button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку"
+                                    onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'>▥</button>
+                                {% endif %}
                                 <button class="catalog-icon-btn" type="button" title="Редактировать"
                                     onclick='openEditItemModal({{ {
                                         "id": i.id,
@@ -153,6 +158,7 @@
                     <div><small>NTIN</small>{{ i.ntin or '—' }}</div>
                 </div>
                 <div class="catalog-mobile-card__actions">
+                    {% if item_type == 'product' %}<button type="button" class="catalog-mobile-label-btn" onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'>Этикетка</button>{% endif %}
                     <button type="button" onclick='openEditItemModal({{ {
                         "id": i.id,
                         "name": i.name or "",
@@ -219,6 +225,10 @@
             <button class="nika-data-action nika-data-action--button" type="button" onclick="openCatalogEnrichmentModal()">
                 <span class="nika-data-action__icon">✦</span>
                 <span><b>Обогатить каталог</b><small>Найти GTIN и NTIN по названию</small></span>
+            </button>
+            <button class="nika-data-action nika-data-action--button" type="button" onclick="closeCatalogDataModal(); openLabelManager()">
+                <span class="nika-data-action__icon">▥</span>
+                <span><b>Штрихкоды и этикетки</b><small>Создать коды и отправить на печать</small></span>
             </button>
         </div>
 
@@ -350,6 +360,7 @@
                     <div class="catalog-barcode-row">
                         <input type="text" name="barcode" id="itemBarcode" inputmode="numeric" autocomplete="off" placeholder="Сканируйте или введите код">
                         <button class="catalog-barcode-search" id="barcodeSearchButton" type="button" onclick="lookupBarcode(true)">Найти товар</button>
+                        <button class="catalog-barcode-generate" id="barcodeGenerateButton" type="button" onclick="generateItemBarcode()">Сгенерировать</button>
                     </div>
                     <div class="catalog-barcode-status" id="barcodeLookupStatus" role="status" aria-live="polite"></div>
                     <small>USB-сканер: после считывания и Enter поиск запускается сразу.</small>
@@ -539,6 +550,41 @@
                     {% endif %}
                 {% endfor %}
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="catalog-label-modal" id="catalogLabelModal" aria-hidden="true">
+    <div class="catalog-label-modal__backdrop" onclick="closeLabelManager()"></div>
+    <div class="catalog-label-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="catalogLabelTitle">
+        <div class="nika-data-modal__head">
+            <div>
+                <span class="nika-data-modal__eyebrow">NIKA LABEL CENTER</span>
+                <h2 id="catalogLabelTitle">Штрихкоды и этикетки</h2>
+                <p>Выберите товары, количество копий и формат печати.</p>
+            </div>
+            <button type="button" class="nika-data-modal__close" onclick="closeLabelManager()" aria-label="Закрыть">×</button>
+        </div>
+
+        <div class="catalog-label-toolbar">
+            <label class="catalog-search"><span class="catalog-search-icon"><img src="/static/icons/search.png" alt=""></span><input type="search" id="catalogLabelSearch" placeholder="Название или штрихкод" oninput="scheduleLabelSearch()"></label>
+            <button type="button" class="nika-data-btn nika-data-btn--light" onclick="generateMissingBarcodes(event)">Создать отсутствующие</button>
+        </div>
+
+        <div class="catalog-label-options">
+            <label><span>Формат</span><select id="catalogLabelFormat"><option value="58x40">Термо 58 × 40 мм</option><option value="50x30">Термо 50 × 30 мм</option><option value="a4">Лист A4</option></select></label>
+            <label class="catalog-label-select-all"><input type="checkbox" id="catalogLabelSelectAll" onchange="toggleAllLabels(this.checked)"><span>Выбрать все показанные</span></label>
+            <span class="catalog-label-count" id="catalogLabelCount">Выбрано: 0</span>
+        </div>
+
+        <div class="catalog-label-list" id="catalogLabelList">
+            <div class="catalog-label-empty">Загрузка товаров…</div>
+        </div>
+        <div class="catalog-label-note" id="catalogLabelNote"></div>
+
+        <div class="catalog-label-footer">
+            <button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeLabelManager()">Закрыть</button>
+            <button type="button" class="nika-data-btn nika-data-btn--primary" onclick="printSelectedLabels()">Печатать выбранные</button>
         </div>
     </div>
 </div>
