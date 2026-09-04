@@ -19,8 +19,13 @@
         })();
     </script>
 
+    <style>
+        /* Не показываем sidebar в позиции 0 до мгновенного восстановления scrollTop. */
+        html:not(.sidebar-scroll-restored) .sidebar { visibility: hidden; }
+    </style>
+
     <link rel="stylesheet" href="/static/css/base.css?v=20260904-1">
-    <link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-3">
+    <link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-5">
     {% block page_css %}{% endblock %}
 </head>
 <body>
@@ -142,6 +147,22 @@
             <a href="/logout" class="logout-link"><img src="/static/icons/logout.png" class="menu-icon"><span class="text">Выход ({{ session.get("username") }})</span></a>
         </div>
     </div>
+
+    <script>
+        /* Восстанавливаем внутреннюю прокрутку sidebar до того, как браузер его покажет. */
+        (function () {
+            try {
+                const sidebar = document.getElementById('sidebar');
+                const savedScroll = Number(sessionStorage.getItem('nikaSidebarScroll') || 0);
+                if (sidebar && Number.isFinite(savedScroll) && savedScroll > 0) {
+                    sidebar.scrollTop = savedScroll;
+                }
+            } catch (e) {
+            } finally {
+                document.documentElement.classList.add('sidebar-scroll-restored');
+            }
+        })();
+    </script>
 
     <div class="content">
         <header class="app-topbar app-topbar--compact">
