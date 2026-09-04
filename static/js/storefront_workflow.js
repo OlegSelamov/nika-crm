@@ -1,8 +1,9 @@
 (() => {
     'use strict';
 
-    let notificationSyncBusy = false;
+    let notificationActionBusy = false;
     let notificationEnhanceTimer = null;
+    let storefrontSyncBusy = false;
 
     function storefrontAllowedInMenu() {
         return Boolean(document.querySelector('.sidebar a[href="/storefront/"]'));
@@ -62,20 +63,62 @@
         }, 120);
     }
 
+    async function syncStorefrontNotifications(showToast = false) {
+        if (storefrontSyncBusy) return 0;
+        storefrontSyncBusy = true;
+
+        try {
+            const response = await fetch('/api/storefront/notifications/sync', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            if (!response.ok) return 0;
+
+            const data = await response.json();
+            const count = Number(data.created_count || 0);
+
+            if (count > 0) {
+                if (typeof window.loadNotifications === 'function') {
+                    await window.loadNotifications(true);
+                }
+                if (showToast && typeof window.showSystemToast === 'function') {
+                    const created = Array.isArray(data.created) ? data.created : [];
+                    const hasOrder = created.some(item => item.type === 'storefront_order');
+                    const hasBooking = created.some(item => item.type === 'storefront_booking');
+                    const title = hasOrder && hasBooking
+                        ? 'Новые обращения'
+                        : (hasOrder ? 'Новый заказ' : 'Новая запись');
+                    window.showSystemToast(title, `Новых событий: ${count}`, hasOrder ? '🛒' : '📅');
+                }
+                scheduleNotificationEnhance(200);
+            }
+
+            return count;
+        } catch (error) {
+            console.debug('Storefront notification sync error:', error);
+            return 0;
+        } finally {
+            storefrontSyncBusy = false;
+        }
+    }
+
     async function navigateFromNotification(notificationId, url) {
         await markNotificationRead(notificationId);
         window.location.href = url;
     }
 
     async function runStatusAction(notificationId, kind, relatedId, status, button) {
-        if (!relatedId || notificationSyncBusy) return;
+        if (!relatedId || notificationActionBusy) return;
 
         const endpoint = kind === 'order'
             ? `/storefront/orders/${relatedId}/status-ajax`
             : `/storefront/bookings/${relatedId}/status-ajax`;
 
         const oldText = button.textContent;
-        notificationSyncBusy = true;
+        notificationActionBusy = true;
         button.disabled = true;
         button.textContent = 'Сохраняем…';
 
@@ -111,7 +154,7 @@
                 alert(error.message || 'Не удалось выполнить действие');
             }
         } finally {
-            notificationSyncBusy = false;
+            notificationActionBusy = false;
         }
     }
 
@@ -231,9 +274,15 @@
         }
     }
 
+    function startPolling() {
+        syncStorefrontNotifications(false);
+        window.setInterval(() => syncStorefrontNotifications(true), 20000);
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         if (storefrontAllowedInMenu()) insertStorefrontMenuLinks();
         observeNotifications();
         autoOpenStorefrontEntity();
+        startPolling();
     });
 })();
