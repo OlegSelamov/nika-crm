@@ -18,6 +18,49 @@
     const searchInput = document.getElementById('search');
     if (!searchInput || typeof handleBarcode !== 'function') return;
 
+    // Продажи раньше использовали старый /api/items/search, который не отдавал
+    // фото. Переключаем ручной поиск на тот же API, что использует Каталог:
+    // он возвращает первое изображение из item_images и одинаково работает
+    // для товаров и услуг.
+    let salesCatalogSearchController = null;
+    window.searchItems = async function (query) {
+        if (salesCatalogSearchController) salesCatalogSearchController.abort();
+        salesCatalogSearchController = new AbortController();
+
+        try {
+            const params = new URLSearchParams({
+                q: String(query || '').trim(),
+                type: 'all',
+                category: 'all',
+                page: '1',
+                limit: '30'
+            });
+
+            const response = await fetch('/api/catalog/items?' + params.toString(), {
+                signal: salesCatalogSearchController.signal,
+                headers: {'Accept': 'application/json'}
+            });
+
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+
+            const data = await response.json();
+            if (typeof window.renderItemSearchResults === 'function') {
+                window.renderItemSearchResults(
+                    Array.isArray(data.items) ? data.items : [],
+                    Boolean(data.has_more)
+                );
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            console.error('ITEM SEARCH ERROR:', error);
+            const itemsList = document.getElementById('itemsList');
+            if (itemsList) {
+                itemsList.innerHTML = '<div class="items-search-message">Не удалось выполнить поиск</div>';
+                itemsList.style.display = 'block';
+            }
+        }
+    };
+
     const MIN_BARCODE_LENGTH = 8;
     const MAX_KEY_GAP_MS = 140;
     const AUTO_FINISH_DELAY_MS = 160;
@@ -67,6 +110,12 @@
         try {
             if (typeof itemSearchController !== 'undefined' && itemSearchController) {
                 itemSearchController.abort();
+            }
+        } catch (e) {}
+
+        try {
+            if (salesCatalogSearchController) {
+                salesCatalogSearchController.abort();
             }
         } catch (e) {}
     }
