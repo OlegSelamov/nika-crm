@@ -1,6 +1,20 @@
 (function () {
     if (!window.location.pathname.startsWith('/sales')) return;
 
+    // Quick-add modal fixes live separately so the main sales.js can stay stable.
+    if (!document.querySelector('link[href*="sales_quick_add.css"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/static/css/sales_quick_add.css?v=20260904-1';
+        document.head.appendChild(link);
+    }
+    if (!document.querySelector('script[src*="sales_quick_add.js"]')) {
+        const script = document.createElement('script');
+        script.src = '/static/js/sales_quick_add.js?v=20260904-1';
+        script.defer = true;
+        document.body.appendChild(script);
+    }
+
     const searchInput = document.getElementById('search');
     if (!searchInput || typeof handleBarcode !== 'function') return;
 
