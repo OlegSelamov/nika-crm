@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-env_file = os.getenv("NIKA_ENV_FILE", ".env.test")
+env_file = os.getenv("NIKA_ENV_FILE", ".env")
 load_dotenv(env_file, override=True)
 APP_MODE = os.getenv("APP_MODE", "test")
 
