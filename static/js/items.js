@@ -1585,7 +1585,29 @@ function buildLabelPrintDocument(items, format) {
 
 function mountLabelPreviewToBody() {
     var modal = document.getElementById('catalogLabelPreviewModal');
-    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'catalog-label-preview-modal';
+        modal.id = 'catalogLabelPreviewModal';
+        modal.setAttribute('aria-hidden', 'true');
+        modal.innerHTML =
+            '<div class="catalog-label-preview-modal__backdrop" onclick="closeLabelPrintPreview()"></div>' +
+            '<div class="catalog-label-preview-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="catalogLabelPreviewTitle">' +
+                '<div class="nika-data-modal__head"><div>' +
+                    '<span class="nika-data-modal__eyebrow">ПРЕДПРОСМОТР</span>' +
+                    '<h2 id="catalogLabelPreviewTitle">Этикетки перед печатью</h2>' +
+                    '<p id="catalogLabelPreviewSubtitle">Проверьте расположение и запустите печать.</p>' +
+                '</div><button type="button" class="nika-data-modal__close" onclick="closeLabelPrintPreview()" aria-label="Закрыть">×</button></div>' +
+                '<div class="catalog-label-preview-modal__body"><iframe id="catalogLabelPreviewFrame" title="Предпросмотр этикеток"></iframe></div>' +
+                '<div class="catalog-label-preview-modal__footer">' +
+                    '<button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeLabelPrintPreview()">Назад</button>' +
+                    '<button type="button" class="nika-data-btn nika-data-btn--primary" onclick="printLabelsFromPreview()">Печатать</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(modal);
+    } else if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
     return modal;
 }
 
@@ -1611,28 +1633,33 @@ function printLabelsFromPreview() {
 }
 
 function printSelectedLabels() {
-    var items = selectedLabelItems();
-    if (!items.length) {
-        alert('Выберите хотя бы один товар со штрихкодом');
-        return;
-    }
-    var unsupported = items.find(function (item) { return !eanBits(item.barcode); });
-    if (unsupported) {
-        alert('Штрихкод товара «' + unsupported.name + '» не является EAN-8 или EAN-13. Создайте для него внутренний код.');
-        return;
-    }
+    try {
+        var items = selectedLabelItems();
+        if (!items.length) {
+            alert('Выберите хотя бы один товар со штрихкодом');
+            return;
+        }
+        var unsupported = items.find(function (item) { return !eanBits(item.barcode); });
+        if (unsupported) {
+            alert('Штрихкод товара «' + unsupported.name + '» не является EAN-8 или EAN-13. Создайте для него внутренний код.');
+            return;
+        }
 
-    var formatSelect = document.getElementById('catalogLabelFormat');
-    var format = formatSelect ? formatSelect.value : '58x40';
-    var modal = mountLabelPreviewToBody();
-    var frame = document.getElementById('catalogLabelPreviewFrame');
-    var subtitle = document.getElementById('catalogLabelPreviewSubtitle');
-    if (!modal || !frame) return;
-    frame.srcdoc = buildLabelPrintDocument(items, format);
-    if (subtitle) {
-        var formatLabel = format === 'a4' ? 'A4' : (format === '50x30' ? 'лента 50 × 30 мм' : 'лента 58 × 40 мм');
-        subtitle.textContent = items.length + ' этикеток · ' + formatLabel;
+        var formatSelect = document.getElementById('catalogLabelFormat');
+        var format = formatSelect ? formatSelect.value : '58x40';
+        var modal = mountLabelPreviewToBody();
+        var frame = document.getElementById('catalogLabelPreviewFrame');
+        var subtitle = document.getElementById('catalogLabelPreviewSubtitle');
+        if (!modal || !frame) throw new Error('Не найдено окно предпросмотра');
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        frame.srcdoc = buildLabelPrintDocument(items, format);
+        if (subtitle) {
+            var formatLabel = format === 'a4' ? 'A4' : (format === '50x30' ? 'лента 50 × 30 мм' : 'лента 58 × 40 мм');
+            subtitle.textContent = items.length + ' этикеток · ' + formatLabel;
+        }
+    } catch (error) {
+        console.error('LABEL PREVIEW ERROR', error);
+        alert('Не удалось открыть предпросмотр: ' + (error.message || 'неизвестная ошибка'));
     }
-    modal.classList.add('is-open');
-    modal.setAttribute('aria-hidden', 'false');
 }
