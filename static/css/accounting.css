@@ -1206,6 +1206,51 @@ body.accounting-modal-open {
     align-items: center;
 }
 
+.accounting-sales-head-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 9px;
+}
+
+.accounting-sales-collapse-btn {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 13px;
+    border: 1px solid #ded9f8;
+    border-radius: 11px;
+    color: var(--acc-purple);
+    background: var(--acc-purple-soft);
+    font: inherit;
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.accounting-sales-collapse-btn span {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.accounting-sales-collapse-btn b {
+    font-weight: 800;
+}
+
+.accounting-sales-content[hidden] {
+    display: none !important;
+}
+
+.accounting-sales-ledger.is-sales-collapsed {
+    padding-bottom: 14px;
+}
+
+.accounting-sales-ledger.is-sales-collapsed .accounting-sales-search {
+    display: none;
+}
+
 .accounting-sales-search {
     width: min(360px, 100%);
     min-width: 280px;
@@ -1648,6 +1693,20 @@ body.accounting-modal-open {
     .accounting-sales-search {
         width: 100%;
         min-width: 0;
+    }
+
+    .accounting-sales-head-actions {
+        width: 100%;
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .accounting-sales-collapse-btn {
+        width: 100%;
+    }
+
+    .accounting-sales-ledger.is-sales-collapsed .accounting-sales-head-actions {
+        flex-direction: row;
     }
 
     .accounting-sales-switch {

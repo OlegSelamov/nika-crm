@@ -238,6 +238,47 @@ function filterAccountingSales() {
     if (empty) empty.style.display = visible === 0 ? 'grid' : 'none';
 }
 
+function setAccountingSalesListCollapsed(collapsed, remember) {
+    const section = document.getElementById('salesDocumentsBlock');
+    const content = document.getElementById('accountingSalesContent');
+    const button = document.getElementById('accountingSalesCollapseBtn');
+    if (!section || !content || !button) return;
+
+    const isCollapsed = Boolean(collapsed);
+    section.classList.toggle('is-sales-collapsed', isCollapsed);
+    content.hidden = isCollapsed;
+    button.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+
+    const icon = button.querySelector('span');
+    const label = button.querySelector('b');
+    if (icon) icon.textContent = isCollapsed ? '⌄' : '⌃';
+    if (label) label.textContent = isCollapsed ? 'Показать список' : 'Скрыть список';
+
+    if (remember !== false) {
+        try {
+            window.localStorage.setItem('nika-accounting-sales-collapsed', isCollapsed ? '1' : '0');
+        } catch (error) {
+            console.warn('ACCOUNTING LIST STATE ERROR', error);
+        }
+    }
+}
+
+function toggleAccountingSalesList() {
+    const content = document.getElementById('accountingSalesContent');
+    if (!content) return;
+    setAccountingSalesListCollapsed(!content.hidden, true);
+}
+
+function restoreAccountingSalesListState() {
+    let collapsed = false;
+    try {
+        collapsed = window.localStorage.getItem('nika-accounting-sales-collapsed') === '1';
+    } catch (error) {
+        console.warn('ACCOUNTING LIST STATE ERROR', error);
+    }
+    setAccountingSalesListCollapsed(collapsed, false);
+}
+
 function accountingDocumentButton(saleId, key, url, title, meta, kind) {
     if (!url) return '';
     if (kind === 'esf') {
@@ -576,5 +617,6 @@ function openAccountingSaleDocuments(saleId) {
 
 // Страница открывается сразу в привычном режиме «Чеки».
 document.addEventListener('DOMContentLoaded', function () {
+    restoreAccountingSalesListState();
     switchAccountingSaleMode('receipt');
 });

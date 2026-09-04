@@ -3,7 +3,7 @@
 {% block content %}
 
 
-{% block page_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/accounting.css', v='20260904-2') }}">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/accounting.css', v='20260904-3') }}">{% endblock %}
 
 
 
@@ -52,14 +52,23 @@
                 <p>Одна продажа — одна запись. Чек или счёт и все связанные документы собраны внутри.</p>
             </div>
 
-            <label class="accounting-search accounting-sales-search">
-                <span>⌕</span>
-                <input id="accountingSaleSearch" type="search"
-                       placeholder="№ продажи, клиент, ИП или ТОО"
-                       oninput="filterAccountingSales()">
-            </label>
+            <div class="accounting-sales-head-actions">
+                <label class="accounting-search accounting-sales-search">
+                    <span>⌕</span>
+                    <input id="accountingSaleSearch" type="search"
+                           placeholder="№ продажи, клиент, ИП или ТОО"
+                           oninput="filterAccountingSales()">
+                </label>
+                <button class="accounting-sales-collapse-btn" id="accountingSalesCollapseBtn"
+                        type="button" aria-expanded="true" aria-controls="accountingSalesContent"
+                        onclick="toggleAccountingSalesList()">
+                    <span aria-hidden="true">⌃</span>
+                    <b>Скрыть список</b>
+                </button>
+            </div>
         </div>
 
+        <div class="accounting-sales-content" id="accountingSalesContent">
         <div class="accounting-sales-switch" role="group" aria-label="Вид продаж">
             <button class="accounting-sales-switch__btn is-active" type="button"
                     data-accounting-sale-mode="receipt"
@@ -172,6 +181,7 @@
             <p>После продажи чек или счёт и связанные документы появятся здесь автоматически.</p>
         </div>
         {% endif %}
+        </div>
     </section>
 
     <nav class="accounting-quick-nav" aria-label="Разделы бухгалтерии">
@@ -804,6 +814,6 @@
     </div>
 </div>
 
-{% block page_js %}<script src="{{ url_for('static', filename='js/accounting.js', v='20260904-2') }}"></script>{% endblock %}
+{% block page_js %}<script src="{{ url_for('static', filename='js/accounting.js', v='20260904-3') }}"></script>{% endblock %}
 
 {% endblock %}
