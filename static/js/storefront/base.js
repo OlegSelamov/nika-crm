@@ -90,7 +90,10 @@ function sfRenderCart(){
     const mobileCount = document.getElementById('sfMobileCartCount');
 
     if(count) count.textContent = sfQty(sfState.cart.count);
-    if(mobileCount) mobileCount.textContent = sfQty(sfState.cart.count);
+    if(mobileCount){
+        mobileCount.textContent = sfQty(sfState.cart.count);
+        mobileCount.hidden = Number(sfState.cart.count || 0) <= 0;
+    }
 
     if(!sfState.cart.items.length){
         body.innerHTML = `
@@ -713,3 +716,17 @@ document.addEventListener('keydown',event=>{
 sfLoadCart().catch(error=>{
     console.error('Cart init:', error);
 });
+
+
+/* MOBILE NAV */
+function sfSyncMobileNav(){
+    const params = new URLSearchParams(window.location.search);
+    const kind = params.get('kind');
+    const hash = window.location.hash;
+    const active = (kind === 'products' || hash === '#sfCatalogStart') ? 'catalog' : 'home';
+    document.querySelectorAll('[data-mobile-nav]').forEach(item=>{
+        item.classList.toggle('active', item.dataset.mobileNav === active);
+    });
+}
+document.addEventListener('DOMContentLoaded', sfSyncMobileNav);
+window.addEventListener('hashchange', sfSyncMobileNav);
