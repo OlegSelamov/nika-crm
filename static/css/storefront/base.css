@@ -650,7 +650,7 @@ body.sf-lock{overflow:hidden}
 
 
 /* ===== Modern desktop storefront ===== */
-@media(min-width:621px){
+@media(min-width:761px){
   body{background:#f6f7fa}
   .sf-header{
     position:sticky;top:0;z-index:90;
