@@ -57,20 +57,6 @@
         } catch (e) {}
     }
 
-    function playScanFeedback() {
-        const beep = document.getElementById('beepSound');
-        if (beep) {
-            try {
-                beep.currentTime = 0;
-                beep.play().catch(() => {});
-            } catch (e) {}
-        }
-
-        if (navigator.vibrate) {
-            try { navigator.vibrate(70); } catch (e) {}
-        }
-    }
-
     function finishScan() {
         clearFinishTimer();
 
@@ -78,8 +64,6 @@
         const duration = startedAt && lastKeyAt ? Math.max(0, lastKeyAt - startedAt) : 0;
         const avgGap = code.length > 1 ? duration / (code.length - 1) : Infinity;
 
-        // Не превращаем обычный ручной ввод в скан. Для HID-сканера символы
-        // приходят очень быстро; Bluetooth может быть немного медленнее USB.
         const looksLikeScanner =
             code.length >= MIN_BARCODE_LENGTH &&
             (avgGap <= MAX_KEY_GAP_MS || duration <= 900);
@@ -98,7 +82,6 @@
         }
 
         recentScanAt = Date.now();
-        playScanFeedback();
         handleBarcode(code);
         return true;
     }
@@ -117,8 +100,6 @@
         const now = Date.now();
         const key = event.key;
 
-        // Некоторые сканеры заканчивают код Enter, другие Tab, а некоторые
-        // вообще не имеют суффикса. Enter/Tab обрабатываем сразу.
         if (key === 'Enter' || key === 'Tab') {
             if (buffer.length >= MIN_BARCODE_LENGTH) {
                 event.preventDefault();
@@ -127,8 +108,6 @@
                 return;
             }
 
-            // Если код уже завершился по паузе, поглощаем запоздалый суффикс,
-            // чтобы старый обработчик sales.js не добавил товар второй раз.
             if (now - recentScanAt < RECENT_SCAN_GUARD_MS) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
@@ -141,7 +120,6 @@
             return;
         }
 
-        // HID-сканер передаёт штрихкод как обычные печатные клавиши.
         if (key.length !== 1 || /\s/.test(key)) return;
 
         if (!lastKeyAt || now - lastKeyAt > MAX_KEY_GAP_MS) {
@@ -156,14 +134,10 @@
         scheduleAutoFinish();
     }, true);
 
-    // Если сканер отправляет значение напрямую в поле через input-событие,
-    // полный EAN/UPC всё равно будет обработан после короткой паузы.
     searchInput.addEventListener('input', function () {
         const value = String(searchInput.value || '').trim();
         if (value.length < MIN_BARCODE_LENGTH) return;
 
-        // Не дублируем буфер keydown. Этот fallback нужен для устройств,
-        // которые не генерируют нормальную последовательность keydown.
         if (!buffer && /^[0-9A-Za-z._\-/]+$/.test(value)) {
             buffer = value;
             startedAt = Date.now();
