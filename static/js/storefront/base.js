@@ -208,12 +208,17 @@ function sfSyncProductCards(){
         if(!add || !stepper) return;
 
         if(qty > 0){
-            add.style.display = 'none';
+            add.classList.add('in-cart');
+            const label = add.querySelector('span');
+            if(label) label.textContent = 'В корзине';
             stepper.style.display = 'grid';
             stepper.querySelector('[data-card-qty]').textContent = sfQty(qty);
         }else{
-            add.style.display = '';
-            stepper.style.display = 'none';
+            add.classList.remove('in-cart');
+            const label = add.querySelector('span');
+            if(label) label.textContent = 'В корзину';
+            stepper.style.display = 'grid';
+            stepper.querySelector('[data-card-qty]').textContent = '1';
         }
     });
 }
@@ -730,3 +735,21 @@ function sfSyncMobileNav(){
 }
 document.addEventListener('DOMContentLoaded', sfSyncMobileNav);
 window.addEventListener('hashchange', sfSyncMobileNav);
+
+
+/* Mobile storefront conveniences */
+document.addEventListener('click', event=>{
+    const focusSearch = event.target.closest('[data-focus-search]');
+    if(focusSearch){
+        document.getElementById('sfLiveSearch')?.focus();
+        document.querySelector('.sf-mobile-search-wrap')?.scrollIntoView({behavior:'smooth',block:'start'});
+        return;
+    }
+    const favorite = event.target.closest('[data-favorite]');
+    if(favorite){
+        event.preventDefault();
+        event.stopPropagation();
+        favorite.classList.toggle('active');
+        favorite.textContent = favorite.classList.contains('active') ? '♥' : '♡';
+    }
+});
