@@ -2,6 +2,7 @@ from datetime import datetime, date, timedelta
 import re
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
 from models import get_db, pool
 from utils.timezone import now_kz
 
@@ -57,6 +58,75 @@ def get_store(slug):
 
 def _cart_key(company_id):
     return f"store_cart_{company_id}"
+
+
+def _customer_account_key(company_id):
+    return f"store_customer_{company_id}"
+
+
+def _ensure_storefront_account_schema():
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS storefront_customer_accounts (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                client_id INTEGER,
+                phone TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name TEXT,
+                email TEXT,
+                customer_type TEXT DEFAULT 'private',
+                iin_bin TEXT,
+                company_name TEXT,
+                legal_address TEXT,
+                delivery_address TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(company_id, phone)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS storefront_favorites (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                account_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(account_id, item_id)
+            )
+        """)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def _current_store_customer(store):
+    account_id = session.get(_customer_account_key(store["company_id"]))
+    if not account_id:
+        return None
+    _ensure_storefront_account_schema()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, client_id, phone, full_name, email, customer_type, iin_bin,
+                   company_name, legal_address, delivery_address
+            FROM storefront_customer_accounts
+            WHERE id=%s AND company_id=%s
+        """, (account_id, store["company_id"]))
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
 
 
 def _cart_count(company_id):
@@ -208,6 +278,168 @@ def _cart_payload(store):
     finally:
         cur.close()
         pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/register", methods=["POST"])
+def customer_register(slug):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+    _ensure_storefront_account_schema()
+    name = (request.form.get("name") or "").strip()
+    phone = re.sub(r"\D", "", request.form.get("phone") or "")
+    password = request.form.get("password") or ""
+    if len(name) < 2 or len(phone) < 10 or len(password) < 6:
+        return jsonify({"ok": False, "error": "Укажите имя, телефон и пароль не короче 6 символов"}), 400
+    phone = phone[-10:]
+    conn = get_db(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM storefront_customer_accounts WHERE company_id=%s AND phone=%s", (store["company_id"], phone))
+        if cur.fetchone():
+            return jsonify({"ok": False, "error": "Клиент с таким телефоном уже зарегистрирован"}), 409
+        client_id = _ensure_customer(cur, store["company_id"], name, phone)
+        cur.execute("""
+            INSERT INTO storefront_customer_accounts(company_id,client_id,phone,password_hash,full_name)
+            VALUES(%s,%s,%s,%s,%s) RETURNING id
+        """, (store["company_id"], client_id, phone, generate_password_hash(password), name))
+        account_id = cur.fetchone()["id"]
+        conn.commit()
+        session[_customer_account_key(store["company_id"])] = account_id
+        session.modified = True
+        return jsonify({"ok": True})
+    except Exception:
+        conn.rollback(); raise
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/login", methods=["POST"])
+def customer_login(slug):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+    _ensure_storefront_account_schema()
+    phone = re.sub(r"\D", "", request.form.get("phone") or "")[-10:]
+    password = request.form.get("password") or ""
+    conn = get_db(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id,password_hash FROM storefront_customer_accounts WHERE company_id=%s AND phone=%s", (store["company_id"], phone))
+        row = cur.fetchone()
+        if not row or not check_password_hash(row["password_hash"], password):
+            return jsonify({"ok": False, "error": "Неверный телефон или пароль"}), 401
+        session[_customer_account_key(store["company_id"])] = row["id"]
+        session.modified = True
+        return jsonify({"ok": True})
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/logout", methods=["POST"])
+def customer_logout(slug):
+    store = get_store(slug)
+    if store:
+        session.pop(_customer_account_key(store["company_id"]), None)
+        session.modified = True
+    return jsonify({"ok": True})
+
+
+@storefront_bp.route("/<slug>/customer/profile-data")
+def customer_profile_data(slug):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+    account = _current_store_customer(store)
+    if not account:
+        return jsonify({"ok": True, "authenticated": False})
+    conn = get_db(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id,total_amount,payment_status,order_status,created_at
+            FROM online_orders WHERE company_id=%s AND customer_id=%s
+            ORDER BY created_at DESC LIMIT 30
+        """, (store["company_id"], account["client_id"]))
+        orders = [dict(x) for x in cur.fetchall()]
+        cur.execute("""
+            SELECT b.id,b.booking_date,b.booking_time,b.status,b.payment_status,b.created_at,i.name AS service_name
+            FROM bookings b LEFT JOIN items i ON i.id=b.item_id
+            WHERE b.company_id=%s AND b.customer_id=%s
+            ORDER BY b.booking_date DESC,b.booking_time DESC LIMIT 30
+        """, (store["company_id"], account["client_id"]))
+        bookings = [dict(x) for x in cur.fetchall()]
+        for rows in (orders, bookings):
+            for row in rows:
+                for k,v in list(row.items()):
+                    if isinstance(v, (datetime, date)) or hasattr(v, "isoformat"):
+                        row[k] = v.isoformat()
+                    elif isinstance(v, Decimal):
+                        row[k] = float(v)
+        return jsonify({"ok": True, "authenticated": True, "profile": account, "orders": orders, "bookings": bookings, "documents": []})
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/customer/profile", methods=["POST"])
+def customer_profile_save(slug):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+    account = _current_store_customer(store)
+    if not account:
+        return jsonify({"ok": False, "error": "Войдите в профиль"}), 401
+    fields = {k:(request.form.get(k) or "").strip() for k in ["full_name","email","customer_type","iin_bin","company_name","legal_address","delivery_address"]}
+    conn=get_db(); cur=conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE storefront_customer_accounts SET full_name=%s,email=%s,customer_type=%s,iin_bin=%s,
+              company_name=%s,legal_address=%s,delivery_address=%s,updated_at=%s WHERE id=%s AND company_id=%s
+        """,(fields["full_name"],fields["email"],fields["customer_type"] or "private",fields["iin_bin"],fields["company_name"],
+             fields["legal_address"],fields["delivery_address"],now_kz(),account["id"],store["company_id"]))
+        cur.execute("""
+            UPDATE clients SET full_name=%s,address=%s,iin=%s,company_name=%s WHERE id=%s AND company_id=%s
+        """,(fields["full_name"],fields["legal_address"],fields["iin_bin"],fields["company_name"],account["client_id"],store["company_id"]))
+        conn.commit(); return jsonify({"ok":True})
+    except Exception:
+        conn.rollback(); raise
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/favorites/data")
+def favorites_data(slug):
+    store=get_store(slug)
+    if not store:return jsonify({"ok":False,"error":"Витрина не найдена"}),404
+    account=_current_store_customer(store)
+    if not account:return jsonify({"ok":True,"authenticated":False,"items":[]})
+    conn=get_db();cur=conn.cursor()
+    try:
+        cur.execute("""
+          SELECT i.id,i.name,COALESCE(i.retail_price,i.price,0) AS price,
+            (SELECT image FROM item_images WHERE item_id=i.id ORDER BY id LIMIT 1) AS image
+          FROM storefront_favorites f JOIN items i ON i.id=f.item_id
+          WHERE f.account_id=%s AND f.company_id=%s ORDER BY f.created_at DESC
+        """,(account["id"],store["company_id"]))
+        rows=[dict(x) for x in cur.fetchall()]
+        for x in rows:x["price"]=float(x["price"] or 0)
+        return jsonify({"ok":True,"authenticated":True,"items":rows})
+    finally:cur.close();pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/favorites/<int:item_id>", methods=["POST"])
+def favorite_toggle(slug,item_id):
+    store=get_store(slug)
+    if not store:return jsonify({"ok":False,"error":"Витрина не найдена"}),404
+    account=_current_store_customer(store)
+    if not account:return jsonify({"ok":False,"auth_required":True,"error":"Войдите в профиль, чтобы сохранять избранное"}),401
+    conn=get_db();cur=conn.cursor()
+    try:
+        cur.execute("DELETE FROM storefront_favorites WHERE account_id=%s AND item_id=%s RETURNING id",(account["id"],item_id))
+        removed=cur.fetchone()
+        if removed: active=False
+        else:
+            cur.execute("INSERT INTO storefront_favorites(company_id,account_id,item_id) VALUES(%s,%s,%s) ON CONFLICT DO NOTHING",(store["company_id"],account["id"],item_id));active=True
+        conn.commit();return jsonify({"ok":True,"active":active})
+    except Exception:conn.rollback();raise
+    finally:cur.close();pool.putconn(conn)
 
 
 @storefront_bp.route("/<slug>")
@@ -706,6 +938,17 @@ def checkout_ajax(slug):
             iin_bin,
             company_name if customer_type == "business" else None,
         )
+
+        account_id = session.get(_customer_account_key(store["company_id"]))
+        if account_id:
+            _ensure_storefront_account_schema()
+            cur.execute("""
+                UPDATE storefront_customer_accounts
+                SET client_id=%s,full_name=%s,email=%s,customer_type=%s,iin_bin=%s,company_name=%s,
+                    legal_address=%s,delivery_address=COALESCE(NULLIF(%s,''),delivery_address),updated_at=%s
+                WHERE id=%s AND company_id=%s
+            """,(customer_id,name,email,customer_type,iin_bin or None,company_name or None,legal_address or None,
+                 address if method=="delivery" else "",now_kz(),account_id,store["company_id"]))
 
         cur.execute("""
             INSERT INTO online_orders (
