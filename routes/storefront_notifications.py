@@ -27,8 +27,9 @@ def _ensure_notifications_table(cur):
         ON notifications(user_id, is_read, id DESC)
     """)
     cur.execute("""
-        CREATE INDEX IF NOT EXISTS idx_notifications_storefront_unique_lookup
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_storefront_event_unique
         ON notifications(company_id, user_id, notification_type, related_id)
+        WHERE notification_type IN ('storefront_order', 'storefront_booking')
     """)
 
 
@@ -85,6 +86,8 @@ def _sync_orders(cur, company_id, user_id):
                 created_at
             )
             VALUES (%s,%s,'storefront_order',%s,%s,%s,%s,FALSE,%s)
+            ON CONFLICT DO NOTHING
+            RETURNING id
         """, (
             company_id,
             user_id,
@@ -94,7 +97,8 @@ def _sync_orders(cur, company_id, user_id):
             f"/storefront/orders?open={order_id}",
             created_at,
         ))
-        created.append({"type": "storefront_order", "id": order_id})
+        if cur.fetchone():
+            created.append({"type": "storefront_order", "id": order_id})
 
     return created
 
@@ -154,6 +158,8 @@ def _sync_bookings(cur, company_id, user_id):
                 created_at
             )
             VALUES (%s,%s,'storefront_booking',%s,%s,%s,%s,FALSE,%s)
+            ON CONFLICT DO NOTHING
+            RETURNING id
         """, (
             company_id,
             user_id,
@@ -163,7 +169,8 @@ def _sync_bookings(cur, company_id, user_id):
             f"/storefront/bookings?open={booking_id}",
             created_at,
         ))
-        created.append({"type": "storefront_booking", "id": booking_id})
+        if cur.fetchone():
+            created.append({"type": "storefront_booking", "id": booking_id})
 
     return created
 
@@ -183,20 +190,10 @@ def sync_storefront_notifications():
         _ensure_notifications_table(cur)
         created = []
 
-        try:
-            created.extend(_sync_orders(cur, company_id, user_id))
-        except Exception as exc:
-            # Если витрина ещё не инициализирована у компании, не ломаем колокольчик.
-            print("STOREFRONT ORDER NOTIFICATION SYNC ERROR:", exc)
-            conn.rollback()
-            _ensure_notifications_table(cur)
-
-        try:
-            created.extend(_sync_bookings(cur, company_id, user_id))
-        except Exception as exc:
-            print("STOREFRONT BOOKING NOTIFICATION SYNC ERROR:", exc)
-            conn.rollback()
-            _ensure_notifications_table(cur)
+        # В штатной установке обе таблицы витрины уже есть. Если модуль ещё не
+        # инициализирован, единичная ошибка синхронизации не должна ломать CRM.
+        created.extend(_sync_orders(cur, company_id, user_id))
+        created.extend(_sync_bookings(cur, company_id, user_id))
 
         conn.commit()
         return jsonify({
@@ -207,7 +204,12 @@ def sync_storefront_notifications():
     except Exception as exc:
         conn.rollback()
         print("STOREFRONT NOTIFICATION SYNC ERROR:", exc)
-        return jsonify({"success": False, "error": "Не удалось синхронизировать уведомления"}), 500
+        return jsonify({
+            "success": False,
+            "created_count": 0,
+            "created": [],
+            "error": "Не удалось синхронизировать уведомления",
+        }), 200
     finally:
         cur.close()
         pool.putconn(conn)
