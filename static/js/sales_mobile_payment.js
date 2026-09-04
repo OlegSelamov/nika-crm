@@ -4,6 +4,25 @@
     let paymentBox = null;
     let originalParent = null;
     let originalNextSibling = null;
+    let sidebarObserver = null;
+
+    function syncSidebarState() {
+        const sidebar = document.querySelector('.sidebar');
+        const isMobile = window.matchMedia(MOBILE_QUERY).matches;
+        const menuOpen = Boolean(isMobile && sidebar?.classList.contains('mobile-open'));
+        document.body.classList.toggle('sales-mobile-menu-open', menuOpen);
+    }
+
+    function observeSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar || sidebarObserver) return;
+        sidebarObserver = new MutationObserver(syncSidebarState);
+        sidebarObserver.observe(sidebar, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+        syncSidebarState();
+    }
 
     function mountMobilePayment() {
         paymentBox = paymentBox || document.querySelector('.payment-box');
@@ -12,14 +31,16 @@
         const isMobile = window.matchMedia(MOBILE_QUERY).matches;
 
         if (isMobile) {
-            if (paymentBox.parentElement === document.body) return;
-
-            originalParent = paymentBox.parentElement;
-            originalNextSibling = paymentBox.nextSibling;
-            placeholder = placeholder || document.createComment('mobile-payment-placeholder');
-            originalParent.insertBefore(placeholder, paymentBox);
-            document.body.appendChild(paymentBox);
+            if (paymentBox.parentElement !== document.body) {
+                originalParent = paymentBox.parentElement;
+                originalNextSibling = paymentBox.nextSibling;
+                placeholder = placeholder || document.createComment('mobile-payment-placeholder');
+                originalParent.insertBefore(placeholder, paymentBox);
+                document.body.appendChild(paymentBox);
+            }
             document.body.classList.add('sales-mobile-payment-mounted');
+            observeSidebar();
+            syncSidebarState();
             return;
         }
 
@@ -34,7 +55,7 @@
             }
         }
 
-        document.body.classList.remove('sales-mobile-payment-mounted');
+        document.body.classList.remove('sales-mobile-payment-mounted', 'sales-mobile-menu-open');
     }
 
     document.addEventListener('DOMContentLoaded', mountMobilePayment);
