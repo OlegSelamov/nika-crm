@@ -626,3 +626,9 @@ body.sf-lock{overflow:hidden}
 .sf-history-row{padding:13px 14px;margin:7px 0;display:flex;align-items:center;justify-content:space-between;gap:10px}.sf-history-row b,.sf-history-row span{display:block}.sf-history-row span{font-size:10px;color:#8b94a7;margin-top:4px}.sf-history-row strong{font-size:12px;color:var(--brand-deep)}
 .sf-empty-profile{padding:28px;text-align:center;color:#8b94a7}.sf-logout{width:100%;margin-top:14px;border:0;background:transparent;color:#e5484d;padding:12px;font-weight:700}
 .sf-favorites-list{display:grid;gap:8px}.sf-favorite-row{width:100%;padding:10px;display:flex;align-items:center;text-align:left;border:1px solid #e9ebf1}.sf-favorite-row>span{width:64px;height:64px;border-radius:13px;background:#f7f8fa;display:grid;place-items:center;font-size:26px;overflow:hidden}.sf-favorite-row img{width:100%;height:100%;object-fit:contain}.sf-favorite-row div{padding-left:11px}.sf-favorite-row b,.sf-favorite-row strong{display:block}.sf-favorite-row b{font-size:12px;color:#151b2b}.sf-favorite-row strong{margin-top:6px;color:var(--brand-deep)}
+
+/* Toasts must stay above customer/profile sheets */
+.sf-toast{z-index:2200!important;bottom:max(24px,calc(env(safe-area-inset-bottom) + 18px))!important;max-width:calc(100vw - 32px);text-align:center}
+.sf-toast.error{background:#b4233b!important}
+.sf-customer-error{display:none;margin:0 0 10px;padding:10px 12px;border-radius:12px;background:#fff0f2;color:#b4233b;font-size:11px;font-weight:750;border:1px solid #ffd7dd}
+.sf-customer-error.show{display:block}
