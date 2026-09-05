@@ -1,0 +1,130 @@
+name: Build Nika Apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 1.2.1"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nika-app-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Build Windows app
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}".Trim()
+          } else {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
+            throw "Invalid version: $version"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Set app version
+        working-directory: desktop
+        shell: pwsh
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build installer
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build
+
+      - name: Verify update files
+        shell: pwsh
+        run: |
+          if (!(Test-Path "desktop/dist/NikaBusinessSetup.exe")) { throw "NikaBusinessSetup.exe was not created" }
+          if (!(Test-Path "desktop/dist/latest.yml")) { throw "latest.yml was not created" }
+          Get-ChildItem desktop/dist
+
+      - name: Collect release files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-files | Out-Null
+          Copy-Item desktop/dist/NikaBusinessSetup.exe release-files/
+          Copy-Item desktop/dist/latest.yml release-files/
+          Get-ChildItem desktop/dist -Filter "*.blockmap" | Copy-Item -Destination release-files/
+          Set-Content -Path release-files/version.txt -Value "${{ steps.version.outputs.version }}" -NoNewline
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nika-windows
+          path: release-files/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: nika-windows
+          path: release-files
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(cat release-files/version.txt)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "${{ github.sha }}" --title "Nika Business $VERSION" --notes "Автоматическая сборка Nika Business $VERSION."
+          fi
+          gh release upload "$TAG" release-files/NikaBusinessSetup.exe release-files/latest.yml release-files/*.blockmap --clobber
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "### Nika Business ${{ steps.version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Windows installer and auto-update metadata published to GitHub Releases." >> "$GITHUB_STEP_SUMMARY"
