@@ -483,6 +483,24 @@ AI_TOOLS = [
     },
     {
         "type": "function",
+        "name": "build_storefront_selection",
+        "description": "Собрать готовую клиентскую подборку из опубликованных позиций витрины и получить ссылку на корзину. Используй для комплектов и подборок под задачу или бюджет.",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "items_json": {
+                    "type": "string",
+                    "description": "JSON-массив объектов item_id и quantity. item_id только из search_storefront.",
+                },
+                "reason": {"type": "string", "maxLength": 500},
+            },
+            "required": ["items_json", "reason"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
         "name": "get_client_history",
         "description": "Покупки и общая сумма покупок конкретного клиента. client_id бери из search_clients.",
         "strict": True,
@@ -1518,6 +1536,11 @@ def _execute_tool(name, arguments, company_id, conversation_id=None, user_id=Non
         return _search_storefront(
             company_id, arguments.get("query"), arguments["limit"]
         )
+    if name == "build_storefront_selection":
+        from routes.whatsapp import _build_storefront_selection
+        return _build_storefront_selection(
+            company_id, arguments["items_json"], arguments.get("reason", "")
+        )
     if name == "get_client_history":
         return _get_client_history(company_id, arguments["client_id"], arguments["limit"])
     if name == "search_system_records":
@@ -1688,7 +1711,7 @@ def _generate_reply(
     )
     storefront_markers = (
         "онлайн витрин", "онлайн-витрин", "витрин", "на сайте", "опубликован",
-        "доставк", "самовывоз", "ссылка на сайт",
+        "доставк", "самовывоз", "ссылка на сайт", "подборк", "комплект", "набор", "ссылк на товар", "ссылк на карточ",
     )
     force_storefront_search = any(
         marker in normalized_message for marker in storefront_markers
