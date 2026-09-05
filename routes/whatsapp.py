@@ -1570,7 +1570,19 @@ def _build_storefront_selection(company_id, items_json, reason=""):
             SELECT ss.id AS storefront_id, ss.slug, ss.show_products, ss.show_services,
                    i.id, i.name, COALESCE(i.item_type,'product') AS item_type,
                    COALESCE(i.service_sale_mode,'order') AS service_sale_mode,
-                   COALESCE(i.retail_price,i.price,0) AS price, i.quantity
+                   COALESCE(i.retail_price,i.price,0) AS price,
+                   COALESCE((
+                       SELECT SUM(
+                           CASE
+                               WHEN sm.movement_type IN ('income','refund') THEN sm.quantity
+                               WHEN sm.movement_type IN ('sale','writeoff') THEN -sm.quantity
+                               ELSE 0
+                           END
+                       )
+                       FROM stock_movements sm
+                       WHERE sm.company_id=i.company_id
+                         AND sm.item_id=i.id
+                   ),0) AS available_quantity
             FROM storefront_settings ss
             JOIN items i ON i.company_id=ss.company_id
             WHERE ss.company_id=%s AND ss.enabled=TRUE
@@ -1595,8 +1607,8 @@ def _build_storefront_selection(company_id, items_json, reason=""):
                 raise StorefrontOrderError(
                     f"Услуга «{item['name']}» оформляется через онлайн-запись и не добавляется в общую корзину"
                 )
-            if item["item_type"]!="service" and item.get("quantity") is not None:
-                available=Decimal(str(item.get("quantity") or 0))
+            if item["item_type"]!="service":
+                available=Decimal(str(item.get("available_quantity") or 0))
                 if available <= 0:
                     raise StorefrontOrderError(f"«{item['name']}» сейчас нет в наличии")
                 quantity=min(quantity,available)
