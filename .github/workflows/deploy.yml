@@ -75,9 +75,9 @@ jobs:
             pip install -r requirements.txt --quiet
           fi
 
-          sudo systemctl restart nika
+          sudo systemctl restart nika-crm
           sleep 2
-          sudo systemctl is-active --quiet nika
+          sudo systemctl is-active --quiet nika-crm
 
           echo "Deployed commit:"
           git rev-parse --short HEAD
