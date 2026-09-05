@@ -36,7 +36,15 @@ jobs:
             fi
           fi
           chmod 600 ~/.ssh/nika_deploy
-          ssh-keygen -y -f ~/.ssh/nika_deploy >/dev/null
+          if ! grep -q "BEGIN OPENSSH PRIVATE KEY\|BEGIN RSA PRIVATE KEY" ~/.ssh/nika_deploy; then
+            echo "ERROR: VPS_SSH_KEY_B64 does not contain a private SSH key."
+            echo "Encode the private file ~/.ssh/nika_github_deploy, NOT ~/.ssh/nika_github_deploy.pub"
+            exit 1
+          fi
+          if ! ssh-keygen -y -f ~/.ssh/nika_deploy >/dev/null 2>&1; then
+            echo "ERROR: decoded SSH private key is malformed or incomplete."
+            exit 1
+          fi
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
