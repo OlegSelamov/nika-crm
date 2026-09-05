@@ -962,3 +962,62 @@ document.addEventListener('click',e=>{
  const mt=e.target.closest('[data-move-time]');if(mt&&sfMovingBookingId){sfSubmitReschedule(sfMovingBookingId,mt.dataset.moveTime);return}
  const doc=e.target.closest('[data-customer-document]');if(doc&&doc.dataset.customerDocument){window.open(doc.dataset.customerDocument,'_blank');return}
 });
+
+
+/* STOREFRONT SHARING */
+async function sfNativeShare({title,text,url}){
+    if(navigator.share){
+        try{
+            await navigator.share({title,text,url});
+            return true;
+        }catch(error){
+            if(error?.name === 'AbortError') return false;
+        }
+    }
+    const value = [text,url].filter(Boolean).join('\n');
+    try{
+        await navigator.clipboard.writeText(value);
+        sfToast('Ссылка скопирована');
+        return true;
+    }catch(error){
+        window.prompt('Скопируйте ссылку', url || value);
+        return true;
+    }
+}
+async function sfShareCurrentProduct(){
+    const product=sfState.product;
+    if(!product) return;
+    const url=new URL(window.location.href);
+    url.searchParams.set('product',product.id);
+    url.hash='';
+    await sfNativeShare({
+        title:product.name || document.title,
+        text:`${product.name || 'Товар'} — ${sfMoney(product.price || 0)}`,
+        url:url.toString()
+    });
+}
+async function sfShareCurrentCart(){
+    try{
+        const data=await sfJson(`/s/${encodeURIComponent(SF_SLUG)}/cart/share`,{method:'POST'});
+        await sfNativeShare({
+            title:'Корзина',
+            text:'Посмотрите мою корзину',
+            url:data.url
+        });
+    }catch(error){
+        sfToast(error.message,true);
+    }
+}
+document.getElementById('sfPmShare')?.addEventListener('click',sfShareCurrentProduct);
+document.getElementById('sfShareCart')?.addEventListener('click',sfShareCurrentCart);
+
+document.addEventListener('DOMContentLoaded',()=>{
+    const params=new URLSearchParams(window.location.search);
+    const product=params.get('product');
+    if(product && /^\d+$/.test(product)){
+        sfOpenProduct(Number(product)).catch(()=>{});
+    }
+    if(params.get('shared_cart')==='1'){
+        setTimeout(()=>sfOpenCart(),120);
+    }
+});
