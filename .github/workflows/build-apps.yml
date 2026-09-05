@@ -87,9 +87,139 @@ jobs:
           path: release-files/*
           if-no-files-found: error
 
+  android:
+    name: Build Android app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          VERSION="$(printf '%s' "$VERSION" | tr -d '[:space:]')"
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: nika-windows
+          path: release-files
+
+      - name: Download Android build
+        uses: actions/download-artifact@v4
+        with:
+          name: nika-android
+          path: android-release
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(cat release-files/version.txt)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "${{ github.sha }}" --title "Nika Business $VERSION" --notes "Автоматическая сборка Nika Business $VERSION."
+          fi
+          gh release upload "$TAG" release-files/NikaBusinessSetup.exe release-files/latest.yml release-files/*.blockmap android-release/NikaBusiness.apk android-release/NikaBusiness.apk.sha256 --clobber
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "### Nika Business ${{ steps.version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Windows installer + Android APK published to GitHub Releases." >> "$GITHUB_STEP_SUMMARY"; then
+            echo "Invalid version: $VERSION"
+            exit 1
+          fi
+          BUILD_NUMBER="$(date -u +%Y%m%d%H%M)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Android signing key
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$ANDROID_KEYSTORE_B64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "Android signing secrets are missing."
+            echo "Required: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD"
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d '[:space:]' | base64 --decode > android_app/android/app/nika-release.jks
+          cat > android_app/android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=nika-release.jks
+          EOF
+
+      - name: Get Flutter dependencies
+        working-directory: android_app
+        run: flutter pub get
+
+      - name: Build signed APK
+        working-directory: android_app
+        run: flutter build apk --release --build-name "${{ steps.version.outputs.version }}" --build-number "${{ steps.version.outputs.build_number }}"
+
+      - name: Collect Android release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android-release
+          cp android_app/build/app/outputs/flutter-apk/app-release.apk android-release/NikaBusiness.apk
+          printf '%s' "${{ steps.version.outputs.version }}" > android-release/android-version.txt
+          sha256sum android-release/NikaBusiness.apk > android-release/NikaBusiness.apk.sha256
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nika-android
+          path: android-release/*
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: windows
+    needs: [windows, android]
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
