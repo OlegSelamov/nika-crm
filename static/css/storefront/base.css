@@ -860,3 +860,113 @@ body.sf-lock{overflow:hidden}
     .sf-cart-share,.sf-share-product{width:38px;padding:0}
     .sf-share-product{position:absolute;right:54px;top:14px;z-index:4;margin:0;background:#fff}
 }
+
+
+/* ===== Mobile final polish: badge, share actions, product modal fit ===== */
+@media(max-width:760px){
+    /* Visually center the quantity inside the red badge */
+    #sfMobileCartCount{
+        display:grid !important;
+        place-items:center !important;
+        align-content:center !important;
+        justify-content:center !important;
+        line-height:20px !important;
+        height:22px !important;
+        min-width:22px !important;
+        padding:0 5px 1px !important;
+        font-size:10px !important;
+        font-weight:900 !important;
+        font-family:Arial,sans-serif !important;
+        text-align:center !important;
+        vertical-align:middle !important;
+        top:-8px !important;
+        right:-10px !important;
+    }
+    #sfMobileCartCount[hidden]{display:none !important}
+
+    /* Cart header actions must always be visible */
+    .sf-cart-head{
+        padding:16px 18px 13px !important;
+        min-height:68px !important;
+    }
+    .sf-cart-head-actions{
+        display:flex !important;
+        align-items:center !important;
+        gap:8px !important;
+        flex:0 0 auto !important;
+    }
+    .sf-cart-share{
+        display:grid !important;
+        place-items:center !important;
+        width:42px !important;
+        height:42px !important;
+        padding:0 !important;
+        border:1px solid var(--brand-border) !important;
+        border-radius:13px !important;
+        background:var(--brand-soft) !important;
+        color:var(--brand) !important;
+    }
+    .sf-cart-share svg{display:block !important;width:20px !important;height:20px !important}
+    .sf-cart-share span{display:none !important}
+
+    /* Product modal always fits inside the phone screen */
+    #sfProductOverlay{padding:8px !important;overflow:hidden !important}
+    #sfProductOverlay .sf-product-modal{
+        position:relative !important;
+        inset:auto !important;
+        left:auto !important;
+        top:auto !important;
+        width:100% !important;
+        height:calc(100dvh - 16px) !important;
+        max-width:none !important;
+        max-height:calc(100dvh - 16px) !important;
+        margin:0 !important;
+        transform:none !important;
+        border-radius:22px !important;
+        display:block !important;
+        overflow-y:auto !important;
+        overflow-x:hidden !important;
+        overscroll-behavior:contain !important;
+        -webkit-overflow-scrolling:touch !important;
+    }
+    #sfProductOverlay.open .sf-product-modal{transform:none !important}
+    #sfProductOverlay .sf-pm-gallery{
+        padding:12px !important;
+        overflow:visible !important;
+    }
+    #sfProductOverlay .sf-pm-main{
+        aspect-ratio:1.25 / 1 !important;
+        max-height:42dvh !important;
+    }
+    #sfProductOverlay .sf-pm-info{
+        padding:18px 18px calc(24px + env(safe-area-inset-bottom)) !important;
+        overflow:visible !important;
+        min-height:auto !important;
+    }
+    #sfProductOverlay .sf-modal-close{
+        position:sticky !important;
+        float:right !important;
+        top:10px !important;
+        right:10px !important;
+        margin:10px 10px -48px 0 !important;
+        z-index:20 !important;
+    }
+    .sf-share-product{
+        display:flex !important;
+        position:static !important;
+        float:none !important;
+        width:auto !important;
+        height:40px !important;
+        margin:0 0 10px auto !important;
+        padding:0 12px !important;
+        border:1px solid var(--brand-border) !important;
+        border-radius:12px !important;
+        background:var(--brand-soft) !important;
+        color:var(--brand) !important;
+        align-items:center !important;
+        justify-content:center !important;
+        gap:6px !important;
+    }
+    .sf-share-product span{display:inline !important;font-size:9px !important}
+    .sf-share-product svg{display:block !important;width:18px !important;height:18px !important}
+}
