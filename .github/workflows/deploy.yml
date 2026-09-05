@@ -1,0 +1,67 @@
+name: Deploy Nika Business
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: nika-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/nika_deploy
+          chmod 600 ~/.ssh/nika_deploy
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/nika_deploy \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            "$VPS_USER@$VPS_HOST" <<'REMOTE'
+          set -euo pipefail
+
+          cd /home/ubuntu/nika-crm
+
+          echo "Current commit:"
+          git rev-parse --short HEAD
+
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+
+          if [ -f requirements.txt ]; then
+            source venv/bin/activate
+            pip install -r requirements.txt --quiet
+          fi
+
+          sudo systemctl restart nika
+          sleep 2
+          sudo systemctl is-active --quiet nika
+
+          echo "Deployed commit:"
+          git rev-parse --short HEAD
+          REMOTE
