@@ -91,7 +91,7 @@ WHATSAPP_AI_TOOLS = [
                 "limit": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 20,
+                    "maximum": 50,
                     "description": "Максимальное число результатов.",
                 },
             },
@@ -975,7 +975,7 @@ def _search_customer_catalog(company_id, query, limit=6, item_type="any"):
                 query,
                 query,
                 query,
-                min(20, max(1, int(limit or 6))),
+                min(50, max(1, int(limit or 6))),
             ),
         )
         rows = [dict(row) for row in cur.fetchall()]
@@ -1047,7 +1047,7 @@ def _search_customer_catalog(company_id, query, limit=6, item_type="any"):
                         item_type,
                         *where_params,
                         *score_params,
-                        min(20, max(1, int(limit or 6))),
+                        min(50, max(1, int(limit or 6))),
                     ),
                 )
                 rows = [dict(row) for row in cur.fetchall()]
@@ -1547,8 +1547,8 @@ def _build_storefront_selection(company_id, items_json, reason=""):
         raise StorefrontOrderError("Не удалось распознать подборку") from error
     if not isinstance(raw_items, list) or not raw_items:
         raise StorefrontOrderError("Подборка пуста")
-    if len(raw_items) > 20:
-        raise StorefrontOrderError("В подборке может быть не больше 20 позиций")
+    if len(raw_items) > 50:
+        raise StorefrontOrderError("В подборке может быть не больше 50 позиций")
 
     requested = {}
     for raw in raw_items:
@@ -1692,7 +1692,7 @@ def _build_customer_ai_instructions(context, extra_instructions="", catalog_resu
         "Каталог онлайн-витрины — единственный источник названий, цен, описаний и остатков. "
         "Если клиент просит оборудование, технику, кассу, принтер, сканер, моноблок или комплект оборудования, используй search_catalog с item_type=product. "
         "Если просит услуги или собрать корзину из услуг — используй item_type=service. "
-        "Если запрос общий и нужно посмотреть ассортимент, используй query=null, а не пытайся искать всю фразу целиком. "
+        "Если запрос общий и нужно посмотреть ассортимент, используй query=null, а не пытайся искать всю фразу целиком. Если клиент говорит «все опубликованные товары» или «все опубликованные услуги», запроси query=null с нужным item_type и limit=50, затем включи все найденные подходящие позиции в подборку, если их не больше 50. "
 
         "Перед ответом о цене, наличии, характеристиках товара или услуги обязательно "
         "используй search_catalog и опирайся только на его результат. Не придумывай позиции, цены, скидки, остатки, сроки, "
@@ -1893,7 +1893,14 @@ def _generate_customer_reply(
         inferred_type = "product"
     if any(x in normalized_latest for x in ("услуг", "работ", "настройк", "консультац", "документооборот")):
         inferred_type = "service"
-    catalog_result = _search_customer_catalog(company_id, latest_text, 12, inferred_type)
+    catalog_result = _search_customer_catalog(company_id, latest_text, 20, inferred_type)
+
+    # General phrases like "equipment for a shop" often do not literally occur
+    # in item names. If typed search returns nothing, browse published items of
+    # the inferred type so Nika can reason over the actual storefront assortment.
+    if not catalog_result.get("items") and inferred_type in {"product", "service"}:
+        catalog_result = _search_customer_catalog(company_id, None, 50, inferred_type)
+
     if not catalog_result.get("items"):
         for history_item in reversed(list(history or [])[:-1]):
             if history_item.get("role") != "user":
@@ -1901,7 +1908,9 @@ def _generate_customer_reply(
             previous_text = str(history_item.get("content") or "").strip()
             if not previous_text:
                 continue
-            previous_result = _search_customer_catalog(company_id, previous_text, 12, inferred_type)
+            previous_result = _search_customer_catalog(company_id, previous_text, 20, inferred_type)
+            if not previous_result.get("items") and inferred_type in {"product", "service"}:
+                previous_result = _search_customer_catalog(company_id, None, 50, inferred_type)
             if previous_result.get("items"):
                 catalog_result = previous_result
                 break
