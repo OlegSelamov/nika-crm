@@ -1,0 +1,4 @@
+# Добавьте эту строку в раздел dependencies существующего pubspec.yaml.
+# Не заменяйте весь pubspec.yaml этим файлом.
+dependencies:
+  webview_flutter: ^4.14.1
