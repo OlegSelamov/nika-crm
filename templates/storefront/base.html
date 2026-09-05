@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}{{ store.title or store.company_name }}{% endblock %}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/storefront/base.css', v='20260904-3') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/storefront/base.css', v='20260905-1') }}">
 {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -107,6 +107,10 @@
         </div>
 
         <div class="sf-pm-info">
+            <button id="sfPmShare" class="sf-share-product" type="button" aria-label="Поделиться товаром">
+                <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
+                <span>Поделиться</span>
+            </button>
             <div id="sfPmCategory" class="sf-pm-cat"></div>
             <h2 id="sfPmTitle" class="sf-pm-title"></h2>
             <div id="sfPmPrice" class="sf-pm-price"></div>
@@ -152,7 +156,13 @@
     <aside class="sf-cart-drawer">
         <div class="sf-cart-head">
             <h3>Корзина</h3>
-            <button class="sf-cart-close" type="button" data-close-cart>×</button>
+            <div class="sf-cart-head-actions">
+                <button id="sfShareCart" class="sf-cart-share" type="button" aria-label="Поделиться корзиной">
+                    <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
+                    <span>Поделиться</span>
+                </button>
+                <button class="sf-cart-close" type="button" data-close-cart>×</button>
+            </div>
         </div>
 
         <div id="sfCartBody" class="sf-cart-body"></div>
@@ -327,6 +337,6 @@
 
 <div id="sfToast" class="sf-toast"></div>
 
-<script src="{{ url_for('static', filename='js/storefront/base.js', v='20260904-3') }}"></script>
+<script src="{{ url_for('static', filename='js/storefront/base.js', v='20260905-1') }}"></script>
 </body>
 </html>
