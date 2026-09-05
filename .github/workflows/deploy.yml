@@ -21,12 +21,13 @@ jobs:
         shell: bash
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_KEY_B64: ${{ secrets.VPS_SSH_KEY_B64 }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/nika_deploy
+          printf '%s' "$VPS_SSH_KEY_B64" | base64 --decode > ~/.ssh/nika_deploy
+          printf '\n' >> ~/.ssh/nika_deploy
           chmod 600 ~/.ssh/nika_deploy
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
