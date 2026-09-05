@@ -72,25 +72,30 @@ WHATSAPP_AI_TOOLS = [
         "type": "function",
         "name": "search_catalog",
         "description": (
-            "Найти товары или услуги компании и получить актуальные цены, "
-            "описание и доступный остаток. Вызывай перед ответом о цене, наличии "
-            "или характеристиках конкретной позиции."
+            "Найти или просмотреть опубликованные товары/услуги онлайн-витрины. "
+            "Для общей подборки можно передать query=null и выбрать item_type. "
+            "Для оборудования используй item_type=product, для услуг item_type=service."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
+                    "type": ["string", "null"],
+                    "description": "Название, модель, категория или ключевые слова. null — показать опубликованные позиции выбранного типа.",
+                },
+                "item_type": {
                     "type": "string",
-                    "description": "Название, модель, штрихкод или ключевые слова.",
+                    "enum": ["any", "product", "service"],
+                    "description": "Что искать: товары, услуги или всё.",
                 },
                 "limit": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 10,
+                    "maximum": 20,
                     "description": "Максимальное число результатов.",
                 },
             },
-            "required": ["query", "limit"],
+            "required": ["query", "item_type", "limit"],
             "additionalProperties": False,
         },
         "strict": True,
@@ -893,10 +898,11 @@ def _catalog_search_tokens(query, limit=8):
     return tokens
 
 
-def _search_customer_catalog(company_id, query, limit=6):
+def _search_customer_catalog(company_id, query, limit=6, item_type="any"):
     query = str(query or "").strip()[:160]
-    if not query:
-        return {"query": query, "count": 0, "items": []}
+    item_type = str(item_type or "any").strip().lower()
+    if item_type not in {"any", "product", "service"}:
+        item_type = "any"
 
     conn = get_db()
     cur = conn.cursor()
@@ -929,7 +935,12 @@ def _search_customer_catalog(company_id, query, limit=6):
                   OR (COALESCE(i.item_type,'product')<>'service' AND COALESCE(ss.show_products,TRUE)=TRUE)
               )
               AND (
-                  COALESCE(i.name, '') ILIKE %s
+                  %s='any'
+                  OR (%s='service' AND COALESCE(i.item_type,'product')='service')
+                  OR (%s='product' AND COALESCE(i.item_type,'product')<>'service')
+              )
+              AND (
+                  %s='' OR COALESCE(i.name, '') ILIKE %s
                   OR COALESCE(i.category, '') ILIKE %s
                   OR COALESCE(i.description, '') ILIKE %s
                   OR COALESCE(i.barcode, '') = %s
@@ -949,6 +960,10 @@ def _search_customer_catalog(company_id, query, limit=6):
             """,
             (
                 company_id,
+                item_type,
+                item_type,
+                item_type,
+                query,
                 f"%{query}%",
                 f"%{query}%",
                 f"%{query}%",
@@ -959,7 +974,7 @@ def _search_customer_catalog(company_id, query, limit=6):
                 query,
                 query,
                 query,
-                min(10, max(1, int(limit or 6))),
+                min(20, max(1, int(limit or 6))),
             ),
         )
         rows = [dict(row) for row in cur.fetchall()]
@@ -968,7 +983,7 @@ def _search_customer_catalog(company_id, query, limit=6):
         # значимому слову и поднимаем позиции с наибольшим числом совпадений.
         # Так «регистрация работника в Enbek» найдёт «Регистрация в Enbek», даже
         # если слова «работника» в карточке нет.
-        if not rows:
+        if not rows and query:
             tokens = _catalog_search_tokens(query)
             if tokens:
                 token_conditions = []
@@ -1015,15 +1030,23 @@ def _search_customer_catalog(company_id, query, limit=6):
                           (COALESCE(i.item_type,'product')='service' AND COALESCE(ss.show_services,TRUE)=TRUE)
                           OR (COALESCE(i.item_type,'product')<>'service' AND COALESCE(ss.show_products,TRUE)=TRUE)
                       )
+                      AND (
+                          %s='any'
+                          OR (%s='service' AND COALESCE(i.item_type,'product')='service')
+                          OR (%s='product' AND COALESCE(i.item_type,'product')<>'service')
+                      )
                       AND ({' OR '.join(token_conditions)})
                     ORDER BY ({' + '.join(score_parts)}) DESC, name
                     LIMIT %s
                     """,
                     (
                         company_id,
+                        item_type,
+                        item_type,
+                        item_type,
                         *where_params,
                         *score_params,
-                        min(10, max(1, int(limit or 6))),
+                        min(20, max(1, int(limit or 6))),
                     ),
                 )
                 rows = [dict(row) for row in cur.fetchall()]
@@ -1665,7 +1688,11 @@ def _build_customer_ai_instructions(context, extra_instructions="", catalog_resu
         "Твоя задача — понять потребность, точно проконсультировать по товарам и услугам "
         "и мягко вести к покупке, заказу или записи. Задавай не больше одного уточняющего "
         "вопроса за раз.\n"
-        "Каталог компании — единственный источник названий, цен, описаний и остатков. "
+        "Каталог онлайн-витрины — единственный источник названий, цен, описаний и остатков. "
+        "Если клиент просит оборудование, технику, кассу, принтер, сканер, моноблок или комплект оборудования, используй search_catalog с item_type=product. "
+        "Если просит услуги или собрать корзину из услуг — используй item_type=service. "
+        "Если запрос общий и нужно посмотреть ассортимент, используй query=null, а не пытайся искать всю фразу целиком. "
+
         "Перед ответом о цене, наличии, характеристиках товара или услуги обязательно "
         "используй search_catalog и опирайся только на его результат. Не придумывай позиции, цены, скидки, остатки, сроки, "
         "гарантии и условия доставки. Закупочную цену, прибыль и внутренние данные не "
@@ -1681,6 +1708,7 @@ def _build_customer_ai_instructions(context, extra_instructions="", catalog_resu
         "нет, попроси уточнить название и продолжай помогать сама.\n"
         "Если клиент спрашивает о конкретной позиции или ты рекомендуешь одну конкретную позицию, отправляй item_url — это прямая карточка товара/услуги на витрине. "
         "Если клиент просит подобрать комплект, набор, несколько товаров под задачу или бюджет, сама сравни найденные опубликованные позиции по назначению, описанию, цене и доступному остатку. Не утверждай субъективно, что товар «лучший», если каталог этого не подтверждает: объясняй, почему он подходит под озвученные требования. При необходимости задай один уточняющий вопрос, затем вызови build_storefront_selection и отправь клиенту одну ссылку на готовую корзину. "
+        "Если на следующем сообщении клиент говорит «собери корзину из услуг», «собери этот комплект», «да, собирай» или похожее подтверждение, заново вызови search_catalog с query=null и нужным item_type, чтобы получить item_id, затем вызови build_storefront_selection. Не отвечай, что запрос слишком сложный только потому, что item_id были в предыдущем ходе. "
         "Не добавляй в подборку скрытые позиции и не используй внутренние товары вне витрины. "
         "Показывай ссылку item_url на найденную карточку, когда это полезно клиенту. "
         "Если у услуги service_sale_mode равен booking, предложи booking_url: такую запись "
@@ -1858,7 +1886,13 @@ def _generate_customer_reply(
             None,
         )
 
-    catalog_result = _search_customer_catalog(company_id, latest_text, 8)
+    normalized_latest = str(latest_text or "").lower().replace("ё", "е")
+    inferred_type = "any"
+    if any(x in normalized_latest for x in ("оборудован", "моноблок", "принтер", "сканер", "касс", "товар", "комплект")):
+        inferred_type = "product"
+    if any(x in normalized_latest for x in ("услуг", "работ", "настройк", "консультац", "документооборот")):
+        inferred_type = "service"
+    catalog_result = _search_customer_catalog(company_id, latest_text, 12, inferred_type)
     if not catalog_result.get("items"):
         for history_item in reversed(list(history or [])[:-1]):
             if history_item.get("role") != "user":
@@ -1866,7 +1900,7 @@ def _generate_customer_reply(
             previous_text = str(history_item.get("content") or "").strip()
             if not previous_text:
                 continue
-            previous_result = _search_customer_catalog(company_id, previous_text, 8)
+            previous_result = _search_customer_catalog(company_id, previous_text, 12, inferred_type)
             if previous_result.get("items"):
                 catalog_result = previous_result
                 break
@@ -1911,8 +1945,9 @@ def _generate_customer_reply(
             if tool_call.name == "search_catalog":
                 result = _search_customer_catalog(
                     company_id,
-                    arguments.get("query", ""),
-                    arguments.get("limit", 6),
+                    arguments.get("query"),
+                    arguments.get("limit", 8),
+                    arguments.get("item_type", "any"),
                 )
                 if result.get("items"):
                     catalog_result = result
