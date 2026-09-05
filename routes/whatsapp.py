@@ -97,6 +97,32 @@ WHATSAPP_AI_TOOLS = [
     },
     {
         "type": "function",
+        "name": "build_storefront_selection",
+        "description": (
+            "Собрать для клиента готовую подборку из опубликованных товаров/услуг "
+            "онлайн-витрины и получить одну ссылку на готовую корзину. Используй, когда "
+            "клиент просит подобрать комплект, набор, несколько вариантов вместе или решение "
+            "под задачу/бюджет. Передавай только item_id из search_catalog."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "items_json": {
+                    "type": "string",
+                    "description": "JSON-массив объектов item_id и quantity.",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Коротко, почему эта подборка подходит клиенту.",
+                },
+            },
+            "required": ["items_json", "reason"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
+    {
+        "type": "function",
         "name": "request_manager",
         "description": (
             "Передать диалог человеку. Используй только когда клиент прямо просит "
@@ -1490,6 +1516,115 @@ def _execute_storefront_order(action_id, company_id, chat_id):
         release_db(conn)
 
 
+def _build_storefront_selection(company_id, items_json, reason=""):
+    try:
+        raw_items = json.loads(str(items_json or "[]"))
+    except Exception as error:
+        raise StorefrontOrderError("Не удалось распознать подборку") from error
+    if not isinstance(raw_items, list) or not raw_items:
+        raise StorefrontOrderError("Подборка пуста")
+    if len(raw_items) > 20:
+        raise StorefrontOrderError("В подборке может быть не больше 20 позиций")
+
+    requested = {}
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            raise StorefrontOrderError("Не удалось распознать состав подборки")
+        try:
+            item_id = int(raw.get("item_id"))
+            quantity = Decimal(str(raw.get("quantity") or 1))
+        except Exception as error:
+            raise StorefrontOrderError("Некорректное количество в подборке") from error
+        if item_id <= 0 or quantity <= 0 or quantity > Decimal("999"):
+            raise StorefrontOrderError("Некорректное количество в подборке")
+        requested[item_id] = requested.get(item_id, Decimal("0")) + quantity
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT ss.id AS storefront_id, ss.slug, ss.show_products, ss.show_services,
+                   i.id, i.name, COALESCE(i.item_type,'product') AS item_type,
+                   COALESCE(i.service_sale_mode,'order') AS service_sale_mode,
+                   COALESCE(i.retail_price,i.price,0) AS price, i.quantity
+            FROM storefront_settings ss
+            JOIN items i ON i.company_id=ss.company_id
+            WHERE ss.company_id=%s AND ss.enabled=TRUE
+              AND i.id=ANY(%s)
+              AND COALESCE(i.storefront_hidden,FALSE)=FALSE
+              AND (
+                  (COALESCE(i.item_type,'product')='service' AND COALESCE(ss.show_services,TRUE)=TRUE)
+                  OR (COALESCE(i.item_type,'product')<>'service' AND COALESCE(ss.show_products,TRUE)=TRUE)
+              )
+        """,(company_id,list(requested)))
+        rows=[dict(row) for row in cur.fetchall()]
+        found={int(row["id"]):row for row in rows}
+        if set(found) != set(requested):
+            raise StorefrontOrderError("Одна из выбранных позиций больше не опубликована на витрине")
+
+        cart={}
+        summary=[]
+        total=Decimal("0")
+        for item_id, quantity in requested.items():
+            item=found[item_id]
+            if item["item_type"]=="service" and item["service_sale_mode"]=="booking":
+                raise StorefrontOrderError(
+                    f"Услуга «{item['name']}» оформляется через онлайн-запись и не добавляется в общую корзину"
+                )
+            if item["item_type"]!="service" and item.get("quantity") is not None:
+                available=Decimal(str(item.get("quantity") or 0))
+                if available <= 0:
+                    raise StorefrontOrderError(f"«{item['name']}» сейчас нет в наличии")
+                quantity=min(quantity,available)
+            cart[str(item_id)]=str(quantity)
+            line=Decimal(str(item.get("price") or 0))*quantity
+            total+=line
+            summary.append({
+                "id":item_id,"name":item["name"],"quantity":quantity,
+                "price":item.get("price") or 0,"total":line,
+            })
+
+        # Same table and token format used by the storefront's Share cart action.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS storefront_shared_carts (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                storefront_id INTEGER,
+                token TEXT UNIQUE NOT NULL,
+                cart_json JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        token=secrets.token_urlsafe(9)
+        store=rows[0]
+        cur.execute("""
+            INSERT INTO storefront_shared_carts
+                (company_id,storefront_id,token,cart_json,created_at)
+            VALUES (%s,%s,%s,%s::jsonb,%s)
+        """,(
+            company_id,store["storefront_id"],token,
+            json.dumps(cart,ensure_ascii=False),now_kz(),
+        ))
+        conn.commit()
+        public_base_url=os.getenv("PUBLIC_BASE_URL","https://nikabusiness.com").rstrip("/")
+        return {
+            "ok":True,
+            "url":f"{public_base_url}/s/{store['slug']}/shared-cart/{token}",
+            "reason":str(reason or "")[:500],
+            "total":total,
+            "count":len(summary),
+            "items":summary,
+            "instruction":"Отправь клиенту эту ссылку как готовую подборку. Кратко объясни выбор и общую сумму.",
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        try: cur.close()
+        except Exception: pass
+        release_db(conn)
+
+
 def _catalog_reference(catalog_result):
     if not catalog_result or not catalog_result.get("items"):
         return "По исходной формулировке клиента совпадений в каталоге пока не найдено."
@@ -1544,6 +1679,9 @@ def _build_customer_ai_instructions(context, extra_instructions="", catalog_resu
         "скажи, что компания может выполнить эту услугу, и задай один полезный вопрос. "
         "Не выдумывай конкретные сроки, документы, гарантии или условия, которых нет в каталоге. Если точного совпадения "
         "нет, попроси уточнить название и продолжай помогать сама.\n"
+        "Если клиент спрашивает о конкретной позиции или ты рекомендуешь одну конкретную позицию, отправляй item_url — это прямая карточка товара/услуги на витрине. "
+        "Если клиент просит подобрать комплект, набор, несколько товаров под задачу или бюджет, сама сравни найденные опубликованные позиции по назначению, описанию, цене и доступному остатку. Не утверждай субъективно, что товар «лучший», если каталог этого не подтверждает: объясняй, почему он подходит под озвученные требования. При необходимости задай один уточняющий вопрос, затем вызови build_storefront_selection и отправь клиенту одну ссылку на готовую корзину. "
+        "Не добавляй в подборку скрытые позиции и не используй внутренние товары вне витрины. "
         "Показывай ссылку item_url на найденную карточку, когда это полезно клиенту. "
         "Если у услуги service_sale_mode равен booking, предложи booking_url: такую запись "
         "не превращай в обычный заказ.\n"
@@ -1778,6 +1916,19 @@ def _generate_customer_reply(
                 )
                 if result.get("items"):
                     catalog_result = result
+            elif tool_call.name == "build_storefront_selection":
+                try:
+                    result = _build_storefront_selection(
+                        company_id,
+                        arguments.get("items_json", "[]"),
+                        arguments.get("reason", ""),
+                    )
+                except StorefrontOrderError as error:
+                    result = {
+                        "ok": False,
+                        "error": str(error),
+                        "instruction": "Исправь подборку или уточни у клиента один недостающий параметр.",
+                    }
             elif tool_call.name == "request_manager":
                 if _customer_handoff_is_allowed(history):
                     handoff_reason = str(arguments.get("reason") or "Требуется менеджер")[:500]
