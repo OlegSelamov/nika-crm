@@ -471,15 +471,20 @@ AI_TOOLS = [
     {
         "type": "function",
         "name": "search_storefront",
-        "description": "Получить настройки онлайн-витрины и найти только позиции, которые реально опубликованы для клиентов.",
+        "description": "Просмотреть реально опубликованные позиции онлайн-витрины. Можно отдельно запросить товары, услуги или всё. Для общего просмотра передавай query=null.",
         "strict": True,
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {"type": ["string", "null"], "maxLength": 150},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 30},
+                "item_type": {
+                    "type": "string",
+                    "enum": ["any", "product", "service"],
+                    "description": "product — товары, service — услуги, any — всё опубликованное."
+                },
+                "limit": {"type": "integer", "minimum": 1, "maximum": 150},
             },
-            "required": ["query", "limit"],
+            "required": ["query", "item_type", "limit"],
             "additionalProperties": False,
         },
     },
@@ -954,10 +959,13 @@ def _search_items(company_id, query, limit):
     return {"query": query, "count": len(rows), "items": [dict(row) for row in rows]}
 
 
-def _search_storefront(company_id, query, limit):
+def _search_storefront(company_id, query, limit, item_type="any"):
     _require_read_module("storefront")
     if not company_id:
         raise ActionError("Сначала выберите организацию")
+    item_type = str(item_type or "any").strip().lower()
+    if item_type not in {"any", "product", "service"}:
+        item_type = "any"
     store = _query_rows(
         """
         SELECT id, slug, title, description, enabled, show_products,
@@ -983,6 +991,31 @@ def _search_storefront(company_id, query, limit):
     store = dict(store)
     query = str(query or "").strip()[:150]
     pattern = f"%{query}%"
+
+    counts = _query_rows(
+        """
+        SELECT
+          COUNT(*) FILTER (
+            WHERE COALESCE(i.item_type,'product')<>'service'
+              AND COALESCE(i.storefront_hidden,FALSE)=FALSE
+              AND %s=TRUE
+          ) AS products,
+          COUNT(*) FILTER (
+            WHERE COALESCE(i.item_type,'product')='service'
+              AND COALESCE(i.storefront_hidden,FALSE)=FALSE
+              AND %s=TRUE
+          ) AS services
+        FROM items i
+        WHERE i.company_id=%s
+        """,
+        (
+            bool(store.get("show_products", True)),
+            bool(store.get("show_services", True)),
+            company_id,
+        ),
+        one=True,
+    ) or {"products": 0, "services": 0}
+
     rows = _query_rows(
         """
         SELECT i.id, i.name, i.category, i.description,
@@ -999,6 +1032,11 @@ def _search_storefront(company_id, query, limit):
               OR (COALESCE(i.item_type,'product')<>'service' AND %s=TRUE)
           )
           AND (
+              %s='any'
+              OR (%s='service' AND COALESCE(i.item_type,'product')='service')
+              OR (%s='product' AND COALESCE(i.item_type,'product')<>'service')
+          )
+          AND (
               %s='' OR COALESCE(i.name,'') ILIKE %s
               OR COALESCE(i.category,'') ILIKE %s
               OR COALESCE(i.description,'') ILIKE %s
@@ -1010,11 +1048,14 @@ def _search_storefront(company_id, query, limit):
             company_id,
             bool(store.get("show_services", True)),
             bool(store.get("show_products", True)),
+            item_type,
+            item_type,
+            item_type,
             query,
             pattern,
             pattern,
             pattern,
-            min(30, max(1, int(limit))),
+            min(150, max(1, int(limit))),
         ),
     )
     public_base_url = os.getenv("PUBLIC_BASE_URL", "https://nikabusiness.com").rstrip("/")
@@ -1041,6 +1082,12 @@ def _search_storefront(company_id, query, limit):
             "min_order_amount": store.get("min_order_amount") or 0,
         },
         "query": query,
+        "item_type": item_type,
+        "published_counts": {
+            "products": int(counts.get("products") or 0),
+            "services": int(counts.get("services") or 0),
+            "total": int(counts.get("products") or 0) + int(counts.get("services") or 0),
+        },
         "count": len(result_items),
         "items": result_items,
     }
@@ -1536,7 +1583,10 @@ def _execute_tool(name, arguments, company_id, conversation_id=None, user_id=Non
         return _search_items(company_id, arguments["query"], arguments["limit"])
     if name == "search_storefront":
         return _search_storefront(
-            company_id, arguments.get("query"), arguments["limit"]
+            company_id,
+            arguments.get("query"),
+            arguments["limit"],
+            arguments.get("item_type", "any"),
         )
     if name == "build_storefront_selection":
         from routes.whatsapp import _build_storefront_selection
@@ -1714,7 +1764,7 @@ def _generate_reply(
     )
     storefront_markers = (
         "онлайн витрин", "онлайн-витрин", "витрин", "на сайте", "опубликован",
-        "доставк", "самовывоз", "ссылка на сайт", "подборк", "комплект", "набор", "ссылк на товар", "ссылк на карточ",
+        "доставк", "самовывоз", "ссылка на сайт", "подборк", "комплект", "набор", "ссылк на товар", "ссылк на карточ", "какие товары", "какие услуги", "все опубликован",
     )
     force_storefront_search = any(
         marker in normalized_message for marker in storefront_markers
