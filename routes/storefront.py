@@ -1,5 +1,7 @@
 from datetime import datetime, date, timedelta
 import re
+import json
+from secrets import token_urlsafe
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -952,6 +954,117 @@ def item(slug, item_id):
             images=images,
             cart_count=_cart_count(store["company_id"]),
         )
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def _ensure_shared_cart_schema():
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS storefront_shared_carts (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                storefront_id INTEGER,
+                token TEXT UNIQUE NOT NULL,
+                cart_json JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_storefront_shared_carts_token
+            ON storefront_shared_carts(token)
+        """)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/cart/share", methods=["POST"])
+def cart_share(slug):
+    store = get_store(slug)
+    if not store:
+        return jsonify({"ok": False, "error": "Витрина не найдена"}), 404
+
+    cart = dict(session.get(_cart_key(store["company_id"]), {}))
+    if not cart:
+        return jsonify({"ok": False, "error": "Корзина пуста"}), 400
+
+    _ensure_shared_cart_schema()
+    token = token_urlsafe(9)
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO storefront_shared_carts (
+                company_id, storefront_id, token, cart_json, created_at
+            )
+            VALUES (%s,%s,%s,%s::jsonb,%s)
+        """, (
+            store["company_id"], store["id"], token,
+            json.dumps(cart, ensure_ascii=False), now_kz()
+        ))
+        conn.commit()
+        share_url = url_for(
+            "storefront.shared_cart",
+            slug=slug,
+            token=token,
+            _external=True,
+        )
+        return jsonify({"ok": True, "url": share_url})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@storefront_bp.route("/<slug>/shared-cart/<token>")
+def shared_cart(slug, token):
+    store = get_store(slug)
+    if not store:
+        return "Витрина не найдена", 404
+
+    _ensure_shared_cart_schema()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT cart_json
+            FROM storefront_shared_carts
+            WHERE token=%s AND company_id=%s
+            LIMIT 1
+        """, (token, store["company_id"]))
+        row = cur.fetchone()
+        if not row:
+            return "Корзина не найдена", 404
+
+        cart = row["cart_json"] or {}
+        if isinstance(cart, str):
+            cart = json.loads(cart)
+
+        ids = [int(x) for x in cart.keys() if str(x).isdigit()]
+        if ids:
+            cur.execute("""
+                SELECT id
+                FROM items
+                WHERE company_id=%s
+                  AND id=ANY(%s)
+                  AND COALESCE(storefront_hidden,FALSE)=FALSE
+            """, (store["company_id"], ids))
+            allowed = {str(x["id"]) for x in cur.fetchall()}
+            cart = {str(k): str(v) for k, v in cart.items() if str(k) in allowed}
+
+        session[_cart_key(store["company_id"])] = cart
+        session.modified = True
+        return redirect(url_for("storefront.home", slug=slug, shared_cart="1"))
     finally:
         cur.close()
         pool.putconn(conn)
