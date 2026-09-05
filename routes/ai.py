@@ -366,19 +366,21 @@ def _navigation_response(message):
     return None
 
 
-def _plain_text_reply(text):
-    """Убирает Markdown и технические символы до показа и озвучивания."""
+def _plain_text_reply(text, preserve_urls=False):
+    """Убирает Markdown и технические символы. По умолчанию ссылки скрываются для UI/TTS."""
     text = unescape(str(text or ""))
     text = re.sub(r"```(?:[a-zA-Z0-9_+-]+)?\s*([\s\S]*?)```", r"\1", text)
     text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text)
     text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
-    text = re.sub(r"https?://\S+|www\.\S+", "", text)
+    if not preserve_urls:
+        text = re.sub(r"https?://\S+|www\.\S+", "", text)
     text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.MULTILINE)
     text = re.sub(r"^\s*>\s?", "", text, flags=re.MULTILINE)
     text = re.sub(r"^\s*[-+*•]\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"(\*\*|__|~~|`)", "", text)
     text = re.sub(r"(?<=\d)\s*/\s*(?=\d)", " из ", text)
-    text = text.replace("/", " ").replace("\\", " ")
+    if not preserve_urls:
+        text = text.replace("/", " ").replace("\\", " ")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
@@ -1696,6 +1698,7 @@ def _generate_reply(
     user_id,
     conversation_id,
     additional_instructions="",
+    preserve_urls=False,
 ):
 
     input_items = [*history, {"role": "user", "content": message}]
@@ -1757,7 +1760,7 @@ def _generate_reply(
 
         function_calls = [item for item in response.output if item.type == "function_call"]
         if not function_calls:
-            reply = _plain_text_reply(response.output_text)
+            reply = _plain_text_reply(response.output_text, preserve_urls=preserve_urls)
             return reply or "Не удалось сформировать ответ. Попробуйте задать вопрос иначе.", None
 
         input_items += response.output
