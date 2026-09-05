@@ -107,7 +107,7 @@ jobs:
             echo "Invalid version: $VERSION"
             exit 1
           fi
-          BUILD_NUMBER="$(date -u +%y%m%d%H%M)"
+          BUILD_NUMBER="$(( $(date -u +%s) / 60 ))"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
       - name: Restore Android signing key
