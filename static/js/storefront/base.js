@@ -1021,3 +1021,41 @@ document.addEventListener('DOMContentLoaded',()=>{
         setTimeout(()=>sfOpenCart(),120);
     }
 });
+
+
+/* Ensure share controls exist in live DOM */
+function sfEnsureShareControls(){
+    const cartHead=document.querySelector('.sf-cart-head');
+    if(cartHead && !document.getElementById('sfShareCart')){
+        let actions=cartHead.querySelector('.sf-cart-head-actions');
+        const close=cartHead.querySelector('[data-close-cart]');
+        if(!actions){
+            actions=document.createElement('div');
+            actions.className='sf-cart-head-actions';
+            if(close) actions.appendChild(close);
+            cartHead.appendChild(actions);
+        }
+        const button=document.createElement('button');
+        button.id='sfShareCart';
+        button.className='sf-cart-share';
+        button.type='button';
+        button.setAttribute('aria-label','Поделиться корзиной');
+        button.innerHTML='<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg><span>Поделиться</span>';
+        actions.insertBefore(button,actions.firstChild);
+        button.addEventListener('click',sfShareCurrentCart);
+    }
+
+    const pmInfo=document.querySelector('.sf-pm-info');
+    if(pmInfo && !document.getElementById('sfPmShare')){
+        const button=document.createElement('button');
+        button.id='sfPmShare';
+        button.className='sf-share-product';
+        button.type='button';
+        button.setAttribute('aria-label','Поделиться товаром');
+        button.innerHTML='<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg><span>Поделиться</span>';
+        pmInfo.insertBefore(button,pmInfo.firstChild);
+        button.addEventListener('click',sfShareCurrentProduct);
+    }
+}
+document.addEventListener('DOMContentLoaded',sfEnsureShareControls);
+setTimeout(sfEnsureShareControls,0);
