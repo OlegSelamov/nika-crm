@@ -770,6 +770,7 @@ def _generate_internal_whatsapp_reply(
             user["id"],
             conversation_id,
             additional_instructions=additional_instructions,
+            preserve_urls=True,
         )
         saved_message = (
             "[команда с паролем скрыта]"
