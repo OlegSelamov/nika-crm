@@ -45,7 +45,7 @@ class _MealsTabState extends State<_MealsTab>{
   @override void initState(){super.initState();load();}
   Future<void> load()async{setState(()=>loading=true);final d=await ApiService.schoolMeals(ds);if(mounted)setState((){rows=List<dynamic>.from(d['rows']??[]);totals=Map<String,dynamic>.from(d['totals']??{});loading=false;});}
   Future<void> edit(Map<String,dynamic> r)async{
-    final plan=TextEditingController(text='${r['plan_count']??0}'),fact=TextEditingController(text:'${r['fact_count']??0}');
+    final plan=TextEditingController(text:'${r['plan_count']??0}'),fact=TextEditingController(text:'${r['fact_count']??0}');
     final free=TextEditingController(text:'${r['free_count']??0}'),paid=TextEditingController(text:'${r['paid_count']??0}'),note=TextEditingController(text:r['note']??'');
     final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:Text(r['class_name']??'Класс'),content:SingleChildScrollView(child:Column(children:[
       TextField(controller:plan,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'План')),TextField(controller:fact,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Факт')),
