@@ -142,8 +142,16 @@ def check_company_access():
         return redirect("/subscription")
     if subscription["status"] in ("expired", "suspended", "cancelled"):
         if request.path.startswith("/api/mobile/"):
-            return jsonify({"success": False, "error": "Подписка компании приостановлена"}), 403
-        return redirect("/subscription")
+            return jsonify({
+                "success": False,
+                "error": "Пробный период завершён. Выберите подписку, чтобы продолжить работу."
+                    if subscription["status"] == "expired"
+                    else "Подписка компании приостановлена",
+                "code": "subscription_expired",
+                "subscription_status": subscription["status"],
+                "subscription_url": "/subscription",
+            }), 403
+        return redirect("/subscription?expired=1")
     company_modules = getattr(g, "company_modules", set())
     for path_prefix, module_code in MODULE_PATHS:
         if request.path == path_prefix or request.path.startswith(path_prefix + "/"):
