@@ -20,6 +20,8 @@ import 'login_screen.dart';
 import 'movements_screen.dart';
 import 'notifications_screen.dart';
 import 'reports_screen.dart';
+import 'profile_screen.dart';
+import 'school_screen.dart';
 import 'sales_history_screen.dart';
 import 'sales_screen.dart';
 import 'settings_screen.dart';
@@ -571,7 +573,7 @@ class _AppDrawer extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 children: [
-                  if (hasModule('profile')) _drawerItem(Icons.person_outline_rounded, 'Профиль', () { Navigator.pop(context); openPage(const WebModuleScreen(title: 'Профиль', path: '/profile')); }),
+                  if (hasModule('profile')) _drawerItem(Icons.person_outline_rounded, 'Профиль', () { Navigator.pop(context); openPage(const ProfileScreen()); }),
                   if (hasModule('dashboard')) _drawerItem(Icons.home_rounded, 'Главная', () => openCore(0), active: selectedIndex == 0),
                   if (hasModule('sales')) _drawerItem(Icons.point_of_sale_rounded, 'Продажи', () => openCore(1), active: selectedIndex == 1),
                   if (hasModule('analytics')) _drawerItem(Icons.query_stats_rounded, 'Аналитика', () { Navigator.pop(context); openPage(const ModulePage(title: 'Аналитика', child: AnalyticsScreen())); }),
@@ -582,7 +584,7 @@ class _AppDrawer extends StatelessWidget {
                   if (hasModule('accounting')) _drawerItem(Icons.account_balance_outlined, 'Бухгалтерия', () { Navigator.pop(context); openPage(const ModulePage(title: 'Бухгалтерия', child: AccountingScreen())); }),
                   if (hasModule('reports')) _drawerItem(Icons.summarize_outlined, 'Отчёты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Отчёты', child: ReportsScreen())); }),
                   if (hasModule('expenses')) _drawerItem(Icons.payments_outlined, 'Расходы', () { Navigator.pop(context); openPage(const ModulePage(title: 'Расходы', child: ExpensesScreen())); }),
-                  if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const WebModuleScreen(title: 'Школа', path: '/school')); }),
+                  if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const SchoolScreen()); }),
                   if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(const ModulePage(title: 'Склад', child: StockScreen())); }),
                   if (hasModule('clients')) _drawerItem(Icons.people_alt_outlined, 'Клиенты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Клиенты', child: ClientsScreen())); }),
                   if (currentRole == 'admin' || currentRole == 'owner') _drawerItem(Icons.badge_outlined, 'Пользователи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Пользователи', child: EmployeesScreen())); }),
