@@ -34,6 +34,7 @@ ACTION_NAMES = (
     "restore_client",
     "delete_client_permanently",
     "send_client_whatsapp",
+    "send_employee_whatsapp",
     "create_item",
     "update_item",
     "delete_item",
@@ -77,6 +78,7 @@ ACTION_MODULES = {
     "restore_client": "clients",
     "delete_client_permanently": "clients",
     "send_client_whatsapp": "clients",
+    "send_employee_whatsapp": None,
     "create_item": "catalog",
     "update_item": "catalog",
     "delete_item": "catalog",
@@ -385,6 +387,7 @@ def _validate_target(action: str, data: dict[str, Any]) -> dict[str, Any]:
         "restore_client": "client_id",
         "delete_client_permanently": "client_id",
         "send_client_whatsapp": "client_id",
+        "send_employee_whatsapp": "target_user_id",
         "update_item": "item_id",
         "delete_item": "item_id",
         "update_category": "category_id",
@@ -431,6 +434,47 @@ def _validate_target(action: str, data: dict[str, Any]) -> dict[str, Any]:
         )
         normalized["client_name"] = str(client.get("full_name") or "Клиент")[:180]
         normalized["client_phone"] = client["normalized_phone"]
+    elif action == "send_employee_whatsapp":
+        normalized["recipient_query"] = _text(normalized, "recipient_query", required=True, limit=180)
+        normalized["message"] = _text(normalized, "message", required=True, limit=4000)
+        company_id = _company_id()
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "SELECT id, full_name, username, phone, position FROM users WHERE id=%s AND company_id=%s",
+                (normalized["target_user_id"], company_id),
+            )
+            employee = cur.fetchone()
+            if not employee:
+                raise ActionError("Сотрудник не найден")
+            employee = dict(employee)
+            phone = _normalized_phone(employee.get("phone"))
+            if not 10 <= len(phone) <= 15:
+                raise ActionError("У сотрудника не указан корректный номер WhatsApp")
+            normalized["employee_name"] = str(employee.get("full_name") or employee.get("username") or "Сотрудник")[:180]
+            normalized["employee_phone"] = phone
+        finally:
+            cur.close()
+            pool.putconn(conn)
+    elif action == "send_employee_whatsapp":
+        employee = _row(
+            cur,
+            "SELECT id, full_name, username, phone, position FROM users WHERE id=%s AND company_id=%s",
+            (data["target_user_id"], company_id),
+            "Сотрудник не найден",
+        )
+        phone = _normalized_phone(employee.get("phone"))
+        if phone != data.get("employee_phone"):
+            raise ActionError("Номер сотрудника изменился. Подготовьте сообщение заново")
+        contact_name = str(employee.get("full_name") or employee.get("username") or "Сотрудник")
+        target_id, chat_id, external_message_id = _send_whatsapp_message(
+            cur, company_id, phone, contact_name, data["message"], customer_id=None
+        )
+        target_type = "whatsapp_message"
+        before = {"employee_id": employee["id"], "employee_name": contact_name, "phone": phone}
+        after = {**before, "chat_id": chat_id, "external_message_id": external_message_id, "message": data["message"], "status": "sent"}
+
     elif action == "create_item":
         normalized["name"] = _text(normalized, "name", required=True, limit=220)
         item_type = _text(normalized, "item_type", limit=20) or "product"
@@ -568,6 +612,12 @@ def _subject_label(action: str, data: dict[str, Any]) -> str:
             f"{str(data.get('message') or '')[:650]}"
             + ("…" if len(str(data.get('message') or '')) > 650 else "")
         ),
+        "send_employee_whatsapp": (
+            f"отправить WhatsApp сотруднику «{data.get('employee_name', 'Сотрудник')}» "
+            f"({data.get('employee_phone', '')}):\n"
+            f"{str(data.get('message') or '')[:650]}"
+            + ("…" if len(str(data.get('message') or '')) > 650 else "")
+        ),
         "create_item": f"создать позицию «{data.get('name', '')}»",
         "update_item": f"изменить позицию #{data.get('item_id')}",
         "delete_item": f"удалить позицию #{data.get('item_id')}",
@@ -657,6 +707,68 @@ def _set_user_modules(cur, employee_id: int, company_id: int | None, module_code
             """,
             (employee_id, row["id"], row["code"] in clean_codes),
         )
+
+
+
+def _send_whatsapp_message(cur, company_id, phone, contact_name, message, customer_id=None):
+    cur.execute(
+        """SELECT id, instance_id, api_token, phone FROM whatsapp_integrations
+           WHERE company_id=%s AND enabled=TRUE AND COALESCE(outgoing_enabled, TRUE)=TRUE LIMIT 1""",
+        (company_id,),
+    )
+    integration = cur.fetchone()
+    if not integration:
+        raise ActionError("WhatsApp не подключён или исходящие сообщения отключены")
+    external_chat_id = f"{phone}@c.us"
+    cur.execute(
+        "SELECT id, customer_id FROM whatsapp_chats WHERE company_id=%s AND integration_id=%s AND external_chat_id=%s LIMIT 1",
+        (company_id, integration["id"], external_chat_id),
+    )
+    chat = cur.fetchone()
+    if customer_id is not None and chat and chat.get("customer_id") not in (None, customer_id):
+        raise ActionError("Этот WhatsApp-чат уже связан с другой карточкой клиента. Проверьте номер")
+    if chat:
+        chat_id = chat["id"]
+        cur.execute(
+            """UPDATE whatsapp_chats SET phone=%s,
+               contact_name=COALESCE(NULLIF(contact_name,''),%s),
+               customer_id=CASE WHEN %s IS NOT NULL AND customer_id IS NULL THEN %s ELSE customer_id END,
+               updated_at=NOW() WHERE id=%s AND company_id=%s""",
+            (phone, contact_name, customer_id, customer_id, chat_id, company_id),
+        )
+    else:
+        cur.execute(
+            """INSERT INTO whatsapp_chats
+               (company_id,integration_id,external_chat_id,phone,contact_name,customer_id,unread_count,created_at,updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,0,NOW(),NOW()) RETURNING id""",
+            (company_id, integration["id"], external_chat_id, phone, contact_name, customer_id),
+        )
+        chat_id = cur.fetchone()["id"]
+    try:
+        response = requests.post(
+            f"https://api.green-api.com/waInstance{integration['instance_id']}/sendMessage/{integration['api_token']}",
+            json={"chatId": external_chat_id, "message": message}, timeout=25,
+        )
+        response.raise_for_status()
+        external_message_id = response.json().get("idMessage")
+        if not external_message_id:
+            raise requests.RequestException("GREEN-API returned no message id")
+    except (requests.RequestException, ValueError) as error:
+        raise ActionError("Не удалось отправить сообщение через WhatsApp") from error
+    cur.execute(
+        """INSERT INTO whatsapp_messages
+           (company_id,integration_id,chat_id,external_message_id,direction,message_type,message_text,sender_phone,status,is_ai,created_at)
+           VALUES (%s,%s,%s,%s,'outgoing','textMessage',%s,%s,'sent',TRUE,NOW())
+           ON CONFLICT DO NOTHING RETURNING id""",
+        (company_id, integration["id"], chat_id, external_message_id, message, integration.get("phone") or ""),
+    )
+    saved = cur.fetchone()
+    message_id = saved["id"] if saved else None
+    cur.execute(
+        "UPDATE whatsapp_chats SET last_message=%s,last_message_at=NOW(),updated_at=NOW() WHERE id=%s AND company_id=%s",
+        (message, chat_id, company_id),
+    )
+    return message_id, chat_id, external_message_id
 
 
 def _execute(cur, action: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -1288,11 +1400,12 @@ def _execute(cur, action: str, data: dict[str, Any]) -> dict[str, Any]:
             )
         after["client_name"] = client["full_name"]
 
-    result_message = (
-        f"Сообщение клиенту «{data.get('client_name', 'Клиент')}» отправлено."
-        if action == "send_client_whatsapp"
-        else f"Готово: {_subject_label(action, data)}."
-    )
+    if action == "send_client_whatsapp":
+        result_message = f"Сообщение клиенту «{data.get('client_name', 'Клиент')}» отправлено."
+    elif action == "send_employee_whatsapp":
+        result_message = f"Сообщение сотруднику «{data.get('employee_name', 'Сотрудник')}» отправлено."
+    else:
+        result_message = f"Готово: {_subject_label(action, data)}."
     return {
         "message": result_message,
         "target_type": target_type,
