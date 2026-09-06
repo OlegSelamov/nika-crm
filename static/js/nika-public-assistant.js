@@ -42,7 +42,9 @@
     };
 
     const config = configs[page] || configs.landing;
-    let conversationId = null;
+    const CHAT_KEY = "nikaAssistantChat";
+    const CONVERSATION_KEY = "nikaAssistantConversationId";
+    let conversationId = sessionStorage.getItem(CONVERSATION_KEY) || null;
     let sending = false;
     let recognition = null;
     let voiceRequest = false;
@@ -64,9 +66,54 @@
         sessionStorage.removeItem(FLOW_KEY);
     }
 
+    function loadChatHistory() {
+        try {
+            const items = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "[]");
+            return Array.isArray(items) ? items : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function saveChatHistory(items) {
+        const clean = (Array.isArray(items) ? items : [])
+            .filter(item => item && (item.role === "user" || item.role === "assistant"))
+            .map(item => ({
+                role: item.role,
+                text: String(item.text || "").slice(0, 4000),
+                ts: Number(item.ts || Date.now())
+            }))
+            .slice(-40);
+        sessionStorage.setItem(CHAT_KEY, JSON.stringify(clean));
+    }
+
+    function rememberMessage(role, text) {
+        const items = loadChatHistory();
+        items.push({role, text: String(text || ""), ts: Date.now()});
+        saveChatHistory(items);
+    }
+
+    function restoreMessages(root) {
+        const messages = root.querySelector(".nika-public-messages");
+        if (!messages) return;
+        const history = loadChatHistory();
+        if (!history.length) return;
+        root.querySelector(".nika-public-welcome")?.remove();
+        history.forEach(item => {
+            const message = createElement(
+                "div",
+                "nika-public-message nika-public-message--" + item.role,
+                item.text
+            );
+            messages.appendChild(message);
+        });
+        messages.scrollTop = messages.scrollHeight;
+    }
+
     function navigateTo(url) {
         if (!url) return;
         sessionStorage.setItem("nikaStandaloneAssistantOpen", "1");
+        if (conversationId) sessionStorage.setItem(CONVERSATION_KEY, conversationId);
         window.location.href = url;
     }
 
@@ -96,6 +143,25 @@
 
     function skip(text) {
         return /пропуст|позже|нет|не сейчас|не надо/i.test(String(text || ""));
+    }
+
+    function restoreFlowContextNotice(root) {
+        const flow = loadFlow();
+        if (!flow || !flow.stage) return;
+        const messages = root.querySelector(".nika-public-messages");
+        if (!messages || loadChatHistory().length) return;
+        let text = "";
+        if (flow.stage === "register" && flow.expected) {
+            text = "Продолжаем регистрацию с того места, где остановились.";
+        } else if (flow.stage === "onboarding") {
+            text = "Продолжаем настройку вашей компании.";
+        } else if (flow.stage === "lead" && flow.businessType) {
+            text = "Я помню, какой у вас бизнес. Можем продолжить регистрацию.";
+        }
+        if (text) {
+            const message = createElement("div", "nika-public-message nika-public-message--assistant", text);
+            messages.appendChild(message);
+        }
     }
 
     function businessTypeFromText(text) {
@@ -288,6 +354,8 @@
         root.querySelector(".nika-public-panel__brand small").textContent = config.label;
         root.querySelector(".nika-public-welcome b").textContent = config.title;
         root.querySelector(".nika-public-welcome p").textContent = config.welcome;
+        restoreMessages(root);
+        restoreFlowContextNotice(root);
 
         const suggestions = root.querySelector(".nika-public-suggestions");
         config.suggestions.forEach(prompt => {
@@ -375,6 +443,7 @@
             );
             messages.appendChild(message);
             messages.scrollTop = messages.scrollHeight;
+            if (!typing) rememberMessage(role, text);
             return message;
         }
 
@@ -391,6 +460,7 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "AI unavailable");
             conversationId = data.conversation_id || conversationId;
+            if (conversationId) sessionStorage.setItem(CONVERSATION_KEY, conversationId);
             return data;
         }
 
