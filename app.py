@@ -140,18 +140,27 @@ def check_company_access():
         if request.path.startswith("/api/mobile/"):
             return jsonify({"success": False, "error": "Подписка компании не настроена"}), 403
         return redirect("/subscription")
-    if subscription["status"] in ("expired", "suspended", "cancelled"):
+    if subscription["status"] in ("expired", "pending_payment", "suspended", "cancelled"):
+        status = subscription["status"]
         if request.path.startswith("/api/mobile/"):
+            if status == "expired":
+                message = "Пробный период завершён. Выберите подписку, чтобы продолжить работу."
+                code = "subscription_expired"
+            elif status == "pending_payment":
+                message = "Ожидается оплата подписки. Рабочий доступ будет восстановлен после подтверждения оплаты."
+                code = "subscription_payment_required"
+            else:
+                message = "Подписка компании приостановлена"
+                code = "subscription_suspended"
             return jsonify({
                 "success": False,
-                "error": "Пробный период завершён. Выберите подписку, чтобы продолжить работу."
-                    if subscription["status"] == "expired"
-                    else "Подписка компании приостановлена",
-                "code": "subscription_expired",
-                "subscription_status": subscription["status"],
+                "error": message,
+                "code": code,
+                "subscription_status": status,
                 "subscription_url": "/subscription",
             }), 403
-        return redirect("/subscription?expired=1")
+        query = "payment_required=1" if status == "pending_payment" else "expired=1"
+        return redirect(f"/subscription?{query}")
     company_modules = getattr(g, "company_modules", set())
     for path_prefix, module_code in MODULE_PATHS:
         if request.path == path_prefix or request.path.startswith(path_prefix + "/"):
