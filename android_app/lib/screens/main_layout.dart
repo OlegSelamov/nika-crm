@@ -29,6 +29,7 @@ import 'storefront_screen.dart';
 import 'tasks_screen.dart';
 import 'whatsapp_screen.dart';
 import 'writeoff_screen.dart';
+import 'web_module_screen.dart';
 import 'cto_screen.dart';
 
 class MainLayout extends StatefulWidget {
@@ -42,6 +43,7 @@ class _MainLayoutState extends State<MainLayout> {
   int selectedIndex = 0;
   final nika = NikaAssistantController.instance;
   Set<String>? enabledModules;
+  String currentRole = 'employee';
 
   bool hasModule(String code) => enabledModules?.contains(code) ?? true;
 
@@ -64,8 +66,15 @@ class _MainLayoutState extends State<MainLayout> {
   Future<void> _loadModules() async {
     try {
       final modules = await ApiService.getModules();
+      final role = await AuthService.getRole();
       if (!mounted) return;
-      setState(() => enabledModules = modules);
+      setState(() {
+        enabledModules = modules;
+        currentRole = role.toLowerCase();
+        if (!modules.contains('dashboard') && selectedIndex == 0) {
+          selectedIndex = 3;
+        }
+      });
     } catch (_) {
       // Не блокируем приложение при временной ошибке синхронизации.
     }
@@ -260,8 +269,18 @@ class _MainLayoutState extends State<MainLayout> {
       DashboardScreen(onOpenSection: openCore),
       const SalesScreen(),
       const SalesHistoryScreen(),
-      _MoreScreen(openPage: openPage, logout: logout, enabledModules: enabledModules),
+      _MoreScreen(openPage: openPage, logout: logout, enabledModules: enabledModules, currentRole: currentRole),
     ];
+
+    final coreIndices = <int>[
+      if (hasModule('dashboard')) 0,
+      if (hasModule('sales')) 1,
+      if (hasModule('sales')) 2,
+      3,
+    ];
+    final navSelectedIndex = coreIndices.indexOf(selectedIndex) >= 0
+        ? coreIndices.indexOf(selectedIndex)
+        : coreIndices.length - 1;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -283,6 +302,7 @@ class _MainLayoutState extends State<MainLayout> {
                   openPage: openPage,
                   logout: logout,
                   enabledModules: enabledModules,
+                  currentRole: currentRole,
                 ),
           appBar: AppBar(
             titleSpacing: tablet ? 16 : 0,
@@ -325,36 +345,39 @@ class _MainLayoutState extends State<MainLayout> {
           body: tablet
               ? Row(children: [
                   NavigationRail(
-                    selectedIndex: selectedIndex,
-                    onDestinationSelected: openCore,
+                    selectedIndex: navSelectedIndex,
+                    onDestinationSelected: (index) => openCore(coreIndices[index]),
                     extended: extendedRail,
                     minExtendedWidth: 220,
                     groupAlignment: -.78,
                     backgroundColor: AppColors.surface,
-                    leading: Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+                    leading: const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
                       child: Icon(
                         Icons.business_center_rounded,
                         color: AppColors.primary,
                       ),
                     ),
-                    destinations: const [
-                      NavigationRailDestination(
-                        icon: Icon(Icons.home_outlined),
-                        selectedIcon: Icon(Icons.home_rounded),
-                        label: Text('Главная'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.point_of_sale_outlined),
-                        selectedIcon: Icon(Icons.point_of_sale_rounded),
-                        label: Text('Продажа'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.history_outlined),
-                        selectedIcon: Icon(Icons.history_rounded),
-                        label: Text('История'),
-                      ),
-                      NavigationRailDestination(
+                    destinations: [
+                      if (hasModule('dashboard'))
+                        const NavigationRailDestination(
+                          icon: Icon(Icons.home_outlined),
+                          selectedIcon: Icon(Icons.home_rounded),
+                          label: Text('Главная'),
+                        ),
+                      if (hasModule('sales'))
+                        const NavigationRailDestination(
+                          icon: Icon(Icons.point_of_sale_outlined),
+                          selectedIcon: Icon(Icons.point_of_sale_rounded),
+                          label: Text('Продажа'),
+                        ),
+                      if (hasModule('sales'))
+                        const NavigationRailDestination(
+                          icon: Icon(Icons.history_outlined),
+                          selectedIcon: Icon(Icons.history_rounded),
+                          label: Text('История'),
+                        ),
+                      const NavigationRailDestination(
                         icon: Icon(Icons.grid_view_outlined),
                         selectedIcon: Icon(Icons.grid_view_rounded),
                         label: Text('Разделы'),
@@ -365,28 +388,31 @@ class _MainLayoutState extends State<MainLayout> {
                   Expanded(child: content),
                 ])
               : content,
-          bottomNavigationBar: tablet
+          bottomNavigationBar: tablet || coreIndices.length <= 1
               ? null
               : NavigationBar(
-                  selectedIndex: selectedIndex,
-                  onDestinationSelected: openCore,
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home_rounded),
-                      label: 'Главная',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.point_of_sale_outlined),
-                      selectedIcon: Icon(Icons.point_of_sale_rounded),
-                      label: 'Продажа',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.history_outlined),
-                      selectedIcon: Icon(Icons.history_rounded),
-                      label: 'История',
-                    ),
-                    NavigationDestination(
+                  selectedIndex: navSelectedIndex,
+                  onDestinationSelected: (index) => openCore(coreIndices[index]),
+                  destinations: [
+                    if (hasModule('dashboard'))
+                      const NavigationDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home_rounded),
+                        label: 'Главная',
+                      ),
+                    if (hasModule('sales'))
+                      const NavigationDestination(
+                        icon: Icon(Icons.point_of_sale_outlined),
+                        selectedIcon: Icon(Icons.point_of_sale_rounded),
+                        label: 'Продажа',
+                      ),
+                    if (hasModule('sales'))
+                      const NavigationDestination(
+                        icon: Icon(Icons.history_outlined),
+                        selectedIcon: Icon(Icons.history_rounded),
+                        label: 'История',
+                      ),
+                    const NavigationDestination(
                       icon: Icon(Icons.grid_view_outlined),
                       selectedIcon: Icon(Icons.grid_view_rounded),
                       label: 'Разделы',
@@ -403,40 +429,37 @@ class _MoreScreen extends StatelessWidget {
   final Future<void> Function(Widget page) openPage;
   final Future<void> Function() logout;
   final Set<String>? enabledModules;
+  final String currentRole;
 
-  const _MoreScreen({required this.openPage, required this.logout, required this.enabledModules});
+  const _MoreScreen({required this.openPage, required this.logout, required this.enabledModules, required this.currentRole});
 
   @override
   Widget build(BuildContext context) {
     final sections = <_SectionData>[
-      const _SectionData('clients', 'Клиенты', 'CRM и история покупок', Icons.people_alt_outlined, AppColors.cyan, ClientsScreen()),
-      const _SectionData('catalog', 'Товары и услуги', 'Каталог и цены', Icons.inventory_2_outlined, AppColors.warning, ItemsScreen()),
-      const _SectionData('warehouse', 'Склад', 'Остатки и движения', Icons.warehouse_outlined, AppColors.success, StockScreen()),
+      const _SectionData('profile', 'Профиль', 'Личный профиль и статистика', Icons.person_outline_rounded, AppColors.primary, WebModuleScreen(title: 'Профиль', path: '/profile'), standalone: true),
+      const _SectionData('dashboard', 'Главная', 'Главная панель компании', Icons.home_outlined, AppColors.primary, WebModuleScreen(title: 'Главная', path: '/dashboard'), standalone: true),
+      const _SectionData('sales', 'Продажи', 'Касса и история продаж', Icons.point_of_sale_outlined, AppColors.primary, SalesScreen()),
       const _SectionData('analytics', 'Аналитика', 'Выручка и прибыль', Icons.query_stats_rounded, AppColors.primary, AnalyticsScreen()),
-      const _SectionData(
-        'reports',
-        'Отчёты',
-        'Товары, услуги и Excel · v2026.08.17.2',
-        Icons.summarize_outlined,
-        Color(0xFF8A54D1),
-        ReportsScreen(
-          key: ValueKey<String>('reports-2026.08.17.2'),
-        ),
-      ),
-      const _SectionData('tasks', 'Задачи', 'Команда и контроль сроков', Icons.task_alt_outlined, Color(0xFF4776E6), TasksScreen()),
-      const _SectionData('expenses', 'Расходы', 'Затраты и категории', Icons.payments_outlined, AppColors.danger, ExpensesScreen()),
-      const _SectionData('accounting', 'Бухгалтерия', 'Налоги, долги и документы', Icons.account_balance_outlined, Color(0xFF6941C6), AccountingScreen()),
-      const _SectionData(null, 'Сотрудники', 'Доступы и показатели', Icons.badge_outlined, Color(0xFF0E9384), EmployeesScreen()),
+      const _SectionData('catalog', 'Каталог', 'Товары, услуги и цены', Icons.inventory_2_outlined, AppColors.warning, ItemsScreen()),
       const _SectionData('storefront', 'Онлайн-витрина', 'Заказы и бронирования', Icons.storefront_outlined, Color(0xFFDC6803), StorefrontScreen()),
-      const _SectionData('cto', 'CTO', 'Технический контроль', Icons.developer_board_outlined, Color(0xFF475467), CtoScreen()),
-      const _SectionData(null, 'Смены reKassa', 'X/Z‑отчёты и архив', Icons.point_of_sale_rounded, Color(0xFFEF6C57), ShiftScreen()),
-      const _SectionData(null, 'WhatsApp', 'Диалоги с клиентами', Icons.forum_outlined, AppColors.success, WhatsappScreen(), standalone: true),
-      const _SectionData(null, 'Nika AI', 'Помощник по бизнесу', Icons.auto_awesome_rounded, AppColors.primary, AssistantScreen(), standalone: true),
-      const _SectionData('settings', 'Настройки', 'POS, принтер и приложение', Icons.settings_outlined, AppColors.muted, SettingsScreen()),
+      const _SectionData('tasks', 'Задачи', 'Команда и контроль сроков', Icons.task_alt_outlined, Color(0xFF4776E6), TasksScreen()),
+      const _SectionData('cto', 'ККМ и ЦТО', 'Кассы и техническое обслуживание', Icons.developer_board_outlined, Color(0xFF475467), CtoScreen()),
+      const _SectionData('accounting', 'Бухгалтерия', 'Налоги, долги и документы', Icons.account_balance_outlined, Color(0xFF6941C6), AccountingScreen()),
+      const _SectionData('reports', 'Отчёты', 'Отчёты и Excel', Icons.summarize_outlined, Color(0xFF8A54D1), ReportsScreen()),
+      const _SectionData('expenses', 'Расходы', 'Затраты и категории', Icons.payments_outlined, AppColors.danger, ExpensesScreen()),
+      const _SectionData('warehouse', 'Склад', 'Остатки и движения', Icons.warehouse_outlined, AppColors.success, StockScreen()),
+      const _SectionData('clients', 'Клиенты', 'CRM и история покупок', Icons.people_alt_outlined, AppColors.cyan, ClientsScreen()),
+      const _SectionData('school', 'Школа', 'Классные руководители и питание', Icons.school_outlined, Color(0xFF6941C6), WebModuleScreen(title: 'Школа', path: '/school'), standalone: true),
+      const _SectionData('settings', 'Настройки', 'Настройки компании и интеграций', Icons.settings_outlined, AppColors.muted, SettingsScreen()),
     ];
     final visibleSections = sections.where((item) =>
-      item.moduleCode == null || enabledModules == null || enabledModules!.contains(item.moduleCode)
+      enabledModules == null || enabledModules!.contains(item.moduleCode)
     ).toList();
+    if (currentRole == 'admin' || currentRole == 'owner') {
+      visibleSections.add(
+        const _SectionData(null, 'Пользователи', 'Сотрудники и права доступа', Icons.badge_outlined, Color(0xFF0E9384), EmployeesScreen()),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
@@ -493,6 +516,7 @@ class _AppDrawer extends StatelessWidget {
   final Future<void> Function(Widget page) openPage;
   final Future<void> Function() logout;
   final Set<String>? enabledModules;
+  final String currentRole;
 
   const _AppDrawer({
     required this.selectedIndex,
@@ -500,6 +524,7 @@ class _AppDrawer extends StatelessWidget {
     required this.openPage,
     required this.logout,
     required this.enabledModules,
+    required this.currentRole,
   });
 
   bool hasModule(String code) => enabledModules?.contains(code) ?? true;
@@ -546,36 +571,21 @@ class _AppDrawer extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 children: [
+                  if (hasModule('profile')) _drawerItem(Icons.person_outline_rounded, 'Профиль', () { Navigator.pop(context); openPage(const WebModuleScreen(title: 'Профиль', path: '/profile')); }),
                   if (hasModule('dashboard')) _drawerItem(Icons.home_rounded, 'Главная', () => openCore(0), active: selectedIndex == 0),
                   if (hasModule('sales')) _drawerItem(Icons.point_of_sale_rounded, 'Продажи', () => openCore(1), active: selectedIndex == 1),
-                  if (hasModule('sales')) _drawerItem(Icons.history_rounded, 'История продаж', () => openCore(2), active: selectedIndex == 2),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 18, 20, 7),
-                    child: Text('УПРАВЛЕНИЕ', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
-                  ),
-                  if (hasModule('clients')) _drawerItem(Icons.people_alt_outlined, 'Клиенты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Клиенты', child: ClientsScreen())); }),
-                  if (hasModule('catalog')) _drawerItem(Icons.inventory_2_outlined, 'Товары и услуги', () { Navigator.pop(context); openPage(const ModulePage(title: 'Товары и услуги', child: ItemsScreen())); }),
-                  if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(const ModulePage(title: 'Склад', child: StockScreen())); }),
                   if (hasModule('analytics')) _drawerItem(Icons.query_stats_rounded, 'Аналитика', () { Navigator.pop(context); openPage(const ModulePage(title: 'Аналитика', child: AnalyticsScreen())); }),
-                  if (hasModule('reports')) _drawerItem(Icons.summarize_outlined, 'Отчёты', () {
-                    Navigator.pop(context);
-                    openPage(
-                      const ModulePage(
-                        title: 'Отчёты',
-                        child: ReportsScreen(
-                          key: ValueKey<String>('reports-2026.08.17.2'),
-                        ),
-                      ),
-                    );
-                  }),
+                  if (hasModule('catalog')) _drawerItem(Icons.inventory_2_outlined, 'Каталог', () { Navigator.pop(context); openPage(const ModulePage(title: 'Каталог', child: ItemsScreen())); }),
+                  if (hasModule('storefront')) _drawerItem(Icons.storefront_outlined, 'Онлайн-витрина', () { Navigator.pop(context); openPage(const ModulePage(title: 'Онлайн-витрина', child: StorefrontScreen())); }),
                   if (hasModule('tasks')) _drawerItem(Icons.task_alt_outlined, 'Задачи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Задачи', child: TasksScreen())); }),
-                  if (hasModule('expenses')) _drawerItem(Icons.payments_outlined, 'Расходы', () { Navigator.pop(context); openPage(const ModulePage(title: 'Расходы', child: ExpensesScreen())); }),
+                  if (hasModule('cto')) _drawerItem(Icons.developer_board_outlined, 'ККМ и ЦТО', () { Navigator.pop(context); openPage(const ModulePage(title: 'ККМ и ЦТО', child: CtoScreen())); }),
                   if (hasModule('accounting')) _drawerItem(Icons.account_balance_outlined, 'Бухгалтерия', () { Navigator.pop(context); openPage(const ModulePage(title: 'Бухгалтерия', child: AccountingScreen())); }),
-                  _drawerItem(Icons.badge_outlined, 'Сотрудники', () { Navigator.pop(context); openPage(const ModulePage(title: 'Сотрудники', child: EmployeesScreen())); }),
-                  _drawerItem(Icons.storefront_outlined, 'Онлайн‑витрина', () { Navigator.pop(context); openPage(const ModulePage(title: 'Онлайн‑витрина', child: StorefrontScreen())); }),
-                  if (hasModule('cto')) _drawerItem(Icons.developer_board_outlined, 'CTO', () { Navigator.pop(context); openPage(const ModulePage(title: 'CTO', child: CtoScreen())); }),
-                  _drawerItem(Icons.lock_clock_outlined, 'Смены reKassa', () { Navigator.pop(context); openPage(const ModulePage(title: 'Смены reKassa', child: ShiftScreen())); }),
-                  _drawerItem(Icons.forum_outlined, 'WhatsApp', () { Navigator.pop(context); openPage(const WhatsappScreen()); }),
+                  if (hasModule('reports')) _drawerItem(Icons.summarize_outlined, 'Отчёты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Отчёты', child: ReportsScreen())); }),
+                  if (hasModule('expenses')) _drawerItem(Icons.payments_outlined, 'Расходы', () { Navigator.pop(context); openPage(const ModulePage(title: 'Расходы', child: ExpensesScreen())); }),
+                  if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const WebModuleScreen(title: 'Школа', path: '/school')); }),
+                  if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(const ModulePage(title: 'Склад', child: StockScreen())); }),
+                  if (hasModule('clients')) _drawerItem(Icons.people_alt_outlined, 'Клиенты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Клиенты', child: ClientsScreen())); }),
+                  if (currentRole == 'admin' || currentRole == 'owner') _drawerItem(Icons.badge_outlined, 'Пользователи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Пользователи', child: EmployeesScreen())); }),
                   if (hasModule('settings')) _drawerItem(Icons.settings_outlined, 'Настройки', () { Navigator.pop(context); openPage(const ModulePage(title: 'Настройки', child: SettingsScreen())); }),
                 ],
               ),
