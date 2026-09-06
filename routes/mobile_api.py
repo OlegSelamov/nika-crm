@@ -163,8 +163,7 @@ def mobile_profile():
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT u.id, u.username, u.full_name, u.role, u.position, u.phone,
-                   u.percent_rate, u.salary, c.name AS company_name
+            SELECT u.*, c.name AS company_name
             FROM users u
             LEFT JOIN companies c ON c.id=u.company_id
             WHERE u.id=%s
