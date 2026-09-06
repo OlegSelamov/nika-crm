@@ -47,6 +47,194 @@
     let recognition = null;
     let voiceRequest = false;
 
+    const FLOW_KEY = "nikaAssistantFlow";
+
+    function loadFlow() {
+        try { return JSON.parse(sessionStorage.getItem(FLOW_KEY) || "{}") || {}; }
+        catch (_) { return {}; }
+    }
+
+    function saveFlow(patch) {
+        const next = {...loadFlow(), ...patch, updatedAt: Date.now()};
+        sessionStorage.setItem(FLOW_KEY, JSON.stringify(next));
+        return next;
+    }
+
+    function clearFlow() {
+        sessionStorage.removeItem(FLOW_KEY);
+    }
+
+    function navigateTo(url) {
+        if (!url) return;
+        sessionStorage.setItem("nikaStandaloneAssistantOpen", "1");
+        window.location.href = url;
+    }
+
+    function setInputValue(name, value) {
+        const input = document.querySelector('[name="' + name + '"]');
+        if (!input) return false;
+        input.value = value;
+        input.dispatchEvent(new Event("input", {bubbles: true}));
+        input.dispatchEvent(new Event("change", {bubbles: true}));
+        return true;
+    }
+
+    function runUiAction(result) {
+        if (!result || typeof result !== "object") return;
+        if (result.action === "redirect" && result.url) {
+            setTimeout(() => navigateTo(result.url), 550);
+        } else if (result.action === "open_drawer" && result.target) {
+            setTimeout(() => {
+                if (typeof window.openSystemDrawer === "function") window.openSystemDrawer(result.target);
+            }, 250);
+        }
+    }
+
+    function yes(text) {
+        return /^(да|давай|хочу|начать|начинаем|поехали|конечно|ок|окей|ага)\b/i.test(String(text || "").trim());
+    }
+
+    function skip(text) {
+        return /пропуст|позже|нет|не сейчас|не надо/i.test(String(text || ""));
+    }
+
+    function businessTypeFromText(text) {
+        const value = String(text || "").toLowerCase().replace(/ё/g, "е");
+        if (/магаз|розниц|продукт|торгов/.test(value)) return "retail";
+        if (/кафе|кофейн|ресторан|общепит/.test(value)) return "cafe";
+        if (/салон|красот|парикмах|барбер/.test(value)) return "beauty";
+        if (/опт|поставщик|дистриб/.test(value)) return "wholesale";
+        if (/услуг|сервис|ремонт|консульт/.test(value)) return "services";
+        return null;
+    }
+
+    function startRegistrationFlow() {
+        saveFlow({stage: "register", expected: "director"});
+        return {
+            reply: "Хорошо. Начнём регистрацию. Сначала скажите ваше ФИО — я подставлю его в форму.",
+            action: page === "register" ? null : "redirect",
+            url: page === "register" ? null : "/register?plan=business"
+        };
+    }
+
+    function handleRegistrationFlow(text) {
+        if (page !== "register") return null;
+        let flow = loadFlow();
+        if (flow.stage !== "register") {
+            if (!/помоги|проведи|регист|запол|начать/i.test(text)) return null;
+            flow = saveFlow({stage: "register", expected: "director"});
+            return {reply: "Проведу вас по регистрации. Как вас зовут? Назовите ФИО владельца."};
+        }
+
+        const value = String(text || "").trim();
+        const expected = flow.expected || "director";
+        if (expected === "director") {
+            setInputValue("director", value);
+            saveFlow({expected: "phone"});
+            return {reply: "Заполнила ФИО. Теперь назовите номер телефона."};
+        }
+        if (expected === "phone") {
+            setInputValue("phone", value);
+            saveFlow({expected: "username"});
+            return {reply: "Телефон записала. Какой логин хотите использовать для входа?"};
+        }
+        if (expected === "username") {
+            setInputValue("username", value.replace(/\s+/g, ""));
+            saveFlow({expected: "password"});
+            return {reply: "Логин готов. Теперь придумайте пароль минимум из 6 символов. Пароль я никуда не сохраняю — только подставлю в поле формы."};
+        }
+        if (expected === "password") {
+            setInputValue("password", value);
+            saveFlow({expected: "company"});
+            if (typeof window.goNext === "function") window.goNext();
+            return {reply: "Пароль подставлен и не сохранён. Теперь скажите название компании."};
+        }
+        if (expected === "company") {
+            setInputValue("name", value);
+            saveFlow({expected: "bin"});
+            return {reply: "Компания указана. Назовите БИН или ИИН. Если хотите заполнить позже — скажите «пропустить»."};
+        }
+        if (expected === "bin") {
+            if (!skip(value)) setInputValue("bin", value.replace(/\s+/g, ""));
+            saveFlow({expected: "address"});
+            return {reply: "Хорошо. Теперь адрес компании. Его тоже можно пропустить."};
+        }
+        if (expected === "address") {
+            if (!skip(value)) setInputValue("address", value);
+            saveFlow({expected: "review"});
+            if (typeof window.goNext === "function") {
+                window.goNext();
+                setTimeout(() => window.goNext(), 100);
+            }
+            return {reply: "Основные данные готовы. Банковские реквизиты можно добавить позже. Я открыла итог регистрации. Проверьте данные и скажите «создать компанию»."};
+        }
+        if (expected === "review" && /созда|готов|подтверж|регистр/i.test(value)) {
+            saveFlow({stage: "onboarding", expected: "business_type"});
+            const form = document.getElementById("registerForm");
+            if (form) setTimeout(() => form.requestSubmit(), 250);
+            return {reply: "Создаю компанию. После регистрации я продолжу настройку уже как помощник владельца."};
+        }
+        return {reply: "Сейчас проверьте итоговые данные. Если всё верно, скажите «создать компанию»."};
+    }
+
+    function setOnboardingChoice(name, value) {
+        const hidden = document.querySelector('input[name="' + name + '"]');
+        if (!hidden) return false;
+        hidden.value = value ? "1" : "0";
+        const group = document.querySelector('.yn[data-name="' + name + '"]');
+        if (group) {
+            group.querySelectorAll("button").forEach(button => {
+                button.classList.toggle("active", button.dataset.value === (value ? "1" : "0"));
+            });
+        }
+        return true;
+    }
+
+    function handleOnboardingFlow(text) {
+        if (page !== "onboarding") return null;
+        let flow = loadFlow();
+        if (flow.stage !== "onboarding") {
+            if (!/помоги|настро|проведи|начать/i.test(text)) return null;
+            flow = saveFlow({stage: "onboarding", expected: "business_type"});
+        }
+
+        const value = String(text || "").trim();
+        const expected = flow.expected || "business_type";
+        if (expected === "business_type") {
+            const type = businessTypeFromText(value);
+            if (!type) return {reply: "Какой у вас бизнес: магазин, услуги, кафе, салон или оптовая торговля?"};
+            const radio = document.querySelector('input[name="business_type"][value="' + type + '"]');
+            if (radio) {
+                radio.checked = true;
+                document.querySelectorAll('input[name="business_type"]').forEach(x => x.closest(".option")?.classList.toggle("selected", x === radio));
+            }
+            saveFlow({expected: "sell_type", businessType: type});
+            if (typeof window.next === "function") window.next();
+            return {reply: "Поняла. Вы продаёте товары, услуги или и то и другое?"};
+        }
+        if (expected === "sell_type") {
+            const normalized = value.toLowerCase();
+            const products = /товар|продукт|оба|и то/i.test(normalized);
+            const services = /услуг|оба|и то/i.test(normalized);
+            if (!products && !services) return {reply: "Скажите: товары, услуги или оба варианта."};
+            setOnboardingChoice("sells_products", products);
+            setOnboardingChoice("sells_services", services);
+            saveFlow({expected: "stock"});
+            return {reply: products ? "Нужен учёт склада и остатков?" : "Хорошо. Склад для такого сценария обычно не нужен. Скажите «да», если всё же хотите вести остатки."};
+        }
+        if (expected === "stock") {
+            setOnboardingChoice("has_stock", yes(value));
+            saveFlow({expected: "continue_setup"});
+            if (typeof window.next === "function") window.next();
+            return {reply: "Основной тип работы настроен. Дальше уточним сотрудников, кассу, бухгалтерию и остальные возможности. Продолжаем?"};
+        }
+        if (expected === "continue_setup" && yes(value)) {
+            clearFlow();
+            return {reply: "Продолжаем. На текущем шаге выберите, есть ли сотрудники. Я остаюсь рядом и могу объяснить любой пункт."};
+        }
+        return null;
+    }
+
     function createElement(tag, className, text) {
         const element = document.createElement(tag);
         if (className) element.className = className;
@@ -153,11 +341,17 @@
             const typing = appendMessage("assistant", "Nika думает…", true);
 
             try {
-                const reply = authenticated
-                    ? await requestAuthenticatedReply(text)
-                    : publicReply(text);
+                let result = handleRegistrationFlow(text) || handleOnboardingFlow(text);
+                if (!result) {
+                    result = authenticated
+                        ? await requestAuthenticatedReply(text)
+                        : publicReply(text);
+                }
+                if (typeof result === "string") result = {reply: result};
                 typing.remove();
+                const reply = result?.reply || "Готово.";
                 appendMessage("assistant", reply);
+                runUiAction(result);
                 if (voiceRequest) speak(reply);
             } catch (error) {
                 typing.remove();
@@ -197,7 +391,7 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "AI unavailable");
             conversationId = data.conversation_id || conversationId;
-            return data.reply || "Готово.";
+            return data;
         }
 
         function startVoiceInput() {
@@ -229,6 +423,15 @@
         const text = String(rawText || "").toLowerCase().replace(/ё/g, "е");
 
         if (page === "landing") {
+            const detectedBusiness = businessTypeFromText(rawText);
+            if (detectedBusiness) {
+                const names = {retail:"магазин", services:"бизнес услуг", cafe:"кафе или общепит", beauty:"салон", wholesale:"оптовую торговлю"};
+                saveFlow({stage:"lead", businessType:detectedBusiness});
+                return "Поняла: у вас " + (names[detectedBusiness] || "бизнес") + ". Nika сможет подобрать подходящие модули и провести настройку. Если хотите начать, скажите «давай зарегистрируемся».";
+            }
+            if ((loadFlow().stage === "lead" && yes(rawText)) || /зарегистр|начать.*работ|создать.*компан/i.test(text)) {
+                return startRegistrationFlow();
+            }
             if (/тариф|цен|стоим/.test(text)) return "Есть три тарифа: Старт — 9 900 тенге, Бизнес — 19 900 тенге, Профи — 29 900 тенге в месяц. Начать можно бесплатно, без оплаты при регистрации.";
             if (/голос|ассист|ai|ника/.test(text)) return "Nika понимает голосовые и текстовые команды: открывает разделы, ищет данные, помогает собрать продажу и готовит действия. Изменения выполняются только после подтверждения.";
             if (/касс|чек|продаж/.test(text)) return "Nika помогает собрать корзину, выбрать способ оплаты, передать оплату в Kaspi POS, пробить фискальный чек через reKassa и отправить его клиенту.";
@@ -243,6 +446,7 @@
         }
 
         if (page === "register") {
+            if (/проведи|заполни|помоги.*регист/.test(text)) return startRegistrationFlow();
             const selectedPlan = document.querySelector('input[name="plan"]')?.value || "business";
             const planNames = {start: "Старт", business: "Бизнес", pro: "Профи"};
             if (/тариф|выбран/.test(text)) return `Сейчас выбран тариф «${planNames[selectedPlan] || "Бизнес"}». После регистрации его можно будет изменить в настройках подписки.`;
