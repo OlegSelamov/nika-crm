@@ -20,6 +20,8 @@ class ApiService {
 
   static String? _cookie;
 
+  static String? get sessionCookie => _cookie;
+
   static Map<String, String> get _headers => {
         'Accept': 'application/json',
         'Content-Type': 'application/json; charset=utf-8',
