@@ -438,8 +438,8 @@ class _MoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sections = <_SectionData>[
-      const _SectionData('profile', 'Профиль', 'Личный профиль и статистика', Icons.person_outline_rounded, AppColors.primary, WebModuleScreen(title: 'Профиль', path: '/profile'), standalone: true),
-      const _SectionData('dashboard', 'Главная', 'Главная панель компании', Icons.home_outlined, AppColors.primary, WebModuleScreen(title: 'Главная', path: '/dashboard'), standalone: true),
+      const _SectionData('profile', 'Профиль', 'Личный профиль и статистика', Icons.person_outline_rounded, AppColors.primary, ProfileScreen()),
+      const _SectionData('dashboard', 'Главная', 'Главная панель компании', Icons.home_outlined, AppColors.primary, DashboardScreen()),
       const _SectionData('sales', 'Продажи', 'Касса и история продаж', Icons.point_of_sale_outlined, AppColors.primary, SalesScreen()),
       const _SectionData('analytics', 'Аналитика', 'Выручка и прибыль', Icons.query_stats_rounded, AppColors.primary, AnalyticsScreen()),
       const _SectionData('catalog', 'Каталог', 'Товары, услуги и цены', Icons.inventory_2_outlined, AppColors.warning, ItemsScreen()),
@@ -451,7 +451,7 @@ class _MoreScreen extends StatelessWidget {
       const _SectionData('expenses', 'Расходы', 'Затраты и категории', Icons.payments_outlined, AppColors.danger, ExpensesScreen()),
       const _SectionData('warehouse', 'Склад', 'Остатки и движения', Icons.warehouse_outlined, AppColors.success, StockScreen()),
       const _SectionData('clients', 'Клиенты', 'CRM и история покупок', Icons.people_alt_outlined, AppColors.cyan, ClientsScreen()),
-      const _SectionData('school', 'Школа', 'Классные руководители и питание', Icons.school_outlined, Color(0xFF6941C6), WebModuleScreen(title: 'Школа', path: '/school'), standalone: true),
+      const _SectionData('school', 'Школа', 'Классные руководители и питание', Icons.school_outlined, Color(0xFF6941C6), SchoolScreen()),
       const _SectionData('settings', 'Настройки', 'Настройки компании и интеграций', Icons.settings_outlined, AppColors.muted, SettingsScreen()),
     ];
     final visibleSections = sections.where((item) =>
@@ -573,7 +573,7 @@ class _AppDrawer extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 children: [
-                  if (hasModule('profile')) _drawerItem(Icons.person_outline_rounded, 'Профиль', () { Navigator.pop(context); openPage(const ProfileScreen()); }),
+                  if (hasModule('profile')) _drawerItem(Icons.person_outline_rounded, 'Профиль', () { Navigator.pop(context); openPage(const ModulePage(title: 'Профиль', child: ProfileScreen())); }),
                   if (hasModule('dashboard')) _drawerItem(Icons.home_rounded, 'Главная', () => openCore(0), active: selectedIndex == 0),
                   if (hasModule('sales')) _drawerItem(Icons.point_of_sale_rounded, 'Продажи', () => openCore(1), active: selectedIndex == 1),
                   if (hasModule('analytics')) _drawerItem(Icons.query_stats_rounded, 'Аналитика', () { Navigator.pop(context); openPage(const ModulePage(title: 'Аналитика', child: AnalyticsScreen())); }),
@@ -584,7 +584,7 @@ class _AppDrawer extends StatelessWidget {
                   if (hasModule('accounting')) _drawerItem(Icons.account_balance_outlined, 'Бухгалтерия', () { Navigator.pop(context); openPage(const ModulePage(title: 'Бухгалтерия', child: AccountingScreen())); }),
                   if (hasModule('reports')) _drawerItem(Icons.summarize_outlined, 'Отчёты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Отчёты', child: ReportsScreen())); }),
                   if (hasModule('expenses')) _drawerItem(Icons.payments_outlined, 'Расходы', () { Navigator.pop(context); openPage(const ModulePage(title: 'Расходы', child: ExpensesScreen())); }),
-                  if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const SchoolScreen()); }),
+                  if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const ModulePage(title: 'Школа', child: SchoolScreen())); }),
                   if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(const ModulePage(title: 'Склад', child: StockScreen())); }),
                   if (hasModule('clients')) _drawerItem(Icons.people_alt_outlined, 'Клиенты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Клиенты', child: ClientsScreen())); }),
                   if (currentRole == 'admin' || currentRole == 'owner') _drawerItem(Icons.badge_outlined, 'Пользователи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Пользователи', child: EmployeesScreen())); }),
