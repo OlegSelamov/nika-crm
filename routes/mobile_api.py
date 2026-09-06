@@ -1,6 +1,6 @@
 import json
 from io import BytesIO
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -148,6 +148,285 @@ def mobile_health():
     if denied:
         return denied
     return jsonify({"success": True, "version": "3.1"})
+
+
+
+@mobile_api_bp.route("/profile")
+def mobile_profile():
+    denied = _guard()
+    if denied:
+        return denied
+
+    user_id = session["user_id"]
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT u.id, u.username, u.full_name, u.role, u.position, u.phone,
+                   u.percent_rate, u.salary, c.name AS company_name
+            FROM users u
+            LEFT JOIN companies c ON c.id=u.company_id
+            WHERE u.id=%s
+        """, (user_id,))
+        user = cur.fetchone() or {}
+
+        today = now_kz().date()
+        month_start = today.replace(day=1)
+        cur.execute("""
+            SELECT COUNT(*) sales_count, COALESCE(SUM(total_amount),0) revenue,
+                   COALESCE(AVG(total_amount),0) average_check
+            FROM sales
+            WHERE company_id=%s AND user_id=%s AND status='Оплачено'
+              AND DATE(created_at) BETWEEN %s AND %s
+        """, (company_id, user_id, month_start, today))
+        month = cur.fetchone() or {}
+
+        cur.execute("""
+            SELECT COUNT(*) sales_count, COALESCE(SUM(total_amount),0) revenue,
+                   COALESCE(AVG(total_amount),0) average_check
+            FROM sales
+            WHERE company_id=%s AND user_id=%s AND status='Оплачено'
+              AND DATE(created_at)=%s
+        """, (company_id, user_id, today))
+        today_stats = cur.fetchone() or {}
+
+        cur.execute("""
+            SELECT id, sale_number, total_amount, sale_type, status, created_at
+            FROM sales
+            WHERE company_id=%s AND user_id=%s
+            ORDER BY id DESC LIMIT 10
+        """, (company_id, user_id))
+        recent_sales = cur.fetchall()
+
+        cur.execute("""
+            SELECT id, title, description, priority, status, due_date
+            FROM tasks
+            WHERE company_id=%s AND assigned_user_id=%s
+            ORDER BY id DESC LIMIT 8
+        """, (company_id, user_id))
+        tasks = cur.fetchall()
+
+        percent_rate = float(user.get("percent_rate") or 0)
+        month_revenue = float(month.get("revenue") or 0)
+        base_salary = float(user.get("salary") or 0)
+        month_reward = month_revenue * percent_rate / 100
+
+        return jsonify(_clean({
+            "success": True,
+            "user": user,
+            "today": today_stats,
+            "month": month,
+            "salary": {
+                "base": base_salary,
+                "reward": month_reward,
+                "payable": base_salary + month_reward,
+                "percent_rate": percent_rate,
+            },
+            "recent_sales": recent_sales,
+            "tasks": tasks,
+        }))
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/school/leaders", methods=["GET", "POST"])
+def mobile_school_leaders():
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if request.method == "POST":
+            data = _payload()
+            full_name = str(data.get("full_name") or "").strip()
+            class_name = str(data.get("class_name") or "").strip()
+            room = str(data.get("room") or "").strip()
+            phone = str(data.get("phone") or "").strip()
+            if not full_name:
+                return jsonify({"success": False, "error": "Укажите ФИО"}), 400
+            class_id = None
+            if class_name:
+                cur.execute("""
+                    INSERT INTO school_classes(company_id,name,sort_order)
+                    VALUES(%s,%s,100)
+                    ON CONFLICT(company_id,name) DO UPDATE SET is_active=TRUE
+                    RETURNING id
+                """, (company_id, class_name))
+                class_id = cur.fetchone()["id"]
+            cur.execute("""
+                INSERT INTO school_class_leaders(company_id,class_id,full_name,room,phone)
+                VALUES(%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (company_id,class_id,full_name,room,phone))
+            conn.commit()
+
+        cur.execute("""
+            SELECT l.id,l.full_name,l.room,l.phone,l.class_id,c.name class_name
+            FROM school_class_leaders l
+            LEFT JOIN school_classes c ON c.id=l.class_id
+            WHERE l.company_id=%s
+            ORDER BY c.sort_order,c.name,l.full_name
+        """, (company_id,))
+        leaders = cur.fetchall()
+        cur.execute("""
+            SELECT id,name FROM school_classes
+            WHERE company_id=%s AND is_active=TRUE
+            ORDER BY sort_order,name
+        """, (company_id,))
+        classes = cur.fetchall()
+        return jsonify(_clean({"success": True, "leaders": leaders, "classes": classes}))
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/school/leaders/<int:leader_id>", methods=["PATCH", "DELETE"])
+def mobile_school_leader(leader_id):
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if request.method == "DELETE":
+            cur.execute("DELETE FROM school_class_leaders WHERE id=%s AND company_id=%s", (leader_id,company_id))
+        else:
+            data = _payload()
+            full_name = str(data.get("full_name") or "").strip()
+            class_name = str(data.get("class_name") or "").strip()
+            room = str(data.get("room") or "").strip()
+            phone = str(data.get("phone") or "").strip()
+            if not full_name:
+                return jsonify({"success": False, "error": "Укажите ФИО"}), 400
+            class_id = None
+            if class_name:
+                cur.execute("""
+                    INSERT INTO school_classes(company_id,name,sort_order)
+                    VALUES(%s,%s,100)
+                    ON CONFLICT(company_id,name) DO UPDATE SET is_active=TRUE
+                    RETURNING id
+                """, (company_id,class_name))
+                class_id = cur.fetchone()["id"]
+            cur.execute("""
+                UPDATE school_class_leaders
+                SET full_name=%s,class_id=%s,room=%s,phone=%s,updated_at=NOW()
+                WHERE id=%s AND company_id=%s
+            """, (full_name,class_id,room,phone,leader_id,company_id))
+        conn.commit()
+        return jsonify({"success": True})
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/school/meals", methods=["GET", "POST"])
+def mobile_school_meals():
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    raw_date = request.args.get("date") if request.method == "GET" else (_payload().get("date"))
+    try:
+        meal_date = datetime.strptime(str(raw_date or date.today().isoformat()), "%Y-%m-%d").date()
+    except ValueError:
+        meal_date = date.today()
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if request.method == "POST":
+            data = _payload()
+            rows = data.get("rows") or []
+            for row in rows:
+                class_id = int(row.get("class_id"))
+                plan = int(row.get("plan_count") or 0)
+                fact = int(row.get("fact_count") or 0)
+                free = int(row.get("free_count") or 0)
+                paid = int(row.get("paid_count") or 0)
+                note = str(row.get("note") or "").strip()
+                cur.execute("""
+                    SELECT free_price,paid_price FROM school_meal_prices
+                    WHERE company_id=%s AND effective_from<=%s
+                    ORDER BY effective_from DESC LIMIT 1
+                """, (company_id,meal_date))
+                prices = cur.fetchone() or {"free_price": 0, "paid_price": 0}
+                cur.execute("""
+                    INSERT INTO school_meals(
+                        company_id,class_id,meal_date,plan_count,fact_count,
+                        free_count,paid_count,free_price,paid_price,note,created_by
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT(company_id,class_id,meal_date) DO UPDATE SET
+                        plan_count=EXCLUDED.plan_count,fact_count=EXCLUDED.fact_count,
+                        free_count=EXCLUDED.free_count,paid_count=EXCLUDED.paid_count,
+                        note=EXCLUDED.note,updated_at=NOW()
+                """, (company_id,class_id,meal_date,plan,fact,free,paid,
+                      prices["free_price"],prices["paid_price"],note,session["user_id"]))
+            conn.commit()
+
+        cur.execute("""
+            SELECT free_price,paid_price FROM school_meal_prices
+            WHERE company_id=%s AND effective_from<=%s
+            ORDER BY effective_from DESC LIMIT 1
+        """, (company_id,meal_date))
+        prices = cur.fetchone() or {"free_price": 0, "paid_price": 0}
+        cur.execute("""
+            SELECT c.id class_id,c.name class_name,l.full_name leader_name,
+                   m.id meal_id,COALESCE(m.plan_count,0) plan_count,
+                   COALESCE(m.fact_count,0) fact_count,
+                   COALESCE(m.free_count,0) free_count,
+                   COALESCE(m.paid_count,0) paid_count,
+                   COALESCE(m.note,'') note
+            FROM school_classes c
+            LEFT JOIN school_class_leaders l ON l.class_id=c.id AND l.company_id=c.company_id
+            LEFT JOIN school_meals m ON m.class_id=c.id AND m.company_id=c.company_id AND m.meal_date=%s
+            WHERE c.company_id=%s AND c.is_active=TRUE
+            ORDER BY c.sort_order,c.name
+        """, (meal_date,company_id))
+        rows = cur.fetchall()
+        totals = {
+            "plan": sum(int(r["plan_count"] or 0) for r in rows),
+            "fact": sum(int(r["fact_count"] or 0) for r in rows),
+            "free": sum(int(r["free_count"] or 0) for r in rows),
+            "paid": sum(int(r["paid_count"] or 0) for r in rows),
+        }
+        return jsonify(_clean({
+            "success": True, "date": meal_date, "prices": prices,
+            "rows": rows, "totals": totals
+        }))
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/school/prices", methods=["POST"])
+def mobile_school_prices():
+    denied = _guard()
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    data = _payload()
+    effective_from = datetime.strptime(str(data.get("date") or date.today().isoformat()), "%Y-%m-%d").date()
+    free_price = _amount(data.get("free_price") or 0)
+    paid_price = _amount(data.get("paid_price") or 0)
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO school_meal_prices(company_id,free_price,paid_price,effective_from)
+            VALUES(%s,%s,%s,%s)
+            ON CONFLICT(company_id,effective_from)
+            DO UPDATE SET free_price=EXCLUDED.free_price,paid_price=EXCLUDED.paid_price
+        """, (company_id,free_price,paid_price,effective_from))
+        conn.commit()
+        return jsonify({"success": True})
+    finally:
+        cur.close()
+        pool.putconn(conn)
 
 
 @mobile_api_bp.route("/tasks", methods=["GET", "POST"])
