@@ -1417,19 +1417,33 @@ def mobile_sale_items():
     try:
         cur.execute("""
             SELECT
-                id,name,retail_price,barcode,unit,gtin,ntin,
-                COALESCE(item_type,'product') AS item_type,
-                COALESCE(quantity,0) AS quantity
-            FROM items
-            WHERE company_id=%s
+                i.id,i.name,i.retail_price,i.barcode,i.unit,i.gtin,i.ntin,
+                COALESCE(i.item_type,'product') AS item_type,
+                CASE
+                    WHEN COALESCE(i.item_type,'product')='service' THEN 0
+                    ELSE COALESCE((
+                        SELECT SUM(
+                            CASE
+                                WHEN sm.movement_type IN ('income','refund') THEN sm.quantity
+                                WHEN sm.movement_type IN ('sale','writeoff') THEN -sm.quantity
+                                ELSE 0
+                            END
+                        )
+                        FROM stock_movements sm
+                        WHERE sm.company_id=i.company_id
+                          AND sm.item_id=i.id
+                    ),0)
+                END AS quantity
+            FROM items i
+            WHERE i.company_id=%s
               AND (
                   %s=''
-                  OR COALESCE(name,'') ILIKE %s
-                  OR COALESCE(barcode,'') ILIKE %s
+                  OR COALESCE(i.name,'') ILIKE %s
+                  OR COALESCE(i.barcode,'') ILIKE %s
               )
             ORDER BY
-                CASE WHEN %s<>'' AND barcode=%s THEN 0 ELSE 1 END,
-                id DESC
+                CASE WHEN %s<>'' AND i.barcode=%s THEN 0 ELSE 1 END,
+                i.id DESC
             LIMIT %s OFFSET %s
         """, (
             company_id,
