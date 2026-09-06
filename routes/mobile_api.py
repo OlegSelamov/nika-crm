@@ -15,6 +15,7 @@ from flask import (
 
 from models import get_db, pool
 from utils.timezone import now_kz
+from routes.auth import load_user_module_codes
 from routes.tasks import (
     TASK_PRIORITIES,
     TASK_STATUSES,
@@ -122,6 +123,23 @@ def _task_json(row):
         "created_at": created_at.strftime("%d.%m.%Y %H:%M") if created_at else "—",
         "overdue": overdue,
     }
+
+
+@mobile_api_bp.route("/modules")
+def mobile_modules():
+    denied = _guard()
+    if denied:
+        return denied
+
+    user = {
+        "id": session.get("user_id"),
+        "company_id": session.get("company_id"),
+        "role": session.get("role") or "employee",
+        "is_super_admin": bool(session.get("is_super_admin")),
+    }
+    modules = load_user_module_codes(user)
+    session["employee_modules"] = modules
+    return jsonify({"success": True, "modules": modules})
 
 
 @mobile_api_bp.route("/health")
