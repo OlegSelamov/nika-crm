@@ -174,6 +174,15 @@ class ApiService {
     }
   }
 
+  static Future<Set<String>> getModules() async {
+    final result = Map<String, dynamic>.from(
+      await _request('GET', '/api/mobile/modules'),
+    );
+    return List<dynamic>.from(result['modules'] ?? const [])
+        .map((item) => item.toString())
+        .toSet();
+  }
+
   static Future<Map<String, dynamic>> dashboard() async =>
       Map<String, dynamic>.from(await _request('GET', '/api/dashboard'));
 
