@@ -3169,28 +3169,43 @@ def search_items():
 
     cur.execute("""
         SELECT
-            id,
-            name,
-            retail_price,
-            barcode,
-            unit,
-            gtin,
-            ntin,
-            COALESCE(item_type, 'product') AS item_type
-        FROM items
-        WHERE company_id = %s
+            i.id,
+            i.name,
+            i.retail_price,
+            i.barcode,
+            i.unit,
+            i.gtin,
+            i.ntin,
+            COALESCE(i.item_type, 'product') AS item_type,
+            CASE
+                WHEN COALESCE(i.item_type,'product')='service' THEN 0
+                ELSE COALESCE((
+                    SELECT SUM(
+                        CASE
+                            WHEN sm.movement_type IN ('income','refund') THEN sm.quantity
+                            WHEN sm.movement_type IN ('sale','writeoff') THEN -sm.quantity
+                            ELSE 0
+                        END
+                    )
+                    FROM stock_movements sm
+                    WHERE sm.company_id=i.company_id
+                      AND sm.item_id=i.id
+                ),0)
+            END AS quantity
+        FROM items i
+        WHERE i.company_id = %s
           AND (
-              name ILIKE %s
-              OR COALESCE(barcode, '') LIKE %s
+              i.name ILIKE %s
+              OR COALESCE(i.barcode, '') LIKE %s
           )
         ORDER BY
             CASE
-                WHEN barcode = %s THEN 0
-                WHEN name ILIKE %s THEN 1
-                WHEN name ILIKE %s THEN 2
+                WHEN i.barcode = %s THEN 0
+                WHEN i.name ILIKE %s THEN 1
+                WHEN i.name ILIKE %s THEN 2
                 ELSE 3
             END,
-            name
+            i.name
         LIMIT 31
     """, (
         session.get("company_id"),
