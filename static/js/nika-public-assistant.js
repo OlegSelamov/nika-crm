@@ -350,26 +350,37 @@
         const send = root.querySelector(".nika-public-send");
         const mic = root.querySelector(".nika-public-mic");
 
-        root.querySelector(".nika-public-fab__copy small").textContent = config.label;
-        root.querySelector(".nika-public-panel__brand small").textContent = config.label;
-        root.querySelector(".nika-public-welcome b").textContent = config.title;
-        root.querySelector(".nika-public-welcome p").textContent = config.welcome;
-        restoreMessages(root);
-        restoreFlowContextNotice(root);
-
+        const fabLabel = root.querySelector(".nika-public-fab__copy small");
+        const panelLabel = root.querySelector(".nika-public-panel__brand small");
+        const welcomeTitle = root.querySelector(".nika-public-welcome b");
+        const welcomeText = root.querySelector(".nika-public-welcome p");
         const suggestions = root.querySelector(".nika-public-suggestions");
-        config.suggestions.forEach(prompt => {
-            const button = createElement("button", "nika-public-suggestion", prompt);
-            button.type = "button";
-            button.addEventListener("click", () => submitMessage(prompt));
-            suggestions.appendChild(button);
-        });
+        const actionWrap = root.querySelector(".nika-public-action-wrap");
 
-        if (config.action) {
+        if (fabLabel) fabLabel.textContent = config.label;
+        if (panelLabel) panelLabel.textContent = config.label;
+        if (welcomeTitle) welcomeTitle.textContent = config.title;
+        if (welcomeText) welcomeText.textContent = config.welcome;
+
+        if (suggestions) {
+            config.suggestions.forEach(prompt => {
+                const button = createElement("button", "nika-public-suggestion", prompt);
+                button.type = "button";
+                button.addEventListener("click", () => submitMessage(prompt));
+                suggestions.appendChild(button);
+            });
+        }
+
+        if (config.action && actionWrap) {
             const action = createElement("a", "nika-public-panel__action", config.action[0]);
             action.href = config.action[1];
-            root.querySelector(".nika-public-action-wrap").appendChild(action);
+            actionWrap.appendChild(action);
         }
+
+        // Историю восстанавливаем только после того, как весь UI уже инициализирован.
+        // restoreMessages может удалить welcome-блок, если переписка уже существует.
+        restoreMessages(root);
+        restoreFlowContextNotice(root);
 
         function setOpen(open) {
             panel.classList.toggle("open", open);
