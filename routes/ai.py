@@ -877,7 +877,21 @@ def _search_items(company_id, query, limit):
     rows = _query_rows(
         """
         SELECT id, name, category, description, retail_price, purchase_price,
-               quantity, unit, barcode, gtin, ntin,
+               CASE
+                   WHEN COALESCE(item_type,'product')='service' THEN 0
+                   ELSE COALESCE((
+                       SELECT SUM(
+                           CASE
+                               WHEN sm.movement_type IN ('income','refund') THEN sm.quantity
+                               WHEN sm.movement_type IN ('sale','writeoff') THEN -sm.quantity
+                               ELSE 0
+                           END
+                       )
+                       FROM stock_movements sm
+                       WHERE sm.company_id=items.company_id
+                         AND sm.item_id=items.id
+                   ),0)
+               END AS quantity, unit, barcode, gtin, ntin,
                COALESCE(item_type, 'product') AS item_type
         FROM items
         WHERE company_id = %s
@@ -941,7 +955,21 @@ def _search_items(company_id, query, limit):
             rows = _query_rows(
                 f"""
                 SELECT id, name, category, description, retail_price, purchase_price,
-                       quantity, unit, barcode, gtin, ntin,
+                       CASE
+                   WHEN COALESCE(item_type,'product')='service' THEN 0
+                   ELSE COALESCE((
+                       SELECT SUM(
+                           CASE
+                               WHEN sm.movement_type IN ('income','refund') THEN sm.quantity
+                               WHEN sm.movement_type IN ('sale','writeoff') THEN -sm.quantity
+                               ELSE 0
+                           END
+                       )
+                       FROM stock_movements sm
+                       WHERE sm.company_id=items.company_id
+                         AND sm.item_id=items.id
+                   ),0)
+               END AS quantity, unit, barcode, gtin, ntin,
                        COALESCE(item_type, 'product') AS item_type
                 FROM items
                 WHERE company_id = %s
@@ -1020,7 +1048,22 @@ def _search_storefront(company_id, query, limit, item_type="any"):
         """
         SELECT i.id, i.name, i.category, i.description,
                COALESCE(i.retail_price,i.price,0) AS price,
-               i.quantity, i.unit,
+               CASE
+                   WHEN COALESCE(i.item_type,'product')='service' THEN 0
+                   ELSE COALESCE((
+                       SELECT SUM(
+                           CASE
+                               WHEN sm.movement_type IN ('income','refund') THEN sm.quantity
+                               WHEN sm.movement_type IN ('sale','writeoff') THEN -sm.quantity
+                               ELSE 0
+                           END
+                       )
+                       FROM stock_movements sm
+                       WHERE sm.company_id=i.company_id
+                         AND sm.item_id=i.id
+                   ),0)
+               END AS quantity,
+               i.unit,
                COALESCE(i.item_type,'product') AS item_type,
                COALESCE(i.service_sale_mode,'order') AS service_sale_mode,
                i.booking_duration_minutes
