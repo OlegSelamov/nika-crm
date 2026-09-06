@@ -31,7 +31,8 @@ def _ensure_subscription_notifications(cur):
         WHERE notification_type IN (
             'subscription_trial_3d',
             'subscription_trial_1d',
-            'subscription_trial_expired'
+            'subscription_trial_expired',
+            'subscription_payment_required'
         )
     """)
 
@@ -82,6 +83,14 @@ def sync_subscription_lifecycle(company_id):
         subscription = cur.fetchone()
         if not subscription:
             return None
+
+        if subscription["status"] == "pending_payment":
+            _notify_subscription(
+                cur, company_id, subscription["id"],
+                "subscription_payment_required",
+                "Требуется оплата подписки",
+                "Рабочий доступ к Nika Business приостановлен до подтверждения оплаты. Откройте подписку и завершите оплату.",
+            )
 
         if subscription["status"] == "trial" and subscription.get("trial_ends_at"):
             cur.execute("""
