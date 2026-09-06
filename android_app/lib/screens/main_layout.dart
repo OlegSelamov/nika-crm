@@ -427,7 +427,7 @@ class _MoreScreen extends StatelessWidget {
       const _SectionData('expenses', 'Расходы', 'Затраты и категории', Icons.payments_outlined, AppColors.danger, ExpensesScreen()),
       const _SectionData('accounting', 'Бухгалтерия', 'Налоги, долги и документы', Icons.account_balance_outlined, Color(0xFF6941C6), AccountingScreen()),
       const _SectionData(null, 'Сотрудники', 'Доступы и показатели', Icons.badge_outlined, Color(0xFF0E9384), EmployeesScreen()),
-      const _SectionData('Онлайн‑витрина', 'Заказы и бронирования', Icons.storefront_outlined, Color(0xFFDC6803), StorefrontScreen()),
+      const _SectionData('storefront', 'Онлайн-витрина', 'Заказы и бронирования', Icons.storefront_outlined, Color(0xFFDC6803), StorefrontScreen()),
       const _SectionData('cto', 'CTO', 'Технический контроль', Icons.developer_board_outlined, Color(0xFF475467), CtoScreen()),
       const _SectionData(null, 'Смены reKassa', 'X/Z‑отчёты и архив', Icons.point_of_sale_rounded, Color(0xFFEF6C57), ShiftScreen()),
       const _SectionData(null, 'WhatsApp', 'Диалоги с клиентами', Icons.forum_outlined, AppColors.success, WhatsappScreen(), standalone: true),
