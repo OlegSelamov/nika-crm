@@ -334,9 +334,47 @@ def integration_status():
 
         data = response.json()
 
-        state = data.get("stateInstance")
+        state = data.get("stateInstance") or "unknown"
 
-        connected = state == "authorized"
+        state_info = {
+            "authorized": {
+                "connected": True,
+                "requires_reconnect": False,
+                "status_text": "Подключено",
+            },
+            "starting": {
+                "connected": True,
+                "requires_reconnect": False,
+                "status_text": "WhatsApp запускается",
+            },
+            "sleepMode": {
+                "connected": True,
+                "requires_reconnect": False,
+                "status_text": "Временно недоступен, ожидаем восстановление",
+            },
+            "suspended": {
+                "connected": True,
+                "requires_reconnect": False,
+                "status_text": "Временные ограничения WhatsApp",
+            },
+            "blocked": {
+                "connected": False,
+                "requires_reconnect": False,
+                "status_text": "WhatsApp аккаунт заблокирован",
+            },
+            "notAuthorized": {
+                "connected": False,
+                "requires_reconnect": True,
+                "status_text": "Нужно переподключить WhatsApp",
+            },
+        }.get(
+            state,
+            {
+                "connected": True,
+                "requires_reconnect": False,
+                "status_text": "Статус WhatsApp временно не определён",
+            },
+        )
 
         conn = get_db()
 
@@ -349,7 +387,7 @@ def integration_status():
                     updated_at = NOW()
                 WHERE company_id = %s
             """, (
-                state or "unknown",
+                state,
                 company_id
             ))
 
@@ -360,8 +398,10 @@ def integration_status():
 
         return jsonify({
             "ok": True,
-            "connected": connected,
+            "connected": state_info["connected"],
+            "requires_reconnect": state_info["requires_reconnect"],
             "state": state,
+            "status_text": state_info["status_text"],
             "phone": integration["phone"]
         })
 
@@ -371,7 +411,10 @@ def integration_status():
 
         return jsonify({
             "ok": False,
-            "connected": False,
+            "connected": None,
+            "requires_reconnect": False,
+            "state": "unknown",
+            "status_text": "Не удалось проверить статус WhatsApp",
             "error": "GREEN-API недоступен"
         }), 502
 
