@@ -176,6 +176,30 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> mobileProfile() async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/mobile/profile'));
+
+  static Future<Map<String, dynamic>> schoolLeaders() async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/mobile/school/leaders'));
+
+  static Future<Map<String, dynamic>> saveSchoolLeader(Map<String, dynamic> data, {int? id}) async =>
+      Map<String, dynamic>.from(await _request(id == null ? 'POST' : 'PATCH',
+          id == null ? '/api/mobile/school/leaders' : '/api/mobile/school/leaders/$id',
+          body: data));
+
+  static Future<void> deleteSchoolLeader(int id) async {
+    await _request('DELETE', '/api/mobile/school/leaders/$id');
+  }
+
+  static Future<Map<String, dynamic>> schoolMeals(String date) async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/mobile/school/meals?date=$date'));
+
+  static Future<Map<String, dynamic>> saveSchoolMeals(Map<String, dynamic> data) async =>
+      Map<String, dynamic>.from(await _request('POST', '/api/mobile/school/meals', body: data));
+
+  static Future<Map<String, dynamic>> saveSchoolPrices(Map<String, dynamic> data) async =>
+      Map<String, dynamic>.from(await _request('POST', '/api/mobile/school/prices', body: data));
+
   static Future<Set<String>> getModules() async {
     final result = Map<String, dynamic>.from(
       await _request('GET', '/api/mobile/modules'),
