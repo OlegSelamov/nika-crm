@@ -1714,6 +1714,7 @@ def mobile_sale_items():
         cur.execute("""
             SELECT
                 i.id,i.name,i.retail_price,i.barcode,i.unit,i.gtin,i.ntin,
+                (SELECT ii.image FROM item_images ii WHERE ii.item_id=i.id ORDER BY ii.id LIMIT 1) AS image,
                 COALESCE(i.item_type,'product') AS item_type,
                 CASE
                     WHEN COALESCE(i.item_type,'product')='service' THEN 0
