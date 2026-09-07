@@ -33,4 +33,24 @@
 <script>
 (function(){const base={{ base_price|float }};const employees={{ employee_total|float }};const checks=[...document.querySelectorAll('input[name="modules"][data-price]')];const periods=[...document.querySelectorAll('input[name="billing_period"]')];const fmt=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(n)+' ₸';function recalc(){const modules=checks.filter(c=>c.checked).reduce((s,c)=>s+Number(c.dataset.price||0),0);const yearly=document.querySelector('input[name="billing_period"]:checked').value==='year';const monthly=base+employees+modules;document.getElementById('modulesTotal').textContent=fmt(modules);document.getElementById('grandTotal').textContent=fmt(yearly?monthly*10:monthly)+(yearly?' / год':' / месяц');document.getElementById('annualHint').textContent=yearly?'2 месяца в подарок. Обычная цена: '+fmt(monthly*12):'';}checks.forEach(c=>c.addEventListener('change',recalc));periods.forEach(c=>c.addEventListener('change',recalc));recalc();})();
 </script>
+
+<script>
+(function(){
+  function dt(v){ if(!v) return '—'; try{return new Date(v).toLocaleString('ru-RU')}catch(e){return v} }
+  function money(v){return Number(v||0).toLocaleString('ru-RU',{maximumFractionDigits:0})+' ₸'}
+  fetch('/subscription/payment/reconcile',{method:'POST',headers:{'Accept':'application/json'}})
+    .then(r=>r.json()).then(data=>{
+      if(!data || !data.ok) return;
+      const sub=data.subscription||{};
+      document.getElementById('subStatus').textContent=sub.status||'—';
+      document.getElementById('subEnd').textContent=dt(sub.period_end);
+      document.getElementById('subNext').textContent=dt(sub.next_payment_at);
+      document.getElementById('subAmount').textContent=money(sub.total_price);
+      const body=document.getElementById('subscriptionPayments');
+      if(!data.payments || !data.payments.length){body.innerHTML='<tr><td colspan="5">Оплат ещё нет.</td></tr>';return;}
+      body.innerHTML=data.payments.map(p=>'<tr><td>'+dt(p.paid_at||p.created_at)+'</td><td><b>'+money(p.amount)+'</b></td><td>'+(p.provider||'—')+'</td><td>'+(p.provider_invoice_id||'—')+'</td><td><b>'+p.status+'</b></td></tr>').join('');
+    }).catch(()=>{});
+})();
+</script>
+
 {% endblock %}
