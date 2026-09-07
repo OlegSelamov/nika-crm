@@ -2,9 +2,31 @@
 {% block content %}
 <style>
 .subscription-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px}.module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.module-card{display:block;padding:18px;border-radius:18px;background:rgba(255,255,255,.82);border:1px solid rgba(148,163,184,.18);cursor:pointer;transition:.2s}.module-card:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(15,23,42,.1)}.module-card.required{outline:3px solid rgba(245,158,11,.35)}.module-top{display:flex;justify-content:space-between;gap:12px}.module-name{font-weight:800;font-size:16px}.module-desc{color:#64748b;font-size:13px;margin:8px 0 14px}.module-price{font-weight:800}.summary{position:sticky;top:20px;padding:22px;border-radius:22px;background:linear-gradient(160deg,#0f172a,#312e81);color:#fff;box-shadow:0 22px 45px rgba(15,23,42,.25)}.summary-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.1)}.summary-total{font-size:25px;font-weight:900;padding-top:18px}.period-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.period-switch label{padding:11px;border-radius:12px;background:rgba(255,255,255,.1);text-align:center;cursor:pointer}.save-btn{width:100%;margin-top:16px}.trial-note{padding:14px;border-radius:14px;background:rgba(99,102,241,.1);margin-bottom:18px}@media(max-width:900px){.subscription-layout{grid-template-columns:1fr}.module-grid{grid-template-columns:1fr}.summary{position:static}}
+
+.sub-status{margin:0 0 18px;padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+.sub-status h3{margin:0 0 12px}.sub-status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.sub-status-item{padding:12px;border-radius:12px;background:#f8fafc}.sub-status-item small{display:block;color:#64748b;margin-bottom:5px;font-size:11px}.sub-status-item b{font-size:14px}
+.pay-history{margin-top:16px;overflow:auto}.pay-history table{width:100%;min-width:620px;border-collapse:collapse}.pay-history th,.pay-history td{padding:9px 8px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:12px}
+@media(max-width:700px){.sub-status-grid{grid-template-columns:1fr 1fr}}
 </style>
 <div class="page-header"><div><h1 class="page-title">Подписка Nika Business</h1><div class="page-note">Подключайте только необходимые вашему бизнесу возможности.</div></div></div>
 {% if required_module %}<div class="trial-note">Для открытия раздела подключите модуль <b>{{ required_module }}</b>.</div>{% endif %}
+<div class="sub-status" id="subscriptionStatusCard">
+  <h3>Состояние подписки</h3>
+  <div class="sub-status-grid">
+    <div class="sub-status-item"><small>Статус</small><b id="subStatus">{{ subscription.status if subscription else "—" }}</b></div>
+    <div class="sub-status-item"><small>Активна до</small><b id="subEnd">{{ subscription.period_end.strftime("%d.%m.%Y %H:%M") if subscription and subscription.period_end else "—" }}</b></div>
+    <div class="sub-status-item"><small>Следующая оплата</small><b id="subNext">{{ subscription.next_payment_at.strftime("%d.%m.%Y %H:%M") if subscription and subscription.next_payment_at else "—" }}</b></div>
+    <div class="sub-status-item"><small>Сумма</small><b id="subAmount">{{ "{:,.0f}".format(subscription.total_price or 0).replace(",", " ") if subscription else "0" }} ₸</b></div>
+  </div>
+  <div class="pay-history">
+    <h3 style="margin:16px 0 8px">Последние попытки оплаты</h3>
+    <table>
+      <thead><tr><th>Дата</th><th>Сумма</th><th>Провайдер</th><th>Заказ</th><th>Статус</th></tr></thead>
+      <tbody id="subscriptionPayments"><tr><td colspan="5">Проверяем статусы в Halyk…</td></tr></tbody>
+    </table>
+  </div>
+</div>
 <form method="post" action="{{ url_for('subscriptions.subscription_update') }}" class="subscription-layout" id="subscriptionForm">
   <div class="module-grid">
     {% for module in modules %}
