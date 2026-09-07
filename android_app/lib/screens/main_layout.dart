@@ -24,6 +24,7 @@ import 'profile_screen.dart';
 import 'school_screen.dart';
 import 'sales_history_screen.dart';
 import 'sales_screen.dart';
+import 'scanner_screen.dart';
 import 'settings_screen.dart';
 import 'shift_screen.dart';
 import 'stock_screen.dart';
@@ -265,6 +266,13 @@ class _MainLayoutState extends State<MainLayout> {
     });
   }
 
+  Future<void> _openSalesScanner() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screens = [
@@ -390,37 +398,61 @@ class _MainLayoutState extends State<MainLayout> {
                   Expanded(child: content),
                 ])
               : content,
-          bottomNavigationBar: tablet || coreIndices.length <= 1
+          bottomNavigationBar: tablet
               ? null
-              : NavigationBar(
-                  selectedIndex: navSelectedIndex,
-                  onDestinationSelected: (index) => openCore(coreIndices[index]),
-                  destinations: [
-                    if (hasModule('dashboard'))
-                      const NavigationDestination(
-                        icon: Icon(Icons.home_outlined),
-                        selectedIcon: Icon(Icons.home_rounded),
-                        label: 'Главная',
-                      ),
-                    if (hasModule('sales'))
-                      const NavigationDestination(
-                        icon: Icon(Icons.point_of_sale_outlined),
-                        selectedIcon: Icon(Icons.point_of_sale_rounded),
-                        label: 'Продажа',
-                      ),
-                    if (hasModule('sales'))
-                      const NavigationDestination(
-                        icon: Icon(Icons.history_outlined),
-                        selectedIcon: Icon(Icons.history_rounded),
-                        label: 'История',
-                      ),
-                    const NavigationDestination(
-                      icon: Icon(Icons.grid_view_outlined),
-                      selectedIcon: Icon(Icons.grid_view_rounded),
-                      label: 'Разделы',
-                    ),
-                  ],
-                ),
+              : selectedIndex == 1
+                  ? NavigationBar(
+                      selectedIndex: 2,
+                      onDestinationSelected: (index) {
+                        switch (index) {
+                          case 0:
+                            if (hasModule('catalog')) {
+                              openPage(const ModulePage(title: 'Каталог', child: ItemsScreen()));
+                            } else {
+                              _moduleDenied();
+                            }
+                            break;
+                          case 1:
+                            if (hasModule('warehouse')) {
+                              openPage(const ModulePage(title: 'Склад', child: StockScreen()));
+                            } else {
+                              _moduleDenied();
+                            }
+                            break;
+                          case 2:
+                            _openSalesScanner();
+                            break;
+                          case 3:
+                            openCore(2);
+                            break;
+                          case 4:
+                            openCore(3);
+                            break;
+                        }
+                      },
+                      destinations: const [
+                        NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2_rounded), label: 'Каталог'),
+                        NavigationDestination(icon: Icon(Icons.warehouse_outlined), selectedIcon: Icon(Icons.warehouse_rounded), label: 'Склад'),
+                        NavigationDestination(icon: Icon(Icons.qr_code_scanner_rounded), selectedIcon: Icon(Icons.qr_code_scanner_rounded), label: 'Сканер'),
+                        NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history_rounded), label: 'История'),
+                        NavigationDestination(icon: Icon(Icons.more_horiz_rounded), selectedIcon: Icon(Icons.more_horiz_rounded), label: 'Ещё'),
+                      ],
+                    )
+                  : coreIndices.length <= 1
+                      ? null
+                      : NavigationBar(
+                          selectedIndex: navSelectedIndex,
+                          onDestinationSelected: (index) => openCore(coreIndices[index]),
+                          destinations: [
+                            if (hasModule('dashboard'))
+                              const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Главная'),
+                            if (hasModule('sales'))
+                              const NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale_rounded), label: 'Продажа'),
+                            if (hasModule('sales'))
+                              const NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history_rounded), label: 'История'),
+                            const NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'Разделы'),
+                          ],
+                        ),
         );
       },
     );
