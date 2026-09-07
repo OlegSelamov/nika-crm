@@ -4132,3 +4132,174 @@ body.sales-document-center-open { overflow: hidden !important; }
         transition: opacity .16s ease, transform .16s ease, visibility .16s ease !important;
     }
 }
+
+
+/* ================= CLIENT PICKER SHEET ================= */
+#clientSheet.sheet{
+    position:fixed;
+    inset:0;
+    z-index:10020;
+    display:none;
+    padding:20px;
+    background:rgba(15,23,42,.48);
+    align-items:center;
+    justify-content:center;
+}
+#clientSheet.sheet.active{display:flex}
+#clientSheet .sheet-content{
+    width:min(920px,100%);
+    max-height:min(760px,92dvh);
+    overflow:hidden;
+    background:#fff;
+    border-radius:22px;
+    box-shadow:0 24px 70px rgba(15,23,42,.24);
+}
+#clientSheet .client-picker{
+    display:grid;
+    grid-template-columns:minmax(0,1.5fr) minmax(280px,.8fr);
+    max-height:min(760px,92dvh);
+    min-height:0;
+}
+#clientSheet .picker-left,
+#clientSheet .picker-right{
+    min-width:0;
+    min-height:0;
+}
+#clientSheet .picker-left{
+    display:flex;
+    flex-direction:column;
+    padding:20px;
+    border-right:1px solid #eef2f7;
+}
+#clientSheet .picker-left h3{
+    margin:0 0 14px;
+}
+#clientSheet #clientSearchInput{
+    width:100%;
+    box-sizing:border-box;
+    margin-bottom:12px;
+}
+#clientSheet .client-table-box{
+    flex:1;
+    min-height:0;
+    overflow:auto;
+    overscroll-behavior:contain;
+}
+#clientSheet .client-table-box .table-wrapper{
+    overflow:visible !important;
+}
+#clientSheet .client-table{
+    width:100%;
+    border-collapse:collapse;
+}
+#clientSheet .client-table td{
+    padding:13px 12px;
+    border-bottom:1px solid #eef2f7;
+}
+#clientSheet .picker-right{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    padding:20px;
+    background:#fbfcff;
+}
+#clientSheet .selected-title{
+    font-weight:800;
+}
+#clientSheet .selected-client{
+    flex:1;
+    min-height:0;
+    overflow:auto;
+}
+#clientSheet .picker-right .btn{
+    width:100%;
+    min-height:46px;
+    flex:0 0 auto;
+}
+
+@media (max-width:768px){
+    #clientSheet.sheet{
+        align-items:flex-end;
+        padding:0;
+        background:rgba(15,23,42,.38);
+    }
+    #clientSheet .sheet-content{
+        width:100%;
+        height:min(88dvh,760px);
+        max-height:88dvh;
+        border-radius:24px 24px 0 0;
+        overflow:hidden;
+    }
+    #clientSheet .client-picker{
+        display:flex;
+        flex-direction:column;
+        height:100%;
+        max-height:none;
+        min-height:0;
+    }
+    #clientSheet .picker-left{
+        flex:1 1 auto;
+        min-height:0;
+        padding:16px 14px 10px;
+        border-right:0;
+        border-bottom:1px solid #eef2f7;
+        overflow:hidden;
+    }
+    #clientSheet .picker-left h3{
+        margin:0 0 10px;
+        font-size:21px;
+    }
+    #clientSheet #clientSearchInput{
+        flex:0 0 auto;
+        height:46px;
+        margin-bottom:8px;
+        font-size:15px;
+    }
+    #clientSheet .client-table-box{
+        flex:1 1 auto;
+        min-height:0;
+        max-height:none;
+        overflow-y:auto;
+        overflow-x:hidden;
+        -webkit-overflow-scrolling:touch;
+    }
+    #clientSheet .client-table td{
+        padding:11px 8px;
+    }
+    #clientSheet .client-table td > div:first-child{
+        display:grid !important;
+        grid-template-columns:minmax(0,1fr) !important;
+        gap:3px !important;
+    }
+    #clientSheet .client-table td span{
+        overflow-wrap:anywhere;
+    }
+    #clientSheet .picker-right{
+        flex:0 0 auto;
+        max-height:34dvh;
+        padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+        gap:8px;
+        background:#fff;
+        box-shadow:0 -10px 30px rgba(15,23,42,.08);
+    }
+    #clientSheet .selected-title{
+        font-size:14px;
+    }
+    #clientSheet .selected-client{
+        max-height:90px;
+        overflow:auto;
+        font-size:12px;
+    }
+    #clientSheet .picker-right .btn{
+        min-height:44px;
+        margin:0;
+    }
+    #clientSheet .picker-right{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+    }
+    #clientSheet .selected-title,
+    #clientSheet .selected-client{
+        grid-column:1 / -1;
+    }
+}
