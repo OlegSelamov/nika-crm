@@ -217,10 +217,22 @@ class _SalesScreenState extends State<SalesScreen> {
                   Wrap(
                     spacing: 7,
                     runSpacing: 7,
-                    children: const [0.25, 0.5, 1.0, 1.5, 2.0].map((hours) {
+                    children: [0.25, 0.5, 1.0, 1.5, 2.0].map((hours) {
+                      final text = hours == 0.25
+                          ? '15 мин'
+                          : hours == 0.5
+                              ? '30 мин'
+                              : hours == 1
+                                  ? '1 ч'
+                                  : hours == 1.5
+                                      ? '1 ч 30 мин'
+                                      : '2 ч';
                       return ActionChip(
-                        label: Text(hours == 0.25 ? '15 мин' : hours == 0.5 ? '30 мин' : hours == 1 ? '1 ч' : hours == 1.5 ? '1 ч 30 мин' : '2 ч'),
-                        onPressed: null,
+                        label: Text(text),
+                        onPressed: () {
+                          controller.text = hours.toString();
+                          setDialogState(() {});
+                        },
                       );
                     }).toList(),
                   ),
