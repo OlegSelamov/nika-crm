@@ -273,6 +273,17 @@ class ApiService {
         },
       ));
 
+  static Future<Map<String, dynamic>> markInvoicePaid(int saleId) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST',
+        '/sales/mark-paid',
+        body: {'sale_id': saleId},
+      ));
+
+  static String saleDocumentPdfPath(String type, int saleId) =>
+      '/docs/pdf/$type/$saleId';
+
+
   static Future<List<dynamic>> getSalesHistory({
     int? shiftNumber,
     String? serialNumber,
