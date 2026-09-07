@@ -22,7 +22,7 @@ class NikaVoiceOverlay extends StatelessWidget {
         AnimatedBuilder(
           animation: controller,
           builder: (context, _) {
-            if (!controller.enabled || controller.chatVisible) {
+            if (!controller.enabled || controller.chatVisible || controller.overlaySuppressed) {
               return const SizedBox.shrink();
             }
             final bottom = MediaQuery.paddingOf(context).bottom + 82;
