@@ -896,32 +896,40 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final actions = Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-        child: Row(children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: scanBarcode,
-              icon: const Icon(Icons.qr_code_scanner_rounded),
-              label: const Text('Сканер'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.navy,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: Row(children: [
+        Expanded(
+          child: InkWell(
+            onTap: showManualAddDialog,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
               ),
+              child: const Row(children: [
+                Icon(Icons.search_rounded, color: AppColors.muted),
+                SizedBox(width: 10),
+                Expanded(child: Text('Поиск товара, услуги, штрихкоду...', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.muted))),
+              ]),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: showManualAddDialog,
-              icon: const Icon(Icons.add_box_rounded),
-              label: const Text('Добавить'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-              ),
-            ),
+        ),
+        const SizedBox(width: 9),
+        SizedBox(
+          width: 52,
+          height: 52,
+          child: OutlinedButton(
+            onPressed: scanBarcode,
+            style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
           ),
-        ]),
-      );
+        ),
+      ]),
+    );
     final client = Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Card(
@@ -989,24 +997,26 @@ class _SalesScreenState extends State<SalesScreen> {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-          child: Row(children: [
-            Expanded(child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${cart.length} поз. · Итого', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
-                const SizedBox(height: 2),
-                Text(money(total), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-              ],
-            )),
-            const SizedBox(width: 12),
-            SizedBox(height: 50, child: ElevatedButton.icon(
-              onPressed: cart.isEmpty || paying ? null : showPaymentSheet,
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: const Text('К оплате'),
-            )),
-          ]),
+          padding: const EdgeInsets.fromLTRB(16, 9, 16, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Итого', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+              const SizedBox(height: 1),
+              Text(money(total), textAlign: TextAlign.center, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 1),
+              Text('${cart.length} ${cart.length == 1 ? 'позиция' : 'позиций'}', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: cart.isEmpty || paying ? null : showPaymentSheet,
+                  child: const Text('К оплате'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1016,9 +1026,8 @@ class _SalesScreenState extends State<SalesScreen> {
         final tablet = constraints.maxWidth >= AppBreakpoints.tablet;
         if (!tablet) {
           return Column(children: [
-            actions,
             client,
-            const SizedBox(height: 8),
+            actions,
             Expanded(child: cartContent),
             checkout,
           ]);
