@@ -97,7 +97,45 @@
         }
     }
 
+    function isOpenModal(id) {
+        const modal = document.getElementById(id);
+        return Boolean(
+            modal &&
+            (
+                modal.classList.contains('is-open') ||
+                modal.classList.contains('open') ||
+                modal.getAttribute('aria-hidden') === 'false'
+            )
+        );
+    }
+
+    function setModalFieldValue(field, value) {
+        if (!field || field.disabled || field.readOnly) return false;
+        field.value = value;
+        field.dispatchEvent(new Event('input', {bubbles: true}));
+        field.dispatchEvent(new Event('change', {bubbles: true}));
+        try { field.focus({preventScroll: true}); } catch (_) { field.focus(); }
+        return true;
+    }
+
     async function routeScan(code) {
+        // Активная модалка всегда имеет приоритет над поиском страницы.
+        // Иначе HID-сканер записывает код в поле, находящееся "за" модальным окном.
+        if (path === '/items' && isOpenModal('itemModal')) {
+            const barcodeField = document.getElementById('itemBarcode');
+            if (setModalFieldValue(barcodeField, code) && typeof window.lookupBarcode === 'function') {
+                window.lookupBarcode(true);
+            }
+            return;
+        }
+
+        if (path === '/clients' && isOpenModal('clientModal')) {
+            const form = document.getElementById('clientForm');
+            const identifierField = form && form.elements ? form.elements.iin : null;
+            setModalFieldValue(identifierField, code);
+            return;
+        }
+
         if (path === '/items') {
             setSearchValue('catalogSearch', code, function () {
                 if (typeof window.filterCatalogItems === 'function') window.filterCatalogItems();
