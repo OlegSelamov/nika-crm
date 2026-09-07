@@ -186,6 +186,7 @@ def get_company_module_codes(company_id, only_enabled=True):
             JOIN modules m ON m.id = cm.module_id
             WHERE cm.company_id = %s
               AND m.is_active = TRUE
+              AND m.code <> 'cto'
         """
         if only_enabled:
             sql += " AND cm.enabled = TRUE AND cm.status IN ('trial', 'active')"
@@ -234,7 +235,7 @@ def load_subscription_context():
         conn = get_db()
         cur = conn.cursor()
         try:
-            cur.execute("SELECT code FROM modules WHERE is_active = TRUE")
+            cur.execute("SELECT code FROM modules WHERE is_active = TRUE AND code <> 'cto'")
             g.company_modules = {row["code"] for row in cur.fetchall()}
         finally:
             cur.close()
