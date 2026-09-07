@@ -94,3 +94,78 @@ def reconcile_subscription_payment():
     finally:
         cur.close()
         pool.putconn(conn)
+
+
+@subscription_status_bp.route("/subscription/payment/debug/<invoice_id>", methods=["GET"])
+def subscription_payment_debug(invoice_id):
+    if not session.get("user_id") or not session.get("company_id"):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    company_id = session.get("company_id")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, company_id, provider_invoice_id, status, amount, currency,
+                   provider_payment_id, provider_payload, created_at, paid_at
+            FROM subscription_payments
+            WHERE company_id = %s
+              AND provider = 'halyk_epay'
+              AND provider_invoice_id = %s
+            ORDER BY id DESC
+            LIMIT 1
+        """, (company_id, invoice_id))
+        payment = cur.fetchone()
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+    if not payment:
+        return jsonify({"ok": False, "error": "payment_not_found"}), 404
+
+    try:
+        status_payload = _check_epay_status(invoice_id)
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": "halyk_status_request_failed",
+            "message": str(exc),
+            "payment": {
+                "id": payment["id"],
+                "status": payment["status"],
+                "amount": float(payment["amount"] or 0),
+                "currency": payment["currency"],
+                "provider_invoice_id": payment["provider_invoice_id"],
+                "provider_payment_id": payment["provider_payment_id"],
+            }
+        }), 502
+
+    tx = (status_payload or {}).get("transaction") or {}
+    return jsonify({
+        "ok": True,
+        "payment": {
+            "id": payment["id"],
+            "status": payment["status"],
+            "amount": float(payment["amount"] or 0),
+            "currency": payment["currency"],
+            "provider_invoice_id": payment["provider_invoice_id"],
+            "provider_payment_id": payment["provider_payment_id"],
+            "paid_at": payment["paid_at"].isoformat() if payment["paid_at"] else None,
+        },
+        "halyk": {
+            "resultCode": (status_payload or {}).get("resultCode"),
+            "resultMessage": (status_payload or {}).get("resultMessage"),
+            "transaction": {
+                "id": tx.get("id"),
+                "invoiceID": tx.get("invoiceID") or tx.get("invoiceId"),
+                "statusName": tx.get("statusName"),
+                "reasonCode": tx.get("reasonCode"),
+                "reason": tx.get("reason"),
+                "amount": tx.get("amount"),
+                "currency": tx.get("currency"),
+                "reference": tx.get("reference"),
+                "approvalCode": tx.get("approvalCode"),
+            }
+        },
+        "raw": status_payload
+    })
