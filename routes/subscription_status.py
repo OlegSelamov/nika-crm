@@ -19,20 +19,24 @@ def reconcile_subscription_payment():
             WHERE company_id = %s
               AND provider = 'halyk_epay'
               AND provider_invoice_id IS NOT NULL
+              AND status <> 'paid'
             ORDER BY created_at DESC
-            LIMIT 1
+            LIMIT 25
         """, (company_id,))
-        payment = cur.fetchone()
+        pending_payments = cur.fetchall()
     finally:
         cur.close()
         pool.putconn(conn)
 
-    if payment and payment["status"] != "paid":
+    # A user may have several failed/retried attempts after a successful one.
+    # Check recent invoices until Halyk confirms a CHARGE.
+    for payment in pending_payments:
         try:
             status_payload = _check_epay_status(payment["provider_invoice_id"])
-            _mark_payment_paid(payment["id"], status_payload)
+            if _mark_payment_paid(payment["id"], status_payload):
+                break
         except Exception:
-            pass
+            continue
 
     conn = get_db()
     cur = conn.cursor()
