@@ -17,6 +17,7 @@
   <div class="epay-test">Тестовый режим ePay — реальные деньги не списываются.</div>
   {% endif %}
   <button id="epayPayButton" class="epay-btn" type="button">Оплатить через Halyk ePay</button>
+  <div id="epayStatus" class="epay-note" style="margin-top:12px"></div>
   <a class="epay-back" href="{{ url_for('subscriptions.subscription') }}">Вернуться к подписке</a>
 </div>
 <script src="{{ epay_js_url }}"></script>
@@ -24,17 +25,26 @@
 (function(){
   const paymentObject = {{ payment_object|tojson }};
   const button = document.getElementById('epayPayButton');
+  const status = document.getElementById('epayStatus');
   button.addEventListener('click', function(){
-    if (typeof halyk === 'undefined' || typeof halyk.pay !== 'function') {
-      alert('Не удалось загрузить платёжную форму Halyk ePay. Обновите страницу.');
+    if (typeof halyk === 'undefined' || typeof halyk.showPaymentWidget !== 'function') {
+      alert('Не удалось загрузить платёжный виджет Halyk ePay. Обновите страницу.');
       return;
     }
     button.disabled = true;
-    try {
-      halyk.pay(paymentObject);
-    } finally {
-      setTimeout(function(){ button.disabled = false; }, 2500);
-    }
+    status.textContent = 'Открываем защищённое окно Halyk ePay…';
+
+    halyk.showPaymentWidget(paymentObject, function(result){
+      button.disabled = false;
+
+      if (result && result.success) {
+        status.textContent = 'Платёж завершён. Проверяем подтверждение в Halyk…';
+        window.location.href = paymentObject.backLink;
+        return;
+      }
+
+      status.textContent = 'Оплата не завершена.';
+    });
   });
 })();
 </script>
