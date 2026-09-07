@@ -16,6 +16,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   static const pageSize = 50;
 
   bool loading = true;
+  int historyTab = 0;
+  int documentFilter = 0;
+  final List<Map<String, dynamic>> documentSales = [];
   bool loadingMore = false;
   bool hasMore = false;
   int page = 0;
@@ -58,10 +61,15 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 size: pageSize,
               ).catchError((_) => <dynamic>[])
             : Future<dynamic>.value(<dynamic>[]),
+        ApiService.getSalesHistory(allHistory: true, page: 0, size: 100).catchError((_) => <dynamic>[]),
       ]);
       final historyResponse = Map<String, dynamic>.from(results[0] as Map);
       final loaded = _extractHistory(historyResponse['history']);
       final operations = List<dynamic>.from(results[1] as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final docs = List<dynamic>.from(results[2] as List)
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
@@ -74,6 +82,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         closedShifts
           ..clear()
           ..addAll(loaded);
+        documentSales
+          ..clear()
+          ..addAll(docs);
         _sortAndDeduplicate();
         page = 0;
         hasMore = historyResponse['has_more'] == true ||
@@ -213,11 +224,21 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       );
     }
 
-    return RefreshIndicator(
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF8F6FF), Color(0xFFF1F7FF), Color(0xFFF9FBFF)],
+        ),
+      ),
+      child: RefreshIndicator(
       onRefresh: loadHistory,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
+          SliverToBoxAdapter(child: _historyTabs()),
+          if (historyTab == 1) ..._documentSlivers() else ...[
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
@@ -274,10 +295,180 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 ),
               ),
             ),
+          ],
         ],
+      ),
+    ),
+    );
+  }
+
+  Widget _historyTabs() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.9),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 18, offset: const Offset(0, 7))],
+          ),
+          child: Row(children: [
+            Expanded(child: _historyTabButton(0, 'Смены', Icons.point_of_sale_rounded)),
+            Expanded(child: _historyTabButton(1, 'Документы', Icons.description_rounded)),
+          ]),
+        ),
+      );
+
+  Widget _historyTabButton(int index, String label, IconData icon) {
+    final selected = historyTab == index;
+    return InkWell(
+      onTap: () => setState(() => historyTab = index),
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          gradient: selected ? const LinearGradient(colors: [Color(0xFF7257FF), Color(0xFF8D62FF)]) : null,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 18, color: selected ? Colors.white : AppColors.muted),
+          const SizedBox(width: 7),
+          Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: selected ? Colors.white : AppColors.navy)),
+        ]),
       ),
     );
   }
+
+  List<Widget> _documentSlivers() {
+    const names = ['Все', 'Счета', 'Накладные', 'Акты', 'ЭСФ'];
+    return [
+      SliverToBoxAdapter(
+        child: SizedBox(
+          height: 48,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: names.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 7),
+            itemBuilder: (_, i) => ChoiceChip(
+              label: Text(names[i]),
+              selected: documentFilter == i,
+              showCheckmark: false,
+              onSelected: (_) => setState(() => documentFilter = i),
+            ),
+          ),
+        ),
+      ),
+      const SliverToBoxAdapter(child: SizedBox(height: 10)),
+      if (documentSales.isEmpty)
+        const SliverFillRemaining(
+          hasScrollBody: false,
+          child: ScreenStateView(
+            icon: Icons.description_outlined,
+            title: 'Документов пока нет',
+            message: 'Счета и документы по продажам будут собраны здесь.',
+          ),
+        )
+      else
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+          sliver: SliverList.separated(
+            itemCount: documentSales.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (_, i) => _documentSaleCard(documentSales[i]),
+          ),
+        ),
+    ];
+  }
+
+  Widget _documentSaleCard(Map<String, dynamic> sale) {
+    final id = sale['id'] ?? sale['sale_id'] ?? '—';
+    final total = asDouble(sale['total'] ?? sale['amount']);
+    final client = '${sale['client_name'] ?? sale['client'] ?? 'Частное лицо'}';
+    final raw = '${sale['status'] ?? sale['payment_status'] ?? ''}'.toLowerCase();
+    final invoice = '${sale['payment_method'] ?? ''}'.toLowerCase().contains('invoice') ||
+        sale['invoice_number'] != null || raw.contains('pending');
+    final paid = raw.contains('paid') || raw.contains('оплачен') || raw.contains('success');
+    final statusText = paid ? 'Оплачено' : (invoice ? 'Ожидает оплаты' : 'Проведено');
+    final statusColor = paid ? AppColors.success : (invoice ? AppColors.warning : AppColors.primary);
+
+    return Card(
+      elevation: 0,
+      color: Colors.white.withOpacity(.92),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: const BorderSide(color: AppColors.border)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(14)),
+              child: const Icon(Icons.description_rounded, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(invoice ? 'Счёт №${sale['invoice_number'] ?? id}' : 'Продажа №$id',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text(client, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+            ])),
+            StatusPill(statusText, color: statusColor),
+          ]),
+          const SizedBox(height: 13),
+          Text(money(total), style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          Wrap(spacing: 7, runSpacing: 7, children: [
+            _documentBadge(Icons.receipt_long_outlined, 'Счёт'),
+            _documentBadge(Icons.local_shipping_outlined, 'Накладная'),
+            _documentBadge(Icons.task_alt_rounded, 'Акт'),
+            _documentBadge(Icons.description_outlined, 'Счёт-фактура'),
+            _documentBadge(Icons.cloud_done_outlined, 'ЭСФ'),
+          ]),
+          const SizedBox(height: 13),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              onPressed: () async {
+                final parsed = int.tryParse('$id');
+                if (parsed == null) return;
+                try {
+                  final detail = await ApiService.getSale(parsed);
+                  if (!mounted) return;
+                  showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => _SaleActionsSheet(sale: detail),
+                  );
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
+                }
+              },
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: const Text('Открыть'),
+            )),
+            const SizedBox(width: 8),
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(14)),
+              child: const Icon(Icons.more_horiz_rounded),
+            ),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _documentBadge(IconData icon, String label) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: BoxDecoration(color: const Color(0xFFF6F4FF), borderRadius: BorderRadius.circular(11)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 15, color: AppColors.primary),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        ]),
+      );
 
   Widget _currentShiftCard() {
     if (!shiftIsOpen) {
@@ -545,4 +736,65 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           ]),
         ),
       );
+}
+
+
+class _SaleActionsSheet extends StatelessWidget {
+  final Map<String, dynamic> sale;
+  const _SaleActionsSheet({required this.sale});
+
+  @override
+  Widget build(BuildContext context) {
+    final id = sale['id'] ?? sale['sale_id'] ?? '—';
+    final total = asDouble(sale['total'] ?? sale['amount']);
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8F8FD),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(8)))),
+          const SizedBox(height: 18),
+          Text('Продажа №$id', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(money(total), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 18),
+          const Text('Документы и действия', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, children: const [
+            _SheetAction(Icons.receipt_long_outlined, 'Счёт'),
+            _SheetAction(Icons.local_shipping_outlined, 'Накладная'),
+            _SheetAction(Icons.task_alt_rounded, 'Акт'),
+            _SheetAction(Icons.description_outlined, 'Счёт-фактура'),
+            _SheetAction(Icons.cloud_done_outlined, 'ЭСФ'),
+            _SheetAction(Icons.undo_rounded, 'Возврат'),
+          ]),
+          const SizedBox(height: 18),
+          SizedBox(width: double.infinity, child: FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Готово'),
+          )),
+        ]),
+      ),
+    );
+  }
+}
+
+class _SheetAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _SheetAction(this.icon, this.label);
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 18, color: AppColors.primary),
+      const SizedBox(width: 7),
+      Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+    ]),
+  );
 }
