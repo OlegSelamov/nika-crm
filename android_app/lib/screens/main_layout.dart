@@ -401,42 +401,26 @@ class _MainLayoutState extends State<MainLayout> {
           bottomNavigationBar: tablet
               ? null
               : selectedIndex == 1
-                  ? NavigationBar(
-                      selectedIndex: 2,
-                      onDestinationSelected: (index) {
-                        switch (index) {
-                          case 0:
-                            if (hasModule('catalog')) {
-                              openPage(const ModulePage(title: 'Каталог', child: ItemsScreen()));
-                            } else {
-                              _moduleDenied();
-                            }
-                            break;
-                          case 1:
-                            if (hasModule('warehouse')) {
-                              openPage(const ModulePage(title: 'Склад', child: StockScreen()));
-                            } else {
-                              _moduleDenied();
-                            }
-                            break;
-                          case 2:
-                            _openSalesScanner();
-                            break;
-                          case 3:
-                            openCore(2);
-                            break;
-                          case 4:
-                            openCore(3);
-                            break;
-                        }
-                      },
-                      destinations: const [
-                        NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2_rounded), label: 'Каталог'),
-                        NavigationDestination(icon: Icon(Icons.warehouse_outlined), selectedIcon: Icon(Icons.warehouse_rounded), label: 'Склад'),
-                        NavigationDestination(icon: Icon(Icons.qr_code_scanner_rounded), selectedIcon: Icon(Icons.qr_code_scanner_rounded), label: 'Сканер'),
-                        NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history_rounded), label: 'История'),
-                        NavigationDestination(icon: Icon(Icons.more_horiz_rounded), selectedIcon: Icon(Icons.more_horiz_rounded), label: 'Ещё'),
-                      ],
+                  ? Container(
+                      margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                      padding: const EdgeInsets.fromLTRB(4, 7, 4, 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 22, offset: const Offset(0, 7))],
+                      ),
+                      child: Row(children: [
+                        Expanded(child: _SalesNavButton(icon: Icons.inventory_2_outlined, label: 'Каталог', onTap: () {
+                          if (hasModule('catalog')) { openPage(const ModulePage(title: 'Каталог', child: ItemsScreen())); } else { _moduleDenied(); }
+                        })),
+                        Expanded(child: _SalesNavButton(icon: Icons.warehouse_outlined, label: 'Склад', onTap: () {
+                          if (hasModule('warehouse')) { openPage(const ModulePage(title: 'Склад', child: StockScreen())); } else { _moduleDenied(); }
+                        })),
+                        Expanded(child: _SalesScannerNavButton(onTap: _openSalesScanner)),
+                        Expanded(child: _SalesNavButton(icon: Icons.history_rounded, label: 'История', onTap: () => openCore(2))),
+                        Expanded(child: _SalesNavButton(icon: Icons.more_horiz_rounded, label: 'Ещё', onTap: () => openCore(3))),
+                      ]),
                     )
                   : coreIndices.length <= 1
                       ? null
@@ -457,6 +441,65 @@ class _MainLayoutState extends State<MainLayout> {
       },
     );
   }
+}
+
+class _SalesNavButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _SalesNavButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 23, color: AppColors.navy),
+        const SizedBox(height: 4),
+        Text(label, maxLines: 1, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.navy)),
+      ]),
+    ),
+  );
+}
+
+class _SalesScannerNavButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _SalesScannerNavButton({required this.onTap});
+
+  @override
+  State<_SalesScannerNavButton> createState() => _SalesScannerNavButtonState();
+}
+
+class _SalesScannerNavButtonState extends State<_SalesScannerNavButton> {
+  bool pressed = false;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: widget.onTap,
+    onLongPressStart: (_) { setState(() => pressed = true); widget.onTap(); },
+    onLongPressEnd: (_) { if (mounted) setState(() => pressed = false); },
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        width: pressed ? 50 : 54,
+        height: pressed ? 50 : 54,
+        transform: Matrix4.translationValues(0, -13, 0),
+        decoration: BoxDecoration(
+          color: pressed ? AppColors.navy : AppColors.primary,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 4),
+          boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(.30), blurRadius: 18, offset: const Offset(0, 7))],
+        ),
+        child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 27),
+      ),
+      Transform.translate(
+        offset: const Offset(0, -8),
+        child: Text(pressed ? 'Сканирую…' : 'Сканер', maxLines: 1, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
+      ),
+    ]),
+  );
 }
 
 class _MoreScreen extends StatelessWidget {
