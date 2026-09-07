@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import 'shift_detail_screen.dart';
 import 'sale_detail_screen.dart';
+import 'sale_document_preview_screen.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -794,15 +795,41 @@ class _SaleActionsSheetState extends State<_SaleActionsSheet> {
     );
   }
 
-  void _documentMessage(String label, {bool needsPaid = true}) {
+  Future<void> _openDocument(
+    String type,
+    String label, {
+    bool needsPaid = true,
+  }) async {
     if (needsPaid && !isPaid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Сначала подтвердите оплату счёта')),
       );
       return;
     }
+    if (saleId <= 0) return;
+    final number = sale['sale_number'] ?? saleId;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SaleDocumentPreviewScreen(
+          saleId: saleId,
+          documentType: type,
+          title: '$label №$number',
+          fileName: '${type.replaceAll('-', '_')}_$number',
+        ),
+      ),
+    );
+  }
+
+  void _esfMessage() {
+    if (!isPaid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала подтвердите оплату счёта')),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label привязан к продаже. Предпросмотр PDF подключим к общей модалке документов.')),
+      const SnackBar(content: Text('ЭСФ требует отдельного подписания ЭЦП. Подключим его к существующему сценарию ЕСФ следующим шагом.')),
     );
   }
 
@@ -842,11 +869,11 @@ class _SaleActionsSheetState extends State<_SaleActionsSheet> {
             const Text('Документы и действия', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
-              _SheetAction(Icons.receipt_long_outlined, 'Счёт', onTap: () => _documentMessage('Счёт', needsPaid: false)),
-              _SheetAction(Icons.local_shipping_outlined, 'Накладная', onTap: () => _documentMessage('Накладная')),
-              _SheetAction(Icons.task_alt_rounded, 'Акт', onTap: () => _documentMessage('Акт')),
-              _SheetAction(Icons.description_outlined, 'Счёт-фактура', onTap: () => _documentMessage('Счёт-фактура')),
-              _SheetAction(Icons.cloud_done_outlined, 'ЭСФ', onTap: () => _documentMessage('ЭСФ')),
+              _SheetAction(Icons.receipt_long_outlined, 'Счёт', onTap: () => _openDocument('invoice', 'Счёт', needsPaid: false)),
+              _SheetAction(Icons.local_shipping_outlined, 'Накладная', onTap: () => _openDocument('nakladnaya', 'Накладная')),
+              _SheetAction(Icons.task_alt_rounded, 'Акт', onTap: () => _openDocument('act', 'Акт')),
+              _SheetAction(Icons.description_outlined, 'Счёт-фактура', onTap: () => _openDocument('schet-factura', 'Счёт-фактура')),
+              _SheetAction(Icons.cloud_done_outlined, 'ЭСФ', onTap: _esfMessage),
               _SheetAction(Icons.undo_rounded, 'Возврат', onTap: _openSale),
             ]),
             const SizedBox(height: 16),
