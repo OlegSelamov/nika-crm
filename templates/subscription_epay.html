@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.epay-wrap{max-width:620px;margin:40px auto;padding:28px;border-radius:24px;background:#fff;box-shadow:0 22px 55px rgba(15,23,42,.14);text-align:center}
+.epay-logo{width:64px;height:64px;margin:0 auto 14px;border-radius:18px;display:grid;place-items:center;background:#eef2ff;font-size:30px}
+.epay-amount{font-size:34px;font-weight:900;margin:18px 0 6px}.epay-note{color:#64748b;line-height:1.55}
+.epay-test{margin:16px 0;padding:10px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-weight:700}
+.epay-btn{width:100%;margin-top:22px;padding:14px 18px;border:0;border-radius:14px;background:#111827;color:#fff;font-size:16px;font-weight:800;cursor:pointer}
+.epay-back{display:inline-block;margin-top:16px;color:#64748b}
+</style>
+<div class="epay-wrap">
+  <div class="epay-logo">₸</div>
+  <h1>Оплата подписки</h1>
+  <div class="epay-amount">{{ '{:,.0f}'.format(amount|float).replace(',', ' ') }} ₸</div>
+  <div class="epay-note">Оплата Nika Business через Halyk ePay. После подтверждения платежа подписка активируется автоматически.</div>
+  {% if epay_mode != 'prod' %}
+  <div class="epay-test">Тестовый режим ePay — реальные деньги не списываются.</div>
+  {% endif %}
+  <button id="epayPayButton" class="epay-btn" type="button">Оплатить через Halyk ePay</button>
+  <a class="epay-back" href="{{ url_for('subscriptions.subscription') }}">Вернуться к подписке</a>
+</div>
+<script src="{{ epay_js_url }}"></script>
+<script>
+(function(){
+  const paymentObject = {{ payment_object|tojson }};
+  const button = document.getElementById('epayPayButton');
+  button.addEventListener('click', function(){
+    if (typeof halyk === 'undefined' || typeof halyk.pay !== 'function') {
+      alert('Не удалось загрузить платёжную форму Halyk ePay. Обновите страницу.');
+      return;
+    }
+    button.disabled = true;
+    try {
+      halyk.pay(paymentObject);
+    } finally {
+      setTimeout(function(){ button.disabled = false; }, 2500);
+    }
+  });
+})();
+</script>
+{% endblock %}
