@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import 'shift_detail_screen.dart';
+import 'sale_detail_screen.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -387,8 +388,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final total = asDouble(sale['total'] ?? sale['amount']);
     final client = '${sale['client_name'] ?? sale['client'] ?? 'Частное лицо'}';
     final raw = '${sale['status'] ?? sale['payment_status'] ?? ''}'.toLowerCase();
-    final invoice = '${sale['payment_method'] ?? ''}'.toLowerCase().contains('invoice') ||
-        sale['invoice_number'] != null || raw.contains('pending');
+    final invoice = '${sale['sale_type'] ?? sale['payment_method'] ?? ''}'.toLowerCase() == 'invoice' ||
+        sale['invoice_number'] != null || raw.contains('счёт выставлен') || raw.contains('pending');
     final paid = raw.contains('paid') || raw.contains('оплачен') || raw.contains('success');
     final statusText = paid ? 'Оплачено' : (invoice ? 'Ожидает оплаты' : 'Проведено');
     final statusColor = paid ? AppColors.success : (invoice ? AppColors.warning : AppColors.primary);
@@ -435,12 +436,13 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 try {
                   final detail = await ApiService.getSale(parsed);
                   if (!mounted) return;
-                  showModalBottomSheet<void>(
+                  await showModalBottomSheet<bool>(
                     context: context,
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (_) => _SaleActionsSheet(sale: detail),
                   );
+                  if (mounted) await loadHistory();
                 } catch (e) {
                   if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
                 }
@@ -739,44 +741,122 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
 }
 
 
-class _SaleActionsSheet extends StatelessWidget {
+class _SaleActionsSheet extends StatefulWidget {
   final Map<String, dynamic> sale;
   const _SaleActionsSheet({required this.sale});
 
   @override
+  State<_SaleActionsSheet> createState() => _SaleActionsSheetState();
+}
+
+class _SaleActionsSheetState extends State<_SaleActionsSheet> {
+  bool paying = false;
+
+  Map<String, dynamic> get sale => widget.sale;
+  int get saleId => int.tryParse('${sale['id'] ?? sale['sale_id'] ?? ''}') ?? 0;
+  bool get isInvoice => '${sale['sale_type'] ?? ''}' == 'invoice';
+  bool get isPaid => '${sale['status'] ?? ''}' == 'Оплачено';
+
+  Future<void> _markPaid() async {
+    if (saleId <= 0 || paying) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        icon: const Icon(Icons.payments_rounded, color: AppColors.success, size: 36),
+        title: const Text('Подтвердить оплату?'),
+        content: Text('Счёт №${sale['sale_number'] ?? saleId} будет отмечен оплаченным. После этого станут доступны закрывающие документы.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Оплата получена')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => paying = true);
+    try {
+      final result = await ApiService.markInvoicePaid(saleId);
+      if (!mounted) return;
+      if (result['success'] != true) throw ApiException('${result['error'] ?? 'Не удалось подтвердить оплату'}');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Оплата подтверждена')));
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
+    } finally {
+      if (mounted) setState(() => paying = false);
+    }
+  }
+
+  Future<void> _openSale() async {
+    Navigator.pop(context);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SaleDetailScreen(saleId: saleId)),
+    );
+  }
+
+  void _documentMessage(String label, {bool needsPaid = true}) {
+    if (needsPaid && !isPaid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала подтвердите оплату счёта')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label привязан к продаже. Предпросмотр PDF подключим к общей модалке документов.')),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final id = sale['id'] ?? sale['sale_id'] ?? '—';
-    final total = asDouble(sale['total'] ?? sale['amount']);
+    final total = asDouble(sale['total_amount'] ?? sale['total'] ?? sale['amount']);
+    final number = sale['sale_number'] ?? saleId;
     return SafeArea(
       child: Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .86),
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
         decoration: const BoxDecoration(
           color: Color(0xFFF8F8FD),
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(8)))),
-          const SizedBox(height: 18),
-          Text('Продажа №$id', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 5),
-          Text(money(total), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 18),
-          const Text('Документы и действия', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          Wrap(spacing: 8, runSpacing: 8, children: const [
-            _SheetAction(Icons.receipt_long_outlined, 'Счёт'),
-            _SheetAction(Icons.local_shipping_outlined, 'Накладная'),
-            _SheetAction(Icons.task_alt_rounded, 'Акт'),
-            _SheetAction(Icons.description_outlined, 'Счёт-фактура'),
-            _SheetAction(Icons.cloud_done_outlined, 'ЭСФ'),
-            _SheetAction(Icons.undo_rounded, 'Возврат'),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(8)))),
+            const SizedBox(height: 18),
+            Row(children: [
+              Expanded(child: Text(isInvoice ? 'Счёт №$number' : 'Продажа №$number', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+              StatusPill(isPaid ? 'Оплачено' : '${sale['status'] ?? 'Проведено'}', color: isPaid ? AppColors.success : AppColors.warning),
+            ]),
+            const SizedBox(height: 5),
+            Text(money(total), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+            if (isInvoice && !isPaid) ...[
+              const SizedBox(height: 16),
+              SizedBox(width: double.infinity, child: FilledButton.icon(
+                onPressed: paying ? null : _markPaid,
+                icon: paying
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.payments_rounded),
+                label: Text(paying ? 'Подтверждаем…' : 'Подтвердить оплату'),
+              )),
+            ],
+            const SizedBox(height: 20),
+            const Text('Документы и действия', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              _SheetAction(Icons.receipt_long_outlined, 'Счёт', onTap: () => _documentMessage('Счёт', needsPaid: false)),
+              _SheetAction(Icons.local_shipping_outlined, 'Накладная', onTap: () => _documentMessage('Накладная')),
+              _SheetAction(Icons.task_alt_rounded, 'Акт', onTap: () => _documentMessage('Акт')),
+              _SheetAction(Icons.description_outlined, 'Счёт-фактура', onTap: () => _documentMessage('Счёт-фактура')),
+              _SheetAction(Icons.cloud_done_outlined, 'ЭСФ', onTap: () => _documentMessage('ЭСФ')),
+              _SheetAction(Icons.undo_rounded, 'Возврат', onTap: _openSale),
+            ]),
+            const SizedBox(height: 16),
+            SizedBox(width: double.infinity, child: OutlinedButton.icon(
+              onPressed: _openSale,
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: const Text('Открыть продажу полностью'),
+            )),
           ]),
-          const SizedBox(height: 18),
-          SizedBox(width: double.infinity, child: FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Готово'),
-          )),
-        ]),
+        ),
       ),
     );
   }
@@ -785,16 +865,25 @@ class _SaleActionsSheet extends StatelessWidget {
 class _SheetAction extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _SheetAction(this.icon, this.label);
+  final VoidCallback? onTap;
+  const _SheetAction(this.icon, this.label, {this.onTap});
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 18, color: AppColors.primary),
-      const SizedBox(width: 7),
-      Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-    ]),
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 18, color: AppColors.primary),
+          const SizedBox(width: 7),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ]),
+      ),
+    ),
   );
 }
