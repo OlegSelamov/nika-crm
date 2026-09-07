@@ -55,6 +55,7 @@ class NikaAssistantController extends ChangeNotifier
   bool _startingSpeech = false;
   bool _historyLoaded = false;
   bool _chatVisible = false;
+  bool _overlaySuppressed = false;
   bool _observerAttached = false;
   bool _appInForeground = true;
   bool _pushToTalkActive = false;
@@ -75,6 +76,7 @@ class NikaAssistantController extends ChangeNotifier
   bool get enabled => _enabled;
   bool get speechReady => _speechReady;
   bool get chatVisible => _chatVisible;
+  bool get overlaySuppressed => _overlaySuppressed;
   bool get pushToTalkActive => _pushToTalkActive;
   bool get isSending => _phase == NikaVoicePhase.thinking;
   bool get isListening =>
@@ -142,6 +144,12 @@ class NikaAssistantController extends ChangeNotifier
   void setChatVisible(bool value) {
     if (_chatVisible == value) return;
     _chatVisible = value;
+    notifyListeners();
+  }
+
+  void setOverlaySuppressed(bool value) {
+    if (_overlaySuppressed == value) return;
+    _overlaySuppressed = value;
     notifyListeners();
   }
 
