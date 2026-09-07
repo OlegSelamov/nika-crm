@@ -970,3 +970,35 @@ body.sf-lock{overflow:hidden}
     .sf-share-product span{display:inline !important;font-size:9px !important}
     .sf-share-product svg{display:block !important;width:18px !important;height:18px !important}
 }
+
+
+/* ===== Desktop product modal viewport fit ===== */
+@media(min-width:761px){
+    #sfProductOverlay{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:20px;
+        overflow:auto;
+    }
+    #sfProductOverlay .sf-product-modal{
+        position:relative !important;
+        left:auto !important;
+        top:auto !important;
+        width:min(1040px,calc(100vw - 40px)) !important;
+        max-height:calc(100dvh - 40px) !important;
+        min-height:0 !important;
+        transform:scale(.98) !important;
+        margin:auto !important;
+    }
+    #sfProductOverlay.open .sf-product-modal{
+        transform:scale(1) !important;
+    }
+    #sfProductOverlay .sf-pm-gallery,
+    #sfProductOverlay .sf-pm-info{
+        min-height:0 !important;
+        max-height:calc(100dvh - 40px) !important;
+        overflow-y:auto !important;
+        overscroll-behavior:contain;
+    }
+}
