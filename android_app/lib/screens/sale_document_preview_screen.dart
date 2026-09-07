@@ -46,7 +46,6 @@ class _SaleDocumentPreviewScreenState extends State<SaleDocumentPreviewScreen> {
       await FileSaver.instance.saveFile(
         name: widget.fileName,
         bytes: bytes,
-        ext: 'pdf',
         mimeType: MimeType.pdf,
       );
       if (mounted) {
