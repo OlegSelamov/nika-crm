@@ -316,6 +316,24 @@ class _MainLayoutState extends State<MainLayout> {
                 ),
           appBar: AppBar(
             titleSpacing: tablet ? 16 : 0,
+            backgroundColor: selectedIndex == 1
+                ? const Color(0xFFF4F1FF)
+                : AppColors.surface,
+            flexibleSpace: selectedIndex == 1
+                ? Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Color(0xFFF1F7FF),
+                          Color(0xFFF4F0FF),
+                          Color(0xFFEEE9FF),
+                        ],
+                      ),
+                    ),
+                  )
+                : null,
             title: Row(
               children: [
                 Container(
