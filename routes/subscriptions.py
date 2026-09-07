@@ -402,10 +402,26 @@ def epay_start():
             secret_hash,
         ))
         payment_id = cur.fetchone()["id"]
-        if payment_id > 999999:
-            raise RuntimeError("Исчерпан диапазон invoiceID ePay для текущей схемы")
 
-        invoice_id = f"{payment_id:06d}"
+        # Halyk ePay requires a unique invoiceID. The public test merchant is
+        # shared, so sequential values like 000010 can already be occupied.
+        invoice_id = None
+        for _ in range(20):
+            candidate = str(secrets.randbelow(900000) + 100000)
+            cur.execute("""
+                SELECT 1
+                FROM subscription_payments
+                WHERE provider = 'halyk_epay'
+                  AND provider_invoice_id = %s
+                LIMIT 1
+            """, (candidate,))
+            if not cur.fetchone():
+                invoice_id = candidate
+                break
+
+        if not invoice_id:
+            raise RuntimeError("Не удалось сформировать уникальный invoiceID ePay")
+
         cur.execute("""
             UPDATE subscription_payments
             SET provider_invoice_id = %s
