@@ -5,7 +5,10 @@ from utils.timezone import now_kz
 
 PUBLIC_ENDPOINTS = {
     "auth.login", "auth.logout", "auth.register", "auth.api_login",
-    "landing", "static", "subscriptions.subscription", "subscriptions.subscription_update"
+    "landing", "static", "subscriptions.subscription", "subscriptions.subscription_update",
+    "subscriptions.epay_start", "subscriptions.epay_callback",
+    "subscriptions.epay_failure_callback", "subscriptions.epay_success",
+    "subscriptions.epay_failure"
 }
 
 
