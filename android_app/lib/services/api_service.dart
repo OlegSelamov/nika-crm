@@ -259,6 +259,20 @@ class ApiService {
         },
       ));
 
+  static Future<Map<String, dynamic>> createInvoiceSale({
+    required List cart,
+    int? clientId,
+  }) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST',
+        '/sales/create-invoice',
+        timeout: const Duration(seconds: 60),
+        body: {
+          'client_id': clientId,
+          'cart': cart,
+        },
+      ));
+
   static Future<List<dynamic>> getSalesHistory({
     int? shiftNumber,
     String? serialNumber,
