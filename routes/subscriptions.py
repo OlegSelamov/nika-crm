@@ -18,7 +18,7 @@ EPAY_SCOPE = "webapi usermanagement email_send verification statement statistics
 # Production credentials must be supplied via environment variables.
 EPAY_MODE = os.getenv("EPAY_MODE", "test").strip().lower()
 EPAY_CLIENT_ID = os.getenv("EPAY_CLIENT_ID", "test")
-EPAY_CLIENT_SECRET = os.getenv("EPAY_CLIENT_SECRET", "yF587AV9Ms94qN2QShFzVR3vFnWkhjbAK3sG")
+EPAY_CLIENT_SECRET = os.getenv("EPAY_CLIENT_SECRET", "")
 EPAY_TERMINAL_ID = os.getenv("EPAY_TERMINAL_ID", "67e34d63-102f-4bd1-898e-370781d0074d")
 EPAY_OAUTH_URL = (
     "https://epay-oauth.homebank.kz/oauth2/token"
@@ -402,10 +402,22 @@ def epay_start():
             secret_hash,
         ))
         payment_id = cur.fetchone()["id"]
-        if payment_id > 999999:
-            raise RuntimeError("Исчерпан диапазон invoiceID ePay для текущей схемы")
 
-        invoice_id = f"{payment_id:06d}"
+        invoice_id = None
+        for _ in range(20):
+            candidate = str(secrets.randbelow(900000) + 100000)
+            cur.execute("""
+                SELECT 1 FROM subscription_payments
+                WHERE provider = 'halyk_epay'
+                  AND provider_invoice_id = %s
+                LIMIT 1
+            """, (candidate,))
+            if not cur.fetchone():
+                invoice_id = candidate
+                break
+        if not invoice_id:
+            raise RuntimeError("Не удалось сформировать уникальный invoiceID ePay")
+
         cur.execute("""
             UPDATE subscription_payments
             SET provider_invoice_id = %s
@@ -457,7 +469,7 @@ def epay_start():
         "autoBackLink": True,
         "postLink": post_link,
         "failurePostLink": failure_post_link,
-        "language": "rus",
+        "language": "RUS",
         "description": "Подписка Nika Business",
         "accountId": f"company-{company_id}",
         "terminal": EPAY_TERMINAL_ID,
