@@ -237,6 +237,7 @@ def subscription():
               ON cm.module_id = m.id
              AND cm.company_id = %s
             WHERE m.is_active = TRUE
+              AND m.code <> 'cto'
             ORDER BY m.category, m.sort_order, m.id
         """, (company_id,))
         modules = cur.fetchall()
@@ -290,7 +291,7 @@ def subscription_update():
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM modules WHERE is_active = TRUE ORDER BY id")
+        cur.execute("SELECT * FROM modules WHERE is_active = TRUE AND code <> 'cto' ORDER BY id")
         all_modules = cur.fetchall()
         selected_modules = [m for m in all_modules if m["code"] in selected_codes or m["is_core"]]
 
