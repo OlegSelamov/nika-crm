@@ -134,7 +134,10 @@ def _mark_payment_paid(payment_id, status_payload):
         currency = str(transaction.get("currency") or "").upper()
         invoice_id = str(transaction.get("invoiceID") or transaction.get("invoiceId") or "")
 
-        if result_code != "100" or status_name != "CHARGE":
+        # Halyk status API returns AUTH for a successfully authorised/charged
+        # test payment. resultCode=100 + reasonCode=0 is the successful result.
+        reason_code = str(transaction.get("reasonCode") or "")
+        if result_code != "100" or reason_code != "0" or status_name not in {"AUTH", "CHARGE"}:
             return False
         if amount != expected or currency != "KZT":
             return False
