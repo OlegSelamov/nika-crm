@@ -25,7 +25,7 @@ class NikaVoiceOverlay extends StatelessWidget {
             if (!controller.enabled || controller.chatVisible || controller.overlaySuppressed) {
               return const SizedBox.shrink();
             }
-            final bottom = MediaQuery.paddingOf(context).bottom + 82;
+            final bottom = MediaQuery.paddingOf(context).bottom + 104;
             return Positioned(
               right: 14,
               bottom: bottom,
