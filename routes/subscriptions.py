@@ -494,17 +494,19 @@ def epay_start():
 @subscriptions_bp.route("/subscription/payment/epay/callback", methods=["POST"])
 def epay_callback():
     payload = request.get_json(silent=True) or request.form.to_dict() or {}
-    invoice_id = str(payload.get("invoiceId") or payload.get("invoiceID") or "")
-    secret_hash = str(payload.get("secret_hash") or "")
-    if not invoice_id or not secret_hash:
-        return jsonify({"ok": False, "error": "missing payment identity"}), 400
+    invoice_id = str(payload.get("invoiceId") or payload.get("invoiceID") or "").strip()
+    if not invoice_id:
+        return jsonify({"ok": False, "error": "missing invoiceId"}), 400
 
+    # Do not trust the browser/postLink payload as proof of payment.
+    # Locate our invoice, then independently verify the transaction through
+    # Halyk's authenticated status API.
     conn = get_db()
     cur = conn.cursor()
     try:
         _ensure_epay_columns(cur)
         cur.execute("""
-            SELECT id, provider_secret_hash
+            SELECT id
             FROM subscription_payments
             WHERE provider = 'halyk_epay'
               AND provider_invoice_id = %s
@@ -517,11 +519,8 @@ def epay_callback():
         cur.close()
         pool.putconn(conn)
 
-    if not payment or not secrets.compare_digest(
-        str(payment.get("provider_secret_hash") or ""),
-        secret_hash,
-    ):
-        return jsonify({"ok": False, "error": "invalid secret_hash"}), 403
+    if not payment:
+        return jsonify({"ok": False, "error": "payment not found"}), 404
 
     try:
         confirmed = _confirm_epay_payment(invoice_id)
