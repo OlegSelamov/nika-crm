@@ -1,99 +1,253 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-.subscription-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px}.module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.module-card{display:block;padding:18px;border-radius:18px;background:rgba(255,255,255,.82);border:1px solid rgba(148,163,184,.18);cursor:pointer;transition:.2s}.module-card:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(15,23,42,.1)}.module-card.required{outline:3px solid rgba(245,158,11,.35)}.module-top{display:flex;justify-content:space-between;gap:12px}.module-name{font-weight:800;font-size:16px}.module-desc{color:#64748b;font-size:13px;margin:8px 0 14px}.module-price{font-weight:800}.summary{position:sticky;top:20px;padding:22px;border-radius:22px;background:linear-gradient(160deg,#0f172a,#312e81);color:#fff;box-shadow:0 22px 45px rgba(15,23,42,.25)}.summary-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.1)}.summary-total{font-size:25px;font-weight:900;padding-top:18px}.period-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.period-switch label{padding:11px;border-radius:12px;background:rgba(255,255,255,.1);text-align:center;cursor:pointer}.save-btn{width:100%;margin-top:16px}.trial-note{padding:14px;border-radius:14px;background:rgba(99,102,241,.1);margin-bottom:18px}@media(max-width:900px){.subscription-layout{grid-template-columns:1fr}.module-grid{grid-template-columns:1fr}.summary{position:static}}
+.subscription-page{max-width:1420px;margin:0 auto;padding:4px 2px 32px}
+.sub-hero{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:20px}
+.sub-hero h1{margin:0;font-size:clamp(28px,3vw,42px);line-height:1.05;color:#0f172a}
+.sub-hero p{margin:8px 0 0;color:#64748b;font-size:15px}
+.sub-live{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:800;white-space:nowrap}
+.sub-live:before{content:"";width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 0 5px rgba(16,185,129,.12)}
+.trial-note{padding:14px 16px;border-radius:14px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;margin-bottom:16px}
 
-.sub-status{margin:0 0 18px;padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.06)}
-.sub-status h3{margin:0 0 12px}.sub-status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.sub-status-item{padding:12px;border-radius:12px;background:#f8fafc}.sub-status-item small{display:block;color:#64748b;margin-bottom:5px;font-size:11px}.sub-status-item b{font-size:14px}
-.pay-history{margin-top:16px;overflow:auto}.pay-history table{width:100%;min-width:620px;border-collapse:collapse}.pay-history th,.pay-history td{padding:9px 8px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:12px}
-@media(max-width:700px){.sub-status-grid{grid-template-columns:1fr 1fr}}
+.sub-status{padding:20px;border:1px solid rgba(148,163,184,.18);border-radius:24px;background:rgba(255,255,255,.92);box-shadow:0 12px 34px rgba(15,23,42,.06);margin-bottom:20px}
+.sub-status-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:14px}
+.sub-status-head h2{margin:0;font-size:19px;color:#0f172a}
+.status-pill{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;font-size:12px;font-weight:800;background:#eef2ff;color:#4338ca}
+.status-pill[data-status="active"]{background:#ecfdf5;color:#047857}
+.status-pill[data-status="trial"]{background:#eff6ff;color:#1d4ed8}
+.status-pill[data-status="pending_payment"]{background:#fff7ed;color:#c2410c}
+.status-pill[data-status="expired"],.status-pill[data-status="suspended"],.status-pill[data-status="cancelled"]{background:#fef2f2;color:#b91c1c}
+.sub-status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.sub-status-item{padding:14px;border-radius:16px;background:#f8fafc;border:1px solid #eef2f7;min-width:0}
+.sub-status-item small{display:block;color:#64748b;font-size:11px;margin-bottom:6px}
+.sub-status-item b{display:block;color:#0f172a;font-size:15px;overflow-wrap:anywhere}
+
+.payments-box{margin-top:16px;padding-top:16px;border-top:1px solid #eef2f7}
+.payments-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+.payments-head h3{margin:0;font-size:15px;color:#0f172a}
+.payments-head span{font-size:11px;color:#94a3b8}
+.payments-table{width:100%;border-collapse:collapse}
+.payments-table th,.payments-table td{padding:10px 8px;text-align:left;border-bottom:1px solid #eef2f7;font-size:12px}
+.payments-table th{color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.payment-status{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#f1f5f9;color:#475569}
+.payment-status.paid{background:#ecfdf5;color:#047857}.payment-status.failed,.payment-status.token_error{background:#fef2f2;color:#b91c1c}.payment-status.created,.payment-status.pending{background:#fff7ed;color:#c2410c}
+
+.subscription-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px;align-items:start}
+.module-wrap{min-width:0}
+.module-section-title{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:0 0 12px}
+.module-section-title h2{margin:0;font-size:19px;color:#0f172a}.module-section-title span{color:#64748b;font-size:12px}
+.module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.module-card{position:relative;display:flex;flex-direction:column;min-height:168px;padding:16px;border-radius:20px;background:rgba(255,255,255,.92);border:1px solid rgba(148,163,184,.18);cursor:pointer;transition:.18s ease;box-shadow:0 8px 22px rgba(15,23,42,.04)}
+.module-card:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(15,23,42,.08)}
+.module-card:has(input:checked){border-color:#8b5cf6;box-shadow:0 0 0 2px rgba(139,92,246,.10),0 12px 28px rgba(15,23,42,.06)}
+.module-card.required{outline:3px solid rgba(245,158,11,.28)}
+.module-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.module-name{font-weight:900;font-size:15px;color:#0f172a;line-height:1.2}
+.module-desc{color:#64748b;font-size:12px;line-height:1.45;margin:9px 0 16px}
+.module-price{font-weight:900;color:#0f172a;font-size:14px;margin-top:auto}
+.module-core{display:inline-flex;margin-top:8px;font-size:10px;font-weight:800;color:#64748b;background:#f1f5f9;border-radius:999px;padding:5px 8px;width:max-content}
+.module-card input[type="checkbox"]{appearance:none;-webkit-appearance:none;width:24px;height:24px;min-width:24px;border:2px solid #cbd5e1;border-radius:8px;background:#fff;display:grid;place-items:center;cursor:pointer}
+.module-card input[type="checkbox"]:checked{border-color:#7c3aed;background:#7c3aed}
+.module-card input[type="checkbox"]:checked:after{content:"✓";color:#fff;font-size:15px;font-weight:900;line-height:1}
+.module-card input[type="checkbox"]:disabled{cursor:default;opacity:.7}
+
+.summary{position:sticky;top:18px;padding:22px;border-radius:24px;background:linear-gradient(155deg,#0f172a 0%,#1e1b4b 62%,#4c1d95 100%);color:#fff;box-shadow:0 24px 55px rgba(15,23,42,.24);overflow:hidden}
+.summary:before{content:"";position:absolute;width:180px;height:180px;border-radius:50%;right:-75px;top:-90px;background:rgba(139,92,246,.28)}
+.summary>*{position:relative}
+.summary h2{margin:0 0 6px;font-size:22px}.summary-sub{color:#cbd5e1;font-size:12px;margin-bottom:16px}
+.summary-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:13px}
+.summary-row span{color:#cbd5e1}.summary-row b{text-align:right}
+.period-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}
+.period-switch label{position:relative;padding:11px 8px;border-radius:13px;background:rgba(255,255,255,.08);text-align:center;cursor:pointer;font-size:12px;font-weight:800;border:1px solid rgba(255,255,255,.08)}
+.period-switch label:has(input:checked){background:#fff;color:#312e81}
+.period-switch input{position:absolute;opacity:0;pointer-events:none}
+.summary-total-label{font-size:11px;color:#cbd5e1;margin-top:4px}
+.summary-total{font-size:30px;font-weight:950;line-height:1.08;padding-top:6px}
+#annualHint{font-size:11px;color:#c4b5fd;margin-top:8px;min-height:16px}
+.save-btn{width:100%;margin-top:14px;min-height:48px;border:0;border-radius:14px;background:linear-gradient(90deg,#6366f1,#8b5cf6);color:#fff;font-weight:900;font-size:14px;cursor:pointer;box-shadow:0 12px 25px rgba(99,102,241,.28)}
+.summary-note{margin-top:11px;color:#cbd5e1;font-size:10px;line-height:1.4;text-align:center}
+
+@media(max-width:1180px){.module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){
+  .subscription-page{padding-bottom:22px}.sub-hero{align-items:flex-start;flex-direction:column}.sub-live{display:none}
+  .subscription-layout{grid-template-columns:1fr}.summary{position:static;order:-1}.module-wrap{order:2}
+  .sub-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:600px){
+  .subscription-page{padding:0 0 18px}.sub-hero{margin-bottom:14px;padding:0 2px}.sub-hero h1{font-size:28px}.sub-hero p{font-size:13px}
+  .sub-status{padding:14px;border-radius:20px}.sub-status-head{align-items:flex-start}.sub-status-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .sub-status-item{padding:11px}.sub-status-item b{font-size:13px}
+  .payments-box{margin-top:14px}.payments-table thead{display:none}.payments-table,.payments-table tbody,.payments-table tr,.payments-table td{display:block;width:100%}
+  .payments-table tr{position:relative;padding:10px 82px 10px 0;border-bottom:1px solid #eef2f7}.payments-table td{padding:2px 0;border:0;font-size:11px}
+  .payments-table td:nth-child(1){font-weight:700;color:#0f172a}.payments-table td:nth-child(2){font-size:13px;font-weight:900}.payments-table td:nth-child(3),.payments-table td:nth-child(4){color:#64748b}
+  .payments-table td:nth-child(5){position:absolute;right:0;top:12px}
+  .module-section-title{align-items:flex-end}.module-section-title h2{font-size:18px}
+  .module-grid{grid-template-columns:1fr 1fr;gap:9px}
+  .module-card{min-height:150px;padding:13px;border-radius:17px}.module-name{font-size:14px}.module-desc{font-size:11px;margin:7px 0 12px}.module-price{font-size:13px}
+  .module-card input[type="checkbox"]{width:22px;height:22px;min-width:22px}
+  .summary{padding:18px;border-radius:20px}.summary h2{font-size:20px}.summary-total{font-size:28px}
+}
+@media(max-width:390px){
+  .module-grid{grid-template-columns:1fr}
+  .module-card{min-height:132px}
+}
 </style>
-<div class="page-header"><div><h1 class="page-title">Подписка Nika Business</h1><div class="page-note">Подключайте только необходимые вашему бизнесу возможности.</div></div></div>
-{% if required_module %}<div class="trial-note">Для открытия раздела подключите модуль <b>{{ required_module }}</b>.</div>{% endif %}
-<div class="sub-status" id="subscriptionStatusCard">
-  <h3>Состояние подписки</h3>
-  <div class="sub-status-grid">
-    <div class="sub-status-item"><small>Статус</small><b id="subStatus">{{ subscription.status if subscription else "—" }}</b></div>
-    <div class="sub-status-item"><small>Активна до</small><b id="subEnd">{{ subscription.period_end.strftime("%d.%m.%Y %H:%M") if subscription and subscription.period_end else "—" }}</b></div>
-    <div class="sub-status-item"><small>Следующая оплата</small><b id="subNext">{{ subscription.next_payment_at.strftime("%d.%m.%Y %H:%M") if subscription and subscription.next_payment_at else "—" }}</b></div>
-    <div class="sub-status-item"><small>Сумма</small><b id="subAmount">{{ "{:,.0f}".format(subscription.total_price or 0).replace(",", " ") if subscription else "0" }} ₸</b></div>
-  </div>
-  <div class="pay-history">
-    <h3 style="margin:16px 0 8px">Последние попытки оплаты</h3>
-    <table>
-      <thead><tr><th>Дата</th><th>Сумма</th><th>Провайдер</th><th>Заказ</th><th>Статус</th></tr></thead>
-      <tbody id="subscriptionPayments"><tr><td colspan="5">Проверяем статусы в Halyk…</td></tr></tbody>
-    </table>
-    <div id="halykDebug" style="display:none;margin-top:12px;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;white-space:pre-wrap;word-break:break-word"></div>
-  </div>
-</div>
-<form method="post" action="{{ url_for('subscriptions.subscription_update') }}" class="subscription-layout" id="subscriptionForm">
-  <div class="module-grid">
-    {% for module in modules %}
-    <label class="module-card {% if required_module == module.code %}required{% endif %}">
-      <div class="module-top"><div class="module-name">{{ module.name }}</div><input type="checkbox" name="modules" value="{{ module.code }}" data-price="{{ module.monthly_price }}" {% if module.selected or module.is_core %}checked{% endif %} {% if module.is_core %}disabled{% endif %}></div>
-      {% if module.is_core %}<input type="hidden" name="modules" value="{{ module.code }}">{% endif %}
-      <div class="module-desc">{{ module.description }}</div>
-      <div class="module-price">{{ '{:,.0f}'.format(module.monthly_price|float).replace(',', ' ') }} ₸ / месяц</div>
-    </label>
-    {% endfor %}
-  </div>
-  <aside class="summary">
-    <h2 style="margin-top:0">Ваш тариф</h2>
-    <div class="summary-row"><span>Базовая платформа</span><b>{{ '{:,.0f}'.format(base_price|float).replace(',', ' ') }} ₸</b></div>
-    <div class="summary-row"><span>Сотрудники ({{ employee_count }})</span><b>{{ '{:,.0f}'.format(employee_total|float).replace(',', ' ') }} ₸</b></div>
-    <div class="summary-row"><span>Выбранные модули</span><b id="modulesTotal">0 ₸</b></div>
-    <div class="period-switch">
-      <label><input type="radio" name="billing_period" value="month" checked> Ежемесячно</label>
-      <label><input type="radio" name="billing_period" value="year"> За год</label>
+
+<div class="subscription-page">
+  <div class="sub-hero">
+    <div>
+      <h1>Подписка Nika Business</h1>
+      <p>Соберите тариф под свой бизнес и оплачивайте только нужные возможности.</p>
     </div>
-    <div class="summary-total"><span id="grandTotal">0 ₸</span></div>
-    <div id="annualHint" style="font-size:12px;color:#cbd5e1;margin-top:7px"></div>
-    <button class="btn save-btn" type="submit">Сохранить и перейти к оплате</button>
-  </aside>
-</form>
+    {% if subscription and subscription.status == 'active' %}
+      <div class="sub-live">Подписка активна</div>
+    {% endif %}
+  </div>
+
+  {% if required_module %}
+    <div class="trial-note">Для открытия раздела подключите модуль <b>{{ required_module }}</b>.</div>
+  {% endif %}
+
+  <section class="sub-status" id="subscriptionStatusCard">
+    <div class="sub-status-head">
+      <h2>Состояние подписки</h2>
+      <span class="status-pill" id="subStatus" data-status="{{ subscription.status if subscription else '' }}">
+        {% if subscription %}
+          {% if subscription.status == 'active' %}Активна
+          {% elif subscription.status == 'trial' %}Пробный период
+          {% elif subscription.status == 'pending_payment' %}Ожидает оплату
+          {% elif subscription.status == 'expired' %}Истекла
+          {% elif subscription.status == 'suspended' %}Приостановлена
+          {% elif subscription.status == 'cancelled' %}Отменена
+          {% else %}{{ subscription.status }}{% endif %}
+        {% else %}—{% endif %}
+      </span>
+    </div>
+
+    <div class="sub-status-grid">
+      <div class="sub-status-item"><small>Активна до</small><b id="subEnd">{{ subscription.period_end.strftime("%d.%m.%Y %H:%M") if subscription and subscription.period_end else "—" }}</b></div>
+      <div class="sub-status-item"><small>Следующая оплата</small><b id="subNext">{{ subscription.next_payment_at.strftime("%d.%m.%Y %H:%M") if subscription and subscription.next_payment_at else "—" }}</b></div>
+      <div class="sub-status-item"><small>Текущий период</small><b>{{ "Год" if subscription and subscription.billing_period == "year" else "Месяц" }}</b></div>
+      <div class="sub-status-item"><small>Сумма тарифа</small><b id="subAmount">{{ "{:,.0f}".format(subscription.total_price or 0).replace(",", " ") if subscription else "0" }} ₸</b></div>
+    </div>
+
+    <div class="payments-box">
+      <div class="payments-head"><h3>История оплат</h3><span>Последние операции</span></div>
+      <table class="payments-table">
+        <thead><tr><th>Дата</th><th>Сумма</th><th>Провайдер</th><th>Заказ</th><th>Статус</th></tr></thead>
+        <tbody id="subscriptionPayments"><tr><td colspan="5">Загружаем…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <form method="post" action="{{ url_for('subscriptions.subscription_update') }}" class="subscription-layout" id="subscriptionForm">
+    <div class="module-wrap">
+      <div class="module-section-title">
+        <h2>Модули</h2>
+        <span>Можно изменить в любое время</span>
+      </div>
+      <div class="module-grid">
+        {% for module in modules %}
+        <label class="module-card {% if required_module == module.code %}required{% endif %}">
+          <div class="module-top">
+            <div class="module-name">{{ module.name }}</div>
+            <input type="checkbox" name="modules" value="{{ module.code }}" data-price="{{ module.monthly_price }}"
+              {% if module.selected or module.is_core %}checked{% endif %}
+              {% if module.is_core %}disabled{% endif %}>
+          </div>
+          {% if module.is_core %}<input type="hidden" name="modules" value="{{ module.code }}">{% endif %}
+          <div class="module-desc">{{ module.description }}</div>
+          <div class="module-price">{{ '{:,.0f}'.format(module.monthly_price|float).replace(',', ' ') }} ₸ / месяц</div>
+          {% if module.is_core %}<span class="module-core">Входит в базу</span>{% endif %}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <aside class="summary">
+      <h2>Ваш тариф</h2>
+      <div class="summary-sub">Итог рассчитывается автоматически</div>
+      <div class="summary-row"><span>Базовая платформа</span><b>{{ '{:,.0f}'.format(base_price|float).replace(',', ' ') }} ₸</b></div>
+      <div class="summary-row"><span>Сотрудники ({{ employee_count }})</span><b>{{ '{:,.0f}'.format(employee_total|float).replace(',', ' ') }} ₸</b></div>
+      <div class="summary-row"><span>Выбранные модули</span><b id="modulesTotal">0 ₸</b></div>
+
+      <div class="period-switch">
+        <label><input type="radio" name="billing_period" value="month" {% if not subscription or subscription.billing_period != 'year' %}checked{% endif %}>Ежемесячно</label>
+        <label><input type="radio" name="billing_period" value="year" {% if subscription and subscription.billing_period == 'year' %}checked{% endif %}>За год</label>
+      </div>
+
+      <div class="summary-total-label">К оплате</div>
+      <div class="summary-total" id="grandTotal">0 ₸</div>
+      <div id="annualHint"></div>
+      <button class="save-btn" type="submit">Сохранить и перейти к оплате</button>
+      <div class="summary-note">После успешной оплаты доступ активируется автоматически.</div>
+    </aside>
+  </form>
+</div>
+
 <script>
-(function(){const base={{ base_price|float }};const employees={{ employee_total|float }};const checks=[...document.querySelectorAll('input[name="modules"][data-price]')];const periods=[...document.querySelectorAll('input[name="billing_period"]')];const fmt=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(n)+' ₸';function recalc(){const modules=checks.filter(c=>c.checked).reduce((s,c)=>s+Number(c.dataset.price||0),0);const yearly=document.querySelector('input[name="billing_period"]:checked').value==='year';const monthly=base+employees+modules;document.getElementById('modulesTotal').textContent=fmt(modules);document.getElementById('grandTotal').textContent=fmt(yearly?monthly*10:monthly)+(yearly?' / год':' / месяц');document.getElementById('annualHint').textContent=yearly?'2 месяца в подарок. Обычная цена: '+fmt(monthly*12):'';}checks.forEach(c=>c.addEventListener('change',recalc));periods.forEach(c=>c.addEventListener('change',recalc));recalc();})();
+(function(){
+  const base={{ base_price|float }};
+  const employees={{ employee_total|float }};
+  const checks=[...document.querySelectorAll('input[name="modules"][data-price]')];
+  const periods=[...document.querySelectorAll('input[name="billing_period"]')];
+  const fmt=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(n)+' ₸';
+
+  function recalc(){
+    const modules=checks.filter(c=>c.checked).reduce((s,c)=>s+Number(c.dataset.price||0),0);
+    const selected=document.querySelector('input[name="billing_period"]:checked');
+    const yearly=selected && selected.value==='year';
+    const monthly=base+employees+modules;
+    document.getElementById('modulesTotal').textContent=fmt(modules);
+    document.getElementById('grandTotal').textContent=fmt(yearly?monthly*10:monthly)+(yearly?' / год':' / месяц');
+    document.getElementById('annualHint').textContent=yearly?'2 месяца в подарок · обычная цена '+fmt(monthly*12):'';
+  }
+  checks.forEach(c=>c.addEventListener('change',recalc));
+  periods.forEach(c=>c.addEventListener('change',recalc));
+  recalc();
+})();
 </script>
 
 <script>
 (function(){
-  function dt(v){ if(!v) return '—'; try{return new Date(v).toLocaleString('ru-RU')}catch(e){return v} }
+  const labels={
+    active:'Активна',trial:'Пробный период',pending_payment:'Ожидает оплату',
+    expired:'Истекла',suspended:'Приостановлена',cancelled:'Отменена'
+  };
+  const payLabels={paid:'Оплачено',created:'Создан',pending:'В обработке',failed:'Ошибка',token_error:'Ошибка подключения',cancelled:'Отменён',refunded:'Возврат'};
+  function dt(v){if(!v)return '—';try{return new Date(v).toLocaleString('ru-RU')}catch(e){return v}}
   function money(v){return Number(v||0).toLocaleString('ru-RU',{maximumFractionDigits:0})+' ₸'}
+  function safe(v){return String(v==null?'—':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+
   fetch('/subscription/payment/reconcile',{method:'POST',headers:{'Accept':'application/json'}})
-    .then(r=>r.json()).then(data=>{
+    .then(r=>r.json())
+    .then(data=>{
       if(!data || !data.ok) return;
       const sub=data.subscription||{};
-      document.getElementById('subStatus').textContent=sub.status||'—';
+      const status=document.getElementById('subStatus');
+      status.textContent=labels[sub.status]||sub.status||'—';
+      status.dataset.status=sub.status||'';
       document.getElementById('subEnd').textContent=dt(sub.period_end);
       document.getElementById('subNext').textContent=dt(sub.next_payment_at);
       document.getElementById('subAmount').textContent=money(sub.total_price);
+
       const body=document.getElementById('subscriptionPayments');
-      if(!data.payments || !data.payments.length){body.innerHTML='<tr><td colspan="5">Оплат ещё нет.</td></tr>';return;}
-      body.innerHTML=data.payments.map(p=>'<tr><td>'+dt(p.paid_at||p.created_at)+'</td><td><b>'+money(p.amount)+'</b></td><td>'+(p.provider||'—')+'</td><td>'+(p.provider_invoice_id||'—')+'</td><td><b>'+p.status+'</b></td></tr>').join('');
-      const successfulInvoiceCandidate = (data.payments||[]).find(p=>String(p.provider_invoice_id||'')==='467678');
-      if(successfulInvoiceCandidate){
-        fetch('/subscription/payment/debug/'+encodeURIComponent(successfulInvoiceCandidate.provider_invoice_id))
-          .then(r=>r.json()).then(d=>{
-            const box=document.getElementById('halykDebug');
-            if(!box) return;
-            box.style.display='block';
-            if(d.ok && d.halyk){
-              const tx=(d.halyk.transaction||{});
-              box.textContent='Диагностика Halyk №467678\nresultCode: '+(d.halyk.resultCode??'—')+
-                '\nresultMessage: '+(d.halyk.resultMessage??'—')+
-                '\nstatusName: '+(tx.statusName??'—')+
-                '\nreasonCode: '+(tx.reasonCode??'—')+
-                '\nreason: '+(tx.reason??'—')+
-                '\ntransactionId: '+(tx.id??'—');
-            }else{
-              box.textContent='Диагностика Halyk №467678\n'+(d.error||'Ошибка')+'\n'+(d.message||'');
-            }
-          }).catch(()=>{});
+      if(!data.payments || !data.payments.length){
+        body.innerHTML='<tr><td colspan="5">Оплат ещё нет.</td></tr>';
+        return;
       }
-    }).catch(()=>{});
+      body.innerHTML=data.payments.map(p=>{
+        const cls=safe(p.status||'');
+        return '<tr>'+
+          '<td>'+safe(dt(p.paid_at||p.created_at))+'</td>'+
+          '<td><b>'+safe(money(p.amount))+'</b></td>'+
+          '<td>'+safe(p.provider==='halyk_epay'?'Halyk ePay':(p.provider||'—'))+'</td>'+
+          '<td>№ '+safe(p.provider_invoice_id||'—')+'</td>'+
+          '<td><span class="payment-status '+cls+'">'+safe(payLabels[p.status]||p.status||'—')+'</span></td>'+
+        '</tr>';
+      }).join('');
+    })
+    .catch(()=>{});
 })();
 </script>
-
 {% endblock %}
