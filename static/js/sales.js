@@ -78,7 +78,8 @@ function isVariableQuantityUnit(unit) {
         "кг", "килограмм", "килограммы",
         "г", "гр", "грамм", "граммы",
         "литр", "л", "литры",
-        "мл", "миллилитр", "миллилитры"
+        "мл", "миллилитр", "миллилитры",
+        "час", "ч", "часа", "часов"
     ].includes(normalizeUnit(unit));
 }
 
@@ -104,17 +105,19 @@ function openQuantityModal(item) {
     document.getElementById("quantityUnitLabel").textContent = item.unit;
 
     const wholeOnly = ["г", "гр", "грамм", "граммы", "мл", "миллилитр", "миллилитры"].includes(unit);
-    input.step = wholeOnly ? "1" : "0.001";
-    input.min = wholeOnly ? "1" : "0.001";
+    const isHour = ["час", "ч", "часа", "часов"].includes(unit);
+
+    input.step = wholeOnly ? "1" : (isHour ? String(1 / 60) : "0.001");
+    input.min = wholeOnly ? "1" : (isHour ? String(1 / 60) : "0.001");
     input.value = wholeOnly ? "100" : "1";
 
     const values = wholeOnly
         ? [50, 100, 250, 500, 1000]
-        : [0.1, 0.25, 0.5, 1, 2];
+        : (isHour ? [0.25, 0.5, 1, 1.5, 2] : [0.1, 0.25, 0.5, 1, 2]);
 
     quick.innerHTML = values.map(value => `
         <button type="button" onclick="setQuantityValue(${value})">
-            ${String(value).replace('.', ',')} ${item.unit}
+            ${isHour ? formatHourQuantity(value) : String(value).replace('.', ',') + ' ' + item.unit}
         </button>
     `).join("");
 
@@ -130,6 +133,16 @@ function openQuantityModal(item) {
 function closeQuantityModal() {
     document.getElementById("quantityModal").style.display = "none";
     pendingQuantityItem = null;
+}
+
+function formatHourQuantity(value) {
+    const totalMinutes = Math.round(Number(value || 0) * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours && minutes) return `${hours} ч ${minutes} мин`;
+    if (hours) return `${hours} ч`;
+    return `${minutes} мин`;
 }
 
 function setQuantityValue(value) {
