@@ -25,6 +25,7 @@
       <thead><tr><th>Дата</th><th>Сумма</th><th>Провайдер</th><th>Заказ</th><th>Статус</th></tr></thead>
       <tbody id="subscriptionPayments"><tr><td colspan="5">Проверяем статусы в Halyk…</td></tr></tbody>
     </table>
+    <div id="halykDebug" style="display:none;margin-top:12px;padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;white-space:pre-wrap;word-break:break-word"></div>
   </div>
 </div>
 <form method="post" action="{{ url_for('subscriptions.subscription_update') }}" class="subscription-layout" id="subscriptionForm">
@@ -71,6 +72,26 @@
       const body=document.getElementById('subscriptionPayments');
       if(!data.payments || !data.payments.length){body.innerHTML='<tr><td colspan="5">Оплат ещё нет.</td></tr>';return;}
       body.innerHTML=data.payments.map(p=>'<tr><td>'+dt(p.paid_at||p.created_at)+'</td><td><b>'+money(p.amount)+'</b></td><td>'+(p.provider||'—')+'</td><td>'+(p.provider_invoice_id||'—')+'</td><td><b>'+p.status+'</b></td></tr>').join('');
+      const successfulInvoiceCandidate = (data.payments||[]).find(p=>String(p.provider_invoice_id||'')==='467678');
+      if(successfulInvoiceCandidate){
+        fetch('/subscription/payment/debug/'+encodeURIComponent(successfulInvoiceCandidate.provider_invoice_id))
+          .then(r=>r.json()).then(d=>{
+            const box=document.getElementById('halykDebug');
+            if(!box) return;
+            box.style.display='block';
+            if(d.ok && d.halyk){
+              const tx=(d.halyk.transaction||{});
+              box.textContent='Диагностика Halyk №467678\nresultCode: '+(d.halyk.resultCode??'—')+
+                '\nresultMessage: '+(d.halyk.resultMessage??'—')+
+                '\nstatusName: '+(tx.statusName??'—')+
+                '\nreasonCode: '+(tx.reasonCode??'—')+
+                '\nreason: '+(tx.reason??'—')+
+                '\ntransactionId: '+(tx.id??'—');
+            }else{
+              box.textContent='Диагностика Halyk №467678\n'+(d.error||'Ошибка')+'\n'+(d.message||'');
+            }
+          }).catch(()=>{});
+      }
     }).catch(()=>{});
 })();
 </script>
