@@ -874,7 +874,6 @@ def init_db():
         ('catalog', 'Каталог', 'Товары, категории, цены, штрихкоды и единицы измерения.', 'Торговля', 790, '/items', '/static/icons/items.png', False, 50),
         ('storefront', 'Онлайн-витрина', 'Публичная витрина, онлайн-заказы и запись на услуги.', 'Онлайн-продажи', 1490, '/storefront', '/static/icons/storefront.png', False, 55),
         ('tasks', 'Задачи', 'Задачи, сроки и контроль исполнения.', 'Управление', 490, '/tasks', '/static/icons/tasks.png', False, 60),
-        ('cto', 'ККМ и ЦТО', 'Кассовые аппараты и обслуживание ЦТО.', 'Интеграции', 1490, '/cto', '/static/icons/cto.png', False, 70),
         ('accounting', 'Бухгалтерия', 'Налоги, платежи и бухгалтерский контроль.', 'Финансы', 1990, '/accounting', '/static/icons/buh.png', False, 80),
         ('reports', 'Отчёты', 'Формы 910, 200 и управленческие отчёты.', 'Финансы', 1490, '/reports', '/static/icons/otchet.png', False, 90),
         ('expenses', 'Расходы', 'Учет расходов и движения денежных средств.', 'Финансы', 990, '/expenses', '/static/icons/rashod.png', False, 100),
@@ -902,6 +901,18 @@ def init_db():
                 sort_order = EXCLUDED.sort_order,
                 is_active = TRUE
         """, module)
+
+    # Модуль ККМ/ЦТО больше не является отдельным платным модулем.
+    # Сохраняем запись для совместимости со старыми данными, но скрываем
+    # его из подписок и отключаем у компаний.
+    cur.execute("UPDATE modules SET is_active = FALSE WHERE code = 'cto'")
+    cur.execute("""
+        UPDATE company_modules
+        SET enabled = FALSE,
+            status = 'disabled',
+            updated_at = NOW()
+        WHERE module_id = (SELECT id FROM modules WHERE code = 'cto')
+    """)
 
     cur.execute("""
         INSERT INTO company_subscriptions (
