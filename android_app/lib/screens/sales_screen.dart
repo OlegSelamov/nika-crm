@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 
 import '../services/api_service.dart';
 import '../services/kaspi_pos_service.dart';
+import '../services/nika_assistant_controller.dart';
 import '../services/sales_voice_bridge.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
@@ -83,6 +84,7 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> selectClient() async {
+    NikaAssistantController.instance.setOverlaySuppressed(true);
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -90,6 +92,7 @@ class _SalesScreenState extends State<SalesScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => const _ClientPickerSheet(),
     );
+    NikaAssistantController.instance.setOverlaySuppressed(false);
     if (result != null && mounted) {
       setState(() {
         clientTouched = true;
@@ -99,6 +102,7 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> showManualAddDialog() async {
+    NikaAssistantController.instance.setOverlaySuppressed(true);
     final item = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -106,6 +110,7 @@ class _SalesScreenState extends State<SalesScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => const _ItemPickerSheet(),
     );
+    NikaAssistantController.instance.setOverlaySuppressed(false);
     if (item != null) await addToCart(item);
   }
 
@@ -189,6 +194,7 @@ class _SalesScreenState extends State<SalesScreen> {
     bool isHour = false,
   }) async {
     final controller = TextEditingController(text: '1');
+    NikaAssistantController.instance.setOverlaySuppressed(true);
     final result = await showModalBottomSheet<double>(
       context: context,
       isScrollControlled: true,
@@ -275,6 +281,7 @@ class _SalesScreenState extends State<SalesScreen> {
         },
       ),
     );
+    NikaAssistantController.instance.setOverlaySuppressed(false);
     controller.dispose();
     return result;
   }
@@ -727,6 +734,7 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Future<void> showPaymentSheet() async {
     if (cart.isEmpty || paying) return;
+    NikaAssistantController.instance.setOverlaySuppressed(true);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -797,6 +805,7 @@ class _SalesScreenState extends State<SalesScreen> {
         },
       ),
     );
+    NikaAssistantController.instance.setOverlaySuppressed(false);
   }
 
   Future<bool> paySale() async {
@@ -883,6 +892,7 @@ class _SalesScreenState extends State<SalesScreen> {
         clientTouched = false;
         selectedClient = Map<String, dynamic>.from(defaultClient);
       });
+      NikaAssistantController.instance.setOverlaySuppressed(true);
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
@@ -894,6 +904,7 @@ class _SalesScreenState extends State<SalesScreen> {
           fileName: 'schet_na_oplatu_$saleId.pdf',
         ),
       );
+      NikaAssistantController.instance.setOverlaySuppressed(false);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
     } finally {
@@ -1047,7 +1058,51 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
     );
 
-    return LayoutBuilder(
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFF8F7FF),
+            Color(0xFFF1F7FF),
+            Color(0xFFF8FBFF),
+          ],
+          stops: [0.0, 0.48, 1.0],
+        ),
+      ),
+      child: Stack(children: [
+        Positioned(
+          top: -80,
+          right: -70,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0x337257FF), Color(0x007257FF)],
+                ),
+              ),
+              child: SizedBox(width: 250, height: 250),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 120,
+          left: -110,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0x2525B9E8), Color(0x0025B9E8)],
+                ),
+              ),
+              child: SizedBox(width: 280, height: 280),
+            ),
+          ),
+        ),
+        LayoutBuilder(
       builder: (_, constraints) {
         final tablet = constraints.maxWidth >= AppBreakpoints.tablet;
         if (!tablet) {
@@ -1087,6 +1142,8 @@ class _SalesScreenState extends State<SalesScreen> {
           ]),
         );
       },
+    ),
+      ]),
     );
   }
 }
