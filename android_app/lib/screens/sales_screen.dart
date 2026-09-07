@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:file_saver/file_saver.dart';
+import 'package:printing/printing.dart';
 
 import '../services/api_service.dart';
 import '../services/kaspi_pos_service.dart';
@@ -8,6 +11,7 @@ import '../services/sales_voice_bridge.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import 'check_screen.dart';
+import 'add_client_screen.dart';
 import 'scanner_screen.dart';
 import 'web_module_screen.dart';
 
@@ -185,11 +189,14 @@ class _SalesScreenState extends State<SalesScreen> {
     bool isHour = false,
   }) async {
     final controller = TextEditingController(text: '1');
-    final result = await showDialog<double>(
+    final result = await showModalBottomSheet<double>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          double value() => double.tryParse(controller.text.replaceAll(',', '.')) ?? 0;
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          double current() => double.tryParse(controller.text.replaceAll(',', '.')) ?? 0;
           String hourLabel(double hours) {
             final totalMinutes = (hours * 60).round();
             final h = totalMinutes ~/ 60;
@@ -198,58 +205,72 @@ class _SalesScreenState extends State<SalesScreen> {
             if (h > 0) return '$h ч';
             return '$m мин';
           }
-          return AlertDialog(
-            title: Text('${item['name']}'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          final unit = '${item['unit'] ?? ''}'.trim();
+          final price = asDouble(item['price']);
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+              ),
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(width: 44, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
+                const SizedBox(height: 16),
+                Row(children: [
+                  itemThumb(item, size: 56),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${item['name']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 4),
+                    Text('${money(price)} / $unit', style: const TextStyle(color: AppColors.muted)),
+                  ])),
+                  IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+                ]),
+                const SizedBox(height: 18),
                 TextField(
                   controller: controller,
-                  autofocus: true,
+                  autofocus: false,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: label,
-                    helperText: isHour && value() > 0 ? hourLabel(value()) : null,
+                    helperText: isHour && current() > 0 ? hourLabel(current()) : null,
+                    helperStyle: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
                   ),
-                  onChanged: (_) => setDialogState(() {}),
+                  onChanged: (_) => setSheetState(() {}),
                 ),
                 if (isHour) ...[
                   const SizedBox(height: 12),
                   Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: [0.25, 0.5, 1.0, 1.5, 2.0].map((hours) {
-                      final text = hours == 0.25
-                          ? '15 мин'
-                          : hours == 0.5
-                              ? '30 мин'
-                              : hours == 1
-                                  ? '1 ч'
-                                  : hours == 1.5
-                                      ? '1 ч 30 мин'
-                                      : '2 ч';
-                      return ActionChip(
-                        label: Text(text),
-                        onPressed: () {
-                          controller.text = hours.toString();
-                          setDialogState(() {});
-                        },
-                      );
-                    }).toList(),
+                    spacing: 7, runSpacing: 7,
+                    alignment: WrapAlignment.center,
+                    children: [0.25, 0.5, 1.0, 1.5, 2.0].map((hours) => ChoiceChip(
+                      label: Text(hourLabel(hours)),
+                      selected: (current() - hours).abs() < .001,
+                      onSelected: (_) { controller.text = hours.toString(); setSheetState(() {}); },
+                    )).toList(),
                   ),
                 ],
-              ],
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Сумма', style: TextStyle(fontWeight: FontWeight.w700)),
+                    Text(money(price * current()), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.primary)),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(width: double.infinity, height: 52, child: FilledButton(
+                  onPressed: current() > 0 ? () => Navigator.pop(sheetContext, current()) : null,
+                  child: const Text('Добавить в корзину'),
+                )),
+              ]),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Отмена')),
-              FilledButton(
-                onPressed: () {
-                  final parsed = double.tryParse(controller.text.replaceAll(',', '.'));
-                  if (parsed != null && parsed > 0) Navigator.pop(dialogContext, parsed);
-                },
-                child: const Text('Добавить'),
-              ),
-            ],
           );
         },
       ),
@@ -862,10 +883,15 @@ class _SalesScreenState extends State<SalesScreen> {
         clientTouched = false;
         selectedClient = Map<String, dynamic>.from(defaultClient);
       });
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WebModuleScreen(title: 'Счёт на оплату', path: '/docs/invoice/$saleId'),
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _SalesDocumentSheet(
+          title: 'Счёт на оплату',
+          pdfPath: '/api/mobile/accounting/pdf/invoice/$saleId',
+          fileName: 'schet_na_oplatu_$saleId.pdf',
         ),
       );
     } catch (e) {
@@ -1173,7 +1199,35 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
     child: Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: TextField(controller: search, onChanged: onSearch, autofocus: true, decoration: const InputDecoration(hintText: 'Имя, компания, телефон или ИИН', prefixIcon: Icon(Icons.search_rounded))),
+        child: Row(children: [
+          Expanded(child: TextField(
+            controller: search,
+            onChanged: onSearch,
+            autofocus: false,
+            decoration: const InputDecoration(hintText: 'Имя, компания, телефон или ИИН', prefixIcon: Icon(Icons.search_rounded)),
+          )),
+          const SizedBox(width: 8),
+          _PickerActionButton(
+            icon: Icons.qr_code_scanner_rounded,
+            tooltip: 'Сканировать ИИН',
+            onTap: () async {
+              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen()));
+              if (result == null || !context.mounted) return;
+              search.text = result.toString();
+              onSearch(search.text);
+            },
+          ),
+          const SizedBox(width: 8),
+          _PickerActionButton(
+            icon: Icons.person_add_alt_1_rounded,
+            tooltip: 'Добавить клиента',
+            primary: true,
+            onTap: () async {
+              final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddClientScreen()));
+              if (changed == true && context.mounted) load(reset: true);
+            },
+          ),
+        ]),
       ),
       Expanded(
         child: loading
@@ -1204,6 +1258,118 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                             },
                           ),
       ),
+    ]),
+  );
+}
+
+class _PickerActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool primary;
+  const _PickerActionButton({required this.icon, required this.tooltip, required this.onTap, this.primary = false});
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        width: 50, height: 50,
+        decoration: BoxDecoration(
+          color: primary ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: primary ? AppColors.primary : AppColors.border),
+          boxShadow: primary ? [BoxShadow(color: AppColors.primary.withOpacity(.18), blurRadius: 14, offset: const Offset(0, 5))] : null,
+        ),
+        child: Icon(icon, color: primary ? Colors.white : AppColors.primary),
+      ),
+    ),
+  );
+}
+
+class _SalesDocumentSheet extends StatefulWidget {
+  final String title;
+  final String pdfPath;
+  final String fileName;
+  const _SalesDocumentSheet({required this.title, required this.pdfPath, required this.fileName});
+
+  @override
+  State<_SalesDocumentSheet> createState() => _SalesDocumentSheetState();
+}
+
+class _SalesDocumentSheetState extends State<_SalesDocumentSheet> {
+  late Future<Uint8List> pdfFuture;
+  bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    pdfFuture = ApiService.downloadPdf(widget.pdfPath);
+  }
+
+  Future<void> run(Future<void> Function(Uint8List) action) async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      await action(await pdfFuture);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> save(Uint8List bytes) async {
+    final name = widget.fileName.toLowerCase().endsWith('.pdf')
+        ? widget.fileName.substring(0, widget.fileName.length - 4)
+        : widget.fileName;
+    await FileSaver.instance.saveAs(name: name, bytes: bytes, fileExtension: 'pdf', mimeType: MimeType.pdf);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PDF сохранён')));
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: MediaQuery.sizeOf(context).height * .94,
+    decoration: const BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+    child: Column(children: [
+      const SizedBox(height: 10),
+      Container(width: 42, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(18, 10, 8, 6),
+        child: Row(children: [
+          Expanded(child: Text(widget.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
+          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+        ]),
+      ),
+      Expanded(child: FutureBuilder<Uint8List>(
+        future: pdfFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError || !snapshot.hasData) {
+            return ScreenStateView(icon: Icons.picture_as_pdf_outlined, title: 'PDF не открылся', message: readableError(snapshot.error ?? 'Ошибка'));
+          }
+          final bytes = snapshot.data!;
+          return Column(children: [
+            SizedBox(height: 58, child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.fromLTRB(14, 5, 14, 7), children: [
+              FilledButton.icon(onPressed: busy ? null : () => run((b) async => Printing.layoutPdf(onLayout: (_) async => b)), icon: const Icon(Icons.print_outlined), label: const Text('Печать')),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(onPressed: busy ? null : () => run((b) => Printing.sharePdf(bytes: b, filename: widget.fileName)), icon: const Icon(Icons.ios_share_rounded), label: const Text('Поделиться')),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(onPressed: busy ? null : () => run(save), icon: const Icon(Icons.download_rounded), label: const Text('Сохранить')),
+            ])),
+            Expanded(child: PdfPreview(
+              build: (_) async => bytes,
+              allowPrinting: false,
+              allowSharing: false,
+              canChangePageFormat: false,
+              canChangeOrientation: false,
+              canDebug: false,
+            )),
+          ]);
+        },
+      )),
     ]),
   );
 }
