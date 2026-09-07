@@ -173,6 +173,7 @@ class _SalesScreenState extends State<SalesScreen> {
           'gtin': item['gtin'],
           'ntin': item['ntin'],
           'excise_stamp': item['excise_stamp'],
+          'image': item['image'] ?? item['image_url'] ?? '',
         });
       }
     });
@@ -681,6 +682,102 @@ class _SalesScreenState extends State<SalesScreen> {
     pendingVoicePaymentTotal = null;
   }
 
+  String itemImageUrl(Map<String, dynamic> item) {
+    final raw = '${item['image'] ?? item['image_url'] ?? ''}'.trim();
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    return '${ApiService.baseUrl}${raw.startsWith('/') ? raw : '/$raw'}';
+  }
+
+  Widget itemThumb(Map<String, dynamic> item, {double size = 48}) {
+    final url = itemImageUrl(item);
+    final service = item['item_type'] == 'service';
+    Widget fallback() => Container(
+      width: size, height: size,
+      decoration: BoxDecoration(color: (service ? AppColors.cyan : AppColors.primary).withOpacity(.1), borderRadius: BorderRadius.circular(13)),
+      child: Icon(service ? Icons.design_services_outlined : Icons.inventory_2_outlined, color: service ? AppColors.cyan : AppColors.primary),
+    );
+    if (url.isEmpty) return fallback();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(13),
+      child: Image.network(url, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback()),
+    );
+  }
+
+  Future<void> showPaymentSheet() async {
+    if (cart.isEmpty || paying) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          Widget methodTile(String value, String label, IconData icon, Color color) {
+            final selected = paymentMethod == value;
+            return Expanded(
+              child: InkWell(
+                onTap: () { setState(() => paymentMethod = value); setSheetState(() {}); },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+                  decoration: BoxDecoration(
+                    color: selected ? color.withOpacity(.10) : AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: selected ? color : AppColors.border, width: selected ? 1.8 : 1),
+                  ),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(icon, color: color),
+                    const SizedBox(height: 6),
+                    Text(label, textAlign: TextAlign.center, style: TextStyle(fontWeight: selected ? FontWeight.w900 : FontWeight.w700, fontSize: 12)),
+                  ]),
+                ),
+              ),
+            );
+          }
+          return Container(
+            decoration: const BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 42, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
+              const SizedBox(height: 12),
+              Row(children: [
+                const Expanded(child: Text('Оплата', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
+                IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+              ]),
+              Card(child: ListTile(
+                leading: const CircleAvatar(backgroundColor: AppColors.primarySoft, child: Icon(Icons.person_outline_rounded, color: AppColors.primary)),
+                title: Text(clientName(selectedClient), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+                subtitle: Text('${cart.length} поз.'),
+                trailing: Text(money(total), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              )),
+              const SizedBox(height: 10),
+              Row(children: [
+                methodTile('cash', 'Наличные', Icons.payments_outlined, Colors.green),
+                const SizedBox(width: 7),
+                methodTile('card', 'Карта', Icons.credit_card_rounded, Colors.blue),
+                const SizedBox(width: 7),
+                methodTile('kaspi', 'Kaspi POS', Icons.point_of_sale_rounded, Colors.red),
+              ]),
+              const SizedBox(height: 12),
+              SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(
+                onPressed: () { Navigator.pop(sheetContext); paySale(); },
+                icon: const Icon(Icons.check_circle_outline_rounded),
+                label: Text('Провести · ${money(total)}'),
+              )),
+              const SizedBox(height: 8),
+              SizedBox(width: double.infinity, height: 48, child: OutlinedButton.icon(
+                onPressed: () { Navigator.pop(sheetContext); createInvoiceSale(); },
+                icon: const Icon(Icons.description_outlined),
+                label: const Text('Безнал · Выставить счёт'),
+              )),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
   Future<bool> paySale() async {
     if (cart.isEmpty || paying) return false;
     lastPaymentError = null;
@@ -864,7 +961,7 @@ class _SalesScreenState extends State<SalesScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(14),
                         child: Row(children: [
-                          Container(width: 46, height: 46, decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(14)), child: Icon(item['item_type'] == 'service' ? Icons.design_services_outlined : Icons.inventory_2_outlined, color: AppColors.primary)),
+                          itemThumb(item, size: 46),
                           const SizedBox(width: 12),
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text('${item['name']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -887,50 +984,32 @@ class _SalesScreenState extends State<SalesScreen> {
                 },
               );
     final checkout = Material(
-        color: AppColors.surface,
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Row(children: [
-                const Text('Итого', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                const Spacer(),
+      color: AppColors.surface,
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          child: Row(children: [
+            Expanded(child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${cart.length} поз. · Итого', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                const SizedBox(height: 2),
                 Text(money(total), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-              ]),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: ChoiceChip(label: const Text('Наличные'), selected: paymentMethod == 'cash', onSelected: (_) => setState(() => paymentMethod = 'cash'))),
-                const SizedBox(width: 7),
-                Expanded(child: ChoiceChip(label: const Text('Карта'), selected: paymentMethod == 'card', onSelected: (_) => setState(() => paymentMethod = 'card'))),
-                const SizedBox(width: 7),
-                Expanded(child: ChoiceChip(label: const Text('Kaspi POS'), selected: paymentMethod == 'kaspi', onSelected: (_) => setState(() => paymentMethod = 'kaspi'))),
-              ]),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: cart.isEmpty || paying ? null : paySale,
-                      child: paying
-                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Оплатить'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: cart.isEmpty || paying ? null : createInvoiceSale,
-                      icon: const Icon(Icons.description_outlined, size: 18),
-                      label: const Text('Безнал'),
-                    ),
-                  ),
-                ],
-              ),
-            ]),
-          ),
+              ],
+            )),
+            const SizedBox(width: 12),
+            SizedBox(height: 50, child: ElevatedButton.icon(
+              onPressed: cart.isEmpty || paying ? null : showPaymentSheet,
+              icon: const Icon(Icons.arrow_forward_rounded),
+              label: const Text('К оплате'),
+            )),
+          ]),
         ),
-      );
+      ),
+    );
 
     return LayoutBuilder(
       builder: (_, constraints) {
@@ -1226,7 +1305,7 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 child: ListTile(
-                                  leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: (service ? AppColors.cyan : AppColors.primary).withOpacity(.1), borderRadius: BorderRadius.circular(13)), child: Icon(service ? Icons.design_services_outlined : Icons.inventory_2_outlined, color: service ? AppColors.cyan : AppColors.primary)),
+                                  leading: _CatalogThumb(item: item, service: service),
                                   title: Text('${item['name'] ?? 'Без названия'}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
                                   subtitle: Text(service ? 'Услуга' : 'Остаток: ${item['quantity'] ?? 0} ${item['unit'] ?? 'шт'}'),
                                   trailing: Text(money(item['retail_price']), style: const TextStyle(fontWeight: FontWeight.w900)),
@@ -1238,6 +1317,25 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
       ),
     ]),
   );
+}
+
+class _CatalogThumb extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final bool service;
+  const _CatalogThumb({required this.item, required this.service});
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = '${item['image'] ?? item['image_url'] ?? ''}'.trim();
+    final url = raw.isEmpty ? '' : (raw.startsWith('http://') || raw.startsWith('https://') ? raw : '${ApiService.baseUrl}${raw.startsWith('/') ? raw : '/$raw'}');
+    Widget fallback() => Container(
+      width: 48, height: 48,
+      decoration: BoxDecoration(color: (service ? AppColors.cyan : AppColors.primary).withOpacity(.1), borderRadius: BorderRadius.circular(13)),
+      child: Icon(service ? Icons.design_services_outlined : Icons.inventory_2_outlined, color: service ? AppColors.cyan : AppColors.primary),
+    );
+    if (url.isEmpty) return fallback();
+    return ClipRRect(borderRadius: BorderRadius.circular(13), child: Image.network(url, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback()));
+  }
 }
 
 class _SheetFrame extends StatelessWidget {
