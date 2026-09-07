@@ -50,6 +50,7 @@ from routes.cto import cto_bp
 from routes.accounting import accounting_bp
 from routes.rekassa import rekassa_bp
 from routes.subscriptions import subscriptions_bp
+from routes.subscription_status import subscription_status_bp
 from subscriptions import load_subscription_context
 from routes.communications import communications_bp
 from routes.admin import admin_bp
@@ -91,6 +92,7 @@ app.register_blueprint(cto_bp)
 app.register_blueprint(accounting_bp)
 app.register_blueprint(rekassa_bp)
 app.register_blueprint(subscriptions_bp)
+app.register_blueprint(subscription_status_bp)
 app.register_blueprint(communications_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(onboarding_bp)
