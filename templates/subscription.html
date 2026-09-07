@@ -25,11 +25,12 @@
 .payments-box{margin-top:16px;padding-top:16px;border-top:1px solid #eef2f7}
 .payments-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
 .payments-head h3{margin:0;font-size:15px;color:#0f172a}
-.payments-head span{font-size:11px;color:#94a3b8}
-.payments-table{width:100%;border-collapse:collapse}
-.payments-table th,.payments-table td{padding:10px 8px;text-align:left;border-bottom:1px solid #eef2f7;font-size:12px}
-.payments-table th{color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
-.payment-status{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#f1f5f9;color:#475569}
+.payments-toggle{border:0;background:#f1f5f9;color:#475569;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.payments-list{display:grid;gap:8px;max-width:100%;overflow:hidden}
+.payments-list[hidden]{display:none}
+.payment-card{display:grid;grid-template-columns:minmax(135px,1.2fr) minmax(90px,.7fr) minmax(100px,.8fr) minmax(80px,.65fr) auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid #eef2f7;border-radius:13px;background:#fff;min-width:0}
+.payment-cell{min-width:0;font-size:12px;color:#475569;overflow-wrap:anywhere}.payment-cell b{color:#0f172a}.payment-label{display:none;color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.payment-status{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#f1f5f9;color:#475569;white-space:nowrap}
 .payment-status.paid{background:#ecfdf5;color:#047857}.payment-status.failed,.payment-status.token_error{background:#fef2f2;color:#b91c1c}.payment-status.created,.payment-status.pending{background:#fff7ed;color:#c2410c}
 
 .subscription-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px;align-items:start}
@@ -77,10 +78,11 @@
   .subscription-page{padding:0 0 18px}.sub-hero{margin-bottom:14px;padding:0 2px}.sub-hero h1{font-size:28px}.sub-hero p{font-size:13px}
   .sub-status{padding:14px;border-radius:20px}.sub-status-head{align-items:flex-start}.sub-status-grid{grid-template-columns:1fr 1fr;gap:8px}
   .sub-status-item{padding:11px}.sub-status-item b{font-size:13px}
-  .payments-box{margin-top:14px}.payments-table thead{display:none}.payments-table,.payments-table tbody,.payments-table tr,.payments-table td{display:block;width:100%}
-  .payments-table tr{position:relative;padding:10px 82px 10px 0;border-bottom:1px solid #eef2f7}.payments-table td{padding:2px 0;border:0;font-size:11px}
-  .payments-table td:nth-child(1){font-weight:700;color:#0f172a}.payments-table td:nth-child(2){font-size:13px;font-weight:900}.payments-table td:nth-child(3),.payments-table td:nth-child(4){color:#64748b}
-  .payments-table td:nth-child(5){position:absolute;right:0;top:12px}
+  .payments-box{margin-top:14px;min-width:0;max-width:100%}.payments-head{margin-bottom:10px}
+  .payments-list{gap:8px;width:100%;max-width:100%}.payment-card{grid-template-columns:1fr auto;gap:7px 10px;padding:11px;width:100%;max-width:100%;box-sizing:border-box}
+  .payment-cell{font-size:11px;max-width:100%}.payment-cell.amount{font-size:14px;font-weight:900}.payment-cell.status{grid-column:2;grid-row:1;align-self:start}
+  .payment-cell.date{grid-column:1;grid-row:1}.payment-cell.provider{grid-column:1;grid-row:3}.payment-cell.invoice{grid-column:2;grid-row:3;text-align:right}
+  .payment-label{display:block}.payments-toggle{padding:7px 9px}
   .module-section-title{align-items:flex-end}.module-section-title h2{font-size:18px}
   .module-grid{grid-template-columns:1fr 1fr;gap:9px}
   .module-card{min-height:150px;padding:13px;border-radius:17px}.module-name{font-size:14px}.module-desc{font-size:11px;margin:7px 0 12px}.module-price{font-size:13px}
@@ -132,11 +134,13 @@
     </div>
 
     <div class="payments-box">
-      <div class="payments-head"><h3>История оплат</h3><span>Последние операции</span></div>
-      <table class="payments-table">
-        <thead><tr><th>Дата</th><th>Сумма</th><th>Провайдер</th><th>Заказ</th><th>Статус</th></tr></thead>
-        <tbody id="subscriptionPayments"><tr><td colspan="5">Загружаем…</td></tr></tbody>
-      </table>
+      <div class="payments-head">
+        <h3>История оплат</h3>
+        <button class="payments-toggle" id="paymentsToggle" type="button" aria-expanded="false">Показать историю</button>
+      </div>
+      <div class="payments-list" id="subscriptionPayments" hidden>
+        <div class="payment-card"><div class="payment-cell">Загружаем…</div></div>
+      </div>
     </div>
   </section>
 
@@ -233,21 +237,35 @@
 
       const body=document.getElementById('subscriptionPayments');
       if(!data.payments || !data.payments.length){
-        body.innerHTML='<tr><td colspan="5">Оплат ещё нет.</td></tr>';
+        body.innerHTML='<div class="payment-card"><div class="payment-cell">Оплат ещё нет.</div></div>';
         return;
       }
       body.innerHTML=data.payments.map(p=>{
         const cls=safe(p.status||'');
-        return '<tr>'+
-          '<td>'+safe(dt(p.paid_at||p.created_at))+'</td>'+
-          '<td><b>'+safe(money(p.amount))+'</b></td>'+
-          '<td>'+safe(p.provider==='halyk_epay'?'Halyk ePay':(p.provider||'—'))+'</td>'+
-          '<td>№ '+safe(p.provider_invoice_id||'—')+'</td>'+
-          '<td><span class="payment-status '+cls+'">'+safe(payLabels[p.status]||p.status||'—')+'</span></td>'+
-        '</tr>';
+        return '<div class="payment-card">'+
+          '<div class="payment-cell date"><span class="payment-label">Дата</span><b>'+safe(dt(p.paid_at||p.created_at))+'</b></div>'+
+          '<div class="payment-cell amount"><span class="payment-label">Сумма</span><b>'+safe(money(p.amount))+'</b></div>'+
+          '<div class="payment-cell provider"><span class="payment-label">Провайдер</span>'+safe(p.provider==='halyk_epay'?'Halyk ePay':(p.provider||'—'))+'</div>'+
+          '<div class="payment-cell invoice"><span class="payment-label">Заказ</span>№ '+safe(p.provider_invoice_id||'—')+'</div>'+
+          '<div class="payment-cell status"><span class="payment-status '+cls+'">'+safe(payLabels[p.status]||p.status||'—')+'</span></div>'+
+        '</div>';
       }).join('');
     })
     .catch(()=>{});
+})();
+</script>
+
+<script>
+(function(){
+  const btn=document.getElementById('paymentsToggle');
+  const list=document.getElementById('subscriptionPayments');
+  if(!btn || !list) return;
+  btn.addEventListener('click',function(){
+    const opening=list.hasAttribute('hidden');
+    if(opening) list.removeAttribute('hidden'); else list.setAttribute('hidden','');
+    btn.setAttribute('aria-expanded',opening?'true':'false');
+    btn.textContent=opening?'Скрыть историю':'Показать историю';
+  });
 })();
 </script>
 {% endblock %}
