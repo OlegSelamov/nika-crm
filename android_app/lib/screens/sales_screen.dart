@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import 'check_screen.dart';
 import 'scanner_screen.dart';
+import 'web_module_screen.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
@@ -139,12 +140,19 @@ class _SalesScreenState extends State<SalesScreen> {
     item['price'] = asDouble(item['price'] ?? item['retail_price']);
     item['qty'] = asDouble(item['qty'] ?? 1);
     final unit = '${item['unit'] ?? ''}'.toLowerCase();
+    final measuredUnit = <String>{
+      'кг', 'килограмм', 'килограммы', 'г', 'гр', 'грамм', 'граммы',
+      'л', 'литр', 'литры', 'мл', 'миллилитр', 'миллилитры',
+      'час', 'ч', 'часа', 'часов',
+    }.contains(unit);
     if (requestMeasuredQuantity &&
-        (unit == 'кг' ||
-            unit == 'л' ||
-            item['type'] == 'weight' ||
-            item['type'] == 'liter')) {
-      final quantity = await _quantityDialog(item, unit == 'л' ? 'Количество (л)' : 'Вес (кг)');
+        (measuredUnit || item['type'] == 'weight' || item['type'] == 'liter')) {
+      final isHour = <String>{'час', 'ч', 'часа', 'часов'}.contains(unit);
+      final quantity = await _quantityDialog(
+        item,
+        isHour ? 'Время (часы, например 1,5)' : 'Количество (${item['unit'] ?? unit})',
+        isHour: isHour,
+      );
       if (quantity == null) return;
       item['qty'] = quantity;
     }
@@ -170,28 +178,67 @@ class _SalesScreenState extends State<SalesScreen> {
     });
   }
 
-  Future<double?> _quantityDialog(Map<String, dynamic> item, String label) async {
+  Future<double?> _quantityDialog(
+    Map<String, dynamic> item,
+    String label, {
+    bool isHour = false,
+  }) async {
     final controller = TextEditingController(text: '1');
     final result = await showDialog<double>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('${item['name']}'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: label),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-          FilledButton(
-            onPressed: () {
-              final value = double.tryParse(controller.text.replaceAll(',', '.'));
-              if (value != null && value > 0) Navigator.pop(context, value);
-            },
-            child: const Text('Добавить'),
-          ),
-        ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          double value() => double.tryParse(controller.text.replaceAll(',', '.')) ?? 0;
+          String hourLabel(double hours) {
+            final totalMinutes = (hours * 60).round();
+            final h = totalMinutes ~/ 60;
+            final m = totalMinutes % 60;
+            if (h > 0 && m > 0) return '$h ч $m мин';
+            if (h > 0) return '$h ч';
+            return '$m мин';
+          }
+          return AlertDialog(
+            title: Text('${item['name']}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: label,
+                    helperText: isHour && value() > 0 ? hourLabel(value()) : null,
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+                if (isHour) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: const [0.25, 0.5, 1.0, 1.5, 2.0].map((hours) {
+                      return ActionChip(
+                        label: Text(hours == 0.25 ? '15 мин' : hours == 0.5 ? '30 мин' : hours == 1 ? '1 ч' : hours == 1.5 ? '1 ч 30 мин' : '2 ч'),
+                        onPressed: null,
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Отмена')),
+              FilledButton(
+                onPressed: () {
+                  final parsed = double.tryParse(controller.text.replaceAll(',', '.'));
+                  if (parsed != null && parsed > 0) Navigator.pop(dialogContext, parsed);
+                },
+                child: const Text('Добавить'),
+              ),
+            ],
+          );
+        },
       ),
     );
     controller.dispose();
@@ -683,14 +730,56 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
+  Future<void> createInvoiceSale() async {
+    if (cart.isEmpty || paying) return;
+    if (selectedClient['id'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Для счёта на оплату выберите клиента')),
+      );
+      return;
+    }
+    setState(() => paying = true);
+    try {
+      final result = await ApiService.createInvoiceSale(
+        cart: cart,
+        clientId: selectedClient['id'] as int?,
+      );
+      if (result['success'] != true) throw ApiException('${result['error'] ?? 'Не удалось выставить счёт'}');
+      final saleId = int.tryParse('${result['sale_id']}');
+      if (saleId == null) throw const ApiException('Сервер не вернул номер счёта');
+      if (!mounted) return;
+      setState(() {
+        cart.clear();
+        clientTouched = false;
+        selectedClient = Map<String, dynamic>.from(defaultClient);
+      });
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WebModuleScreen(title: 'Счёт на оплату', path: '/docs/invoice/$saleId'),
+        ),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
+    } finally {
+      if (mounted) setState(() => paying = false);
+    }
+  }
+
   void changeQuantity(int index, double delta) {
     setState(() {
       _clearPendingVoicePayment();
-      final next = asDouble(cart[index]['qty']) + delta;
+      final unit = '${cart[index]['unit'] ?? 'шт'}'.trim().toLowerCase();
+      final step = <String>{'час', 'ч', 'часа', 'часов'}.contains(unit)
+          ? 0.25
+          : <String>{'кг', 'килограмм', 'килограммы', 'л', 'литр', 'литры'}.contains(unit)
+              ? 0.1
+              : 1.0;
+      final next = asDouble(cart[index]['qty']) + (delta * step);
       if (next <= 0) {
         cart.removeAt(index);
       } else {
-        cart[index]['qty'] = next;
+        cart[index]['qty'] = double.parse(next.toStringAsFixed(3));
       }
     });
   }
@@ -806,14 +895,25 @@ class _SalesScreenState extends State<SalesScreen> {
                 Expanded(child: ChoiceChip(label: const Text('Kaspi POS'), selected: paymentMethod == 'kaspi', onSelected: (_) => setState(() => paymentMethod = 'kaspi'))),
               ]),
               const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: cart.isEmpty || paying ? null : paySale,
-                  child: paying
-                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Оплатить'),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: cart.isEmpty || paying ? null : paySale,
+                      child: paying
+                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Оплатить'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: cart.isEmpty || paying ? null : createInvoiceSale,
+                      icon: const Icon(Icons.description_outlined, size: 18),
+                      label: const Text('Безнал'),
+                    ),
+                  ),
+                ],
               ),
             ]),
           ),
