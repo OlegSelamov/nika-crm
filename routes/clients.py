@@ -24,6 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 from models import get_db, pool
 from utils.timezone import now_kz
+from services.media import upload_image
 
 
 UPLOAD_DIR = os.path.join("static", "uploads", "clients")
@@ -56,17 +57,16 @@ def _save_uploaded_file(file_storage, folder, with_microseconds=False):
     if not file_storage or not file_storage.filename:
         return ""
 
-    safe_name = secure_filename(file_storage.filename)
-    if not safe_name:
-        return ""
-
-    date_format = "%Y%m%d%H%M%S%f" if with_microseconds else "%Y%m%d%H%M%S"
-    filename = f"{now_kz().strftime(date_format)}_{safe_name}"
-    save_path = os.path.join(folder, filename)
-    file_storage.save(save_path)
-
-    return "/" + save_path.replace("\\", "/")
-
+    namespace = (
+        "clients/comments"
+        if os.path.normpath(folder) == os.path.normpath(COMMENT_UPLOAD_DIR)
+        else "clients/photos"
+    )
+    return upload_image(
+        file_storage,
+        company_id=_company_id(),
+        namespace=namespace,
+    ) or ""
 
 def _serialize_value(value):
     if isinstance(value, (datetime,)):

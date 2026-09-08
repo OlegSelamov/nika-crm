@@ -13,8 +13,9 @@ from werkzeug.utils import secure_filename
 
 ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 MAX_UPLOAD_BYTES = int(os.getenv("MEDIA_MAX_UPLOAD_MB", "15")) * 1024 * 1024
-MAX_IMAGE_SIDE = int(os.getenv("MEDIA_MAX_IMAGE_SIDE", "1800"))
-WEBP_QUALITY = int(os.getenv("MEDIA_WEBP_QUALITY", "84"))
+MAX_IMAGE_SIDE = int(os.getenv("MEDIA_MAX_IMAGE_SIDE", "1600"))
+WEBP_QUALITY = int(os.getenv("MEDIA_WEBP_QUALITY", "82"))
+_R2_CLIENT = None
 
 
 def _backend():
@@ -39,14 +40,23 @@ def _r2_ready():
 
 
 def _r2_client():
-    return boto3.client(
-        "s3",
-        endpoint_url=os.environ["R2_ENDPOINT_URL"],
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        region_name="auto",
-        config=Config(signature_version="s3v4"),
-    )
+    global _R2_CLIENT
+    if _R2_CLIENT is None:
+        _R2_CLIENT = boto3.client(
+            "s3",
+            endpoint_url=os.environ["R2_ENDPOINT_URL"],
+            aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+            region_name="auto",
+            config=Config(
+                signature_version="s3v4",
+                connect_timeout=2,
+                read_timeout=8,
+                max_pool_connections=20,
+                retries={"max_attempts": 1, "mode": "standard"},
+            ),
+        )
+    return _R2_CLIENT
 
 
 def _normalized_image(file_storage):
@@ -58,16 +68,23 @@ def _normalized_image(file_storage):
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         raise ValueError("Разрешены только JPG, JPEG, PNG и WEBP.")
 
-    file_storage.stream.seek(0, os.SEEK_END)
-    size = file_storage.stream.tell()
     file_storage.stream.seek(0)
-    if size > MAX_UPLOAD_BYTES:
+    raw = file_storage.stream.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
         raise ValueError(
             f"Изображение слишком большое. Максимум {MAX_UPLOAD_BYTES // 1024 // 1024} МБ."
         )
 
     try:
-        image = Image.open(file_storage.stream)
+        image = Image.open(io.BytesIO(raw))
+
+        if (
+            (image.format or "").upper() == "WEBP"
+            and image.width <= MAX_IMAGE_SIDE
+            and image.height <= MAX_IMAGE_SIDE
+        ):
+            return raw, "image/webp", "webp"
+
         image = ImageOps.exif_transpose(image)
         image.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE), Image.Resampling.LANCZOS)
 
@@ -79,14 +96,11 @@ def _normalized_image(file_storage):
             output,
             format="WEBP",
             quality=WEBP_QUALITY,
-            method=6,
-            optimize=True,
+            method=2,
         )
-        output.seek(0)
         return output.getvalue(), "image/webp", "webp"
     except Exception as exc:
         raise ValueError("Файл не удалось обработать как изображение.") from exc
-
 
 def _key(company_id, namespace, ext="webp", name=None):
     safe_namespace = "/".join(
