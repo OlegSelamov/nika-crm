@@ -115,10 +115,191 @@ async function runClientIdentifierLookup(input, context) {
     }, 450);
 }
 
+
+let clientMediaExisting = [];
+let clientMediaNewFiles = [];
+let clientMediaRemovedUrls = new Set();
+let clientMediaMain = { type: null, value: null };
+
+function resetClientMedia() {
+    clientMediaExisting = [];
+    clientMediaNewFiles = [];
+    clientMediaRemovedUrls = new Set();
+    clientMediaMain = { type: null, value: null };
+
+    const input = document.getElementById('clientImagesInput');
+    if (input) {
+        try { input.value = ''; } catch (_) {}
+    }
+    syncClientMediaHidden();
+    renderClientMedia();
+}
+
+function syncClientMediaInput() {
+    const input = document.getElementById('clientImagesInput');
+    if (!input || typeof DataTransfer === 'undefined') return;
+    const dt = new DataTransfer();
+    clientMediaNewFiles.forEach(file => dt.items.add(file));
+    input.files = dt.files;
+}
+
+function activeClientExistingMedia() {
+    return clientMediaExisting.filter(row => !clientMediaRemovedUrls.has(row.url));
+}
+
+function ensureClientMediaMain() {
+    const existing = activeClientExistingMedia();
+
+    if (clientMediaMain.type === 'existing') {
+        if (existing.some(row => row.url === clientMediaMain.value)) return;
+    }
+    if (clientMediaMain.type === 'new') {
+        const index = Number(clientMediaMain.value);
+        if (index >= 0 && index < clientMediaNewFiles.length) return;
+    }
+
+    if (existing.length) clientMediaMain = { type: 'existing', value: existing[0].url };
+    else if (clientMediaNewFiles.length) clientMediaMain = { type: 'new', value: 0 };
+    else clientMediaMain = { type: null, value: null };
+}
+
+function syncClientMediaHidden() {
+    const removed = document.getElementById('clientRemoveUrls');
+    const existing = document.getElementById('clientMainExistingUrl');
+    const fresh = document.getElementById('clientMainNewIndex');
+
+    if (removed) removed.value = JSON.stringify(Array.from(clientMediaRemovedUrls));
+    if (existing) existing.value = clientMediaMain.type === 'existing' ? clientMediaMain.value : '';
+    if (fresh) fresh.value = clientMediaMain.type === 'new' ? String(clientMediaMain.value) : '';
+}
+
+function renderClientMedia() {
+    const grid = document.getElementById('clientMediaGrid');
+    if (!grid) return;
+
+    ensureClientMediaMain();
+    syncClientMediaHidden();
+
+    const cards = [];
+
+    activeClientExistingMedia().forEach(row => {
+        const isMain = clientMediaMain.type === 'existing' && clientMediaMain.value === row.url;
+        cards.push(
+            '<article class="client-media-card ' + (isMain ? 'is-main' : '') + '">' +
+                (isMain ? '<span class="client-media-badge">Главное</span>' : '') +
+                '<img src="' + escapeHtml(row.url) + '" alt="Фото клиента">' +
+                '<div class="client-media-card__actions">' +
+                    '<button type="button" class="client-media-main" onclick="setClientMediaMainExisting(' + JSON.stringify(row.url) + ')">' +
+                        (isMain ? 'Главное' : 'На главную') +
+                    '</button>' +
+                    '<button type="button" class="client-media-remove" onclick="removeClientMediaExisting(' + JSON.stringify(row.url) + ')">Удалить</button>' +
+                '</div>' +
+            '</article>'
+        );
+    });
+
+    clientMediaNewFiles.forEach((file, index) => {
+        const isMain = clientMediaMain.type === 'new' && Number(clientMediaMain.value) === index;
+        const url = URL.createObjectURL(file);
+        cards.push(
+            '<article class="client-media-card ' + (isMain ? 'is-main' : '') + '">' +
+                '<span class="client-media-badge">' + (isMain ? 'Главное' : 'Новое') + '</span>' +
+                '<img src="' + url + '" alt="Новое фото" onload="URL.revokeObjectURL(this.src)">' +
+                '<div class="client-media-card__actions">' +
+                    '<button type="button" class="client-media-main" onclick="setClientMediaMainNew(' + index + ')">' +
+                        (isMain ? 'Главное' : 'На главную') +
+                    '</button>' +
+                    '<button type="button" class="client-media-remove" onclick="removeClientMediaNew(' + index + ')">Удалить</button>' +
+                '</div>' +
+            '</article>'
+        );
+    });
+
+    grid.innerHTML = cards.length
+        ? cards.join('')
+        : '<div class="client-media-empty">Фотографий пока нет</div>';
+}
+
+function setClientMediaMainExisting(url) {
+    clientMediaMain = { type: 'existing', value: url };
+    renderClientMedia();
+}
+
+function setClientMediaMainNew(index) {
+    clientMediaMain = { type: 'new', value: Number(index) };
+    renderClientMedia();
+}
+
+function removeClientMediaExisting(url) {
+    clientMediaRemovedUrls.add(url);
+    ensureClientMediaMain();
+    renderClientMedia();
+}
+
+function removeClientMediaNew(index) {
+    clientMediaNewFiles.splice(Number(index), 1);
+    if (clientMediaMain.type === 'new') {
+        const current = Number(clientMediaMain.value);
+        if (current === Number(index)) clientMediaMain = { type: null, value: null };
+        else if (current > Number(index)) clientMediaMain.value = current - 1;
+    }
+    syncClientMediaInput();
+    ensureClientMediaMain();
+    renderClientMedia();
+}
+
+async function loadClientMedia(clientId) {
+    resetClientMedia();
+    if (!clientId) return;
+
+    const grid = document.getElementById('clientMediaGrid');
+    if (grid) grid.innerHTML = '<div class="client-media-empty">Загружаем фотографии…</div>';
+
+    try {
+        const response = await fetch('/api/client/' + encodeURIComponent(clientId), {
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.client) throw new Error(data.message || 'Не удалось загрузить фотографии');
+
+        const client = data.client || {};
+        const comments = String(client.comment_photos || '').split('|').filter(Boolean);
+        clientMediaExisting = [];
+        if (client.photo) clientMediaExisting.push({ url: client.photo, is_main: true });
+        comments.forEach(url => {
+            if (url && url !== client.photo) clientMediaExisting.push({ url, is_main: false });
+        });
+
+        if (client.photo) clientMediaMain = { type: 'existing', value: client.photo };
+        renderClientMedia();
+    } catch (error) {
+        if (grid) grid.innerHTML = '<div class="client-media-empty">' + escapeHtml(error.message || 'Не удалось загрузить фотографии') + '</div>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('clientImagesInput');
+    if (!input || input.dataset.clientGalleryBound === '1') return;
+    input.dataset.clientGalleryBound = '1';
+
+    input.addEventListener('nika:media-ready', event => {
+        const files = event.detail && Array.isArray(event.detail.files)
+            ? event.detail.files
+            : Array.from(input.files || []);
+        if (!files.length) return;
+
+        clientMediaNewFiles = clientMediaNewFiles.concat(files);
+        syncClientMediaInput();
+        ensureClientMediaMain();
+        renderClientMedia();
+    });
+});
+
 function openClientModal(record = null) {
     const modal = document.getElementById('clientModal');
     const form = document.getElementById('clientForm');
     form.reset();
+    resetClientMedia();
     setClientLookupStatus('form');
 
     if (record) {
@@ -139,6 +320,7 @@ function openClientModal(record = null) {
         form.elements.category.value = d.category || 'Клиент';
         form.elements.payment.value = d.payment || 'Не оплачено';
         form.elements.comment.value = d.comment || '';
+        loadClientMedia(d.id);
     } else {
         form.action = '/clients/add';
         document.getElementById('clientModalTitle').textContent = 'Новый клиент';

@@ -488,6 +488,7 @@ function setServiceSaleMode(mode){
 function openAddItemModal() {
     var form = document.getElementById('itemForm');
     form.reset();
+    resetItemMedia();
     form.action = '/items/add';
     document.getElementById('itemModalTitle').textContent = 'Новая позиция';
     document.getElementById('itemUnit').value = 'шт';
@@ -727,6 +728,7 @@ function openEditItemModal(item) {
     selectItemCategory(item.category_id, item.category);
     priceCalculationSource = 'purchase';
     syncCategoryName(true);
+    loadItemMedia(item.id);
 
     openItemModal();
 }

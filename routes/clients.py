@@ -24,7 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 from models import get_db, pool
 from utils.timezone import now_kz
-from services.media import upload_image
+from services.media import upload_image, delete_media
 
 
 UPLOAD_DIR = os.path.join("static", "uploads", "clients")
@@ -381,17 +381,47 @@ def add_client():
     if not full_name:
         return jsonify({"status": "error", "message": "Укажите имя клиента"}), 400
 
-    photo_path = _save_uploaded_file(request.files.get("photo"), UPLOAD_DIR)
+    gallery_files = [
+        file_storage
+        for file_storage in request.files.getlist("client_images")
+        if file_storage and file_storage.filename
+    ]
 
-    comment_photo_paths = []
-    for file_storage in request.files.getlist("comment_photos"):
-        path = _save_uploaded_file(
-            file_storage,
-            COMMENT_UPLOAD_DIR,
-            with_microseconds=True,
-        )
-        if path:
-            comment_photo_paths.append(path)
+    if gallery_files:
+        try:
+            main_new_index = int(request.form.get("main_new_index", "0") or 0)
+        except (TypeError, ValueError):
+            main_new_index = 0
+        main_new_index = min(max(main_new_index, 0), len(gallery_files) - 1)
+
+        uploaded_gallery = []
+        for file_storage in gallery_files:
+            path = _save_uploaded_file(file_storage, COMMENT_UPLOAD_DIR, with_microseconds=True)
+            if path:
+                uploaded_gallery.append(path)
+
+        if uploaded_gallery:
+            main_new_index = min(main_new_index, len(uploaded_gallery) - 1)
+            photo_path = uploaded_gallery[main_new_index]
+            comment_photo_paths = [
+                path for index, path in enumerate(uploaded_gallery)
+                if index != main_new_index
+            ]
+        else:
+            photo_path = ""
+            comment_photo_paths = []
+    else:
+        # Backward compatibility for older forms / integrations.
+        photo_path = _save_uploaded_file(request.files.get("photo"), UPLOAD_DIR)
+        comment_photo_paths = []
+        for file_storage in request.files.getlist("comment_photos"):
+            path = _save_uploaded_file(
+                file_storage,
+                COMMENT_UPLOAD_DIR,
+                with_microseconds=True,
+            )
+            if path:
+                comment_photo_paths.append(path)
 
     conn = get_db()
     try:
@@ -711,24 +741,51 @@ def edit_client(client_id):
         if not full_name:
             return jsonify({"status": "error", "message": "Укажите имя клиента"}), 400
 
-        photo_path = old_client["photo"] or ""
-        new_photo_path = _save_uploaded_file(request.files.get("photo"), UPLOAD_DIR)
-        if new_photo_path:
-            photo_path = new_photo_path
-
-        old_comment_photos = old_client["comment_photos"] or ""
-        comment_photo_paths = [
-            path for path in old_comment_photos.split("|") if path
+        old_photo = old_client["photo"] or ""
+        old_comment_photos = [
+            path for path in (old_client["comment_photos"] or "").split("|") if path
         ]
+        existing_gallery = ([old_photo] if old_photo else []) + old_comment_photos
 
-        for file_storage in request.files.getlist("comment_photos"):
-            path = _save_uploaded_file(
-                file_storage,
-                COMMENT_UPLOAD_DIR,
-                with_microseconds=True,
-            )
+        try:
+            removed_urls = set(json.loads(request.form.get("remove_client_urls") or "[]"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            removed_urls = set()
+
+        remaining_gallery = [url for url in existing_gallery if url not in removed_urls]
+
+        gallery_files = [
+            file_storage
+            for file_storage in request.files.getlist("client_images")
+            if file_storage and file_storage.filename
+        ]
+        uploaded_gallery = []
+        for file_storage in gallery_files:
+            path = _save_uploaded_file(file_storage, COMMENT_UPLOAD_DIR, with_microseconds=True)
             if path:
-                comment_photo_paths.append(path)
+                uploaded_gallery.append(path)
+
+        main_existing_url = (request.form.get("main_existing_url") or "").strip()
+        try:
+            main_new_index = int(request.form.get("main_new_index", "") or -1)
+        except (TypeError, ValueError):
+            main_new_index = -1
+
+        combined_gallery = remaining_gallery + uploaded_gallery
+        photo_path = ""
+
+        if main_existing_url and main_existing_url in remaining_gallery:
+            photo_path = main_existing_url
+        elif 0 <= main_new_index < len(uploaded_gallery):
+            photo_path = uploaded_gallery[main_new_index]
+        elif combined_gallery:
+            photo_path = combined_gallery[0]
+
+        comment_photo_paths = [url for url in combined_gallery if url != photo_path]
+
+        for url in removed_urls:
+            if url in existing_gallery:
+                delete_media(url)
 
         cur.execute(
             """

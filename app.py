@@ -71,6 +71,26 @@ app.secret_key = os.getenv("SECRET_KEY", "nika_super_secret_key")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 app.config["APP_MODE"] = APP_MODE
 
+# Lightweight production migration for the item media gallery.
+# Gunicorn does not call init_db(), so this must run during app import too.
+try:
+    _media_schema_conn = get_db()
+    _media_schema_cur = _media_schema_conn.cursor()
+    _media_schema_cur.execute("""
+        ALTER TABLE item_images
+        ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT FALSE
+    """)
+    _media_schema_conn.commit()
+    _media_schema_cur.close()
+    pool.putconn(_media_schema_conn)
+except Exception as _media_schema_error:
+    try:
+        _media_schema_conn.rollback()
+        pool.putconn(_media_schema_conn)
+    except Exception:
+        pass
+    print("ITEM MEDIA SCHEMA MIGRATION ERROR:", _media_schema_error)
+
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(tasks_bp)

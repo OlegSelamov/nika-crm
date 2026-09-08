@@ -290,8 +290,22 @@
             <label><span>Статус</span><select name="status"><option>Новый</option><option>В работе</option><option>Ожидание</option><option>Завершен</option></select></label>
             <label><span>Категория</span><select name="category"><option>Клиент</option><option>Предприниматель</option><option>Партнер</option><option>Другое</option></select></label>
             <label><span>Оплата</span><select name="payment"><option>Наличные</option><option>Безнал</option><option>Kaspi QR</option><option selected>Не оплачено</option></select></label>
-            <label><span>Основное фото</span><input type="file" name="photo" accept="image/*"></label>
-            <label class="client-field-wide"><span>Фото к комментарию</span><input type="file" name="comment_photos" accept="image/*" multiple></label>
+            <div class="client-field-full client-media-field">
+                <div class="client-media-head">
+                    <div>
+                        <b>Фотографии клиента</b>
+                        <small>Можно добавить несколько фото, выбрать главное и убрать лишние до сохранения.</small>
+                    </div>
+                    <button class="client-media-add" type="button" onclick="document.getElementById('clientImagesInput').click()">+ Добавить фото</button>
+                </div>
+                <input id="clientImagesInput" type="file" name="client_images" accept="image/*" multiple data-nika-media-custom="1" hidden>
+                <input id="clientRemoveUrls" type="hidden" name="remove_client_urls">
+                <input id="clientMainExistingUrl" type="hidden" name="main_existing_url">
+                <input id="clientMainNewIndex" type="hidden" name="main_new_index" value="0">
+                <div class="client-media-grid" id="clientMediaGrid">
+                    <div class="client-media-empty">Фотографий пока нет</div>
+                </div>
+            </div>
             <label class="client-field-full"><span>Комментарий</span><textarea name="comment" placeholder="Комментарий о клиенте"></textarea></label>
             <div class="client-modal-actions client-field-full"><button class="clients-btn clients-btn--light" type="button" onclick="closeClientModal()">Отмена</button><button class="clients-btn clients-btn--primary" type="submit" id="clientSubmitBtn">Сохранить клиента</button></div>
         </form>
@@ -370,7 +384,7 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{{ url_for('static', filename='js/clients.js') }}"></script>
+<script src="{{ url_for('static', filename='js/clients.js') }}?v=20260908-2"></script>
 {% endblock %}
 
 

@@ -44,7 +44,8 @@ def init_db():
     CREATE TABLE IF NOT EXISTS item_images (
         id SERIAL PRIMARY KEY,
         item_id INTEGER,
-        image TEXT
+        image TEXT,
+        is_main BOOLEAN NOT NULL DEFAULT FALSE
     )
     """)
     
@@ -222,6 +223,12 @@ def init_db():
     except:
         conn.rollback()
             
+    try:
+        cur.execute("ALTER TABLE item_images ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT FALSE")
+        conn.commit()
+    except:
+        conn.rollback()
+
     try:
         cur.execute("ALTER TABLE clients ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE")
         conn.commit()    

@@ -60,6 +60,13 @@ def _internal_barcode_for_item(item_id, occupied):
     raise RuntimeError("Не удалось создать уникальный штрихкод")
 
 
+def _ensure_item_images_main(cur):
+    cur.execute("""
+        ALTER TABLE item_images
+        ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT FALSE
+    """)
+
+
 def _item_barcode(cur, value, item_type="product"):
     barcode = str(value or "").strip()
     if barcode or item_type == "service":
@@ -72,12 +79,14 @@ def items():
     conn = get_db()
     
     cur = conn.cursor()
+    _ensure_item_images_main(cur)
     
     cur.execute("""
     SELECT 
         items.*,
         (SELECT image FROM item_images 
-         WHERE item_id = items.id 
+         WHERE item_id = items.id
+         ORDER BY COALESCE(is_main, FALSE) DESC, id
          LIMIT 1) as image
     FROM items
     WHERE items.company_id = %s
@@ -170,6 +179,7 @@ def api_catalog_items():
     cur = conn.cursor()
 
     try:
+        _ensure_item_images_main(cur)
         cur.execute(
             f"SELECT COUNT(*) AS total FROM items WHERE {where_sql}",
             tuple(params),
@@ -181,6 +191,7 @@ def api_catalog_items():
                 items.*,
                 (SELECT image FROM item_images
                  WHERE item_id = items.id
+                 ORDER BY COALESCE(is_main, FALSE) DESC, id
                  LIMIT 1) AS image
             FROM items
             WHERE {where_sql}
@@ -199,6 +210,31 @@ def api_catalog_items():
         "total": total,
         "has_more": offset + len(rows) < total,
     })
+
+
+@items_bp.route("/api/items/<int:item_id>/images")
+def api_item_images(item_id):
+    company_id = session.get("company_id")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_item_images_main(cur)
+        cur.execute(
+            "SELECT id FROM items WHERE id = %s AND company_id = %s",
+            (item_id, company_id),
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "Товар не найден"}), 404
+
+        cur.execute("""
+            SELECT id, image, COALESCE(is_main, FALSE) AS is_main
+            FROM item_images
+            WHERE item_id = %s
+            ORDER BY COALESCE(is_main, FALSE) DESC, id
+        """, (item_id,))
+        return jsonify({"success": True, "images": [dict(row) for row in cur.fetchall()]})
+    finally:
+        pool.putconn(conn)
 
 
 @items_bp.route("/api/items/barcodes/new")
@@ -380,18 +416,25 @@ def add_item():
 
         # Медиа хранится через единый сервис: R2 в production,
         # локальный диск остаётся безопасным fallback до настройки ключей.
-        images = request.files.getlist("images")
-        for image in images:
-            if image and image.filename:
-                image_path = upload_image(
-                    image,
-                    company_id=company_id,
-                    namespace=f"items/{item_id}",
-                )
-                cur.execute("""
-                    INSERT INTO item_images (item_id, image)
-                    VALUES (%s, %s)
-                """, (item_id, image_path))
+        _ensure_item_images_main(cur)
+        images = [image for image in request.files.getlist("images") if image and image.filename]
+        try:
+            main_new_index = int(request.form.get("main_new_index", "0") or 0)
+        except (TypeError, ValueError):
+            main_new_index = 0
+        if images:
+            main_new_index = min(max(main_new_index, 0), len(images) - 1)
+
+        for index, image in enumerate(images):
+            image_path = upload_image(
+                image,
+                company_id=company_id,
+                namespace=f"items/{item_id}",
+            )
+            cur.execute("""
+                INSERT INTO item_images (item_id, image, is_main)
+                VALUES (%s, %s, %s)
+            """, (item_id, image_path, index == main_new_index))
 
         conn.commit()
 
@@ -464,37 +507,89 @@ def edit_item(item_id):
             session.get("company_id")
         ))
         
-        # Новые изображения атомарно заменяют старые записи.
-        images = request.files.getlist("images")
-        new_images = [image for image in images if image and image.filename]
+        _ensure_item_images_main(cur)
 
-        if new_images:
-            cur.execute("SELECT image FROM item_images WHERE item_id=%s", (item_id,))
-            old_images = cur.fetchall()
+        cur.execute("""
+            SELECT id, image, COALESCE(is_main, FALSE) AS is_main
+            FROM item_images
+            WHERE item_id = %s
+            ORDER BY COALESCE(is_main, FALSE) DESC, id
+        """, (item_id,))
+        old_images = [dict(row) for row in cur.fetchall()]
 
-            uploaded = []
-            try:
-                for image in new_images:
-                    uploaded.append(upload_image(
-                        image,
-                        company_id=session.get("company_id"),
-                        namespace=f"items/{item_id}",
-                    ))
-            except Exception:
-                for url in uploaded:
-                    delete_media(url)
-                raise
+        remove_ids = set()
+        for raw_id in (request.form.get("remove_image_ids") or "").split(","):
+            raw_id = raw_id.strip()
+            if raw_id.isdigit():
+                remove_ids.add(int(raw_id))
 
-            cur.execute("DELETE FROM item_images WHERE item_id=%s", (item_id,))
-            for image_path in uploaded:
+        removed_rows = [row for row in old_images if row["id"] in remove_ids]
+        if remove_ids:
+            cur.execute(
+                "DELETE FROM item_images WHERE item_id = %s AND id = ANY(%s)",
+                (item_id, list(remove_ids)),
+            )
+
+        new_images = [image for image in request.files.getlist("images") if image and image.filename]
+        uploaded_rows = []
+        try:
+            for index, image in enumerate(new_images):
+                image_path = upload_image(
+                    image,
+                    company_id=session.get("company_id"),
+                    namespace=f"items/{item_id}",
+                )
                 cur.execute("""
-                    INSERT INTO item_images (item_id, image)
-                    VALUES (%s, %s)
+                    INSERT INTO item_images (item_id, image, is_main)
+                    VALUES (%s, %s, FALSE)
+                    RETURNING id, image
                 """, (item_id, image_path))
+                uploaded_rows.append(dict(cur.fetchone()))
+        except Exception:
+            for row in uploaded_rows:
+                delete_media(row.get("image"))
+            raise
 
-            # Старые файлы удаляем только после успешной загрузки новых.
-            for old_image in old_images:
-                delete_media(old_image.get("image"))
+        main_existing_id = request.form.get("main_existing_id", type=int)
+        main_new_index = request.form.get("main_new_index", type=int)
+
+        cur.execute(
+            "UPDATE item_images SET is_main = FALSE WHERE item_id = %s",
+            (item_id,),
+        )
+
+        selected_main_id = None
+        if main_existing_id and main_existing_id not in remove_ids:
+            cur.execute(
+                "SELECT id FROM item_images WHERE item_id = %s AND id = %s",
+                (item_id, main_existing_id),
+            )
+            if cur.fetchone():
+                selected_main_id = main_existing_id
+
+        if selected_main_id is None and uploaded_rows:
+            if main_new_index is None:
+                main_new_index = 0
+            main_new_index = min(max(main_new_index, 0), len(uploaded_rows) - 1)
+            selected_main_id = uploaded_rows[main_new_index]["id"]
+
+        if selected_main_id is None:
+            cur.execute(
+                "SELECT id FROM item_images WHERE item_id = %s ORDER BY id LIMIT 1",
+                (item_id,),
+            )
+            fallback = cur.fetchone()
+            if fallback:
+                selected_main_id = fallback["id"]
+
+        if selected_main_id is not None:
+            cur.execute(
+                "UPDATE item_images SET is_main = TRUE WHERE item_id = %s AND id = %s",
+                (item_id, selected_main_id),
+            )
+
+        for row in removed_rows:
+            delete_media(row.get("image"))
 
         conn.commit()
         pool.putconn(conn)
@@ -506,6 +601,14 @@ def edit_item(item_id):
     )
 
     item = cur.fetchone()
+    _ensure_item_images_main(cur)
+    cur.execute("""
+        SELECT id, image, COALESCE(is_main, FALSE) AS is_main
+        FROM item_images
+        WHERE item_id = %s
+        ORDER BY COALESCE(is_main, FALSE) DESC, id
+    """, (item_id,))
+    item_images = [dict(row) for row in cur.fetchall()]
 
     conn = get_db()
     
@@ -527,6 +630,7 @@ def edit_item(item_id):
     return render_template(
         "item_form.html",
         item=item,
+        item_images=item_images,
         categories=categories
     )
     

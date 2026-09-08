@@ -96,7 +96,9 @@
   async function optimizeInput(input) {
     if (!input.files || !input.files.length) return;
     const originals = [...input.files];
-    renderPreview(input, originals, 'Подготавливаем фото…');
+    if (input.dataset.nikaMediaCustom !== '1') {
+      renderPreview(input, originals, 'Подготавливаем фото…');
+    }
     input.dataset.nikaMediaOptimizing = '1';
 
     try {
@@ -109,14 +111,24 @@
       const before = originals.reduce((sum, file) => sum + (file.size || 0), 0);
       const after = optimized.reduce((sum, file) => sum + (file.size || 0), 0);
       const saved = before > after ? ' • ' + formatBytes(before - after) + ' сэкономлено' : '';
-      renderPreview(
-        input,
-        optimized,
-        'Фото готово к загрузке • ' + formatBytes(after) + saved,
-        true
-      );
+      if (input.dataset.nikaMediaCustom !== '1') {
+        renderPreview(
+          input,
+          optimized,
+          'Фото готово к загрузке • ' + formatBytes(after) + saved,
+          true
+        );
+      }
+      input.dispatchEvent(new CustomEvent('nika:media-ready', {
+        detail: { files: optimized, originalFiles: originals }
+      }));
     } catch (_) {
-      renderPreview(input, originals, 'Фото готово к загрузке', true);
+      if (input.dataset.nikaMediaCustom !== '1') {
+        renderPreview(input, originals, 'Фото готово к загрузке', true);
+      }
+      input.dispatchEvent(new CustomEvent('nika:media-ready', {
+        detail: { files: originals, originalFiles: originals }
+      }));
     } finally {
       delete input.dataset.nikaMediaOptimizing;
     }

@@ -240,7 +240,7 @@ def _cart_payload(store):
                 (SELECT ii.image
                  FROM item_images ii
                  WHERE ii.item_id=i.id
-                 ORDER BY ii.id LIMIT 1) AS image
+                 ORDER BY COALESCE(ii.is_main, FALSE) DESC, ii.id LIMIT 1) AS image
             FROM items i
             WHERE i.company_id=%s AND i.id=ANY(%s)
         """, (store["company_id"], ids))
@@ -738,7 +738,7 @@ def favorites_data(slug):
     try:
         cur.execute("""
           SELECT i.id,i.name,COALESCE(i.retail_price,i.price,0) AS price,
-            (SELECT image FROM item_images WHERE item_id=i.id ORDER BY id LIMIT 1) AS image
+            (SELECT image FROM item_images WHERE item_id=i.id ORDER BY COALESCE(is_main, FALSE) DESC, id LIMIT 1) AS image
           FROM storefront_favorites f JOIN items i ON i.id=f.item_id
           WHERE f.account_id=%s AND f.company_id=%s ORDER BY f.created_at DESC
         """,(account["id"],store["company_id"]))
@@ -883,7 +883,7 @@ def item_data(slug, item_id):
             SELECT image
             FROM item_images
             WHERE item_id=%s
-            ORDER BY id
+            ORDER BY COALESCE(is_main, FALSE) DESC, id
         """, (item_id,))
         images = [x["image"] for x in cur.fetchall() if x.get("image")]
 
