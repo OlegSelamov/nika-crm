@@ -1029,30 +1029,58 @@ class _SalesScreenState extends State<SalesScreen> {
                 },
               );
     final checkout = Material(
-      color: AppColors.surface,
-      elevation: 8,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 9, 16, 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Итого', style: TextStyle(color: AppColors.muted, fontSize: 12)),
-              const SizedBox(height: 1),
-              Text(money(total), textAlign: TextAlign.center, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 1),
-              Text('${cart.length} ${cart.length == 1 ? 'позиция' : 'позиций'}', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: cart.isEmpty || paying ? null : showPaymentSheet,
-                  child: const Text('К оплате'),
+      color: Colors.transparent,
+      elevation: 10,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFFFFF), Color(0xFFF4F0FF), Color(0xFFF0F7FF)],
+          ),
+          border: Border(top: BorderSide(color: Color(0xFFE8E4F3))),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 11),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('ИТОГО', style: TextStyle(color: AppColors.muted, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                const SizedBox(height: 3),
+                ShaderMask(
+                  blendMode: BlendMode.srcIn,
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [Color(0xFF17213A), Color(0xFF7257FF), Color(0xFF8D62FF)],
+                  ).createShader(bounds),
+                  child: Text(
+                    money(total),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900, letterSpacing: -.8),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  '${cart.length} ${cart.length == 1 ? 'позиция' : 'позиций'}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 9),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: cart.isEmpty || paying ? null : showPaymentSheet,
+                    style: ElevatedButton.styleFrom(
+                      elevation: cart.isEmpty ? 0 : 3,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: const Text('К оплате', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
