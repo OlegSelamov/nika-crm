@@ -485,6 +485,182 @@ function setServiceSaleMode(mode){
     if(el) el.checked=true;
 }
 
+
+var itemMediaExisting = [];
+var itemMediaNewFiles = [];
+var itemMediaRemovedIds = new Set();
+var itemMediaMain = { type: null, value: null };
+
+function resetItemMedia() {
+    itemMediaExisting = [];
+    itemMediaNewFiles = [];
+    itemMediaRemovedIds = new Set();
+    itemMediaMain = { type: null, value: null };
+
+    var input = document.getElementById('itemImagesInput');
+    if (input) {
+        try { input.value = ''; } catch (_) {}
+    }
+    syncItemMediaHidden();
+    renderItemMedia();
+}
+
+function syncItemMediaInput() {
+    var input = document.getElementById('itemImagesInput');
+    if (!input || typeof DataTransfer === 'undefined') return;
+    var dt = new DataTransfer();
+    itemMediaNewFiles.forEach(function(file) { dt.items.add(file); });
+    input.files = dt.files;
+}
+
+function activeExistingImages() {
+    return itemMediaExisting.filter(function(row) {
+        return !itemMediaRemovedIds.has(Number(row.id));
+    });
+}
+
+function ensureItemMediaMain() {
+    var existing = activeExistingImages();
+
+    if (itemMediaMain.type === 'existing') {
+        if (existing.some(function(row) { return Number(row.id) === Number(itemMediaMain.value); })) return;
+    }
+    if (itemMediaMain.type === 'new') {
+        var index = Number(itemMediaMain.value);
+        if (index >= 0 && index < itemMediaNewFiles.length) return;
+    }
+
+    if (existing.length) itemMediaMain = { type: 'existing', value: Number(existing[0].id) };
+    else if (itemMediaNewFiles.length) itemMediaMain = { type: 'new', value: 0 };
+    else itemMediaMain = { type: null, value: null };
+}
+
+function syncItemMediaHidden() {
+    var removed = document.getElementById('itemRemoveImageIds');
+    var existing = document.getElementById('itemMainExistingId');
+    var fresh = document.getElementById('itemMainNewIndex');
+
+    if (removed) removed.value = Array.from(itemMediaRemovedIds).join(',');
+    if (existing) existing.value = itemMediaMain.type === 'existing' ? String(itemMediaMain.value) : '';
+    if (fresh) fresh.value = itemMediaMain.type === 'new' ? String(itemMediaMain.value) : '';
+}
+
+function renderItemMedia() {
+    var grid = document.getElementById('itemMediaGrid');
+    if (!grid) return;
+
+    ensureItemMediaMain();
+    syncItemMediaHidden();
+
+    var cards = [];
+
+    activeExistingImages().forEach(function(row) {
+        var isMain = itemMediaMain.type === 'existing' && Number(itemMediaMain.value) === Number(row.id);
+        cards.push(
+            '<article class="catalog-media-card ' + (isMain ? 'is-main' : '') + '">' +
+                (isMain ? '<span class="catalog-media-badge">Главное</span>' : '') +
+                '<img src="' + escapeCatalogHtml(row.image || '') + '" alt="Фото товара">' +
+                '<div class="catalog-media-card__actions">' +
+                    '<button class="catalog-media-main" type="button" onclick="setItemMediaMainExisting(' + Number(row.id) + ')">' +
+                        (isMain ? 'Главное' : 'На главную') +
+                    '</button>' +
+                    '<button class="catalog-media-remove" type="button" onclick="removeItemMediaExisting(' + Number(row.id) + ')">Удалить</button>' +
+                '</div>' +
+            '</article>'
+        );
+    });
+
+    itemMediaNewFiles.forEach(function(file, index) {
+        var isMain = itemMediaMain.type === 'new' && Number(itemMediaMain.value) === index;
+        var url = URL.createObjectURL(file);
+        cards.push(
+            '<article class="catalog-media-card ' + (isMain ? 'is-main' : '') + '">' +
+                '<span class="catalog-media-badge">' + (isMain ? 'Главное' : 'Новое') + '</span>' +
+                '<img src="' + url + '" alt="Новое фото">' +
+                '<div class="catalog-media-card__actions">' +
+                    '<button class="catalog-media-main" type="button" onclick="setItemMediaMainNew(' + index + ')">' +
+                        (isMain ? 'Главное' : 'На главную') +
+                    '</button>' +
+                    '<button class="catalog-media-remove" type="button" onclick="removeItemMediaNew(' + index + ')">Удалить</button>' +
+                '</div>' +
+            '</article>'
+        );
+    });
+
+    grid.innerHTML = cards.length
+        ? cards.join('')
+        : '<div class="catalog-media-empty">Фотографии пока не добавлены</div>';
+}
+
+function setItemMediaMainExisting(id) {
+    itemMediaMain = { type: 'existing', value: Number(id) };
+    renderItemMedia();
+}
+
+function setItemMediaMainNew(index) {
+    itemMediaMain = { type: 'new', value: Number(index) };
+    renderItemMedia();
+}
+
+function removeItemMediaExisting(id) {
+    itemMediaRemovedIds.add(Number(id));
+    ensureItemMediaMain();
+    renderItemMedia();
+}
+
+function removeItemMediaNew(index) {
+    itemMediaNewFiles.splice(Number(index), 1);
+    if (itemMediaMain.type === 'new') {
+        var current = Number(itemMediaMain.value);
+        if (current === Number(index)) itemMediaMain = { type: null, value: null };
+        else if (current > Number(index)) itemMediaMain.value = current - 1;
+    }
+    syncItemMediaInput();
+    ensureItemMediaMain();
+    renderItemMedia();
+}
+
+async function loadItemMedia(itemId) {
+    resetItemMedia();
+    if (!itemId) return;
+
+    var grid = document.getElementById('itemMediaGrid');
+    if (grid) grid.innerHTML = '<div class="catalog-media-empty">Загружаем фотографии…</div>';
+
+    try {
+        var response = await fetch('/api/items/' + encodeURIComponent(itemId) + '/images', {
+            headers: { 'Accept': 'application/json' }
+        });
+        var data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Не удалось загрузить фотографии');
+
+        itemMediaExisting = Array.isArray(data.images) ? data.images : [];
+        var currentMain = itemMediaExisting.find(function(row) { return Boolean(row.is_main); });
+        if (currentMain) itemMediaMain = { type: 'existing', value: Number(currentMain.id) };
+        renderItemMedia();
+    } catch (error) {
+        if (grid) grid.innerHTML = '<div class="catalog-media-empty">' + escapeCatalogHtml(error.message || 'Не удалось загрузить фотографии') + '</div>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var input = document.getElementById('itemImagesInput');
+    if (!input || input.dataset.itemGalleryBound === '1') return;
+    input.dataset.itemGalleryBound = '1';
+
+    input.addEventListener('nika:media-ready', function (event) {
+        var files = event.detail && Array.isArray(event.detail.files)
+            ? event.detail.files
+            : Array.from(input.files || []);
+        if (!files.length) return;
+
+        itemMediaNewFiles = itemMediaNewFiles.concat(files);
+        syncItemMediaInput();
+        ensureItemMediaMain();
+        renderItemMedia();
+    });
+});
+
 function openAddItemModal() {
     var form = document.getElementById('itemForm');
     form.reset();
