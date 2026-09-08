@@ -7,3 +7,5 @@ num2words
 psycopg2-binary
 pytz
 openpyxl
+boto3
+Pillow

@@ -15,6 +15,7 @@ from decimal import Decimal, InvalidOperation
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
+from services.media import upload_image, delete_media
 
 UPLOAD_DIR = os.path.join(
     "static",
@@ -377,42 +378,20 @@ def add_item():
 
         item_id = cur.fetchone()["id"]
 
-        # 🔥 загрузка картинок
-
+        # Медиа хранится через единый сервис: R2 в production,
+        # локальный диск остаётся безопасным fallback до настройки ключей.
         images = request.files.getlist("images")
-
         for image in images:
-
             if image and image.filename:
-
-                filename = secure_filename(image.filename)
-
-                filename = (
-                    f"{uuid.uuid4().hex}_{filename}"
+                image_path = upload_image(
+                    image,
+                    company_id=company_id,
+                    namespace=f"items/{item_id}",
                 )
-
-                save_path = os.path.join(
-                    UPLOAD_DIR,
-                    filename
-                )
-
-                image.save(save_path)
-
-                image_path = (
-                    "/" + save_path.replace("\\", "/")
-                )
-
                 cur.execute("""
-                    INSERT INTO item_images
-                    (
-                        item_id,
-                        image
-                    )
+                    INSERT INTO item_images (item_id, image)
                     VALUES (%s, %s)
-                """, (
-                    item_id,
-                    image_path
-                ))
+                """, (item_id, image_path))
 
         conn.commit()
 
@@ -485,67 +464,37 @@ def edit_item(item_id):
             session.get("company_id")
         ))
         
-        # Новое изображение при редактировании
+        # Новые изображения атомарно заменяют старые записи.
         images = request.files.getlist("images")
-        new_images = [
-            image for image in images
-            if image and image.filename
-        ]
+        new_images = [image for image in images if image and image.filename]
 
         if new_images:
-            # Получаем старые изображения
-            cur.execute("""
-                SELECT image
-                FROM item_images
-                WHERE item_id = %s
-            """, (item_id,))
-
+            cur.execute("SELECT image FROM item_images WHERE item_id=%s", (item_id,))
             old_images = cur.fetchall()
 
-            # Удаляем старые записи из БД
-            cur.execute("""
-                DELETE FROM item_images
-                WHERE item_id = %s
-            """, (item_id,))
+            uploaded = []
+            try:
+                for image in new_images:
+                    uploaded.append(upload_image(
+                        image,
+                        company_id=session.get("company_id"),
+                        namespace=f"items/{item_id}",
+                    ))
+            except Exception:
+                for url in uploaded:
+                    delete_media(url)
+                raise
 
-            # Удаляем старые файлы
-            for old_image in old_images:
-                old_path = old_image["image"]
-
-                if old_path:
-                    file_path = old_path.lstrip("/")
-
-                    if os.path.exists(file_path):
-                        try:
-                            os.remove(file_path)
-                        except OSError:
-                            pass
-
-            # Сохраняем новое изображение
-            for image in new_images:
-                filename = secure_filename(image.filename)
-
-                filename = f"{uuid.uuid4().hex}_{filename}"
-
-                save_path = os.path.join(
-                    UPLOAD_DIR,
-                    filename
-                )
-
-                image.save(save_path)
-
-                image_path = "/" + save_path.replace("\\", "/")
-
+            cur.execute("DELETE FROM item_images WHERE item_id=%s", (item_id,))
+            for image_path in uploaded:
                 cur.execute("""
-                    INSERT INTO item_images (
-                        item_id,
-                        image
-                    )
+                    INSERT INTO item_images (item_id, image)
                     VALUES (%s, %s)
-                """, (
-                    item_id,
-                    image_path
-                ))
+                """, (item_id, image_path))
+
+            # Старые файлы удаляем только после успешной загрузки новых.
+            for old_image in old_images:
+                delete_media(old_image.get("image"))
 
         conn.commit()
         pool.putconn(conn)

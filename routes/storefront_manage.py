@@ -5,6 +5,7 @@ from flask import Blueprint, render_template, request, redirect, session, flash,
 from werkzeug.utils import secure_filename
 from models import get_db, pool
 from utils.timezone import now_kz
+from services.media import upload_image, delete_media
 
 storefront_manage_bp = Blueprint("storefront_manage", __name__, url_prefix="/storefront")
 
@@ -43,26 +44,12 @@ def _valid_color(value):
 
 
 def _save_storefront_image(file_storage, company_id, kind):
-    if not file_storage or not file_storage.filename:
-        return None
-
-    filename = secure_filename(file_storage.filename)
-    if "." not in filename:
-        return None
-
-    ext = filename.rsplit(".", 1)[1].lower()
-    if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        raise ValueError("Разрешены только PNG, JPG, JPEG и WEBP.")
-
-    folder = Path(current_app.root_path) / "static" / "uploads" / "storefront" / str(company_id)
-    folder.mkdir(parents=True, exist_ok=True)
-
-    final_name = f"{kind}.{ext}"
-    target = folder / final_name
-    file_storage.save(target)
-
-    return f"/static/uploads/storefront/{company_id}/{final_name}"
-
+    return upload_image(
+        file_storage,
+        company_id=company_id,
+        namespace="storefront/branding",
+        name=kind,
+    )
 
 
 def _banner_json(row):
@@ -81,26 +68,11 @@ def _banner_json(row):
 
 
 def _save_banner_image(file_storage, company_id):
-    if not file_storage or not file_storage.filename:
-        return None
-
-    filename = secure_filename(file_storage.filename)
-    if "." not in filename:
-        raise ValueError("У баннера не найдено расширение файла.")
-
-    ext = filename.rsplit(".", 1)[1].lower()
-    if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        raise ValueError("Баннер: разрешены только PNG, JPG, JPEG и WEBP.")
-
-    folder = Path(current_app.root_path) / "static" / "uploads" / "storefront" / str(company_id) / "banners"
-    folder.mkdir(parents=True, exist_ok=True)
-
-    stamp = now_kz().strftime("%Y%m%d%H%M%S%f")
-    final_name = f"banner_{stamp}.{ext}"
-    target = folder / final_name
-    file_storage.save(target)
-
-    return f"/static/uploads/storefront/{company_id}/banners/{final_name}"
+    return upload_image(
+        file_storage,
+        company_id=company_id,
+        namespace="storefront/banners",
+    )
 
 
 @storefront_manage_bp.route("/", methods=["GET", "POST"])
@@ -548,14 +520,7 @@ def banner_delete(banner_id):
         if not row:
             return jsonify({"ok": False, "error": "Баннер не найден."}), 404
 
-        if row.get("image_url"):
-            relative = row["image_url"].lstrip("/")
-            path = Path(current_app.root_path) / relative
-            try:
-                if path.exists():
-                    path.unlink()
-            except Exception:
-                pass
+        delete_media(row.get("image_url"))
 
         return jsonify({"ok": True, "id": banner_id})
     finally:
