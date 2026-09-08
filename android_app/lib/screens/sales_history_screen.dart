@@ -384,93 +384,263 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     ];
   }
 
+  List<Map<String, dynamic>> _saleItems(Map<String, dynamic> sale) {
+    for (final key in const ['items', 'sale_items', 'positions', 'cart']) {
+      final raw = sale[key];
+      if (raw is List) {
+        return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    }
+    return const [];
+  }
+
+  bool _isServiceItem(Map<String, dynamic> item) {
+    final type = '${item['item_type'] ?? item['type'] ?? item['product_type'] ?? ''}'.toLowerCase();
+    return type == 'service' || type.contains('услуг');
+  }
+
+  bool _isRefundSale(Map<String, dynamic> sale) {
+    final raw = '${sale['status'] ?? sale['operation_type'] ?? sale['type'] ?? ''}'.toLowerCase();
+    return sale['is_refunded'] == true || sale['refunded'] == true ||
+        raw.contains('refund') || raw.contains('возврат');
+  }
+
+  List<_SaleDocumentAction> _documentsFor(Map<String, dynamic> sale) {
+    final items = _saleItems(sale);
+    final explicitHasServices = sale['has_services'] == true;
+    final explicitHasProducts = sale['has_products'] == true;
+    final hasServices = explicitHasServices || items.any(_isServiceItem);
+    final hasProducts = explicitHasProducts || items.any((e) => !_isServiceItem(e));
+    final knownComposition = explicitHasServices || explicitHasProducts || items.isNotEmpty;
+    final invoice = '${sale['sale_type'] ?? sale['payment_method'] ?? ''}'.toLowerCase() == 'invoice' ||
+        sale['invoice_number'] != null;
+    final refunded = _isRefundSale(sale);
+
+    final docs = <_SaleDocumentAction>[];
+    if (refunded) {
+      docs.add(const _SaleDocumentAction('refund-receipt', 'Чек возврата', Icons.receipt_long_rounded));
+    } else if (!invoice) {
+      docs.add(const _SaleDocumentAction('receipt', 'Чек', Icons.receipt_long_rounded));
+    }
+    if (invoice) {
+      docs.add(const _SaleDocumentAction('invoice', 'Счёт', Icons.request_quote_rounded, needsPaid: false));
+    }
+
+    // Та же матрица документов, что и на вебе:
+    // услуга -> АВР; товар -> накладная; смешанная -> оба.
+    if (!knownComposition || hasProducts) {
+      docs.add(const _SaleDocumentAction('nakladnaya', 'Накладная', Icons.local_shipping_outlined));
+    }
+    if (!knownComposition || hasServices) {
+      docs.add(const _SaleDocumentAction('act', 'АВР', Icons.task_alt_rounded));
+    }
+    docs.add(const _SaleDocumentAction('schet-factura', 'Счёт-фактура', Icons.description_outlined));
+    docs.add(const _SaleDocumentAction('esf', 'ЭСФ', Icons.cloud_done_outlined));
+    return docs;
+  }
+
+  String _saleDateTime(Map<String, dynamic> sale) {
+    final raw = sale['created_at'] ?? sale['sale_date'] ?? sale['date'] ??
+        sale['createdAt'] ?? sale['timestamp'];
+    if (raw == null) return 'Дата формирования не указана';
+    if (raw is num) {
+      final ms = raw.toInt() < 100000000000 ? raw.toInt() * 1000 : raw.toInt();
+      final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+      return _formatDocumentDate(dt);
+    }
+    final dt = DateTime.tryParse('$raw');
+    return dt == null ? '$raw' : _formatDocumentDate(dt.toLocal());
+  }
+
+  String _formatDocumentDate(DateTime dt) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(dt.day)}.${two(dt.month)}.${dt.year} • ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  Future<Map<String, dynamic>> _detailFor(Map<String, dynamic> sale) async {
+    final id = int.tryParse('${sale['id'] ?? sale['sale_id'] ?? ''}');
+    if (id == null) return sale;
+    try {
+      return await ApiService.getSale(id);
+    } catch (_) {
+      return sale;
+    }
+  }
+
+  Future<void> _openCardDocument(
+    Map<String, dynamic> sale,
+    _SaleDocumentAction doc,
+  ) async {
+    final detail = await _detailFor(sale);
+    if (!mounted) return;
+    final id = int.tryParse('${detail['id'] ?? detail['sale_id'] ?? sale['id'] ?? sale['sale_id'] ?? ''}');
+    if (id == null) return;
+    final raw = '${detail['status'] ?? sale['status'] ?? ''}'.toLowerCase();
+    final paid = raw.contains('paid') || raw.contains('оплачен') || raw.contains('success');
+    if (doc.needsPaid && !paid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала подтвердите оплату счёта')),
+      );
+      return;
+    }
+    if (doc.type == 'esf') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ЭСФ готовим отдельно: мобильная подпись будет подключена после доступа.')),
+      );
+      return;
+    }
+    if (doc.type == 'refund-receipt' || doc.type == 'receipt') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => SaleDetailScreen(saleId: id)),
+      );
+      return;
+    }
+    final number = detail['sale_number'] ?? detail['invoice_number'] ?? id;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SaleDocumentPreviewScreen(
+          saleId: id,
+          documentType: doc.type,
+          title: '${doc.label} №$number',
+          fileName: '${doc.type.replaceAll('-', '_')}_$number',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openRefund(Map<String, dynamic> sale) async {
+    final id = int.tryParse('${sale['id'] ?? sale['sale_id'] ?? ''}');
+    if (id == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SaleDetailScreen(saleId: id)),
+    );
+    if (mounted) await loadHistory();
+  }
+
   Widget _documentSaleCard(Map<String, dynamic> sale) {
     final id = sale['id'] ?? sale['sale_id'] ?? '—';
-    final total = asDouble(sale['total'] ?? sale['amount']);
+    final total = asDouble(sale['total'] ?? sale['total_amount'] ?? sale['amount']);
     final client = '${sale['client_name'] ?? sale['client'] ?? 'Частное лицо'}';
     final raw = '${sale['status'] ?? sale['payment_status'] ?? ''}'.toLowerCase();
     final invoice = '${sale['sale_type'] ?? sale['payment_method'] ?? ''}'.toLowerCase() == 'invoice' ||
         sale['invoice_number'] != null || raw.contains('счёт выставлен') || raw.contains('pending');
     final paid = raw.contains('paid') || raw.contains('оплачен') || raw.contains('success');
-    final statusText = paid ? 'Оплачено' : (invoice ? 'Ожидает оплаты' : 'Проведено');
-    final statusColor = paid ? AppColors.success : (invoice ? AppColors.warning : AppColors.primary);
+    final refunded = _isRefundSale(sale);
+    final statusText = refunded ? 'Возврат' : paid ? 'Оплачено' : (invoice ? 'Ожидает оплаты' : 'Проведено');
+    final statusColor = refunded ? AppColors.danger : paid ? AppColors.success : (invoice ? AppColors.warning : AppColors.primary);
+    final docs = _documentsFor(sale);
 
     return Card(
       elevation: 0,
-      color: Colors.white.withOpacity(.92),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: const BorderSide(color: AppColors.border)),
+      color: Colors.white.withOpacity(.94),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: AppColors.border),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(14)),
-              child: const Icon(Icons.description_rounded, color: AppColors.primary),
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFECE7FF), Color(0xFFF1F6FF)]),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(refunded ? Icons.assignment_return_rounded : Icons.description_rounded,
+                  color: refunded ? AppColors.danger : AppColors.primary),
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(invoice ? 'Счёт №${sale['invoice_number'] ?? id}' : 'Продажа №$id',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              Text(
+                refunded
+                    ? 'Возврат №$id'
+                    : invoice ? 'Счёт №${sale['invoice_number'] ?? id}' : 'Продажа №$id',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              ),
               const SizedBox(height: 3),
               Text(client, maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              const SizedBox(height: 4),
+              Row(children: [
+                const Icon(Icons.schedule_rounded, size: 14, color: AppColors.muted),
+                const SizedBox(width: 4),
+                Text(_saleDateTime(sale),
+                    style: const TextStyle(color: AppColors.muted, fontSize: 11, fontWeight: FontWeight.w600)),
+              ]),
             ])),
+            const SizedBox(width: 8),
             StatusPill(statusText, color: statusColor),
           ]),
+          const SizedBox(height: 14),
+          Text(money(total), style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
           const SizedBox(height: 13),
-          Text(money(total), style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 12),
-          Wrap(spacing: 7, runSpacing: 7, children: [
-            _documentBadge(Icons.receipt_long_outlined, 'Счёт'),
-            _documentBadge(Icons.local_shipping_outlined, 'Накладная'),
-            _documentBadge(Icons.task_alt_rounded, 'Акт'),
-            _documentBadge(Icons.description_outlined, 'Счёт-фактура'),
-            _documentBadge(Icons.cloud_done_outlined, 'ЭСФ'),
-          ]),
-          const SizedBox(height: 13),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: docs.map((doc) => _documentBadge(
+              doc.icon,
+              doc.label,
+              onTap: () => _openCardDocument(sale, doc),
+            )).toList(),
+          ),
+          const SizedBox(height: 10),
           Row(children: [
-            Expanded(child: OutlinedButton.icon(
-              onPressed: () async {
-                final parsed = int.tryParse('$id');
-                if (parsed == null) return;
-                try {
-                  final detail = await ApiService.getSale(parsed);
-                  if (!mounted) return;
-                  await showModalBottomSheet<bool>(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => _SaleActionsSheet(sale: detail),
-                  );
-                  if (mounted) await loadHistory();
-                } catch (e) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
-                }
-              },
-              icon: const Icon(Icons.visibility_outlined, size: 18),
-              label: const Text('Открыть'),
-            )),
-            const SizedBox(width: 8),
-            Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(14)),
-              child: const Icon(Icons.more_horiz_rounded),
-            ),
+            if (invoice && !paid)
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    final detail = await _detailFor(sale);
+                    if (!mounted) return;
+                    final changed = await showModalBottomSheet<bool>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => _SaleActionsSheet(sale: detail),
+                    );
+                    if (changed == true && mounted) await loadHistory();
+                  },
+                  icon: const Icon(Icons.payments_rounded, size: 18),
+                  label: const Text('Подтвердить оплату'),
+                ),
+              )
+            else if (!refunded)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openRefund(sale),
+                  icon: const Icon(Icons.undo_rounded, size: 18),
+                  label: const Text('Возврат'),
+                ),
+              ),
           ]),
         ]),
       ),
     );
   }
 
-  Widget _documentBadge(IconData icon, String label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-        decoration: BoxDecoration(color: const Color(0xFFF6F4FF), borderRadius: BorderRadius.circular(11)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 15, color: AppColors.primary),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-        ]),
+  Widget _documentBadge(
+    IconData icon,
+    String label, {
+    VoidCallback? onTap,
+  }) => Material(
+        color: const Color(0xFFF6F4FF),
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(11),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, size: 15, color: AppColors.primary),
+              const SizedBox(width: 5),
+              Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+            ]),
+          ),
+        ),
       );
 
   Widget _currentShiftCard() {
@@ -739,6 +909,15 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           ]),
         ),
       );
+}
+
+
+class _SaleDocumentAction {
+  final String type;
+  final String label;
+  final IconData icon;
+  final bool needsPaid;
+  const _SaleDocumentAction(this.type, this.label, this.icon, {this.needsPaid = true});
 }
 
 
