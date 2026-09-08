@@ -406,37 +406,52 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }
 
   List<_SaleDocumentAction> _documentsFor(Map<String, dynamic> sale) {
+    final serverTypes = sale['document_types'];
+    if (serverTypes is List && serverTypes.isNotEmpty) {
+      return serverTypes
+          .map((raw) => _documentActionForType('$raw'))
+          .whereType<_SaleDocumentAction>()
+          .toList();
+    }
+
+    // Совместимость со старым API до обновления сервера.
     final items = _saleItems(sale);
     final explicitHasServices = sale['has_services'] == true;
     final explicitHasProducts = sale['has_products'] == true;
     final hasServices = explicitHasServices || items.any(_isServiceItem);
     final hasProducts = explicitHasProducts || items.any((e) => !_isServiceItem(e));
-    final knownComposition = explicitHasServices || explicitHasProducts || items.isNotEmpty;
     final invoice = '${sale['sale_type'] ?? sale['payment_method'] ?? ''}'.toLowerCase() == 'invoice' ||
         sale['invoice_number'] != null;
-    final refunded = _isRefundSale(sale);
+    final refunded = sale['sale_refunded'] == true || _isRefundSale(sale);
 
-    final docs = <_SaleDocumentAction>[];
-    if (refunded) {
-      docs.add(const _SaleDocumentAction('refund-receipt', 'Чек возврата', Icons.receipt_long_rounded));
-    } else if (!invoice) {
-      docs.add(const _SaleDocumentAction('receipt', 'Чек', Icons.receipt_long_rounded));
-    }
-    if (invoice) {
-      docs.add(const _SaleDocumentAction('invoice', 'Счёт', Icons.request_quote_rounded, needsPaid: false));
-    }
+    final types = <String>[
+      if (invoice) 'invoice' else if (refunded) 'refund-receipt' else 'receipt',
+      if (hasProducts) 'nakladnaya',
+      if (hasServices) 'act',
+      if (hasProducts || hasServices) 'schet-factura',
+      if (hasProducts || hasServices) 'esf',
+    ];
+    return types.map(_documentActionForType).whereType<_SaleDocumentAction>().toList();
+  }
 
-    // Та же матрица документов, что и на вебе:
-    // услуга -> АВР; товар -> накладная; смешанная -> оба.
-    if (!knownComposition || hasProducts) {
-      docs.add(const _SaleDocumentAction('nakladnaya', 'Накладная', Icons.local_shipping_outlined));
+  _SaleDocumentAction? _documentActionForType(String type) {
+    switch (type) {
+      case 'receipt':
+        return const _SaleDocumentAction('receipt', 'Чек', Icons.receipt_long_rounded, needsPaid: false);
+      case 'refund-receipt':
+        return const _SaleDocumentAction('refund-receipt', 'Чек возврата', Icons.assignment_return_rounded, needsPaid: false);
+      case 'invoice':
+        return const _SaleDocumentAction('invoice', 'Счёт', Icons.request_quote_rounded, needsPaid: false);
+      case 'nakladnaya':
+        return const _SaleDocumentAction('nakladnaya', 'Накладная', Icons.local_shipping_outlined);
+      case 'act':
+        return const _SaleDocumentAction('act', 'АВР', Icons.task_alt_rounded);
+      case 'schet-factura':
+        return const _SaleDocumentAction('schet-factura', 'Счёт-фактура', Icons.description_outlined);
+      case 'esf':
+        return const _SaleDocumentAction('esf', 'ЭСФ', Icons.cloud_done_outlined);
     }
-    if (!knownComposition || hasServices) {
-      docs.add(const _SaleDocumentAction('act', 'АВР', Icons.task_alt_rounded));
-    }
-    docs.add(const _SaleDocumentAction('schet-factura', 'Счёт-фактура', Icons.description_outlined));
-    docs.add(const _SaleDocumentAction('esf', 'ЭСФ', Icons.cloud_done_outlined));
-    return docs;
+    return null;
   }
 
   String _saleDateTime(Map<String, dynamic> sale) {
@@ -528,7 +543,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final invoice = '${sale['sale_type'] ?? sale['payment_method'] ?? ''}'.toLowerCase() == 'invoice' ||
         sale['invoice_number'] != null || raw.contains('счёт выставлен') || raw.contains('pending');
     final paid = raw.contains('paid') || raw.contains('оплачен') || raw.contains('success');
-    final refunded = _isRefundSale(sale);
+    final refunded = sale['sale_refunded'] == true || _isRefundSale(sale);
     final statusText = refunded ? 'Возврат' : paid ? 'Оплачено' : (invoice ? 'Ожидает оплаты' : 'Проведено');
     final statusColor = refunded ? AppColors.danger : paid ? AppColors.success : (invoice ? AppColors.warning : AppColors.primary);
     final docs = _documentsFor(sale);
