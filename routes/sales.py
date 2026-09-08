@@ -650,6 +650,33 @@ def sales_history():
             if not is_refund and status == "Возврат":
                 status = "Продажа"
 
+            product_count = int(sale.get("product_count") or 0)
+            service_count = int(sale.get("service_count") or 0)
+            has_products = product_count > 0
+            has_services = service_count > 0
+            sale_refunded = bool(sale.get("sale_refunded"))
+            is_invoice = sale.get("sale_type") == "invoice"
+
+            # Единая серверная матрица документов для веба и мобильного приложения.
+            # Услуги: чек + АВР + счёт-фактура + ЭСФ.
+            # Товары: чек + накладная + счёт-фактура + ЭСФ.
+            # Смешанная продажа: чек + накладная + АВР + счёт-фактура + ЭСФ.
+            # При возврате вместо обычного чека показываем чек возврата.
+            document_types = []
+            if is_invoice:
+                document_types.append("invoice")
+            elif sale_refunded:
+                document_types.append("refund-receipt")
+            else:
+                document_types.append("receipt")
+
+            if has_products:
+                document_types.append("nakladnaya")
+            if has_services:
+                document_types.append("act")
+            if has_products or has_services:
+                document_types.extend(["schet-factura", "esf"])
+
             result.append({
                 "id": sale["id"],
                 "event_type": event_type,
@@ -673,12 +700,19 @@ def sales_history():
                     sale.get("sale_refunded") and sale["sale_type"] != "invoice"
                 ),
                 "sale_refunded": bool(sale.get("sale_refunded")),
-                "product_count": int(sale.get("product_count") or 0),
-                "service_count": int(sale.get("service_count") or 0),
+                "product_count": product_count,
+                "service_count": service_count,
                 "product_total": float(sale.get("product_total") or 0),
                 "service_total": float(sale.get("service_total") or 0),
-                "has_products": int(sale.get("product_count") or 0) > 0,
-                "has_services": int(sale.get("service_count") or 0) > 0,
+                "has_products": has_products,
+                "has_services": has_services,
+                "document_composition": (
+                    "mixed" if has_products and has_services
+                    else "product" if has_products
+                    else "service" if has_services
+                    else "empty"
+                ),
+                "document_types": document_types,
                 "refunded_at": (
                     sale.get("refunded_at").isoformat()
                     if sale.get("refunded_at") else ""
