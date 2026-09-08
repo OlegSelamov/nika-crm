@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/items.css') }}?v=20260904-4">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/items.css') }}?v=20260908-5">
 {% endblock %}
 
 {% block content %}
@@ -623,24 +623,7 @@
 
 {% endblock %}
 
-<style id="catalogMediaStyles">
-.catalog-media-field{padding:16px;border:1px solid rgba(99,102,241,.14);border-radius:18px;background:linear-gradient(135deg,rgba(248,250,255,.96),rgba(244,240,255,.76))}
-.catalog-media-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-.catalog-media-head>div>span{display:block;font-weight:800;color:#273044}
-.catalog-media-head small{display:block;margin-top:4px;color:#8691a5;font-size:11px;line-height:1.4}
-.catalog-media-add{border:0;border-radius:12px;padding:10px 13px;background:linear-gradient(135deg,#6d5dfc,#9a4ff2);color:#fff;font-weight:800;cursor:pointer;white-space:nowrap;box-shadow:0 7px 18px rgba(109,93,252,.2)}
-.catalog-media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
-.catalog-media-card{position:relative;border:1px solid rgba(148,163,184,.18);border-radius:15px;background:#fff;padding:6px;box-shadow:0 7px 18px rgba(15,23,42,.05);min-width:0}
-.catalog-media-card.is-main{border-color:#7c5cff;box-shadow:0 0 0 2px rgba(124,92,255,.12),0 8px 20px rgba(72,52,180,.10)}
-.catalog-media-card img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:11px;background:#eef2f7}
-.catalog-media-card__actions{display:flex;gap:5px;margin-top:6px}
-.catalog-media-main,.catalog-media-remove{flex:1;border:0;border-radius:9px;min-height:30px;font-size:10px;font-weight:800;cursor:pointer}
-.catalog-media-main{background:#f0edff;color:#6747e8}.catalog-media-card.is-main .catalog-media-main{background:#6f55f6;color:#fff}
-.catalog-media-remove{background:#fff0f1;color:#dc4655}
-.catalog-media-badge{position:absolute;left:10px;top:10px;padding:5px 7px;border-radius:999px;background:rgba(20,24,38,.78);color:#fff;font-size:9px;font-weight:800;backdrop-filter:blur(6px)}
-.catalog-media-empty{grid-column:1/-1;border:1px dashed rgba(148,163,184,.35);border-radius:14px;padding:24px;text-align:center;color:#96a0b2;font-size:12px;background:rgba(255,255,255,.58)}
-@media(max-width:600px){.catalog-media-head{align-items:flex-start;flex-direction:column}.catalog-media-add{width:100%}.catalog-media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-</style>
+
 
 {% block page_js %}
 
