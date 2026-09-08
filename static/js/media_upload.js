@@ -7,8 +7,55 @@
   function imageInputs(root = document) {
     return [...root.querySelectorAll('input[type="file"]')].filter((input) => {
       const accept = (input.getAttribute('accept') || '').toLowerCase();
-      return accept.includes('image');
+      const name = (input.getAttribute('name') || '').toLowerCase();
+      return accept.includes('image') ||
+        ['images', 'image', 'photo', 'comment_photos', 'logo', 'cover', 'banner'].includes(name);
     });
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '';
+    if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + ' КБ';
+    return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
+  }
+
+  function ensurePreview(input) {
+    let wrap = input.parentElement?.querySelector(':scope > .nika-media-preview');
+    if (wrap) return wrap;
+    wrap = document.createElement('div');
+    wrap.className = 'nika-media-preview';
+    wrap.innerHTML = '<div class="nika-media-preview__status"></div><div class="nika-media-preview__grid"></div>';
+    input.insertAdjacentElement('afterend', wrap);
+    return wrap;
+  }
+
+  function renderPreview(input, files, statusText, ready = false) {
+    const wrap = ensurePreview(input);
+    const status = wrap.querySelector('.nika-media-preview__status');
+    const grid = wrap.querySelector('.nika-media-preview__grid');
+    status.textContent = statusText || '';
+    status.classList.toggle('is-ready', ready);
+    grid.innerHTML = '';
+
+    for (const file of files || []) {
+      const tile = document.createElement('div');
+      tile.className = 'nika-media-preview__tile';
+
+      const img = document.createElement('img');
+      const url = URL.createObjectURL(file);
+      img.src = url;
+      img.alt = '';
+      img.onload = () => URL.revokeObjectURL(url);
+
+      const meta = document.createElement('div');
+      meta.className = 'nika-media-preview__meta';
+      meta.innerHTML = '<b></b><span></span>';
+      meta.querySelector('b').textContent = file.name || 'Фото';
+      meta.querySelector('span').textContent = formatBytes(file.size);
+
+      tile.append(img, meta);
+      grid.appendChild(tile);
+    }
   }
 
   async function compressFile(file) {
@@ -48,15 +95,28 @@
 
   async function optimizeInput(input) {
     if (!input.files || !input.files.length) return;
+    const originals = [...input.files];
+    renderPreview(input, originals, 'Подготавливаем фото…');
     input.dataset.nikaMediaOptimizing = '1';
+
     try {
       const dt = new DataTransfer();
-      for (const file of input.files) {
+      for (const file of originals) {
         dt.items.add(await compressFile(file));
       }
       input.files = dt.files;
+      const optimized = [...input.files];
+      const before = originals.reduce((sum, file) => sum + (file.size || 0), 0);
+      const after = optimized.reduce((sum, file) => sum + (file.size || 0), 0);
+      const saved = before > after ? ' • ' + formatBytes(before - after) + ' сэкономлено' : '';
+      renderPreview(
+        input,
+        optimized,
+        'Фото готово к загрузке • ' + formatBytes(after) + saved,
+        true
+      );
     } catch (_) {
-      // Browser fallback: original image will be sent.
+      renderPreview(input, originals, 'Фото готово к загрузке', true);
     } finally {
       delete input.dataset.nikaMediaOptimizing;
     }
@@ -121,4 +181,24 @@
     await Promise.allSettled(waits);
     form.submit();
   }, true);
+})();
+
+
+(() => {
+  if (document.getElementById('nikaMediaPreviewStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'nikaMediaPreviewStyles';
+  style.textContent = `
+    .nika-media-preview{margin-top:10px}
+    .nika-media-preview__status{font-size:12px;font-weight:700;color:#7c8799;margin-bottom:8px}
+    .nika-media-preview__status.is-ready{color:#16a34a}
+    .nika-media-preview__grid{display:flex;gap:10px;flex-wrap:wrap}
+    .nika-media-preview__tile{width:108px;border:1px solid rgba(99,102,241,.14);background:#fff;border-radius:14px;padding:6px;box-shadow:0 5px 14px rgba(15,23,42,.05)}
+    .nika-media-preview__tile img{width:96px;height:76px;object-fit:cover;border-radius:10px;display:block;background:#eef2f7}
+    .nika-media-preview__meta{padding:6px 2px 1px;min-width:0}
+    .nika-media-preview__meta b{display:block;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#273044}
+    .nika-media-preview__meta span{display:block;margin-top:2px;font-size:9px;color:#94a3b8}
+    @media(max-width:600px){.nika-media-preview__tile{width:96px}.nika-media-preview__tile img{width:84px;height:68px}}
+  `;
+  document.head.appendChild(style);
 })();
