@@ -781,6 +781,7 @@ def profile():
         company = None
         subscription = None
         active_modules = []
+        document_settings = None
         if company_id:
             cur.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
             company = cur.fetchone()
@@ -796,6 +797,22 @@ def profile():
                 ORDER BY m.sort_order, m.id
             """, (company_id,))
             active_modules = cur.fetchall()
+            cur.execute("""
+                SELECT *
+                FROM company_document_settings
+                WHERE company_id = %s
+            """, (company_id,))
+            document_settings = cur.fetchone()
+            if not document_settings:
+                document_settings = {
+                    "custom_numbering_enabled": False,
+                    "invoice_next_number": 1,
+                    "nakladnaya_next_number": 1,
+                    "act_next_number": 1,
+                    "schet_factura_next_number": 1,
+                    "show_signature": False,
+                    "show_stamp": False,
+                }
 
         return render_template(
             "profile.html",
@@ -803,6 +820,7 @@ def profile():
             company=company,
             subscription=subscription,
             active_modules=active_modules,
+            document_settings=document_settings,
             can_manage_company=bool(
                 session.get("is_super_admin")
                 or session.get("role") in ("owner", "admin")
@@ -843,6 +861,66 @@ def save_personal_profile():
         pool.putconn(conn)
 
     return redirect("/profile?tab=personal&saved=1")
+
+
+@auth_bp.route("/profile/documents", methods=["POST"])
+def save_profile_documents():
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    can_manage = bool(
+        session.get("is_super_admin")
+        or session.get("role") in ("owner", "admin")
+    )
+    if not can_manage or not session.get("company_id"):
+        return "Доступ запрещен", 403
+
+    def positive_int(name):
+        try:
+            return max(1, int(request.form.get(name) or 1))
+        except (TypeError, ValueError):
+            return 1
+
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO company_document_settings (
+                company_id, custom_numbering_enabled,
+                invoice_next_number, nakladnaya_next_number,
+                act_next_number, schet_factura_next_number,
+                show_signature, show_stamp, updated_at
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            ON CONFLICT (company_id) DO UPDATE SET
+                custom_numbering_enabled = EXCLUDED.custom_numbering_enabled,
+                invoice_next_number = EXCLUDED.invoice_next_number,
+                nakladnaya_next_number = EXCLUDED.nakladnaya_next_number,
+                act_next_number = EXCLUDED.act_next_number,
+                schet_factura_next_number = EXCLUDED.schet_factura_next_number,
+                show_signature = EXCLUDED.show_signature,
+                show_stamp = EXCLUDED.show_stamp,
+                updated_at = NOW()
+        """, (
+            company_id,
+            request.form.get("custom_numbering_enabled") == "on",
+            positive_int("invoice_next_number"),
+            positive_int("nakladnaya_next_number"),
+            positive_int("act_next_number"),
+            positive_int("schet_factura_next_number"),
+            request.form.get("show_signature") == "on",
+            request.form.get("show_stamp") == "on",
+        ))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+    return redirect("/profile?tab=documents&saved=1")
 
 
 @auth_bp.route("/profile/interface", methods=["POST"])
