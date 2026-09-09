@@ -22,7 +22,7 @@
 
   <div class="printer-grid">
     <section class="printer-card">
-      <div class="printer-card-head"><div class="printer-card-icon">🧾</div><div><h2>Чековый принтер</h2><p>Чеки продаж, возвратов, X- и Z-отчёты</p></div></div>
+      <div class="printer-card-head"><div class="printer-card-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-receipt"></use></svg></div><div><h2>Чековый принтер</h2><p>Чеки продаж, возвратов, X- и Z-отчёты</p></div></div>
       <div class="printer-field"><label for="receiptPrinter">Принтер Windows</label><select id="receiptPrinter" class="printer-select"><option value="">Выберите принтер</option></select></div>
       <div class="printer-row printer-row--three">
         <div class="printer-field"><span class="printer-label">Ширина ленты</span><div class="printer-segment"><label><input type="radio" name="receiptPaperWidth" value="58"><span>58 мм</span></label><label><input type="radio" name="receiptPaperWidth" value="80"><span>80 мм</span></label></div></div>
@@ -34,13 +34,13 @@
     </section>
 
     <section class="printer-card">
-      <div class="printer-card-head"><div class="printer-card-icon">📄</div><div><h2>Принтер документов</h2><p>Счета, накладные, акты и документы А4</p></div></div>
+      <div class="printer-card-head"><div class="printer-card-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-file"></use></svg></div><div><h2>Принтер документов</h2><p>Счета, накладные, акты и документы А4</p></div></div>
       <div class="printer-field"><label for="documentPrinter">Принтер Windows</label><select id="documentPrinter" class="printer-select"><option value="">Выберите принтер</option></select></div>
       <div class="printer-row">
         <div class="printer-field"><label for="documentCopies">Количество копий</label><input id="documentCopies" class="printer-input" type="number" min="1" max="5" value="1"></div>
         <div class="printer-field"><span class="printer-label">Ориентация А4</span><div class="printer-segment"><label><input type="radio" name="documentOrientation" value="portrait"><span>Книжная</span></label><label><input type="radio" name="documentOrientation" value="landscape"><span>Альбомная</span></label></div></div>
       </div>
-      <div class="printer-toggle"><div><strong>Печать через Windows</strong><small>Кириллица и қазақша выводятся графически, без смены кодировки принтера</small></div><span style="color:#249b62;font-size:20px">✓</span></div>
+      <div class="printer-toggle"><div><strong>Печать через Windows</strong><small>Кириллица и қазақша выводятся графически, без смены кодировки принтера</small></div><span style="color:#249b62;font-size:20px"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-check"></use></svg></span></div>
       <div class="printer-actions"><button id="testDocumentBtn" class="printer-btn" type="button">Тестовый лист А4</button></div>
     </section>
   </div>

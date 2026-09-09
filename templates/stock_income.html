@@ -30,7 +30,7 @@
 
     <section class="income-stats">
         <article class="income-stat income-stat--purple">
-            <div class="income-stat-icon">↓</div>
+            <div class="income-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-arrowRight"></use></svg></div>
             <div>
                 <span>Последних приходов</span>
                 <strong>{{ ns.count }}</strong>
@@ -39,7 +39,7 @@
         </article>
 
         <article class="income-stat income-stat--green">
-            <div class="income-stat-icon">▦</div>
+            <div class="income-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-package"></use></svg></div>
             <div>
                 <span>Принято товаров</span>
                 <strong>{{ "{:,.3f}".format(ns.total_quantity).rstrip("0").rstrip(".").replace(",", " ") }}</strong>
@@ -48,7 +48,7 @@
         </article>
 
         <article class="income-stat income-stat--blue">
-            <div class="income-stat-icon">₸</div>
+            <div class="income-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-money"></use></svg></div>
             <div>
                 <span>Сумма приходов</span>
                 <strong>{{ "{:,.0f}".format(ns.total_sum).replace(",", " ") }} ₸</strong>
@@ -80,7 +80,7 @@
                     <div class="product-picker">
                         <div class="product-search-row">
                             <div class="product-search-box">
-                                <span class="product-search-icon">⌕</span>
+                                <span class="product-search-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-search"></use></svg></span>
 
                                 <input
                                     type="text"
@@ -106,7 +106,7 @@
                             </div>
 
                             <a href="/scanner" class="income-scan-link" aria-label="Открыть сканер">
-                                📷
+                                <svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-camera"></use></svg>
                             </a>
                         </div>
                     </div>
@@ -120,7 +120,7 @@
                         <span id="selectedProductMeta">Текущий остаток: 0</span>
                     </div>
 
-                    <button type="button" id="clearSelectedProduct" aria-label="Убрать товар">×</button>
+                    <button type="button" id="clearSelectedProduct" aria-label="Убрать товар"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></button>
                 </div>
 
                 <div class="income-field">

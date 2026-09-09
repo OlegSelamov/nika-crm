@@ -19,7 +19,7 @@
 
         <div class="stock-header-actions">
             <a href="/stock/income" class="stock-btn stock-btn--primary">
-                <span>＋</span>
+                <span><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-package"></use></svg></span>
                 Приход товара
             </a>
 
@@ -31,7 +31,7 @@
 
     <section class="stock-stats">
         <article class="stock-stat stock-stat--purple">
-            <div class="stock-stat-icon">▦</div>
+            <div class="stock-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-package"></use></svg></div>
             <div>
                 <span>Всего позиций</span>
                 <strong>{{ total_count }}</strong>
@@ -40,7 +40,7 @@
         </article>
 
         <article class="stock-stat stock-stat--green">
-            <div class="stock-stat-icon">✓</div>
+            <div class="stock-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-check"></use></svg></div>
             <div>
                 <span>В наличии</span>
                 <strong>{{ normal_count }}</strong>
@@ -49,7 +49,7 @@
         </article>
 
         <article class="stock-stat stock-stat--orange">
-            <div class="stock-stat-icon">!</div>
+            <div class="stock-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-warning"></use></svg></div>
             <div>
                 <span>Заканчиваются</span>
                 <strong>{{ low_count }}</strong>
@@ -58,7 +58,7 @@
         </article>
 
         <article class="stock-stat stock-stat--red">
-            <div class="stock-stat-icon">×</div>
+            <div class="stock-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></div>
             <div>
                 <span>Нет в наличии</span>
                 <strong>{{ out_count }}</strong>
@@ -109,7 +109,7 @@
 
         <div class="stock-toolbar-row">
             <label class="stock-search">
-                <span>⌕</span>
+                <span><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-search"></use></svg></span>
                 <input
                     id="stockSearch"
                     type="search"
@@ -303,7 +303,7 @@
         </div>
 
         <div class="stock-empty stock-empty--search" id="stockSearchEmpty" hidden>
-            <div>⌕</div>
+            <div><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-search"></use></svg></div>
             <strong>Товары не найдены</strong>
             <p>Измените поиск или выбранные фильтры.</p>
         </div>
@@ -316,7 +316,7 @@
 
         {% else %}
         <div class="stock-empty">
-            <div>▦</div>
+            <div><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-package"></use></svg></div>
             <strong>На складе пока нет товаров</strong>
             <p>Добавьте товары в каталог, затем оформите приход.</p>
             <a href="/stock/income" class="stock-btn stock-btn--primary">Оформить приход</a>
