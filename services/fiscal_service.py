@@ -40,6 +40,7 @@ def ensure_fiscal_schema(conn):
         cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS fiscal_ticket_id TEXT")
         cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS fiscal_ticket_number TEXT")
         cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS fiscal_shift_number TEXT")
+        conn.commit()
         _SCHEMA_READY = True
     finally:
         cur.close()
