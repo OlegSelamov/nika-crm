@@ -1120,7 +1120,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                   ]),
                   const SizedBox(height: 5),
                   Text(
-                    _periodLabel(opened, closed),
+                    _shiftPeriodLabel(opened, closed),
                     style: const TextStyle(color: AppColors.muted, fontSize: 12),
                   ),
                   const SizedBox(height: 7),
@@ -1180,7 +1180,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     );
   }
 
-  String _periodLabel(dynamic opened, dynamic closed) {
+  String _shiftPeriodLabel(dynamic opened, dynamic closed) {
     if (opened != null && closed != null) {
       return '${shiftDateLabel(opened)} — ${shiftDateLabel(closed)}';
     }
