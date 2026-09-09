@@ -909,6 +909,16 @@ def init_db():
                 is_active = TRUE
         """, module)
 
+    # Главная больше не отдельный модуль: все бизнес-показатели находятся в Аналитике.
+    cur.execute("UPDATE modules SET is_active = FALSE WHERE code = 'dashboard'")
+    cur.execute("""
+        UPDATE company_modules
+        SET enabled = FALSE,
+            status = 'disabled',
+            updated_at = NOW()
+        WHERE module_id = (SELECT id FROM modules WHERE code = 'dashboard')
+    """)
+
     # Модуль ККМ/ЦТО больше не является отдельным платным модулем.
     # Сохраняем запись для совместимости со старыми данными, но скрываем
     # его из подписок и отключаем у компаний.
@@ -1019,6 +1029,11 @@ def init_db():
     cur.execute("""
         ALTER TABLE companies
         ADD COLUMN IF NOT EXISTS city TEXT
+    """)
+
+    cur.execute("""
+        ALTER TABLE companies
+        ADD COLUMN IF NOT EXISTS is_vat_payer BOOLEAN NOT NULL DEFAULT FALSE
     """)
 
     cur.execute("""
