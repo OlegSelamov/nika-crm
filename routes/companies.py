@@ -129,22 +129,64 @@ def delete_company(id):
 
     return redirect("/companies")
     
-@companies_bp.route("/company/profile")
+@companies_bp.route("/company/profile", methods=["GET", "POST"])
 def company_profile():
     if not session.get("user_id"):
         return redirect("/login")
 
-    conn = get_db()
-    
-    cur = conn.cursor()
-
-    cur.execute(
-        "SELECT * FROM companies WHERE id = %s",
-        (session.get("company_id"),)
+    company_id = session.get("company_id")
+    can_manage = bool(
+        session.get("is_super_admin")
+        or session.get("role") in ("owner", "admin")
     )
+    if not company_id:
+        return redirect("/profile")
 
-    company = cur.fetchone()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if request.method == "POST":
+            if not can_manage:
+                return "Доступ запрещен", 403
 
-    pool.putconn(conn)
+            cur.execute("""
+                UPDATE companies
+                SET name = %s,
+                    bin = %s,
+                    address = %s,
+                    phone = %s,
+                    iik = %s,
+                    bik = %s,
+                    bank = %s,
+                    kbe = %s,
+                    knp = %s,
+                    director = %s,
+                    is_vat_payer = %s
+                WHERE id = %s
+            """, (
+                (request.form.get("name") or "").strip(),
+                (request.form.get("bin") or "").strip(),
+                (request.form.get("address") or "").strip(),
+                (request.form.get("phone") or "").strip(),
+                (request.form.get("iik") or "").strip(),
+                (request.form.get("bik") or "").strip(),
+                (request.form.get("bank") or "").strip(),
+                (request.form.get("kbe") or "").strip(),
+                (request.form.get("knp") or "").strip(),
+                (request.form.get("director") or "").strip(),
+                request.form.get("is_vat_payer") == "on",
+                company_id,
+            ))
+            conn.commit()
+            return redirect("/profile?tab=company&saved=1")
 
-    return render_template("company_profile.html", company=company)
+        cur.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
+        company = cur.fetchone()
+        return render_template("company_profile.html", company=company)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
