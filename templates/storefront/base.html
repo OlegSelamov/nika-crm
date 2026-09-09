@@ -6,6 +6,7 @@
 <title>{% block title %}{{ store.title or store.company_name }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/storefront/base.css', v='20260905-2') }}">
 {% block extra_head %}{% endblock %}
+<link rel="stylesheet" href="/static/css/nika_icons.css?v=20260910-1">
 </head>
 <body>
 <header class="sf-header">
@@ -338,5 +339,6 @@
 <div id="sfToast" class="sf-toast"></div>
 
 <script src="{{ url_for('static', filename='js/storefront/base.js', v='20260905-2') }}"></script>
+<script src="/static/js/nika_icons.js?v=20260910-1"></script>
 </body>
 </html>
