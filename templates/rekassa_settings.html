@@ -10,13 +10,14 @@
     <input
         type="text"
         id="rekassa_number"
+        value="{{ rekassa.rekassa_number or '' }}"
         placeholder="Введите ЗНМ">
 
     <label>Пароль интеграции</label>
     <input
         type="password"
         id="rekassa_password"
-        placeholder="Введите пароль">
+        placeholder="{{ 'Введите новый пароль, если хотите изменить' if rekassa.rekassa_enabled else 'Введите пароль' }}">
 
     <br><br>
 
@@ -28,7 +29,15 @@
         Сохранить
     </button>
 
-    <div id="rekassaStatus"></div>
+    <div id="rekassaStatus">
+      {% if rekassa.rekassa_enabled %}
+      <div style="color:green;margin-top:12px">
+        ✅ reKassa сохранена<br>
+        ЗНМ: {{ rekassa.rekassa_serial_number or rekassa.rekassa_number or '—' }}<br>
+        ID: {{ rekassa.rekassa_crs_id or '—' }}
+      </div>
+      {% endif %}
+    </div>
 
 </div>
 
@@ -113,7 +122,7 @@ async function saveRekassa(){
         return;
     }
 
-    await fetch(
+    const saveResponse = await fetch(
         "/api/rekassa/save",
         {
             method:"POST",
@@ -129,7 +138,22 @@ async function saveRekassa(){
         }
     );
 
-    alert("ReKassa сохранена");
+    const saved = await saveResponse.json().catch(() => ({}));
+
+    if(!saveResponse.ok || saved.success !== true){
+        alert(saved.error || "Не удалось сохранить reKassa");
+        return;
+    }
+
+    document.getElementById("rekassaStatus").innerHTML = `
+      <div style="color:green;margin-top:12px">
+        ✅ reKassa сохранена<br>
+        ЗНМ: ${saved.serial_number || number}<br>
+        ID: ${saved.crs_id || auth.id}
+      </div>
+    `;
+
+    alert("reKassa сохранена");
 }
 
 </script>

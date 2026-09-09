@@ -73,6 +73,7 @@ def _load_company_rekassa():
             SELECT *
             FROM integrations
             WHERE company_id = %s
+            ORDER BY id DESC
             LIMIT 1
         """, (company_id,))
         row = cur.fetchone()
@@ -705,58 +706,120 @@ def rekassa_test_ticket():
         "response": response.json()
     })
     
+@rekassa_bp.route("/api/rekassa/settings", methods=["GET"])
+def get_rekassa_settings():
+    from models import get_db, pool
+
+    company_id = session.get("company_id")
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Требуется войти в систему"}), 401
+    if not company_id:
+        return jsonify({"success": False, "error": "Активная организация не выбрана"}), 403
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                rekassa_enabled,
+                rekassa_number,
+                rekassa_crs_id,
+                rekassa_serial_number
+            FROM integrations
+            WHERE company_id = %s
+            ORDER BY id DESC
+            LIMIT 1
+        """, (company_id,))
+        row = cur.fetchone()
+        data = dict(row) if row else {}
+    finally:
+        pool.putconn(conn)
+
+    return jsonify({
+        "success": True,
+        "configured": bool(
+            data.get("rekassa_enabled")
+            and data.get("rekassa_number")
+            and data.get("rekassa_crs_id")
+        ),
+        "enabled": bool(data.get("rekassa_enabled")),
+        "number": data.get("rekassa_number") or "",
+        "crs_id": data.get("rekassa_crs_id"),
+        "serial_number": data.get("rekassa_serial_number") or ""
+    })
+
+
 @rekassa_bp.route("/api/rekassa/save", methods=["POST"])
 def save_rekassa():
-
-    from models import get_db
+    from models import get_db, pool
 
     data = request.get_json(silent=True) or {}
     company_id = session.get("company_id")
 
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Требуется войти в систему"}), 401
     if not company_id:
-        return jsonify({
-            "success": False,
-            "error": "Активная организация не выбрана"
-        }), 403
+        return jsonify({"success": False, "error": "Активная организация не выбрана"}), 403
 
-    number = data.get("number")
-    password = data.get("password")
+    number = str(data.get("number") or "").strip()
+    password = str(data.get("password") or "").strip()
     crs_id = data.get("id")
-    serial_number = data.get("serialNumber")
+    serial_number = str(data.get("serialNumber") or "").strip()
 
     if not number or not password or not crs_id:
         return jsonify({
             "success": False,
-            "error": "ReKassa вернула неполные данные кассы"
+            "error": "reKassa вернула неполные данные кассы"
         }), 400
 
-    conn = get_db()
-    cur = conn.cursor()
-
     try:
-        # У старых организаций строка integrations обычно уже существует.
-        # Для новой организации её может ещё не быть, поэтому одного UPDATE
-        # недостаточно: он молча обновляет 0 строк.
+        crs_id = int(crs_id)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Некорректный ID кассы reKassa"}), 400
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+
+        # Убеждаемся, что production-БД содержит все нужные поля.
         cur.execute("""
-            UPDATE integrations
-            SET
-                rekassa_enabled = TRUE,
-                rekassa_number = %s,
-                rekassa_password = %s,
-                rekassa_crs_id = %s,
-                rekassa_serial_number = %s
+            ALTER TABLE integrations
+            ADD COLUMN IF NOT EXISTS rekassa_enabled BOOLEAN DEFAULT FALSE
+        """)
+        cur.execute("ALTER TABLE integrations ADD COLUMN IF NOT EXISTS rekassa_number TEXT")
+        cur.execute("ALTER TABLE integrations ADD COLUMN IF NOT EXISTS rekassa_password TEXT")
+        cur.execute("ALTER TABLE integrations ADD COLUMN IF NOT EXISTS rekassa_crs_id INTEGER")
+        cur.execute("ALTER TABLE integrations ADD COLUMN IF NOT EXISTS rekassa_serial_number TEXT")
+
+        cur.execute("""
+            SELECT id
+            FROM integrations
             WHERE company_id = %s
-        """, (
-            number,
-            password,
-            crs_id,
-            serial_number,
-            company_id
-        ))
+            ORDER BY id DESC
+            LIMIT 1
+        """, (company_id,))
+        existing = cur.fetchone()
 
-        created = cur.rowcount == 0
-
-        if created:
+        if existing:
+            integration_id = existing["id"]
+            cur.execute("""
+                UPDATE integrations
+                SET
+                    rekassa_enabled = TRUE,
+                    rekassa_number = %s,
+                    rekassa_password = %s,
+                    rekassa_crs_id = %s,
+                    rekassa_serial_number = %s
+                WHERE id = %s
+            """, (
+                number,
+                password,
+                crs_id,
+                serial_number,
+                integration_id
+            ))
+            created = False
+        else:
             cur.execute("""
                 INSERT INTO integrations (
                     company_id,
@@ -768,6 +831,7 @@ def save_rekassa():
                     created_at
                 )
                 VALUES (%s, TRUE, %s, %s, %s, %s, NOW())
+                RETURNING id
             """, (
                 company_id,
                 number,
@@ -775,21 +839,53 @@ def save_rekassa():
                 crs_id,
                 serial_number
             ))
+            integration_id = cur.fetchone()["id"]
+            created = True
 
         conn.commit()
-    except Exception:
+
+        # Не отвечаем "сохранено", пока не прочитали запись обратно из БД.
+        cur.execute("""
+            SELECT
+                rekassa_enabled,
+                rekassa_number,
+                rekassa_crs_id,
+                rekassa_serial_number
+            FROM integrations
+            WHERE id = %s
+        """, (integration_id,))
+        saved = cur.fetchone()
+
+        if (
+            not saved
+            or not saved["rekassa_enabled"]
+            or saved["rekassa_number"] != number
+            or int(saved["rekassa_crs_id"] or 0) != crs_id
+        ):
+            return jsonify({
+                "success": False,
+                "error": "Настройки reKassa не подтвердились после сохранения"
+            }), 500
+
+        return jsonify({
+            "success": True,
+            "company_id": company_id,
+            "created": created,
+            "configured": True,
+            "number": saved["rekassa_number"],
+            "crs_id": saved["rekassa_crs_id"],
+            "serial_number": saved["rekassa_serial_number"] or ""
+        })
+    except Exception as exc:
         conn.rollback()
+        print("REKASSA SAVE ERROR:", repr(exc))
         return jsonify({
             "success": False,
-            "error": "Не удалось сохранить настройки ReKassa для организации"
+            "error": f"Не удалось сохранить настройки reKassa: {exc}"
         }), 500
+    finally:
+        pool.putconn(conn)
 
-    return jsonify({
-        "success": True,
-        "company_id": company_id,
-        "created": created
-    })
-    
 def rekassa_sell(conn, sale_id):
 
     cur = conn.cursor()

@@ -65,7 +65,33 @@ def scales():
     
 @settings_bp.route("/settings/rekassa")
 def rekassa_settings():
-    return render_template("rekassa_settings.html")
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    company_id = session.get("company_id")
+    if not company_id:
+        return redirect("/dashboard")
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                rekassa_enabled,
+                rekassa_number,
+                rekassa_crs_id,
+                rekassa_serial_number
+            FROM integrations
+            WHERE company_id = %s
+            ORDER BY id DESC
+            LIMIT 1
+        """, (company_id,))
+        row = cur.fetchone()
+        rekassa = dict(row) if row else {}
+    finally:
+        pool.putconn(conn)
+
+    return render_template("rekassa_settings.html", rekassa=rekassa)
     
 @settings_bp.route("/settings/whatsapp")
 def whatsapp_settings():
