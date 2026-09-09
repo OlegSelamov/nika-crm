@@ -1,105 +1,66 @@
 {% extends "base.html" %}
-
 {% block content %}
 {% set active_tab = request.args.get('tab', 'company' if can_manage_company else 'personal') %}
 <style>
-.profile-settings{max-width:1180px;margin:0 auto;padding:8px 0 40px;color:#202434}
-.profile-settings__head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:20px}
-.profile-settings__head h1{margin:0;font-size:30px;letter-spacing:-.03em}
-.profile-settings__head p{margin:6px 0 0;color:#7b8294;font-size:13px}
-.profile-tabs{display:flex;gap:8px;margin:0 0 18px;padding:5px;background:#f1f3f8;border-radius:15px;width:max-content;max-width:100%}
-.profile-tab{padding:10px 16px;border-radius:11px;color:#697084;text-decoration:none;font-size:13px;font-weight:800}
-.profile-tab.active{background:#fff;color:#5c48d8;box-shadow:0 5px 16px rgba(49,53,78,.09)}
-.profile-card{background:#fff;border:1px solid #e7e9f1;border-radius:22px;box-shadow:0 12px 32px rgba(40,44,72,.07);padding:22px;margin-bottom:15px}
-.profile-card h2{margin:0 0 5px;font-size:18px}.profile-card__desc{margin:0 0 20px;color:#858b9b;font-size:12px}
-.profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
-.profile-field{display:flex;flex-direction:column;gap:6px}.profile-field--wide{grid-column:1/-1}
-.profile-field label{font-size:11px;font-weight:800;color:#656d7f}
-.profile-field input{height:43px;border:1px solid #dfe3eb;border-radius:12px;padding:0 13px;font:inherit;color:#252a39;background:#fff;outline:none}
-.profile-field input:focus{border-color:#8a78ef;box-shadow:0 0 0 3px rgba(114,87,255,.09)}
-.profile-readonly{height:43px;display:flex;align-items:center;padding:0 13px;border:1px solid #edf0f5;border-radius:12px;background:#f8f9fc;color:#71798b;font-size:13px}
-.profile-actions{display:flex;justify-content:flex-end;margin-top:20px}
-.profile-save{border:0;border-radius:12px;background:#7257ff;color:#fff;padding:11px 18px;font-weight:850;cursor:pointer}
-.vat-switch{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px;border:1px solid #e4e7ef;border-radius:15px;background:#fafbfe}
-.vat-switch b{display:block;font-size:14px}.vat-switch span{display:block;margin-top:4px;color:#818899;font-size:11px;line-height:1.45}
-.switch{position:relative;width:50px;height:28px;flex:0 0 auto}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;inset:0;background:#cfd4df;border-radius:999px;cursor:pointer;transition:.2s}.slider:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,.18);transition:.2s}.switch input:checked+.slider{background:#7257ff}.switch input:checked+.slider:before{transform:translateX(22px)}
-.profile-saved{margin-bottom:14px;padding:11px 14px;border:1px solid #cdebd9;border-radius:12px;background:#effaf3;color:#218052;font-size:12px;font-weight:750}
-@media(max-width:700px){.profile-settings__head h1{font-size:25px}.profile-grid{grid-template-columns:1fr}.profile-field--wide{grid-column:auto}.profile-card{padding:16px;border-radius:18px}.profile-tabs{width:100%}.profile-tab{flex:1;text-align:center;padding:10px 8px}.vat-switch{grid-column:auto}}
+.pf{max-width:1240px;margin:0 auto;padding:8px 0 40px;color:#202434}.pf-head{margin-bottom:18px}.pf-head h1{margin:0;font-size:30px;letter-spacing:-.03em}.pf-head p{margin:6px 0 0;color:#7b8294;font-size:13px}
+.pf-nav{display:flex;gap:7px;overflow-x:auto;padding:5px;margin-bottom:18px;background:#f1f3f8;border-radius:15px;scrollbar-width:none}.pf-nav::-webkit-scrollbar{display:none}.pf-nav a{white-space:nowrap;padding:10px 14px;border-radius:11px;color:#697084;text-decoration:none;font-size:12px;font-weight:800}.pf-nav a.active{background:#fff;color:#5c48d8;box-shadow:0 5px 16px rgba(49,53,78,.09)}
+.card{background:#fff;border:1px solid #e7e9f1;border-radius:22px;box-shadow:0 12px 32px rgba(40,44,72,.07);padding:22px;margin-bottom:15px}.card h2{margin:0 0 5px;font-size:18px}.desc{margin:0 0 20px;color:#858b9b;font-size:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}.wide{grid-column:1/-1}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:11px;font-weight:800;color:#656d7f}.field input,.field select{height:43px;border:1px solid #dfe3eb;border-radius:12px;padding:0 13px;font:inherit;background:#fff;color:#252a39}.ro{height:43px;display:flex;align-items:center;padding:0 13px;border:1px solid #edf0f5;border-radius:12px;background:#f8f9fc;color:#71798b;font-size:13px}.actions{display:flex;justify-content:flex-end;margin-top:20px}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;background:#7257ff;color:#fff;padding:11px 18px;font-weight:850;text-decoration:none;cursor:pointer}.btn-light{background:#f0edff;color:#6049dd}
+.switch-row{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px;border:1px solid #e4e7ef;border-radius:15px;background:#fafbfe}.switch-row b{display:block;font-size:14px}.switch-row small{display:block;margin-top:4px;color:#818899;line-height:1.45}.switch{position:relative;width:50px;height:28px;flex:0 0 auto}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;inset:0;background:#cfd4df;border-radius:99px;cursor:pointer}.slider:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;box-shadow:0 2px 5px #0003;transition:.2s}.switch input:checked+.slider{background:#7257ff}.switch input:checked+.slider:before{transform:translateX(22px)}
+.notice{margin-bottom:14px;padding:11px 14px;border-radius:12px;font-size:12px;font-weight:750}.ok{border:1px solid #cdebd9;background:#effaf3;color:#218052}.err{border:1px solid #f0cccc;background:#fff1f1;color:#b44343}.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.stat{padding:16px;border:1px solid #e8eaf1;border-radius:16px;background:#fafbfe}.stat span{display:block;color:#858b9b;font-size:10px;font-weight:800;text-transform:uppercase}.stat strong{display:block;margin-top:7px;font-size:17px}.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}.chip{padding:7px 10px;border-radius:999px;background:#f0edff;color:#6049dd;font-size:10px;font-weight:800}.placeholder{padding:17px;border:1px dashed #d9ddea;border-radius:15px;background:#fafbfe;color:#747c8e;font-size:12px;line-height:1.55}
+@media(max-width:700px){.pf-head h1{font-size:25px}.grid,.stat-grid{grid-template-columns:1fr}.wide{grid-column:auto}.card{padding:16px;border-radius:18px}.pf-nav{margin-left:-2px;margin-right:-2px}}
 </style>
+<div class="pf">
+<div class="pf-head"><h1>Профиль</h1><p>{% if can_manage_company %}Аккаунт, организация и управление Nika Business{% else %}Ваш аккаунт и персональные настройки{% endif %}</p></div>
+{% if request.args.get('saved') %}<div class="notice ok">Изменения сохранены.</div>{% endif %}
+{% if request.args.get('error') %}<div class="notice err">{% if request.args.get('error')=='wrong_password' %}Текущий пароль указан неверно.{% elif request.args.get('error')=='password_mismatch' %}Новые пароли не совпадают.{% else %}Новый пароль должен содержать минимум 5 символов.{% endif %}</div>{% endif %}
+<nav class="pf-nav">
+<a href="/profile?tab=personal" class="{{ 'active' if active_tab=='personal' else '' }}">Личные данные</a>
+{% if can_manage_company %}
+<a href="/profile?tab=company" class="{{ 'active' if active_tab=='company' else '' }}">Организация</a>
+<a href="/profile?tab=taxes" class="{{ 'active' if active_tab=='taxes' else '' }}">Налоги</a>
+<a href="/profile?tab=documents" class="{{ 'active' if active_tab=='documents' else '' }}">Документы</a>
+<a href="/profile?tab=subscription" class="{{ 'active' if active_tab=='subscription' else '' }}">Подписка</a>
+{% endif %}
+<a href="/profile?tab=interface" class="{{ 'active' if active_tab=='interface' else '' }}">Интерфейс</a>
+<a href="/profile?tab=security" class="{{ 'active' if active_tab=='security' else '' }}">Безопасность</a>
+</nav>
 
-<div class="profile-settings">
-  <div class="profile-settings__head">
-    <div>
-      <h1>Профиль</h1>
-      <p>{% if can_manage_company %}Личные данные и настройки организации{% else %}Ваши личные данные и настройки{% endif %}</p>
-    </div>
-  </div>
+{% if active_tab=='personal' %}
+<form method="post" action="/profile/personal"><section class="card"><h2>Личные данные</h2><p class="desc">Персональные данные вашей учётной записи.</p><div class="grid">
+<div class="field"><label>ФИО</label><input name="full_name" value="{{ user.full_name or '' }}"></div><div class="field"><label>Телефон</label><input name="phone" value="{{ user.phone or '' }}"></div><div class="field"><label>Должность</label><input name="position" value="{{ user.position or '' }}"></div><div class="field"><label>Логин</label><div class="ro">{{ user.username or '—' }}</div></div><div class="field"><label>Роль</label><div class="ro">{{ user.role or 'employee' }}</div></div><div class="field"><label>Организация</label><div class="ro">{{ user.company_name or 'Не указана' }}</div></div>
+</div><div class="actions"><button class="btn">Сохранить</button></div></section></form>
 
-  {% if request.args.get('saved') %}
-  <div class="profile-saved">Изменения сохранены.</div>
-  {% endif %}
+{% elif active_tab=='company' and can_manage_company %}
+<form method="post" action="/company/profile"><section class="card"><h2>Организация</h2><p class="desc">Основные и банковские реквизиты организации.</p><div class="grid">
+<div class="field"><label>Название</label><input name="name" value="{{ company.name or '' }}"></div><div class="field"><label>БИН / ИИН</label><input name="bin" value="{{ company.bin or '' }}"></div><div class="field wide"><label>Адрес</label><input name="address" value="{{ company.address or '' }}"></div><div class="field"><label>Телефон</label><input name="phone" value="{{ company.phone or '' }}"></div><div class="field"><label>Руководитель</label><input name="director" value="{{ company.director or '' }}"></div><div class="field"><label>ИИК</label><input name="iik" value="{{ company.iik or '' }}"></div><div class="field"><label>БИК</label><input name="bik" value="{{ company.bik or '' }}"></div><div class="field"><label>Банк</label><input name="bank" value="{{ company.bank or '' }}"></div><div class="field"><label>КБЕ</label><input name="kbe" value="{{ company.kbe or '' }}"></div><div class="field"><label>КНП</label><input name="knp" value="{{ company.knp or '' }}"></div>
+</div><input type="hidden" name="is_vat_payer" value="{{ 'on' if company.is_vat_payer else '' }}"><div class="actions"><button class="btn">Сохранить организацию</button></div></section></form>
 
-  <nav class="profile-tabs">
-    <a href="/profile?tab=personal" class="profile-tab {{ 'active' if active_tab == 'personal' else '' }}">Личные настройки</a>
-    {% if can_manage_company %}
-    <a href="/profile?tab=company" class="profile-tab {{ 'active' if active_tab == 'company' else '' }}">Организация</a>
-    {% endif %}
-  </nav>
+{% elif active_tab=='taxes' and can_manage_company %}
+<form method="post" action="/company/profile"><section class="card"><h2>Налоги</h2><p class="desc">Налоговые параметры организации для документов и бухгалтерии.</p>
+<input type="hidden" name="name" value="{{ company.name or '' }}"><input type="hidden" name="bin" value="{{ company.bin or '' }}"><input type="hidden" name="address" value="{{ company.address or '' }}"><input type="hidden" name="phone" value="{{ company.phone or '' }}"><input type="hidden" name="director" value="{{ company.director or '' }}"><input type="hidden" name="iik" value="{{ company.iik or '' }}"><input type="hidden" name="bik" value="{{ company.bik or '' }}"><input type="hidden" name="bank" value="{{ company.bank or '' }}"><input type="hidden" name="kbe" value="{{ company.kbe or '' }}"><input type="hidden" name="knp" value="{{ company.knp or '' }}">
+<div class="switch-row"><div><b>Плательщик НДС</b><small>Включите, если организация состоит на регистрационном учёте по НДС.</small></div><label class="switch"><input type="checkbox" name="is_vat_payer" {% if company.is_vat_payer %}checked{% endif %}><span class="slider"></span></label></div>
+<div class="actions"><button class="btn">Сохранить налоги</button></div></section></form>
 
-  {% if active_tab == 'company' and can_manage_company %}
-  <form method="post" action="/company/profile">
-    <section class="profile-card">
-      <h2>Настройки организации</h2>
-      <p class="profile-card__desc">Реквизиты принадлежат организации и используются в документах, налогах и интеграциях.</p>
-      <div class="profile-grid">
-        <div class="profile-field"><label>Название организации</label><input name="name" value="{{ company.name or '' }}" autocomplete="organization"></div>
-        <div class="profile-field"><label>БИН / ИИН</label><input name="bin" value="{{ company.bin or '' }}" inputmode="numeric"></div>
-        <div class="profile-field profile-field--wide"><label>Адрес</label><input name="address" value="{{ company.address or '' }}"></div>
-        <div class="profile-field"><label>Телефон организации</label><input name="phone" value="{{ company.phone or '' }}"></div>
-        <div class="profile-field"><label>Руководитель</label><input name="director" value="{{ company.director or '' }}"></div>
-      </div>
-    </section>
+{% elif active_tab=='documents' and can_manage_company %}
+<section class="card"><h2>Документы</h2><p class="desc">Единый центр параметров документов организации.</p><div class="placeholder"><b>Следующий этап:</b> здесь будут нумерация счетов, накладных, актов и счетов-фактур, правила подписи и печати, а также шаблоны. Раздел уже отделён архитектурно, поэтому можно наполнять его без смешивания с реквизитами организации.</div></section>
 
-    <section class="profile-card">
-      <h2>Налоги</h2>
-      <p class="profile-card__desc">Налоговые параметры организации. Они будут использоваться при формировании документов и расчётах.</p>
-      <div class="profile-grid">
-        <div class="vat-switch">
-          <div><b>Плательщик НДС</b><span>Включите, если организация состоит на регистрационном учёте по НДС.</span></div>
-          <label class="switch"><input type="checkbox" name="is_vat_payer" {% if company.is_vat_payer %}checked{% endif %}><span class="slider"></span></label>
-        </div>
-      </div>
-    </section>
+{% elif active_tab=='subscription' and can_manage_company %}
+<section class="card"><h2>Подписка</h2><p class="desc">Состояние подписки и подключённые возможности Nika Business.</p>
+<div class="stat-grid"><div class="stat"><span>Статус</span><strong>{{ subscription.status if subscription else '—' }}</strong></div><div class="stat"><span>Стоимость</span><strong>{{ ('{:,.0f}'.format(subscription.total_price or 0)).replace(',', ' ') if subscription else '0' }} ₸</strong></div><div class="stat"><span>Следующая оплата</span><strong>{{ subscription.next_payment_at.strftime('%d.%m.%Y') if subscription and subscription.next_payment_at else '—' }}</strong></div></div>
+{% if active_modules %}<div class="chips">{% for module in active_modules %}<span class="chip">{{ module.name }}</span>{% endfor %}</div>{% endif %}
+<div class="actions"><a class="btn" href="/subscription">Управление подпиской</a></div></section>
 
-    <section class="profile-card">
-      <h2>Банковские реквизиты</h2>
-      <p class="profile-card__desc">Используются в счетах, накладных, актах и других документах.</p>
-      <div class="profile-grid">
-        <div class="profile-field"><label>ИИК</label><input name="iik" value="{{ company.iik or '' }}"></div>
-        <div class="profile-field"><label>БИК</label><input name="bik" value="{{ company.bik or '' }}"></div>
-        <div class="profile-field"><label>Банк</label><input name="bank" value="{{ company.bank or '' }}"></div>
-        <div class="profile-field"><label>КБЕ</label><input name="kbe" value="{{ company.kbe or '' }}"></div>
-        <div class="profile-field"><label>КНП</label><input name="knp" value="{{ company.knp or '' }}"></div>
-      </div>
-      <div class="profile-actions"><button class="profile-save" type="submit">Сохранить организацию</button></div>
-    </section>
-  </form>
-  {% else %}
-  <form method="post" action="/profile/personal">
-    <section class="profile-card">
-      <h2>Личные настройки</h2>
-      <p class="profile-card__desc">Эти данные относятся только к вашей учётной записи и не меняют реквизиты организации.</p>
-      <div class="profile-grid">
-        <div class="profile-field"><label>ФИО</label><input name="full_name" value="{{ user.full_name or '' }}" autocomplete="name"></div>
-        <div class="profile-field"><label>Телефон</label><input name="phone" value="{{ user.phone or '' }}" autocomplete="tel"></div>
-        <div class="profile-field"><label>Должность</label><input name="position" value="{{ user.position or '' }}"></div>
-        <div class="profile-field"><label>Логин</label><div class="profile-readonly">{{ user.username or '—' }}</div></div>
-        <div class="profile-field"><label>Роль</label><div class="profile-readonly">{{ user.role or 'employee' }}</div></div>
-        <div class="profile-field"><label>Организация</label><div class="profile-readonly">{{ user.company_name or 'Не указана' }}</div></div>
-      </div>
-      <div class="profile-actions"><button class="profile-save" type="submit">Сохранить личные данные</button></div>
-    </section>
-  </form>
-  {% endif %}
+{% elif active_tab=='interface' %}
+<form method="post" action="/profile/interface"><section class="card"><h2>Интерфейс</h2><p class="desc">Персональные настройки отображения и поведения Nika.</p><div class="grid">
+<div class="field wide"><label>Стартовый раздел после входа</label><select name="start_page"><option value="profile" {% if user.start_page=='profile' %}selected{% endif %}>Профиль</option><option value="analytics" {% if user.start_page=='analytics' %}selected{% endif %}>Аналитика</option><option value="sales" {% if user.start_page=='sales' %}selected{% endif %}>Продажи</option><option value="tasks" {% if user.start_page=='tasks' %}selected{% endif %}>Задачи</option><option value="catalog" {% if user.start_page=='catalog' %}selected{% endif %}>Каталог</option></select></div>
+<div class="switch-row wide"><div><b>Компактный интерфейс</b><small>Уменьшает отступы и плотнее размещает информацию.</small></div><label class="switch"><input type="checkbox" name="compact_mode" {% if user.compact_mode %}checked{% endif %}><span class="slider"></span></label></div>
+<div class="switch-row wide"><div><b>Уведомления</b><small>Разрешить персональные уведомления внутри Nika.</small></div><label class="switch"><input type="checkbox" name="notifications_enabled" {% if user.notifications_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+</div><div class="actions"><button class="btn">Сохранить интерфейс</button></div></section></form>
+
+{% elif active_tab=='security' %}
+<form method="post" action="/profile/security"><section class="card"><h2>Безопасность</h2><p class="desc">Изменение пароля вашей учётной записи.</p><div class="grid">
+<div class="field wide"><label>Текущий пароль</label><input type="password" name="current_password" required autocomplete="current-password"></div><div class="field"><label>Новый пароль</label><input type="password" name="new_password" required autocomplete="new-password"></div><div class="field"><label>Повторите новый пароль</label><input type="password" name="confirm_password" required autocomplete="new-password"></div>
+</div><div class="actions"><button class="btn">Изменить пароль</button></div></section></form>
+{% endif %}
 </div>
 {% endblock %}
