@@ -1,0 +1,6 @@
+.nika-icon-sprite{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+.nika-ui-icon,.nika-emoji-icon{width:1.18em;height:1.18em;display:inline-block;vertical-align:-.18em;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.nika-emoji-icon{margin:0 .18em;color:#6d5ee8}
+button .nika-emoji-icon,a .nika-emoji-icon,.btn .nika-emoji-icon{margin-left:0}
+.nika-icon-chip{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;background:linear-gradient(145deg,rgba(99,102,241,.14),rgba(139,92,246,.12));color:#6d5ee8;border:1px solid rgba(99,102,241,.12)}
+.nika-icon-chip .nika-ui-icon{width:18px;height:18px}
