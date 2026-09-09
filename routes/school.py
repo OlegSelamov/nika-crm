@@ -98,7 +98,7 @@ def _style_sheet(ws, widths):
 
 @school_bp.route("")
 def index():
-    return redirect(url_for("school.meals"))
+    return redirect(url_for("school.classes"))
 
 
 @school_bp.route("/leaders")
@@ -463,3 +463,160 @@ def import_meals():
     except Exception as exc:
         return redirect(url_for("school.meals", error=f"Ошибка импорта: {exc}"))
     return redirect(url_for("school.meals", success=f"Загружено строк: {count}"))
+
+
+def _school_classes(cur, company_id):
+    cur.execute("SELECT id,name FROM school_classes WHERE company_id=%s AND is_active=TRUE ORDER BY sort_order,name", (company_id,))
+    return cur.fetchall()
+
+
+@school_bp.route("/classes")
+def classes():
+    company_id = _company_id()
+    if not company_id: return redirect("/login")
+    selected_date = request.args.get("date") or date.today().isoformat()
+    conn=get_db()
+    try:
+        cur=conn.cursor(); class_rows=_school_classes(cur,company_id)
+        selected_class_id=request.args.get("class_id",type=int) or (class_rows[0]["id"] if class_rows else None)
+        students=[]
+        if selected_class_id:
+            cur.execute("""
+                SELECT s.id,s.full_name,s.iin,s.phone,
+                       COALESCE(a.is_present,TRUE) is_present,COALESCE(a.note,'') attendance_note
+                FROM school_students s
+                LEFT JOIN school_attendance a ON a.student_id=s.id AND a.company_id=s.company_id AND a.attendance_date=%s
+                WHERE s.company_id=%s AND s.class_id=%s AND s.is_active=TRUE
+                ORDER BY s.full_name
+            """,(selected_date,company_id,selected_class_id)); students=cur.fetchall()
+    finally: pool.putconn(conn)
+    return render_template("school_classes.html",classes=class_rows,students=students,selected_class_id=selected_class_id,selected_date=selected_date)
+
+
+@school_bp.route("/students/save",methods=["POST"])
+def save_student():
+    company_id=_company_id()
+    if not company_id: return redirect("/login")
+    class_id=request.form.get("class_id",type=int); full_name=request.form.get("full_name","").strip()
+    if not class_id or not full_name: return redirect(url_for("school.classes",class_id=class_id,error="Укажите класс и ФИО"))
+    conn=get_db()
+    try:
+        cur=conn.cursor(); cur.execute("""
+            INSERT INTO school_students(company_id,class_id,full_name,iin,phone)
+            SELECT %s,%s,%s,%s,%s WHERE EXISTS(SELECT 1 FROM school_classes WHERE id=%s AND company_id=%s)
+        """,(company_id,class_id,full_name,request.form.get("iin","").strip(),request.form.get("phone","").strip(),class_id,company_id)); conn.commit()
+    finally: pool.putconn(conn)
+    return redirect(url_for("school.classes",class_id=class_id,success="Ученик добавлен"))
+
+
+@school_bp.route("/students/<int:student_id>/delete",methods=["POST"])
+def delete_student(student_id):
+    company_id=_company_id(); class_id=request.form.get("class_id",type=int)
+    conn=get_db()
+    try:
+        cur=conn.cursor(); cur.execute("UPDATE school_students SET is_active=FALSE,updated_at=NOW() WHERE id=%s AND company_id=%s",(student_id,company_id)); conn.commit()
+    finally: pool.putconn(conn)
+    return redirect(url_for("school.classes",class_id=class_id,success="Ученик удалён из активного списка"))
+
+
+@school_bp.route("/attendance/save",methods=["POST"])
+def save_attendance():
+    company_id=_company_id(); class_id=request.form.get("class_id",type=int); attendance_date=request.form.get("attendance_date") or date.today().isoformat()
+    if not company_id: return redirect("/login")
+    conn=get_db()
+    try:
+        cur=conn.cursor()
+        cur.execute("SELECT id FROM school_students WHERE company_id=%s AND class_id=%s AND is_active=TRUE",(company_id,class_id))
+        for row in cur.fetchall():
+            sid=row["id"]; present=request.form.get(f"present_{sid}")=="on"; note=request.form.get(f"note_{sid}","").strip()
+            cur.execute("""
+                INSERT INTO school_attendance(company_id,student_id,attendance_date,is_present,note,marked_by)
+                VALUES(%s,%s,%s,%s,%s,%s)
+                ON CONFLICT(company_id,student_id,attendance_date) DO UPDATE SET is_present=EXCLUDED.is_present,note=EXCLUDED.note,marked_by=EXCLUDED.marked_by,updated_at=NOW()
+            """,(company_id,sid,attendance_date,present,note,session.get("user_id")))
+        conn.commit()
+    finally: pool.putconn(conn)
+    return redirect(url_for("school.classes",class_id=class_id,date=attendance_date,success="Посещаемость сохранена"))
+
+
+@school_bp.route("/schedule")
+def schedule():
+    company_id=_company_id()
+    if not company_id: return redirect("/login")
+    conn=get_db()
+    try:
+        cur=conn.cursor(); classes=_school_classes(cur,company_id)
+        class_id=request.args.get("class_id",type=int) or (classes[0]["id"] if classes else None)
+        rows=[]
+        if class_id:
+            cur.execute("SELECT * FROM school_schedule WHERE company_id=%s AND class_id=%s ORDER BY weekday,lesson_number",(company_id,class_id)); rows=cur.fetchall()
+    finally: pool.putconn(conn)
+    return render_template("school_schedule.html",classes=classes,rows=rows,selected_class_id=class_id,weekdays={1:"Понедельник",2:"Вторник",3:"Среда",4:"Четверг",5:"Пятница",6:"Суббота",7:"Воскресенье"})
+
+
+@school_bp.route("/schedule/save",methods=["POST"])
+def save_schedule():
+    company_id=_company_id(); class_id=request.form.get("class_id",type=int); weekday=request.form.get("weekday",type=int); lesson=request.form.get("lesson_number",type=int); subject=request.form.get("subject","").strip()
+    if not company_id or not class_id or not weekday or not lesson or not subject: return redirect(url_for("school.schedule",class_id=class_id,error="Заполните обязательные поля"))
+    conn=get_db()
+    try:
+        cur=conn.cursor(); cur.execute("""
+            INSERT INTO school_schedule(company_id,class_id,weekday,lesson_number,subject,teacher,room,start_time,end_time)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,NULLIF(%s,'')::time,NULLIF(%s,'')::time)
+            ON CONFLICT(company_id,class_id,weekday,lesson_number) DO UPDATE SET subject=EXCLUDED.subject,teacher=EXCLUDED.teacher,room=EXCLUDED.room,start_time=EXCLUDED.start_time,end_time=EXCLUDED.end_time,updated_at=NOW()
+        """,(company_id,class_id,weekday,lesson,subject,request.form.get("teacher","").strip(),request.form.get("room","").strip(),request.form.get("start_time",""),request.form.get("end_time",""))); conn.commit()
+    finally: pool.putconn(conn)
+    return redirect(url_for("school.schedule",class_id=class_id,success="Расписание сохранено"))
+
+
+@school_bp.route("/schedule/<int:row_id>/delete",methods=["POST"])
+def delete_schedule(row_id):
+    company_id=_company_id(); class_id=request.form.get("class_id",type=int)
+    conn=get_db()
+    try:
+        cur=conn.cursor(); cur.execute("DELETE FROM school_schedule WHERE id=%s AND company_id=%s",(row_id,company_id)); conn.commit()
+    finally: pool.putconn(conn)
+    return redirect(url_for("school.schedule",class_id=class_id,success="Урок удалён"))
+
+
+@school_bp.route("/topics")
+def topics():
+    company_id=_company_id()
+    if not company_id: return redirect("/login")
+    lesson_date=request.args.get("date") or date.today().isoformat()
+    conn=get_db()
+    try:
+        cur=conn.cursor(); classes=_school_classes(cur,company_id)
+        class_id=request.args.get("class_id",type=int) or (classes[0]["id"] if classes else None); rows=[]
+        if class_id:
+            cur.execute("""
+                SELECT t.* FROM school_lesson_topics t
+                WHERE t.company_id=%s AND t.class_id=%s AND t.lesson_date=%s ORDER BY t.lesson_number
+            """,(company_id,class_id,lesson_date)); rows=cur.fetchall()
+    finally: pool.putconn(conn)
+    return render_template("school_topics.html",classes=classes,rows=rows,selected_class_id=class_id,selected_date=lesson_date)
+
+
+@school_bp.route("/topics/save",methods=["POST"])
+def save_topic():
+    company_id=_company_id(); class_id=request.form.get("class_id",type=int); lesson_date=request.form.get("lesson_date") or date.today().isoformat(); lesson=request.form.get("lesson_number",type=int); topic=request.form.get("topic","").strip()
+    if not company_id or not class_id or not lesson or not topic: return redirect(url_for("school.topics",class_id=class_id,date=lesson_date,error="Укажите урок и тему"))
+    conn=get_db()
+    try:
+        cur=conn.cursor(); cur.execute("""
+            INSERT INTO school_lesson_topics(company_id,class_id,lesson_date,lesson_number,subject,topic,homework,teacher,created_by)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT(company_id,class_id,lesson_date,lesson_number) DO UPDATE SET subject=EXCLUDED.subject,topic=EXCLUDED.topic,homework=EXCLUDED.homework,teacher=EXCLUDED.teacher,created_by=EXCLUDED.created_by,updated_at=NOW()
+        """,(company_id,class_id,lesson_date,lesson,request.form.get("subject","").strip(),topic,request.form.get("homework","").strip(),request.form.get("teacher","").strip(),session.get("user_id"))); conn.commit()
+    finally: pool.putconn(conn)
+    return redirect(url_for("school.topics",class_id=class_id,date=lesson_date,success="Тема урока сохранена"))
+
+
+@school_bp.route("/topics/<int:topic_id>/delete",methods=["POST"])
+def delete_topic(topic_id):
+    company_id=_company_id(); class_id=request.form.get("class_id",type=int); lesson_date=request.form.get("lesson_date")
+    conn=get_db()
+    try:
+        cur=conn.cursor(); cur.execute("DELETE FROM school_lesson_topics WHERE id=%s AND company_id=%s",(topic_id,company_id)); conn.commit()
+    finally: pool.putconn(conn)
+    return redirect(url_for("school.topics",class_id=class_id,date=lesson_date,success="Тема удалена"))
