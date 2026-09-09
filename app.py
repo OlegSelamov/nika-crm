@@ -81,6 +81,10 @@ try:
         ALTER TABLE item_images
         ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT FALSE
     """)
+    _media_schema_cur.execute("""
+        ALTER TABLE companies
+        ADD COLUMN IF NOT EXISTS is_vat_payer BOOLEAN NOT NULL DEFAULT FALSE
+    """)
     _media_schema_conn.commit()
     _media_schema_cur.close()
     pool.putconn(_media_schema_conn)
@@ -236,7 +240,7 @@ def inject_subscription_context():
 @app.route("/")
 def landing():
     if session.get("user_id"):
-        return redirect("/dashboard")
+        return redirect("/analytics")
     return render_template("landing.html")
 
 if __name__ == "__main__":
