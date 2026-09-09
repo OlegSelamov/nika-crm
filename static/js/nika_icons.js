@@ -46,6 +46,7 @@ arrowLeft:'<path d="M19 12H5M11 6l-6 6 6 6"/>',
 arrowRight:'<path d="M5 12h14M13 6l6 6-6 6"/>',
 bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
 spark:'<path d="m12 3 1.4 4.2L18 9l-4.6 1.8L12 15l-1.4-4.2L6 9l4.6-1.8L12 3ZM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/>',
+search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
 play:'<path d="m8 5 11 7-11 7z"/>'
 };
 function inject(){if(document.getElementById('nikaGlobalIconSprite'))return;const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.id='nikaGlobalIconSprite';s.classList.add('nika-icon-sprite');s.setAttribute('aria-hidden','true');s.innerHTML='<defs>'+Object.entries(S).map(([k,v])=>'<symbol id="nika-'+k+'" viewBox="0 0 24 24">'+v+'</symbol>').join('')+'</defs>';document.body.prepend(s);}
