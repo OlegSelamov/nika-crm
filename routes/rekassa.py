@@ -471,8 +471,8 @@ def _local_closed_shifts(
             WHERE company_id = %s
               AND rekassa_shift_number IS NOT NULL
               AND (%s IS NULL OR rekassa_shift_number <> %s)
-              AND (%s = '' OR DATE(COALESCE(refunded_at, created_at)) >= %s::date)
-              AND (%s = '' OR DATE(COALESCE(refunded_at, created_at)) <= %s::date)
+              AND (NULLIF(%s, '') IS NULL OR DATE(COALESCE(refunded_at, created_at)) >= NULLIF(%s, '')::date)
+              AND (NULLIF(%s, '') IS NULL OR DATE(COALESCE(refunded_at, created_at)) <= NULLIF(%s, '')::date)
             GROUP BY rekassa_shift_number, COALESCE(rekassa_znm, '')
             ORDER BY MAX(COALESCE(refunded_at, created_at)) DESC
             LIMIT %s OFFSET %s

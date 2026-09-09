@@ -131,6 +131,69 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     }
   }
 
+  Future<void> _reloadDocuments() async {
+    if (mounted) setState(() => loadingMoreDocuments = true);
+    try {
+      final rows = await ApiService.getSalesHistory(
+        allHistory: true,
+        page: 0,
+        size: documentPageSize,
+        queryText: documentSearchController.text,
+        kind: documentKind,
+        dateFrom: _apiDate(documentPeriod?.start),
+        dateTo: _apiDate(documentPeriod?.end),
+      );
+      final docs = rows.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      if (!mounted) return;
+      setState(() {
+        documentSales
+          ..clear()
+          ..addAll(docs);
+        documentPage = 0;
+        documentsHasMore = docs.length >= documentPageSize;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loadingMoreDocuments = false);
+    }
+  }
+
+  Future<void> _reloadShifts() async {
+    if (mounted) setState(() => loadingMore = true);
+    try {
+      final response = await ApiService.shiftHistory(
+        page: 0,
+        size: pageSize,
+        dateFrom: _apiDate(shiftPeriod?.start),
+        dateTo: _apiDate(shiftPeriod?.end),
+      );
+      final loaded = _extractHistory(response['history']);
+      if (!mounted) return;
+      setState(() {
+        closedShifts
+          ..clear()
+          ..addAll(loaded);
+        _sortAndDeduplicate();
+        page = 0;
+        hasMore = response['has_more'] == true || loaded.length >= pageSize;
+        historyWarning = (response['warning'])?.toString();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loadingMore = false);
+    }
+  }
+
   Future<void> loadMore() async {
     if (loadingMore || !hasMore) return;
     setState(() => loadingMore = true);
@@ -234,20 +297,20 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final selected = await _pickRussianPeriod(shiftPeriod);
     if (selected == null) return;
     setState(() => shiftPeriod = selected);
-    await loadHistory();
+    await _reloadShifts();
   }
 
   Future<void> _changeDocumentPeriod() async {
     final selected = await _pickRussianPeriod(documentPeriod);
     if (selected == null) return;
     setState(() => documentPeriod = selected);
-    await loadHistory();
+    await _reloadDocuments();
   }
 
   Future<void> _resetShiftPeriod() async {
     if (shiftPeriod == null) return;
     setState(() => shiftPeriod = null);
-    await loadHistory();
+    await _reloadShifts();
   }
 
   Future<void> _resetDocumentFilters() async {
@@ -256,13 +319,13 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       documentPeriod = null;
       documentKind = 'all';
     });
-    await loadHistory();
+    await _reloadDocuments();
   }
 
   Future<void> _setDocumentKind(String kind) async {
     if (documentKind == kind) return;
     setState(() => documentKind = kind);
-    await loadHistory();
+    await _reloadDocuments();
   }
 
   List<Map<String, dynamic>> _extractHistory(dynamic raw) {
@@ -549,7 +612,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             TextField(
               controller: documentSearchController,
               textInputAction: TextInputAction.search,
-              onSubmitted: (_) => loadHistory(),
+              onSubmitted: (_) => _reloadDocuments(),
               decoration: InputDecoration(
                 hintText: 'Номер, клиент или сумма',
                 prefixIcon: const Icon(Icons.search_rounded),
@@ -559,7 +622,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                         onPressed: () {
                           documentSearchController.clear();
                           setState(() {});
-                          loadHistory();
+                          _reloadDocuments();
                         },
                         icon: const Icon(Icons.close_rounded),
                       ),
@@ -805,7 +868,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Оплата подтверждена')),
       );
-      await loadHistory();
+      await _reloadDocuments();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -829,7 +892,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         formedAt: _saleDateTime(detail),
       ),
     );
-    if (changed == true && mounted) await loadHistory();
+    if (changed == true && mounted) await _reloadDocuments();
   }
 
   Widget _documentSaleCard(Map<String, dynamic> sale) {
