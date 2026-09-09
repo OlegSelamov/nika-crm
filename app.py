@@ -33,6 +33,7 @@ from routes.clients import clients_bp
 from routes.tasks import tasks_bp
 from routes.items import items_bp
 from routes.sales import sales_bp
+from routes.rekassa_comrun import rekassa_comrun_bp
 from routes.kaspi_pos import kaspi_pos_bp
 from models import init_db, get_db, pool
 from routes.sales import sales_api
@@ -95,6 +96,7 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(items_bp)
+app.register_blueprint(rekassa_comrun_bp)
 app.register_blueprint(sales_bp)
 app.register_blueprint(kaspi_pos_bp)
 app.register_blueprint(sales_api)
@@ -210,6 +212,8 @@ def inject_storefront_workflow_assets(response):
             html = html.replace("</body>", '<script src="/static/js/ai_error_patch.js?v=20260904-1"></script>\n</body>', 1)
         if request.path == "/sales" and "sales_hid_scanner.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/sales_hid_scanner.js?v=20260904-3"></script>\n</body>', 1)
+        if request.path == "/sales" and "sales_rekassa_comrun.js" not in html and "</body>" in html:
+            html = html.replace("</body>", '<script src="/static/js/sales_rekassa_comrun.js?v=20260909-1"></script>\n</body>', 1)
         scanner_pages = {"/items", "/stock", "/stock/income", "/stock/writeoff", "/stock/movements", "/clients"}
         if request.path in scanner_pages and "global_hid_scanner.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/global_hid_scanner.js?v=20260904-1"></script>\n</body>', 1)
