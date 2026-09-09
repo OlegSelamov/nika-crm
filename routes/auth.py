@@ -225,7 +225,7 @@ def login():
 
         # 🏢 Владелец / администратор компании
         if user["role"] in ("admin", "owner"):
-            return redirect("/dashboard")
+            return redirect("/analytics")
 
         # 👤 Обычный сотрудник
         return redirect("/profile")
@@ -754,7 +754,6 @@ def profile():
 
     conn = get_db()
     cur = conn.cursor()
-
     try:
         cur.execute("""
             SELECT
@@ -763,9 +762,13 @@ def profile():
                 c.bin AS company_bin,
                 c.address AS company_address,
                 c.phone AS company_phone,
+                c.iik AS company_iik,
+                c.bik AS company_bik,
+                c.bank AS company_bank,
+                c.kbe AS company_kbe,
+                c.knp AS company_knp,
                 c.director AS company_director,
-                c.tariff AS company_tariff,
-                c.paid_until AS company_paid_until
+                COALESCE(c.is_vat_payer, FALSE) AS company_is_vat_payer
             FROM users u
             LEFT JOIN companies c ON c.id = u.company_id
             WHERE u.id = %s
@@ -775,372 +778,56 @@ def profile():
         if not user:
             return redirect("/logout")
 
-        now = now_kz()
-        today = now.date()
-        month_start = today.replace(day=1)
-        chart_start = today - timedelta(days=29)
-
-        cur.execute("""
-            SELECT
-                COUNT(*) AS sales_count,
-                COALESCE(SUM(total_amount), 0) AS revenue,
-                COALESCE(AVG(total_amount), 0) AS average_check
-            FROM sales
-            WHERE company_id = %s
-              AND user_id = %s
-              AND status = 'Оплачено'
-              AND DATE(created_at) = %s
-        """, (company_id, user_id, today))
-        today_stats = cur.fetchone()
-
-        cur.execute("""
-            SELECT
-                COUNT(*) AS sales_count,
-                COALESCE(SUM(total_amount), 0) AS revenue,
-                COALESCE(AVG(total_amount), 0) AS average_check,
-                COUNT(DISTINCT DATE(created_at)) AS active_days
-            FROM sales
-            WHERE company_id = %s
-              AND user_id = %s
-              AND status = 'Оплачено'
-              AND DATE(created_at) BETWEEN %s AND %s
-        """, (company_id, user_id, month_start, today))
-        month_stats = cur.fetchone()
-
-        percent_rate = float(user.get("percent_rate") or 0)
-        today_revenue = float(today_stats.get("revenue") or 0)
-        month_revenue = float(month_stats.get("revenue") or 0)
-        today_reward = today_revenue * percent_rate / 100
-        month_reward = month_revenue * percent_rate / 100
-
-        base_salary = float(
-            user.get("salary")
-            or user.get("base_salary")
-            or user.get("salary_amount")
-            or 0
-        )
-        salary_deductions = float(
-            user.get("advance")
-            or user.get("salary_advance")
-            or user.get("deductions")
-            or 0
-        )
-        salary_payable = max(base_salary + month_reward - salary_deductions, 0)
-
-        cur.execute("""
-            SELECT
-                COUNT(*) AS refund_count,
-                COALESCE(SUM(total_amount), 0) AS refund_total
-            FROM sales
-            WHERE company_id = %s
-              AND user_id = %s
-              AND (
-                    status = 'Возврат'
-                    OR COALESCE(is_refunded, FALSE) = TRUE
-              )
-              AND DATE(created_at) BETWEEN %s AND %s
-        """, (company_id, user_id, month_start, today))
-        refund_stats = cur.fetchone()
-
-        cur.execute("""
-            SELECT DATE(created_at) AS sale_date,
-                   COALESCE(SUM(total_amount), 0) AS total
-            FROM sales
-            WHERE company_id = %s
-              AND user_id = %s
-              AND status = 'Оплачено'
-              AND DATE(created_at) BETWEEN %s AND %s
-            GROUP BY DATE(created_at)
-            ORDER BY sale_date
-        """, (company_id, user_id, chart_start, today))
-        chart_rows = cur.fetchall()
-        totals_by_date = {
-            row["sale_date"]: float(row["total"] or 0)
-            for row in chart_rows
-        }
-
-        chart_labels = []
-        chart_values = []
-        current_day = chart_start
-        while current_day <= today:
-            chart_labels.append(current_day.strftime("%d.%m"))
-            chart_values.append(totals_by_date.get(current_day, 0))
-            current_day += timedelta(days=1)
-
-        chart_total = sum(chart_values)
-        best_day_total = max(chart_values) if chart_values else 0
-        active_days = int(month_stats.get("active_days") or 0)
-
-        cur.execute("""
-            SELECT
-                u.id,
-                u.username,
-                u.full_name,
-                u.position,
-                COALESCE(SUM(s.total_amount) FILTER (
-                    WHERE s.status = 'Оплачено'
-                      AND DATE(s.created_at) BETWEEN %s AND %s
-                ), 0) AS revenue
-            FROM users u
-            LEFT JOIN sales s
-              ON s.user_id = u.id
-             AND s.company_id = u.company_id
-            WHERE u.company_id = %s
-              AND COALESCE(u.is_super_admin, FALSE) = FALSE
-            GROUP BY u.id, u.username, u.full_name, u.position
-            ORDER BY revenue DESC, u.id
-        """, (month_start, today, company_id))
-        employee_ranking = cur.fetchall()
-
-        employee_rank = None
-        for index, row in enumerate(employee_ranking, start=1):
-            if row["id"] == user_id:
-                employee_rank = index
-                break
-
-        employees_total = len(employee_ranking)
-
-        cur.execute("""
-            SELECT
-                id,
-                sale_number,
-                total_amount,
-                sale_type,
-                status,
-                created_at
-            FROM sales
-            WHERE company_id = %s
-              AND user_id = %s
-            ORDER BY id DESC
-            LIMIT 12
-        """, (company_id, user_id))
-        recent_sales = cur.fetchall()
-
-        # Планка продаж: каждые 1 000 000 ₸.
-        step = 1_000_000
-        bonus_target = max(step, ((int(month_revenue) // step) + 1) * step)
-        previous_target = max(0, bonus_target - step)
-        progress_value = month_revenue - previous_target
-        bonus_progress = min(100, max(0, round(progress_value / step * 100)))
-        bonus_remaining = max(0, bonus_target - month_revenue)
-
-        # Это личный профиль текущего авторизованного пользователя.
-        # Раз страница открыта и запрос выполняется с его сессией — он онлайн.
-        # last_seen_at нужен для отображения статуса этого сотрудника другим пользователям.
-        is_online = True
-
-        name_parts = (user.get("full_name") or user.get("username") or "?").split()
-        employee_initials = "".join(part[:1] for part in name_parts[:2]).upper()
-
-        # Задачи, назначенные текущему сотруднику.
-        cur.execute("""
-            SELECT
-                t.id,
-                t.title,
-                t.description,
-                t.priority,
-                t.status,
-                (CASE
-                    WHEN t.due_date IS NULL THEN NULL
-                    WHEN BTRIM(t.due_date::text) = '' THEN NULL
-                    WHEN t.due_date::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                        THEN (t.due_date::text)::date
-                    ELSE NULL
-                END) AS due_date,
-                t.created_at
-            FROM tasks t
-            WHERE t.company_id = %s
-              AND t.assigned_user_id = %s
-            ORDER BY
-                CASE
-                    WHEN t.status NOT IN ('done', 'cancelled')
-                     AND (CASE
-                    WHEN t.due_date IS NULL THEN NULL
-                    WHEN BTRIM(t.due_date::text) = '' THEN NULL
-                    WHEN t.due_date::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                        THEN (t.due_date::text)::date
-                    ELSE NULL
-                END) IS NOT NULL
-                     AND (CASE
-                    WHEN t.due_date IS NULL THEN NULL
-                    WHEN BTRIM(t.due_date::text) = '' THEN NULL
-                    WHEN t.due_date::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                        THEN (t.due_date::text)::date
-                    ELSE NULL
-                END) < %s THEN 0
-                    WHEN t.status = 'in_progress' THEN 1
-                    WHEN t.status = 'new' THEN 2
-                    WHEN t.status = 'done' THEN 3
-                    ELSE 4
-                END,
-                CASE t.priority
-                    WHEN 'urgent' THEN 1
-                    WHEN 'high' THEN 2
-                    WHEN 'medium' THEN 3
-                    ELSE 4
-                END,
-                (CASE
-                    WHEN t.due_date IS NULL THEN NULL
-                    WHEN BTRIM(t.due_date::text) = '' THEN NULL
-                    WHEN t.due_date::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                        THEN (t.due_date::text)::date
-                    ELSE NULL
-                END) NULLS LAST,
-                t.id DESC
-            LIMIT 8
-        """, (company_id, user_id, today))
-        task_rows = cur.fetchall()
-
-        task_status_labels = {
-            "new": "Новая",
-            "in_progress": "В работе",
-            "done": "Выполнена",
-            "cancelled": "Отменена",
-        }
-        task_priority_labels = {
-            "low": "Низкий",
-            "medium": "Средний",
-            "high": "Высокий",
-            "urgent": "Срочный",
-        }
-
-        profile_tasks = []
-        for row in task_rows:
-            due_date = row.get("due_date")
-            status = row.get("status") or "new"
-            overdue = (
-                due_date is not None
-                and due_date < today
-                and status not in ("done", "cancelled")
-            )
-
-            if due_date == today:
-                due_label = "Сегодня"
-            elif due_date == today + timedelta(days=1):
-                due_label = "Завтра"
-            elif due_date:
-                due_label = due_date.strftime("%d.%m.%Y")
-            else:
-                due_label = "Без срока"
-
-            profile_tasks.append({
-                "id": row["id"],
-                "title": row.get("title") or "",
-                "description": row.get("description") or "",
-                "priority": row.get("priority") or "medium",
-                "priority_label": task_priority_labels.get(row.get("priority"), "Средний"),
-                "status": status,
-                "status_label": task_status_labels.get(status, "Новая"),
-                "due_date_label": due_label,
-                "overdue": overdue,
-            })
-
-        cur.execute("""
-            SELECT
-                COUNT(*) FILTER (
-                    WHERE status NOT IN ('done', 'cancelled')
-                ) AS active_count,
-                COUNT(*) FILTER (
-                    WHERE status NOT IN ('done', 'cancelled')
-                      AND (CASE
-                    WHEN due_date IS NULL THEN NULL
-                    WHEN BTRIM(due_date::text) = '' THEN NULL
-                    WHEN due_date::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                        THEN (due_date::text)::date
-                    ELSE NULL
-                END) IS NOT NULL
-                      AND (CASE
-                    WHEN due_date IS NULL THEN NULL
-                    WHEN BTRIM(due_date::text) = '' THEN NULL
-                    WHEN due_date::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                        THEN (due_date::text)::date
-                    ELSE NULL
-                END) < %s
-                ) AS overdue_count,
-                COUNT(*) FILTER (
-                    WHERE status NOT IN ('done', 'cancelled')
-                      AND (CASE
-                    WHEN due_date IS NULL THEN NULL
-                    WHEN BTRIM(due_date::text) = '' THEN NULL
-                    WHEN due_date::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                        THEN (due_date::text)::date
-                    ELSE NULL
-                END) = %s
-                ) AS today_count,
-                COUNT(*) FILTER (
-                    WHERE status = 'done'
-                      AND DATE(completed_at) BETWEEN %s AND %s
-                ) AS done_month_count
-            FROM tasks
-            WHERE company_id = %s
-              AND assigned_user_id = %s
-        """, (today, today, month_start, today, company_id, user_id))
-        task_summary = cur.fetchone()
-
-        achievements = [
-            {
-                "icon": "🏆",
-                "title": "Лидер команды",
-                "description": "Первое место по продажам за месяц",
-                "unlocked": employee_rank == 1 and month_revenue > 0,
-            },
-            {
-                "icon": "⭐",
-                "title": "100 продаж",
-                "description": "Не менее 100 оплаченных чеков за месяц",
-                "unlocked": int(month_stats.get("sales_count") or 0) >= 100,
-            },
-            {
-                "icon": "💰",
-                "title": "Миллион",
-                "description": "Продажи на сумму от 1 000 000 ₸",
-                "unlocked": month_revenue >= 1_000_000,
-            },
-            {
-                "icon": "🔥",
-                "title": "Без возвратов",
-                "description": "Продажи за месяц без единого возврата",
-                "unlocked": int(month_stats.get("sales_count") or 0) > 0
-                            and int(refund_stats.get("refund_count") or 0) == 0,
-            },
-        ]
+        company = None
+        if company_id:
+            cur.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
+            company = cur.fetchone()
 
         return render_template(
             "profile.html",
             user=user,
-            today_stats=today_stats,
-            month_stats=month_stats,
-            refund_stats=refund_stats,
-            today_reward=today_reward,
-            month_reward=month_reward,
-            base_salary=base_salary,
-            salary_deductions=salary_deductions,
-            salary_payable=salary_payable,
-            recent_sales=recent_sales,
-            chart_labels=chart_labels,
-            chart_values=chart_values,
-            chart_total=chart_total,
-            best_day_total=best_day_total,
-            active_days=active_days,
-            employee_ranking=employee_ranking,
-            employee_rank=employee_rank,
-            employees_total=employees_total,
-            bonus_target=bonus_target,
-            bonus_remaining=bonus_remaining,
-            bonus_progress=bonus_progress,
-            achievements=achievements,
-            employee_initials=employee_initials,
-            is_online=is_online,
-            profile_tasks=profile_tasks,
-            task_summary=task_summary,
-            task_statuses=task_status_labels,
-            today=today,
-            month_start=month_start,
+            company=company,
+            can_manage_company=bool(
+                session.get("is_super_admin")
+                or session.get("role") in ("owner", "admin")
+            ),
         )
-
     finally:
         cur.close()
         pool.putconn(conn)
+
+
+@auth_bp.route("/profile/personal", methods=["POST"])
+def save_personal_profile():
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    full_name = (request.form.get("full_name") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    position = (request.form.get("position") or "").strip()
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE users
+            SET full_name = %s,
+                phone = %s,
+                position = %s
+            WHERE id = %s
+        """, (full_name, phone, position, session["user_id"]))
+        conn.commit()
+        session["full_name"] = full_name
+        session["phone"] = phone
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+    return redirect("/profile?tab=personal&saved=1")
+
 
 @auth_bp.route("/users/delete/<int:user_id>")
 def delete_user(user_id):
