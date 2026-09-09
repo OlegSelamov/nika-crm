@@ -148,7 +148,7 @@ td, th {
 <div class="page">
 
 <div class="title">
-Счет-фактура № {{ sale.sale_number }} от {{ sale_date }}
+Счет-фактура № {{ sale.document_number or sale.sale_number }} от {{ sale_date }}
 </div>
 
 <div class="row">

@@ -1144,6 +1144,47 @@ def format_fio(fio):
 
     return f"{surname} {initials}"
     
+def get_document_number(sale_id, document_type):
+    """Закрепляет отдельный номер документа за продажей при первом формировании."""
+    mapping = {
+        "invoice": ("invoice_number", "invoice_next_number"),
+        "nakladnaya": ("nakladnaya_number", "nakladnaya_next_number"),
+        "act": ("act_number", "act_next_number"),
+        "schet_factura": ("schet_factura_number", "schet_factura_next_number"),
+    }
+    sale_column, counter_column = mapping[document_type]
+    company_id = session.get("company_id")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT sale_number, {sale_column} AS document_number FROM sales WHERE id = %s AND company_id = %s FOR UPDATE", (sale_id, company_id))
+        sale_row = cur.fetchone()
+        if not sale_row:
+            return None
+
+        cur.execute("SELECT * FROM company_document_settings WHERE company_id = %s FOR UPDATE", (company_id,))
+        settings = cur.fetchone()
+        if not settings or not settings.get("custom_numbering_enabled"):
+            conn.rollback()
+            return sale_row["sale_number"]
+
+        if sale_row.get("document_number"):
+            conn.rollback()
+            return sale_row["document_number"]
+
+        next_number = max(1, int(settings.get(counter_column) or 1))
+        cur.execute(f"UPDATE sales SET {sale_column} = %s WHERE id = %s", (next_number, sale_id))
+        cur.execute(f"UPDATE company_document_settings SET {counter_column} = %s, updated_at = NOW() WHERE company_id = %s", (next_number + 1, company_id))
+        conn.commit()
+        return next_number
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
 @sales_bp.route("/docs/invoice/<int:sale_id>")
 def invoice(sale_id):
     sale, items, client = get_sale_data(sale_id)
@@ -1183,6 +1224,8 @@ def invoice(sale_id):
             "total": i["total"],
             "unit": i["unit"] if i["unit"] else "шт"
         })
+
+    sale["document_number"] = get_document_number(sale_id, "invoice")
 
     return render_template(
         "docs/invoice.html",
@@ -1567,7 +1610,7 @@ def nakladnaya(sale_id):
         "sender_short": company["name"],
         "receiver_short": client["company_name"] or client["full_name"],
         "bin": company["bin"],
-        "doc_number": sale["sale_number"],
+        "doc_number": get_document_number(sale_id, "nakladnaya"),
         "doc_date": sale_date,
         "responsible": director_short,
         "transport_org": "",
@@ -1645,6 +1688,8 @@ def schet_factura(sale_id):
         
     date_obj = sale["created_at"]
     sale_date = date_obj.strftime("%d.%m.%Y")
+
+    sale["document_number"] = get_document_number(sale_id, "schet_factura")
 
     return render_template(
         "docs/schet_factura.html",
@@ -2765,6 +2810,8 @@ def act(sale_id):
     client = dict(client)
 
     total = sum(item["total"] or 0 for item in items)
+    sale_date = sale["created_at"].strftime("%d.%m.%Y")
+    sale["document_number"] = get_document_number(sale_id, "act")
     
     pool.putconn(conn)
 
@@ -2775,7 +2822,7 @@ def act(sale_id):
         company=company,
         client=client,
         total=total,
-        date=now_kz().strftime("%d.%m.%Y"),
+        date=sale_date,
         format_date_ru=format_date_ru
     )
 

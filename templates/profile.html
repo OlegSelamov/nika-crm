@@ -42,7 +42,19 @@
 <div class="actions"><button class="btn">Сохранить налоги</button></div></section></form>
 
 {% elif active_tab=='documents' and can_manage_company %}
-<section class="card"><h2>Документы</h2><p class="desc">Единый центр параметров документов организации.</p><div class="placeholder"><b>Следующий этап:</b> здесь будут нумерация счетов, накладных, актов и счетов-фактур, правила подписи и печати, а также шаблоны. Раздел уже отделён архитектурно, поэтому можно наполнять его без смешивания с реквизитами организации.</div></section>
+<form method="post" action="/profile/documents">
+<section class="card"><h2>Нумерация документов</h2><p class="desc">Можно продолжить существующую нумерацию из тетради или старой программы. Номер закрепляется за документом при первом формировании.</p>
+<div class="switch-row"><div><b>Своя нумерация документов</b><small>Если выключено, документы продолжают использовать номер продажи. Включите для перехода со старого документооборота.</small></div><label class="switch"><input type="checkbox" name="custom_numbering_enabled" {% if document_settings.custom_numbering_enabled %}checked{% endif %}><span class="slider"></span></label></div>
+<div class="grid" style="margin-top:14px">
+<div class="field"><label>Следующий счёт на оплату №</label><input type="number" min="1" name="invoice_next_number" value="{{ document_settings.invoice_next_number }}"></div>
+<div class="field"><label>Следующая накладная №</label><input type="number" min="1" name="nakladnaya_next_number" value="{{ document_settings.nakladnaya_next_number }}"></div>
+<div class="field"><label>Следующий АВР №</label><input type="number" min="1" name="act_next_number" value="{{ document_settings.act_next_number }}"></div>
+<div class="field"><label>Следующий счёт-фактура №</label><input type="number" min="1" name="schet_factura_next_number" value="{{ document_settings.schet_factura_next_number }}"></div>
+</div></section>
+<section class="card"><h2>Оформление</h2><p class="desc">Правила оформления документов организации.</p>
+<div class="grid"><div class="switch-row wide"><div><b>Подставлять подпись</b><small>Настройка подготовлена для автоматической подписи документов после загрузки изображения подписи.</small></div><label class="switch"><input type="checkbox" name="show_signature" {% if document_settings.show_signature %}checked{% endif %}><span class="slider"></span></label></div>
+<div class="switch-row wide"><div><b>Подставлять печать</b><small>Настройка подготовлена для автоматической печати после загрузки изображения печати организации.</small></div><label class="switch"><input type="checkbox" name="show_stamp" {% if document_settings.show_stamp %}checked{% endif %}><span class="slider"></span></label></div></div>
+<div class="actions"><button class="btn">Сохранить документы</button></div></section></form>
 
 {% elif active_tab=='subscription' and can_manage_company %}
 <section class="card"><h2>Подписка</h2><p class="desc">Состояние подписки и подключённые возможности Nika Business.</p>

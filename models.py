@@ -1041,6 +1041,25 @@ def init_db():
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
 
     cur.execute("""
+        CREATE TABLE IF NOT EXISTS company_document_settings (
+            company_id INTEGER PRIMARY KEY,
+            custom_numbering_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+            invoice_next_number INTEGER NOT NULL DEFAULT 1,
+            nakladnaya_next_number INTEGER NOT NULL DEFAULT 1,
+            act_next_number INTEGER NOT NULL DEFAULT 1,
+            schet_factura_next_number INTEGER NOT NULL DEFAULT 1,
+            show_signature BOOLEAN NOT NULL DEFAULT FALSE,
+            show_stamp BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS invoice_number INTEGER")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS nakladnaya_number INTEGER")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS act_number INTEGER")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS schet_factura_number INTEGER")
+
+    cur.execute("""
         ALTER TABLE companies
         ADD COLUMN IF NOT EXISTS business_type TEXT
     """)
