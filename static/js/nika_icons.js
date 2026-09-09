@@ -47,6 +47,18 @@ arrowRight:'<path d="M5 12h14M13 6l6 6-6 6"/>',
 bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
 spark:'<path d="m12 3 1.4 4.2L18 9l-4.6 1.8L12 15l-1.4-4.2L6 9l4.6-1.8L12 3ZM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/>',
 search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+database:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+barcode:'<path d="M3 5v14M6 5v14M10 5v14M13 5v14M18 5v14M21 5v14"/>',
+download:'<path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/>',
+upload:'<path d="M12 21V9m-5 5 5-5 5 5M5 3h14"/>',
+clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+list:'<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+hash:'<path d="M10 3 8 21M16 3l-2 18M4 9h16M3 15h16"/>',
+rotateLeft:'<path d="M9 7H4v5"/><path d="M5 11a8 8 0 1 0 2-5"/>',
+sale:'<path d="M4 7h16v12H4zM7 4h10v3M8 12h8M8 15h5"/>',
+tag:'<path d="M20 13 13 20 4 11V4h7z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
+image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/>',
+plus:'<path d="M12 5v14M5 12h14"/>',
 play:'<path d="m8 5 11 7-11 7z"/>'
 };
 function inject(){if(document.getElementById('nikaGlobalIconSprite'))return;const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.id='nikaGlobalIconSprite';s.classList.add('nika-icon-sprite');s.setAttribute('aria-hidden','true');s.innerHTML='<defs>'+Object.entries(S).map(([k,v])=>'<symbol id="nika-'+k+'" viewBox="0 0 24 24">'+v+'</symbol>').join('')+'</defs>';document.body.prepend(s);}
