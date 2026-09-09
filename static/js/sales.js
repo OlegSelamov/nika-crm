@@ -447,12 +447,22 @@ function pay() {
             return;
         }
 
-        openSaleModal(data.sale_id, { autoPrint: true });
-
         cart = [];
         renderCart();
         resetSaleAmounts();
         window.dispatchEvent(new CustomEvent("nika:sale-completed"));
+
+        if (data.fiscalized !== true) {
+            const reason = data.rekassa?.message || "reKassa отклонила чек";
+            alert(
+                "Продажа сохранена, но чек НЕ фискализирован.\n\n" +
+                reason +
+                "\n\nНе проводите оплату повторно. Откройте Настройки → reKassa → Проверить интеграцию."
+            );
+            return;
+        }
+
+        openSaleModal(data.sale_id, { autoPrint: true });
 
     })
     .catch(err => {

@@ -708,6 +708,8 @@ def rekassa_test_ticket():
     
 @rekassa_bp.route("/api/rekassa/diagnostics", methods=["GET"])
 def rekassa_diagnostics():
+    from models import get_db, pool
+
     context, error = _load_company_rekassa()
     if error:
         return error
@@ -724,18 +726,106 @@ def rekassa_diagnostics():
     if state_error:
         return state_error
 
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                id,
+                sale_number,
+                created_at,
+                rekassa_status,
+                rekassa_ticket_id,
+                rekassa_ticket_number,
+                rekassa_shift_number
+            FROM sales
+            WHERE company_id = %s
+              AND COALESCE(sale_type, '') <> 'invoice'
+            ORDER BY id DESC
+            LIMIT 1
+        """, (context["company_id"],))
+        last_sale = cur.fetchone()
+        last_sale = dict(last_sale) if last_sale else None
+    finally:
+        pool.putconn(conn)
+
+    if last_sale and last_sale.get("created_at"):
+        last_sale["created_at"] = last_sale["created_at"].isoformat()
+
     register = state.get("register") or {}
     return jsonify({
         "success": True,
         "stage": "ready",
-        "message": "reKassa полностью подключена и доступна для фискализации",
+        "message": "Связь с reKassa установлена. Ниже отдельно показан статус последней фискализации.",
         "crs_id": context.get("crs_id"),
         "number": context["integration"].get("rekassa_number"),
         "serial_number": register.get("serialNumber") or context["integration"].get("rekassa_serial_number") or "",
         "shift_open": bool(register.get("shiftOpen")),
         "shift_number": register.get("shiftNumber"),
-        "status": register.get("status")
+        "status": register.get("status"),
+        "last_sale": last_sale,
+        "fiscalization_ready": not (
+            last_sale
+            and str(last_sale.get("rekassa_status") or "").startswith("ERROR:")
+        )
     })
+
+
+@rekassa_bp.route("/api/rekassa/sales/<int:sale_id>/fiscalize", methods=["POST"])
+def retry_rekassa_fiscalization(sale_id):
+    from models import get_db, pool
+
+    company_id = session.get("company_id")
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Требуется войти в систему"}), 401
+    if not company_id:
+        return jsonify({"success": False, "error": "Активная организация не выбрана"}), 403
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, rekassa_ticket_id
+            FROM sales
+            WHERE id = %s AND company_id = %s
+        """, (sale_id, company_id))
+        sale = cur.fetchone()
+        if not sale:
+            return jsonify({"success": False, "error": "Продажа не найдена"}), 404
+        if sale.get("rekassa_ticket_id"):
+            return jsonify({
+                "success": True,
+                "fiscalized": True,
+                "message": "Чек уже фискализирован",
+                "ticket_id": sale.get("rekassa_ticket_id")
+            })
+
+        result = rekassa_sell(conn, sale_id)
+        if result.get("status") != "OK":
+            message = result.get("message") or result.get("error") or "reKassa отклонила чек"
+            cur.execute(
+                "UPDATE sales SET rekassa_status = %s WHERE id = %s",
+                (("ERROR: " + str(message))[:500], sale_id),
+            )
+            conn.commit()
+            return jsonify({
+                "success": False,
+                "fiscalized": False,
+                "error": message,
+                "details": result.get("details"),
+                "http_status": result.get("http_status")
+            }), 422
+
+        return jsonify({
+            "success": True,
+            "fiscalized": True,
+            "message": "Чек фискализирован",
+            "ticket_id": result.get("id"),
+            "ticket_number": result.get("ticketNumber"),
+            "shift_number": result.get("shiftNumber")
+        })
+    finally:
+        pool.putconn(conn)
 
 
 @rekassa_bp.route("/api/rekassa/settings", methods=["GET"])

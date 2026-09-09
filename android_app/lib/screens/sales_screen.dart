@@ -853,6 +853,35 @@ class _SalesScreenState extends State<SalesScreen> {
         clientTouched = false;
         selectedClient = Map<String, dynamic>.from(defaultClient);
       });
+
+      if (result['fiscalized'] != true) {
+        final rekassa = result['rekassa'] is Map
+            ? Map<String, dynamic>.from(result['rekassa'] as Map)
+            : <String, dynamic>{};
+        final reason = '${rekassa['message'] ?? 'reKassa отклонила чек'}';
+        lastPaymentError = 'Продажа сохранена, но чек не фискализирован: $reason';
+        if (mounted) {
+          await showDialog<void>(
+            context: context,
+            builder: (_) => AlertDialog(
+              icon: const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 38),
+              title: const Text('Чек не фискализирован'),
+              content: Text(
+                'Продажа сохранена, но reKassa не приняла чек.\n\n$reason\n\n'
+                'Не проводите оплату повторно. Проверьте интеграцию reKassa.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Понятно'),
+                ),
+              ],
+            ),
+          );
+        }
+        return false;
+      }
+
       if (saleId != null) {
         Navigator.push(
           context,

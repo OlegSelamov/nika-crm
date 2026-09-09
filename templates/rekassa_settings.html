@@ -105,13 +105,29 @@ async function diagnoseRekassa(){
     const result = await response.json().catch(() => ({}));
 
     if(response.ok && result.success){
+        const last = result.last_sale || null;
+        const fiscalError = last && String(last.rekassa_status || "").startsWith("ERROR:")
+            ? String(last.rekassa_status).replace(/^ERROR:\s*/, "")
+            : "";
         status.innerHTML = `
             <div style="color:green;margin-top:12px">
-                ✅ reKassa полностью подключена<br>
+                ✅ Связь с reKassa установлена<br>
                 ID кассы: ${result.crs_id || "—"}<br>
                 ЗНМ: ${result.serial_number || result.number || "—"}<br>
                 Смена: ${result.shift_open ? "открыта №" + (result.shift_number || "—") : "закрыта"}
             </div>
+            ${fiscalError ? `
+                <div style="color:#c0392b;margin-top:12px;padding:10px;border-radius:10px;background:#fff1f1">
+                    ❌ Последний чек НЕ фискализирован<br>
+                    Продажа №${last.sale_number || last.id}<br>
+                    Причина: ${fiscalError}<br>
+                    <button class="btn" style="margin-top:8px" onclick="retryFiscalization(${last.id})">Повторить фискализацию</button>
+                </div>
+            ` : (last && last.rekassa_ticket_id ? `
+                <div style="color:green;margin-top:12px">
+                    ✅ Последний чек фискализирован · смена №${last.rekassa_shift_number || "—"}
+                </div>
+            ` : "")}
         `;
     }else{
         status.innerHTML = `
@@ -121,6 +137,22 @@ async function diagnoseRekassa(){
                 ${result.error || result.message || "Неизвестная ошибка reKassa"}
             </div>
         `;
+    }
+}
+
+async function retryFiscalization(saleId){
+    const status = document.getElementById("rekassaStatus");
+    const response = await fetch("/api/rekassa/sales/" + encodeURIComponent(saleId) + "/fiscalize", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"}
+    });
+    const result = await response.json().catch(() => ({}));
+    if(response.ok && result.fiscalized){
+        alert("Чек фискализирован. Смена №" + (result.shift_number || "—"));
+        await diagnoseRekassa();
+    }else{
+        alert("reKassa отклонила чек: " + (result.error || result.message || "Неизвестная ошибка"));
+        await diagnoseRekassa();
     }
 }
 

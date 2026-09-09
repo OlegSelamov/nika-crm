@@ -375,13 +375,20 @@ class _CheckScreenState extends State<CheckScreen> {
 
                 const SizedBox(height: 16),
 
-				Center(
-				  child: QrImageView(
-					data: sale!["rekassa_qr"] ??
-						"SALE-${sale!["id"]}",
-					size: 140,
-				  ),
-				),
+                if ((sale!["rekassa_qr"] ?? "").toString().isNotEmpty)
+                  Center(
+                    child: QrImageView(
+                      data: sale!["rekassa_qr"].toString(),
+                      size: 140,
+                    ),
+                  )
+                else
+                  const Center(
+                    child: Text(
+                      "Фискальный QR отсутствует",
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
 
 				const SizedBox(height: 12),
 
