@@ -1020,6 +1020,70 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_school_leaders_company ON school_class_leaders(company_id)")
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_school_one_leader_per_class ON school_class_leaders(company_id, class_id) WHERE class_id IS NOT NULL")
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS school_students (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            class_id INTEGER NOT NULL REFERENCES school_classes(id) ON DELETE CASCADE,
+            full_name TEXT NOT NULL,
+            iin TEXT,
+            phone TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS school_attendance (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL REFERENCES school_students(id) ON DELETE CASCADE,
+            attendance_date DATE NOT NULL,
+            is_present BOOLEAN NOT NULL DEFAULT TRUE,
+            note TEXT,
+            marked_by INTEGER,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(company_id, student_id, attendance_date)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS school_schedule (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            class_id INTEGER NOT NULL REFERENCES school_classes(id) ON DELETE CASCADE,
+            weekday INTEGER NOT NULL CHECK (weekday BETWEEN 1 AND 7),
+            lesson_number INTEGER NOT NULL CHECK (lesson_number > 0),
+            subject TEXT NOT NULL,
+            teacher TEXT,
+            room TEXT,
+            start_time TIME,
+            end_time TIME,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(company_id, class_id, weekday, lesson_number)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS school_lesson_topics (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            class_id INTEGER NOT NULL REFERENCES school_classes(id) ON DELETE CASCADE,
+            lesson_date DATE NOT NULL,
+            lesson_number INTEGER NOT NULL CHECK (lesson_number > 0),
+            subject TEXT,
+            topic TEXT NOT NULL,
+            homework TEXT,
+            teacher TEXT,
+            created_by INTEGER,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(company_id, class_id, lesson_date, lesson_number)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_school_students_class ON school_students(company_id, class_id, is_active)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_school_attendance_date ON school_attendance(company_id, attendance_date)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_school_schedule_class_day ON school_schedule(company_id, class_id, weekday)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_school_topics_class_date ON school_lesson_topics(company_id, class_id, lesson_date)")
+
     # Эти изменения безопасно выполняются повторно при каждом запуске.
     cur.execute("""
         ALTER TABLE companies
