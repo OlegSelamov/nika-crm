@@ -108,7 +108,7 @@ def stock_income():
         SELECT
             stock_movements.*,
             items.name AS item_name,
-            COALESCE((SELECT ii.image FROM item_images ii WHERE ii.item_id = items.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1), items.image) AS item_image
+            (SELECT ii.image FROM item_images ii WHERE ii.item_id = items.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1) AS item_image
 
         FROM stock_movements
 
@@ -146,7 +146,7 @@ def stock():
         WITH stock_rows AS (
             SELECT
                 i.*,
-                COALESCE((SELECT ii.image FROM item_images ii WHERE ii.item_id = i.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1), i.image) AS item_image,
+                (SELECT ii.image FROM item_images ii WHERE ii.item_id = i.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1) AS item_image,
                 COALESCE(SUM(
                     CASE
                         WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
@@ -232,7 +232,7 @@ def stock_movements():
         SELECT
             stock_movements.*,
             items.name as item_name,
-            COALESCE((SELECT ii.image FROM item_images ii WHERE ii.item_id = items.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1), items.image) AS item_image
+            (SELECT ii.image FROM item_images ii WHERE ii.item_id = items.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1) AS item_image
 
         FROM stock_movements
 
@@ -393,7 +393,7 @@ def api_stock():
         WITH stock_rows AS (
             SELECT
                 i.*,
-                COALESCE((SELECT ii.image FROM item_images ii WHERE ii.item_id = i.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1), i.image) AS item_image,
+                (SELECT ii.image FROM item_images ii WHERE ii.item_id = i.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1) AS item_image,
                 COALESCE(SUM(
                     CASE
                         WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
@@ -452,7 +452,7 @@ def api_stock_movements():
         SELECT
             stock_movements.*,
             items.name as item_name,
-            COALESCE((SELECT ii.image FROM item_images ii WHERE ii.item_id = items.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1), items.image) AS item_image
+            (SELECT ii.image FROM item_images ii WHERE ii.item_id = items.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1) AS item_image
 
         FROM stock_movements
 
