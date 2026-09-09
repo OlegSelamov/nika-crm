@@ -100,7 +100,8 @@ document.addEventListener("DOMContentLoaded", function () {
         searchInput.value = name;
         searchInput.setCustomValidity("");
 
-        if (selectedAvatar) selectedAvatar.textContent = (name || "Т").slice(0, 1).toUpperCase();
+        if (selectedAvatar) selectedAvatar.replaceChildren();
+        if (option.dataset.image) { const img = document.createElement("img"); img.src = option.dataset.image; img.alt = ""; selectedAvatar.appendChild(img); } else { selectedAvatar.textContent = (name || "Т").slice(0, 1).toUpperCase(); }
         if (selectedName) selectedName.textContent = name;
         if (selectedMeta) {
             selectedMeta.textContent = `Текущий остаток: ${formatNumber(stock)} ${unit}`.trim();
@@ -130,11 +131,12 @@ document.addEventListener("DOMContentLoaded", function () {
         option.dataset.ntin = item.ntin || "";
         option.dataset.unit = item.unit || "";
         option.dataset.stock = item.stock ?? 0;
+        option.dataset.image = item.item_image || item.image || "";
         option.dataset.price = item.purchase_price ?? 0;
 
         const avatar = document.createElement("span");
         avatar.className = "product-option-avatar";
-        avatar.textContent = (item.name || "Т").slice(0, 1).toUpperCase();
+        if (item.item_image || item.image) { const img = document.createElement("img"); img.src = item.item_image || item.image; img.alt = ""; img.loading = "lazy"; avatar.appendChild(img); } else { avatar.textContent = (item.name || "Т").slice(0, 1).toUpperCase(); }
 
         const main = document.createElement("span");
         main.className = "product-option-main";

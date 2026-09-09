@@ -90,7 +90,8 @@ document.addEventListener("DOMContentLoaded", function () {
         searchInput.value = name;
         searchInput.setCustomValidity("");
 
-        selectedAvatar.textContent = (name || "Т").slice(0, 1).toUpperCase();
+        selectedAvatar.replaceChildren();
+        if (option.dataset.image) { const img = document.createElement("img"); img.src = option.dataset.image; img.alt = ""; selectedAvatar.appendChild(img); } else { selectedAvatar.textContent = (name || "Т").slice(0, 1).toUpperCase(); }
         selectedName.textContent = name;
         selectedMeta.textContent = `Доступно: ${formatNumber(currentStock)} ${currentUnit}`.trim();
 
@@ -143,10 +144,11 @@ document.addEventListener("DOMContentLoaded", function () {
         option.dataset.ntin = item.ntin || "";
         option.dataset.unit = item.unit || "";
         option.dataset.stock = item.stock ?? 0;
+        option.dataset.image = item.item_image || item.image || "";
 
         const avatar = document.createElement("span");
         avatar.className = "product-option-avatar";
-        avatar.textContent = (item.name || "Т").slice(0, 1).toUpperCase();
+        if (item.item_image || item.image) { const img = document.createElement("img"); img.src = item.item_image || item.image; img.alt = ""; img.loading = "lazy"; avatar.appendChild(img); } else { avatar.textContent = (item.name || "Т").slice(0, 1).toUpperCase(); }
 
         const main = document.createElement("span");
         main.className = "product-option-main";

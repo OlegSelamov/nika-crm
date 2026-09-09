@@ -266,7 +266,7 @@
                         data-search="{{ (row.item_name or '')|lower }} {{ (row.comment or '')|lower }}">
                         <td>
                             <div class="history-product">
-                                <span>{{ (row.item_name or "Т")[:1]|upper }}</span>
+                                {% if row.item_image %}<img class="history-product-image" src="{{ row.item_image }}" alt="" loading="lazy">{% else %}<span>{{ (row.item_name or "Т")[:1]|upper }}</span>{% endif %}
                                 <strong>{{ row.item_name }}</strong>
                             </div>
                         </td>
@@ -308,7 +308,7 @@
 
                 <div class="income-history-card-top">
                     <div class="history-product">
-                        <span>{{ (row.item_name or "Т")[:1]|upper }}</span>
+                        {% if row.item_image %}<img class="history-product-image" src="{{ row.item_image }}" alt="" loading="lazy">{% else %}<span>{{ (row.item_name or "Т")[:1]|upper }}</span>{% endif %}
                         <div>
                             <strong>{{ row.item_name }}</strong>
                             <small>{{ row.created_at.strftime('%d.%m.%Y в %H:%M') if row.created_at else "Дата не указана" }}</small>
