@@ -75,10 +75,6 @@
             <a href="/profile"><img src="/static/icons/profile.png" class="menu-icon"><span class="text">Профиль</span></a>
             {% endif %}
 
-            {% if session.get("is_super_admin") or "dashboard" in session.get("employee_modules", []) %}
-            <a href="/dashboard"><img src="/static/icons/home.png" class="menu-icon"><span class="text">Главная</span></a>
-            {% endif %}
-
             {% if session.get("is_super_admin") or "sales" in session.get("employee_modules", []) %}
             <a href="/sales"><img src="/static/icons/sales.png" class="menu-icon"><span class="text">Продажи</span></a>
             {% endif %}
