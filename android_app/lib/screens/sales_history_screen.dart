@@ -6,6 +6,8 @@ import '../widgets/app_widgets.dart';
 import 'shift_detail_screen.dart';
 import 'sale_detail_screen.dart';
 import 'sale_document_preview_screen.dart';
+import 'check_screen.dart';
+import 'refund_check_screen.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -414,7 +416,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           .toList();
     }
 
-    // Совместимость со старым API до обновления сервера.
+    // Совместимость со старым API.
     final items = _saleItems(sale);
     final explicitHasServices = sale['has_services'] == true;
     final explicitHasProducts = sale['has_products'] == true;
@@ -423,14 +425,25 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final invoice = '${sale['sale_type'] ?? sale['payment_method'] ?? ''}'.toLowerCase() == 'invoice' ||
         sale['invoice_number'] != null;
     final refunded = sale['sale_refunded'] == true || _isRefundSale(sale);
+    final rawStatus = '${sale['status'] ?? sale['payment_status'] ?? ''}'.toLowerCase();
+    final paid = rawStatus.contains('paid') || rawStatus.contains('оплачен') || rawStatus.contains('success');
 
-    final types = <String>[
-      if (invoice) 'invoice' else if (refunded) 'refund-receipt' else 'receipt',
-      if (hasProducts) 'nakladnaya',
-      if (hasServices) 'act',
-      if (hasProducts || hasServices) 'schet-factura',
-      if (hasProducts || hasServices) 'esf',
-    ];
+    final types = <String>[];
+    if (refunded) {
+      types.add(invoice ? 'invoice' : 'refund-receipt');
+    } else if (invoice) {
+      types.add('invoice');
+      if (paid) {
+        if (hasProducts) types.add('nakladnaya');
+        if (hasServices) types.add('act');
+        if (hasProducts || hasServices) types.addAll(['schet-factura', 'esf']);
+      }
+    } else {
+      types.add('receipt');
+      if (hasProducts) types.add('nakladnaya');
+      if (hasServices) types.add('act');
+      if (hasProducts || hasServices) types.addAll(['schet-factura', 'esf']);
+    }
     return types.map(_documentActionForType).whereType<_SaleDocumentAction>().toList();
   }
 
@@ -441,7 +454,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       case 'refund-receipt':
         return const _SaleDocumentAction('refund-receipt', 'Чек возврата', Icons.assignment_return_rounded, needsPaid: false);
       case 'invoice':
-        return const _SaleDocumentAction('invoice', 'Счёт', Icons.request_quote_rounded, needsPaid: false);
+        return const _SaleDocumentAction('invoice', 'Счёт на оплату', Icons.request_quote_rounded, needsPaid: false);
       case 'nakladnaya':
         return const _SaleDocumentAction('nakladnaya', 'Накладная', Icons.local_shipping_outlined);
       case 'act':
@@ -455,7 +468,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }
 
   String _saleDateTime(Map<String, dynamic> sale) {
-    final raw = sale['created_at'] ?? sale['sale_date'] ?? sale['date'] ??
+    final raw = sale['event_at'] ?? sale['created_at'] ?? sale['sale_date'] ?? sale['date'] ??
         sale['createdAt'] ?? sale['timestamp'];
     if (raw == null) return 'Дата формирования не указана';
     if (raw is num) {
@@ -468,77 +481,83 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }
 
   String _formatDocumentDate(DateTime dt) {
+    const months = [
+      'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+    ];
     String two(int v) => v.toString().padLeft(2, '0');
-    return '${two(dt.day)}.${two(dt.month)}.${dt.year} • ${two(dt.hour)}:${two(dt.minute)}';
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}, ${two(dt.hour)}:${two(dt.minute)}';
   }
 
   Future<Map<String, dynamic>> _detailFor(Map<String, dynamic> sale) async {
     final id = int.tryParse('${sale['id'] ?? sale['sale_id'] ?? ''}');
     if (id == null) return sale;
     try {
-      return await ApiService.getSale(id);
+      final detail = await ApiService.getSale(id);
+      return <String, dynamic>{...sale, ...detail};
     } catch (_) {
       return sale;
     }
   }
 
-  Future<void> _openCardDocument(
-    Map<String, dynamic> sale,
-    _SaleDocumentAction doc,
-  ) async {
-    final detail = await _detailFor(sale);
-    if (!mounted) return;
-    final id = int.tryParse('${detail['id'] ?? detail['sale_id'] ?? sale['id'] ?? sale['sale_id'] ?? ''}');
-    if (id == null) return;
-    final raw = '${detail['status'] ?? sale['status'] ?? ''}'.toLowerCase();
-    final paid = raw.contains('paid') || raw.contains('оплачен') || raw.contains('success');
-    if (doc.needsPaid && !paid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сначала подтвердите оплату счёта')),
-      );
-      return;
-    }
-    if (doc.type == 'esf') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ЭСФ готовим отдельно: мобильная подпись будет подключена после доступа.')),
-      );
-      return;
-    }
-    if (doc.type == 'refund-receipt' || doc.type == 'receipt') {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => SaleDetailScreen(saleId: id)),
-      );
-      return;
-    }
-    final number = detail['sale_number'] ?? detail['invoice_number'] ?? id;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SaleDocumentPreviewScreen(
-          saleId: id,
-          documentType: doc.type,
-          title: '${doc.label} №$number',
-          fileName: '${doc.type.replaceAll('-', '_')}_$number',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openRefund(Map<String, dynamic> sale) async {
+  Future<void> _confirmInvoicePayment(Map<String, dynamic> sale) async {
     final id = int.tryParse('${sale['id'] ?? sale['sale_id'] ?? ''}');
     if (id == null) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => SaleDetailScreen(saleId: id)),
+    final number = sale['invoice_number'] ?? sale['sale_number'] ?? id;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        icon: const Icon(Icons.payments_rounded, color: AppColors.success, size: 36),
+        title: const Text('Подтвердить оплату?'),
+        content: Text('Счёт №$number будет отмечен оплаченным. После этого появятся закрывающие документы.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Оплата получена')),
+        ],
+      ),
     );
-    if (mounted) await loadHistory();
+    if (ok != true) return;
+
+    try {
+      final result = await ApiService.markInvoicePaid(id);
+      if (!mounted) return;
+      if (result['success'] != true) {
+        throw ApiException('${result['error'] ?? 'Не удалось подтвердить оплату'}');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Оплата подтверждена')),
+      );
+      await loadHistory();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(e))),
+        );
+      }
+    }
+  }
+
+  Future<void> _openSaleDocuments(Map<String, dynamic> sale) async {
+    final detail = await _detailFor(sale);
+    if (!mounted) return;
+    final docs = _documentsFor(detail);
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SaleDocumentsSheet(
+        sale: detail,
+        documents: docs,
+        formedAt: _saleDateTime(detail),
+      ),
+    );
+    if (changed == true && mounted) await loadHistory();
   }
 
   Widget _documentSaleCard(Map<String, dynamic> sale) {
-    final id = sale['id'] ?? sale['sale_id'] ?? '—';
+    final id = sale['sale_number'] ?? sale['id'] ?? sale['sale_id'] ?? '—';
     final total = asDouble(sale['total'] ?? sale['total_amount'] ?? sale['amount']);
-    final client = '${sale['client_name'] ?? sale['client'] ?? 'Частное лицо'}';
+    final client = '${sale['client_name'] ?? sale['client_company_name'] ?? sale['client'] ?? 'Частное лицо'}';
     final raw = '${sale['status'] ?? sale['payment_status'] ?? ''}'.toLowerCase();
     final invoice = '${sale['sale_type'] ?? sale['payment_method'] ?? ''}'.toLowerCase() == 'invoice' ||
         sale['invoice_number'] != null || raw.contains('счёт выставлен') || raw.contains('pending');
@@ -547,115 +566,103 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final statusText = refunded ? 'Возврат' : paid ? 'Оплачено' : (invoice ? 'Ожидает оплаты' : 'Проведено');
     final statusColor = refunded ? AppColors.danger : paid ? AppColors.success : (invoice ? AppColors.warning : AppColors.primary);
     final docs = _documentsFor(sale);
+    final docLabel = docs.length == 1 ? '1 документ сформирован' : '${docs.length} документов сформировано';
 
     return Card(
       elevation: 0,
-      color: Colors.white.withOpacity(.94),
+      color: Colors.white.withOpacity(.96),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
         side: const BorderSide(color: AppColors.border),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFECE7FF), Color(0xFFF1F6FF)]),
-                borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: () => _openSaleDocuments(sale),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFFECE7FF), Color(0xFFF1F6FF)]),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  refunded ? Icons.assignment_return_rounded : invoice ? Icons.request_quote_rounded : Icons.receipt_long_rounded,
+                  color: refunded ? AppColors.danger : AppColors.primary,
+                ),
               ),
-              child: Icon(refunded ? Icons.assignment_return_rounded : Icons.description_rounded,
-                  color: refunded ? AppColors.danger : AppColors.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                refunded
-                    ? 'Возврат №$id'
-                    : invoice ? 'Счёт №${sale['invoice_number'] ?? id}' : 'Продажа №$id',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 3),
-              Text(client, maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-              const SizedBox(height: 4),
-              Row(children: [
-                const Icon(Icons.schedule_rounded, size: 14, color: AppColors.muted),
-                const SizedBox(width: 4),
-                Text(_saleDateTime(sale),
-                    style: const TextStyle(color: AppColors.muted, fontSize: 11, fontWeight: FontWeight.w600)),
-              ]),
-            ])),
-            const SizedBox(width: 8),
-            StatusPill(statusText, color: statusColor),
-          ]),
-          const SizedBox(height: 14),
-          Text(money(total), style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 13),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: docs.map((doc) => _documentBadge(
-              doc.icon,
-              doc.label,
-              onTap: () => _openCardDocument(sale, doc),
-            )).toList(),
-          ),
-          const SizedBox(height: 10),
-          Row(children: [
-            if (invoice && !paid)
+              const SizedBox(width: 12),
               Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(
+                    invoice ? 'Счёт №${sale['invoice_number'] ?? id}' : 'Продажа №$id',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    client,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              StatusPill(statusText, color: statusColor),
+            ]),
+            const SizedBox(height: 14),
+            Text(money(total), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 12),
+            _documentInfoRow(Icons.schedule_rounded, 'Сформировано', _saleDateTime(sale)),
+            const SizedBox(height: 7),
+            _documentInfoRow(Icons.folder_copy_outlined, 'Документы', docLabel),
+            const SizedBox(height: 11),
+            Row(children: [
+              Text(
+                'Нажмите, чтобы открыть документы',
+                style: TextStyle(
+                  color: AppColors.primary.withOpacity(.92),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
+            ]),
+            if (invoice && !paid && !refunded) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () async {
-                    final detail = await _detailFor(sale);
-                    if (!mounted) return;
-                    final changed = await showModalBottomSheet<bool>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => _SaleActionsSheet(sale: detail),
-                    );
-                    if (changed == true && mounted) await loadHistory();
-                  },
+                  onPressed: () => _confirmInvoicePayment(sale),
                   icon: const Icon(Icons.payments_rounded, size: 18),
                   label: const Text('Подтвердить оплату'),
                 ),
-              )
-            else if (!refunded)
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _openRefund(sale),
-                  icon: const Icon(Icons.undo_rounded, size: 18),
-                  label: const Text('Возврат'),
-                ),
               ),
+            ],
           ]),
-        ]),
+        ),
       ),
     );
   }
 
-  Widget _documentBadge(
-    IconData icon,
-    String label, {
-    VoidCallback? onTap,
-  }) => Material(
-        color: const Color(0xFFF6F4FF),
-        borderRadius: BorderRadius.circular(11),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(11),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 15, color: AppColors.primary),
-              const SizedBox(width: 5),
-              Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-            ]),
+  Widget _documentInfoRow(IconData icon, String label, String value) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: AppColors.muted),
+          const SizedBox(width: 7),
+          Text('$label: ', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
           ),
-        ),
+        ],
       );
 
   Widget _currentShiftCard() {
@@ -936,175 +943,285 @@ class _SaleDocumentAction {
 }
 
 
-class _SaleActionsSheet extends StatefulWidget {
+class _SaleDocumentsSheet extends StatefulWidget {
   final Map<String, dynamic> sale;
-  const _SaleActionsSheet({required this.sale});
+  final List<_SaleDocumentAction> documents;
+  final String formedAt;
+
+  const _SaleDocumentsSheet({
+    required this.sale,
+    required this.documents,
+    required this.formedAt,
+  });
 
   @override
-  State<_SaleActionsSheet> createState() => _SaleActionsSheetState();
+  State<_SaleDocumentsSheet> createState() => _SaleDocumentsSheetState();
 }
 
-class _SaleActionsSheetState extends State<_SaleActionsSheet> {
-  bool paying = false;
+class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
+  bool refunding = false;
 
   Map<String, dynamic> get sale => widget.sale;
   int get saleId => int.tryParse('${sale['id'] ?? sale['sale_id'] ?? ''}') ?? 0;
-  bool get isInvoice => '${sale['sale_type'] ?? ''}' == 'invoice';
-  bool get isPaid => '${sale['status'] ?? ''}' == 'Оплачено';
-
-  Future<void> _markPaid() async {
-    if (saleId <= 0 || paying) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        icon: const Icon(Icons.payments_rounded, color: AppColors.success, size: 36),
-        title: const Text('Подтвердить оплату?'),
-        content: Text('Счёт №${sale['sale_number'] ?? saleId} будет отмечен оплаченным. После этого станут доступны закрывающие документы.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Оплата получена')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    setState(() => paying = true);
-    try {
-      final result = await ApiService.markInvoicePaid(saleId);
-      if (!mounted) return;
-      if (result['success'] != true) throw ApiException('${result['error'] ?? 'Не удалось подтвердить оплату'}');
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Оплата подтверждена')));
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
-    } finally {
-      if (mounted) setState(() => paying = false);
-    }
+  bool get isInvoice => '${sale['sale_type'] ?? ''}'.toLowerCase() == 'invoice';
+  bool get isRefunded =>
+      sale['sale_refunded'] == true ||
+      sale['is_refunded'] == true ||
+      '${sale['status'] ?? ''}'.toLowerCase().contains('возврат');
+  bool get isPaid {
+    final raw = '${sale['status'] ?? ''}'.toLowerCase();
+    return raw.contains('оплачен') || raw.contains('paid') || raw.contains('success');
   }
 
-  Future<void> _openSale() async {
-    Navigator.pop(context);
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => SaleDetailScreen(saleId: saleId)),
-    );
-  }
+  String get statusText =>
+      isRefunded ? 'Возврат' : isPaid ? 'Оплачено' : isInvoice ? 'Ожидает оплаты' : 'Проведено';
 
-  Future<void> _openDocument(
-    String type,
-    String label, {
-    bool needsPaid = true,
-  }) async {
-    if (needsPaid && !isPaid) {
+  Color get statusColor =>
+      isRefunded ? AppColors.danger : isPaid ? AppColors.success : isInvoice ? AppColors.warning : AppColors.primary;
+
+  Future<void> _openDocument(_SaleDocumentAction doc) async {
+    if (saleId <= 0) return;
+
+    if (doc.needsPaid && !isPaid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Сначала подтвердите оплату счёта')),
       );
       return;
     }
-    if (saleId <= 0) return;
-    final number = sale['sale_number'] ?? saleId;
+
+    if (doc.type == 'esf') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ЭСФ готовится отдельно и будет подписываться через ЭЦП.')),
+      );
+      return;
+    }
+
+    if (doc.type == 'receipt') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => CheckScreen(saleId: saleId)),
+      );
+      return;
+    }
+
+    if (doc.type == 'refund-receipt') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => RefundCheckScreen(saleId: saleId)),
+      );
+      return;
+    }
+
+    final number = sale['sale_number'] ?? sale['invoice_number'] ?? saleId;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SaleDocumentPreviewScreen(
           saleId: saleId,
-          documentType: type,
-          title: '$label №$number',
-          fileName: '${type.replaceAll('-', '_')}_$number',
+          documentType: doc.type,
+          title: '${doc.label} №$number',
+          fileName: '${doc.type.replaceAll('-', '_')}_$number',
         ),
       ),
     );
   }
 
-  void _esfMessage() {
-    if (!isPaid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сначала подтвердите оплату счёта')),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('ЭСФ требует отдельного подписания ЭЦП. Подключим его к существующему сценарию ЕСФ следующим шагом.')),
+  Future<void> _refund() async {
+    if (saleId <= 0 || refunding || isRefunded || isInvoice) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        icon: const Icon(Icons.undo_rounded, color: AppColors.danger, size: 36),
+        title: const Text('Оформить возврат?'),
+        content: const Text(
+          'Товар вернётся на склад, сумма продажи и прибыль уменьшатся, а reKassa сформирует чек возврата.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('Подтвердить возврат'),
+          ),
+        ],
+      ),
     );
+    if (ok != true) return;
+
+    setState(() => refunding = true);
+    try {
+      final result = await ApiService.refundSale(saleId);
+      if (!mounted) return;
+      if (result['success'] != true) {
+        throw ApiException('${result['error'] ?? 'Не удалось выполнить возврат'}');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Возврат оформлен')),
+      );
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => RefundCheckScreen(saleId: saleId)),
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(e)), backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => refunding = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final total = asDouble(sale['total_amount'] ?? sale['total'] ?? sale['amount']);
-    final number = sale['sale_number'] ?? saleId;
+    final number = sale['sale_number'] ?? sale['invoice_number'] ?? saleId;
+    final client = '${sale['client_name'] ?? sale['client_company_name'] ?? sale['client'] ?? 'Частное лицо'}';
+
     return SafeArea(
       child: Container(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .86),
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .88),
         decoration: const BoxDecoration(
           color: Color(0xFFF8F8FD),
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
-        child: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(8)))),
-            const SizedBox(height: 18),
-            Row(children: [
-              Expanded(child: Text(isInvoice ? 'Счёт №$number' : 'Продажа №$number', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
-              StatusPill(isPaid ? 'Оплачено' : '${sale['status'] ?? 'Проведено'}', color: isPaid ? AppColors.success : AppColors.warning),
-            ]),
-            const SizedBox(height: 5),
-            Text(money(total), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
-            if (isInvoice && !isPaid) ...[
-              const SizedBox(height: 16),
-              SizedBox(width: double.infinity, child: FilledButton.icon(
-                onPressed: paying ? null : _markPaid,
-                icon: paying
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.payments_rounded),
-                label: Text(paying ? 'Подтверждаем…' : 'Подтвердить оплату'),
-              )),
-            ],
-            const SizedBox(height: 20),
-            const Text('Документы и действия', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              _SheetAction(Icons.receipt_long_outlined, 'Счёт', onTap: () => _openDocument('invoice', 'Счёт', needsPaid: false)),
-              _SheetAction(Icons.local_shipping_outlined, 'Накладная', onTap: () => _openDocument('nakladnaya', 'Накладная')),
-              _SheetAction(Icons.task_alt_rounded, 'Акт', onTap: () => _openDocument('act', 'Акт')),
-              _SheetAction(Icons.description_outlined, 'Счёт-фактура', onTap: () => _openDocument('schet-factura', 'Счёт-фактура')),
-              _SheetAction(Icons.cloud_done_outlined, 'ЭСФ', onTap: _esfMessage),
-              _SheetAction(Icons.undo_rounded, 'Возврат', onTap: _openSale),
-            ]),
-            const SizedBox(height: 16),
-            SizedBox(width: double.infinity, child: OutlinedButton.icon(
-              onPressed: _openSale,
-              icon: const Icon(Icons.open_in_new_rounded),
-              label: const Text('Открыть продажу полностью'),
-            )),
-          ]),
-        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 10),
+          Center(
+            child: Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 26),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                    child: Text(
+                      isInvoice ? 'Счёт №$number' : 'Продажа №$number',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  StatusPill(statusText, color: statusColor),
+                ]),
+                const SizedBox(height: 6),
+                Text(client, style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 14),
+                Text(money(total), style: const TextStyle(fontSize: 31, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(children: [
+                    _sheetFact('Статус', statusText),
+                    const SizedBox(height: 8),
+                    _sheetFact('Сформировано', widget.formedAt),
+                    const SizedBox(height: 8),
+                    _sheetFact('Документов', '${widget.documents.length}'),
+                  ]),
+                ),
+                const SizedBox(height: 20),
+                const Text('Сформированные документы', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                if (widget.documents.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                    child: const Text('Документы пока не сформированы', style: TextStyle(color: AppColors.muted)),
+                  )
+                else
+                  ...widget.documents.map((doc) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        onTap: () => _openDocument(doc),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(doc.icon, color: AppColors.primary, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(doc.label, style: const TextStyle(fontWeight: FontWeight.w800)),
+                            ),
+                            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  )),
+                if (!isRefunded && !isInvoice) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: refunding ? null : _refund,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.danger,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      icon: refunding
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.undo_rounded),
+                      label: Text(refunding ? 'Оформляем возврат…' : 'Оформить возврат'),
+                    ),
+                  ),
+                ],
+              ]),
+            ),
+          ),
+        ]),
       ),
     );
   }
+
+  Widget _sheetFact(String label, String value) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 105,
+            child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      );
 }
 
-class _SheetAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  const _SheetAction(this.icon, this.label, {this.onTap});
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(14),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 18, color: AppColors.primary),
-          const SizedBox(width: 7),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ]),
-      ),
-    ),
-  );
-}

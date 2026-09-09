@@ -657,25 +657,41 @@ def sales_history():
             sale_refunded = bool(sale.get("sale_refunded"))
             is_invoice = sale.get("sale_type") == "invoice"
 
-            # Единая серверная матрица документов для веба и мобильного приложения.
-            # Услуги: чек + АВР + счёт-фактура + ЭСФ.
-            # Товары: чек + накладная + счёт-фактура + ЭСФ.
-            # Смешанная продажа: чек + накладная + АВР + счёт-фактура + ЭСФ.
-            # При возврате вместо обычного чека показываем чек возврата.
+            # Единая матрица документов для веба и мобильного приложения.
+            #
+            # Обычная продажа:
+            #   товар   -> чек + накладная + счёт-фактура + ЭСФ
+            #   услуга  -> чек + АВР + счёт-фактура + ЭСФ
+            #   смешанная -> чек + накладная + АВР + счёт-фактура + ЭСФ
+            #
+            # Выставленный счёт до оплаты показывает только сам счёт.
+            # После подтверждения оплаты к нему добавляются закрывающие документы.
+            #
+            # Возврат не создаёт новый набор документов:
+            #   кассовая продажа -> только чек возврата
+            #   счёт             -> только счёт со статусом возврата
+            is_paid = str(sale.get("status") or "").strip().lower() == "оплачено"
             document_types = []
-            if is_invoice:
+
+            if sale_refunded:
+                document_types.append("invoice" if is_invoice else "refund-receipt")
+            elif is_invoice:
                 document_types.append("invoice")
-            elif sale_refunded:
-                document_types.append("refund-receipt")
+                if is_paid:
+                    if has_products:
+                        document_types.append("nakladnaya")
+                    if has_services:
+                        document_types.append("act")
+                    if has_products or has_services:
+                        document_types.extend(["schet-factura", "esf"])
             else:
                 document_types.append("receipt")
-
-            if has_products:
-                document_types.append("nakladnaya")
-            if has_services:
-                document_types.append("act")
-            if has_products or has_services:
-                document_types.extend(["schet-factura", "esf"])
+                if has_products:
+                    document_types.append("nakladnaya")
+                if has_services:
+                    document_types.append("act")
+                if has_products or has_services:
+                    document_types.extend(["schet-factura", "esf"])
 
             result.append({
                 "id": sale["id"],
@@ -713,6 +729,7 @@ def sales_history():
                     else "empty"
                 ),
                 "document_types": document_types,
+                "document_count": len(document_types),
                 "refunded_at": (
                     sale.get("refunded_at").isoformat()
                     if sale.get("refunded_at") else ""
