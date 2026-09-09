@@ -217,3 +217,12 @@ html:not(.ui-ready) .sidebar,html:not(.ui-ready) .content,html:not(.ui-ready) .t
         font-size:7px !important;
     }
 }
+
+/* Unified Nika semantic icons: crisp SVG strokes instead of platform emoji glyphs. */
+.nika-icon-sprite{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+.nika-ui-icon{width:1.25em;height:1.25em;display:inline-block;vertical-align:-.18em;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.mobile-toggle .nika-ui-icon,.desktop-toggle .nika-ui-icon{width:25px;height:25px}
+.chat-contact__avatar .nika-ui-icon{width:18px;height:18px}
+.chat-composer button .nika-ui-icon,.wa-icon-btn .nika-ui-icon,.ai-command-btn .nika-ui-icon,.ai-mic-btn .nika-ui-icon{width:20px;height:20px}
+.nika-semantic-icon{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,rgba(99,102,241,.14),rgba(139,92,246,.12));color:#6d5ee8;border:1px solid rgba(99,102,241,.12)}
+.nika-semantic-icon .nika-ui-icon{width:19px;height:19px}
