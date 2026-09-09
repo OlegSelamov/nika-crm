@@ -1036,6 +1036,10 @@ def init_db():
         ADD COLUMN IF NOT EXISTS is_vat_payer BOOLEAN NOT NULL DEFAULT FALSE
     """)
 
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS start_page TEXT DEFAULT 'profile'")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_mode BOOLEAN NOT NULL DEFAULT FALSE")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+
     cur.execute("""
         ALTER TABLE companies
         ADD COLUMN IF NOT EXISTS business_type TEXT
