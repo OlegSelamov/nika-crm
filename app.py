@@ -145,6 +145,12 @@ try:
         )
     """)
 
+    _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS methodic_url TEXT")
+    _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS methodic_name TEXT")
+    _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'planned'")
+    _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS conducted_at TIMESTAMP")
+    _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS conducted_by INTEGER")
+
     _media_schema_conn.commit()
     _media_schema_cur.close()
     pool.putconn(_media_schema_conn)
