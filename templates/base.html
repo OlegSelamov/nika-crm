@@ -46,18 +46,27 @@
     <link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-5">
     {% block page_css %}{% endblock %}
 </head>
-<body>
+<body><svg class="nika-icon-sprite" aria-hidden="true"><defs>
+<symbol id="nika-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+<symbol id="nika-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="nika-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></symbol>
+<symbol id="nika-refresh" viewBox="0 0 24 24"><path d="M20 7h-5V2M4 17h5v5M5 9a8 8 0 0 1 13-4l2 2M19 15a8 8 0 0 1-13 4l-2-2"/></symbol>
+<symbol id="nika-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></symbol>
+<symbol id="nika-school" viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6M8 11h.01M16 11h.01M12 4V1l4 2-4 1"/></symbol>
+<symbol id="nika-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+<symbol id="nika-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+</defs></svg>
 {% if not session.get("user_id") %}
 <script>window.location.href = "/login";</script>
 {% endif %}
 
 <div class="layout">
-    <button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
+    <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Меню"><svg class="nika-ui-icon"><use href="#nika-menu"/></svg></button>
     <div class="sidebar-backdrop"></div>
 
     <div class="sidebar" id="sidebar">
         <div class="top-sidebar-row">
-            <div class="toggle-btn desktop-toggle" onclick="toggleSidebar()">☰</div>
+            <div class="toggle-btn desktop-toggle" onclick="toggleSidebar()"><svg class="nika-ui-icon"><use href="#nika-menu"/></svg></div>
         </div>
 
         <div class="sidebar-logo">
@@ -228,14 +237,14 @@
         <div class="chat-layout">
             <div class="chat-sidebar">
                 <button id="generalChatButton" class="chat-contact active" type="button" onclick="selectChat('general')">
-                    <span class="chat-contact__avatar">👥</span><span class="chat-contact__main"><b>Общий чат</b><small>Все сотрудники</small></span><span id="generalChatUnread" class="chat-contact__badge">0</span>
+                    <span class="chat-contact__avatar"><svg class="nika-ui-icon"><use href="#nika-users"/></svg></span><span class="chat-contact__main"><b>Общий чат</b><small>Все сотрудники</small></span><span id="generalChatUnread" class="chat-contact__badge">0</span>
                 </button>
                 <div class="chat-sidebar__caption">Личные сообщения</div>
                 <div id="chatContacts" class="chat-contacts"><div class="drawer-empty">Загрузка сотрудников…</div></div>
             </div>
             <div class="chat-main">
                 <div id="chatMessages" class="system-drawer__body chat-messages"><div class="drawer-empty">Загрузка сообщений…</div></div>
-                <div class="chat-composer"><textarea id="chatInput" maxlength="2000" placeholder="Напишите сообщение…"></textarea><button type="button" onclick="sendChatMessage()">➤</button></div>
+                <div class="chat-composer"><textarea id="chatInput" maxlength="2000" placeholder="Напишите сообщение…"></textarea><button type="button" onclick="sendChatMessage()"><svg class="nika-ui-icon"><use href="#nika-send"/></svg></button></div>
             </div>
         </div>
     </div>
@@ -253,11 +262,11 @@
                     <div class="whatsapp-chat-header__actions">
                         <button id="whatsappChatAiButton" class="wa-ai-toggle" type="button" onclick="toggleActiveWhatsappAi()" disabled>AI выключен</button>
                         <button id="whatsappClientCardButton" class="wa-card-btn" type="button" onclick="openWhatsappClientModal()" disabled>Карточка клиента</button>
-                        <button class="wa-icon-btn" type="button" onclick="refreshActiveWhatsappChat()" title="Обновить">↻</button>
+                        <button class="wa-icon-btn" type="button" onclick="refreshActiveWhatsappChat()" title="Обновить"><svg class="nika-ui-icon"><use href="#nika-refresh"/></svg></button>
                     </div>
                 </div>
                 <div id="whatsappMessages" class="system-drawer__body chat-messages"><div class="drawer-empty">Выберите чат слева</div></div>
-                <div class="chat-composer"><textarea id="whatsappChatInput" maxlength="4000" placeholder="Ответить клиенту в WhatsApp…" disabled></textarea><button id="whatsappSendButton" type="button" onclick="sendWhatsappChatMessage()" disabled>➤</button></div>
+                <div class="chat-composer"><textarea id="whatsappChatInput" maxlength="4000" placeholder="Ответить клиенту в WhatsApp…" disabled></textarea><button id="whatsappSendButton" type="button" onclick="sendWhatsappChatMessage()" disabled><svg class="nika-ui-icon"><use href="#nika-send"/></svg></button></div>
             </div>
         </div>
     </div>
@@ -282,9 +291,9 @@
     </div>
     <div class="ai-composer">
         <div class="ai-command-box">
-            <button id="aiMicButton" class="ai-mic-btn" type="button" onclick="startVoice()"><img src="/static/icons/ai-mic.png" alt="" onerror="this.style.display='none';this.parentElement.textContent='🎙';"></button>
+            <button id="aiMicButton" class="ai-mic-btn" type="button" onclick="startVoice()"><img src="/static/icons/ai-mic.png" alt="" onerror="this.style.display='none';this.parentElement.innerHTML='<svg class=&quot;nika-ui-icon&quot;><use href=&quot;#nika-mic&quot;/></svg>';"></button>
             <textarea id="agent-input" rows="1" maxlength="4000" placeholder="Спросите Nika AI…"></textarea>
-            <button id="aiSendButton" class="ai-command-btn" type="button" onclick="sendCommand()"><img src="/static/icons/ai-send.png" alt="" onerror="this.style.display='none';this.parentElement.textContent='➤';"></button>
+            <button id="aiSendButton" class="ai-command-btn" type="button" onclick="sendCommand()"><img src="/static/icons/ai-send.png" alt="" onerror="this.style.display='none';this.parentElement.innerHTML='<svg class=&quot;nika-ui-icon&quot;><use href=&quot;#nika-send&quot;/></svg>';"></button>
         </div>
         <div class="ai-composer__foot"><button id="aiSoundButton" class="ai-sound-toggle active" type="button" onclick="toggleVoice()"><img id="aiSoundIcon" src="/static/icons/ai-sound-on.png" alt=""><span id="aiSoundText">Озвучивание включено</span></button><span>Действия ограничены вашей ролью и организацией</span></div>
     </div>
