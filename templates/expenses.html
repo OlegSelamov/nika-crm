@@ -39,7 +39,7 @@
         <article class="expense-stat expense-stat--today">
             <div class="expense-stat-top">
                 <span class="expense-stat-label">Сегодня</span>
-                <span class="expense-stat-icon">◷</span>
+                <span class="expense-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-clock"></use></svg></span>
             </div>
             <strong>{{ "{:,.0f}".format(today_total|default(0)).replace(',', ' ') }} ₸</strong>
             <small>Расходы за текущий день</small>
@@ -48,7 +48,7 @@
         <article class="expense-stat expense-stat--month">
             <div class="expense-stat-top">
                 <span class="expense-stat-label">За месяц</span>
-                <span class="expense-stat-icon">▤</span>
+                <span class="expense-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-calendar"></use></svg></span>
             </div>
             <strong>{{ "{:,.0f}".format(month_total|default(0)).replace(',', ' ') }} ₸</strong>
             <small>С начала текущего месяца</small>
@@ -57,7 +57,7 @@
         <article class="expense-stat expense-stat--category">
             <div class="expense-stat-top">
                 <span class="expense-stat-label">Главная категория</span>
-                <span class="expense-stat-icon">↗</span>
+                <span class="expense-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-chart"></use></svg></span>
             </div>
             <strong class="expense-stat-text">{{ largest_category|default('Нет данных') }}</strong>
             <small>{{ "{:,.0f}".format(largest_category_total|default(0)).replace(',', ' ') }} ₸</small>
@@ -66,7 +66,7 @@
         <article class="expense-stat expense-stat--count">
             <div class="expense-stat-top">
                 <span class="expense-stat-label">Операций</span>
-                <span class="expense-stat-icon">#</span>
+                <span class="expense-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-list"></use></svg></span>
             </div>
             <strong>{{ total_expenses_count|default(expense_rows|length) }}</strong>
             <small>Найдено по выбранным фильтрам</small>

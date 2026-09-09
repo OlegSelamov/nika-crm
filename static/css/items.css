@@ -369,3 +369,11 @@ body.catalog-label-modal-open{overflow:hidden}
   .catalog-media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .catalog-media-card img{height:132px}
 }
+
+/* Polished semantic icons */
+.nika-data-trigger__icon .nika-ui-icon{width:16px;height:16px;stroke-width:1.9}
+.nika-data-action__icon .nika-ui-icon{width:21px;height:21px;stroke-width:1.8}
+.nika-data-dropzone__icon .nika-ui-icon{width:24px;height:24px}
+.nika-data-modal__close .nika-ui-icon,.catalog-label-modal .nika-data-modal__close .nika-ui-icon{width:18px;height:18px}
+.catalog-mobile-label-btn{display:inline-flex!important;align-items:center;justify-content:center;gap:7px}.catalog-mobile-label-btn .nika-ui-icon{width:16px;height:16px}
+.catalog-label-footer .nika-data-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px}.catalog-label-footer .nika-ui-icon{width:17px;height:17px}

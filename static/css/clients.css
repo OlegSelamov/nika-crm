@@ -32,3 +32,11 @@ body.client-modal-open{overflow:hidden}
 .client-media-badge{position:absolute;left:10px;top:10px;padding:5px 7px;border-radius:999px;background:rgba(20,24,38,.78);color:#fff;font-size:9px;font-weight:800;backdrop-filter:blur(6px)}
 .client-media-empty{grid-column:1/-1;border:1px dashed rgba(148,163,184,.35);border-radius:14px;padding:24px;text-align:center;color:#96a0b2;font-size:12px;background:rgba(255,255,255,.58)}
 @media(max-width:600px){.client-media-head{align-items:flex-start;flex-direction:column}.client-media-add{width:100%}.client-media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Polished semantic icons */
+.nika-data-trigger__icon .nika-ui-icon{width:16px;height:16px;stroke-width:1.9}
+.nika-data-action__icon .nika-ui-icon{width:21px;height:21px;stroke-width:1.8}
+.nika-data-dropzone__icon .nika-ui-icon{width:24px;height:24px}
+.nika-data-modal__close .nika-ui-icon,.client-modal-close .nika-ui-icon{width:18px;height:18px}
+.clients-btn .nika-ui-icon,.client-media-add .nika-ui-icon{width:17px;height:17px;vertical-align:-.2em}
+.client-media-add{display:inline-flex;align-items:center;justify-content:center;gap:7px}

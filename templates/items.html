@@ -26,8 +26,8 @@
             <div class="catalog-note">Товары и услуги, цены, категории, штрихкоды и единицы измерения</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <button class="nika-data-trigger" type="button" onclick="openLabelManager()"><span class="nika-data-trigger__icon">▥</span>Этикетки</button>
-            <button class="nika-data-trigger" type="button" onclick="openCatalogDataModal()"><span class="nika-data-trigger__icon">▤</span>Данные</button>
+            <button class="nika-data-trigger" type="button" onclick="openLabelManager()"><span class="nika-data-trigger__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-barcode"></use></svg></span>Этикетки</button>
+            <button class="nika-data-trigger" type="button" onclick="openCatalogDataModal()"><span class="nika-data-trigger__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-database"></use></svg></span>Данные</button>
             <button class="catalog-primary-btn" type="button" onclick="openAddItemModal()"><img src="/static/icons/add.png" class="catalog-btn-icon" alt="">Добавить позицию</button>
         </div>
     </div>
@@ -158,7 +158,7 @@
                     <div><small>NTIN</small>{{ i.ntin or '—' }}</div>
                 </div>
                 <div class="catalog-mobile-card__actions">
-                    {% if item_type == 'product' %}<button type="button" class="catalog-mobile-label-btn" onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'>Этикетка</button>{% endif %}
+                    {% if item_type == 'product' %}<button type="button" class="catalog-mobile-label-btn" onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-barcode"></use></svg><span>Этикетка</span></button>{% endif %}
                     <button type="button" onclick='openEditItemModal({{ {
                         "id": i.id,
                         "name": i.name or "",
@@ -210,24 +210,24 @@
                 <h2 id="catalogDataModalTitle">Данные: каталог</h2>
                 <p>Импортируйте, выгружайте и сохраняйте рабочую базу в Excel.</p>
             </div>
-            <button type="button" class="nika-data-modal__close" onclick="closeCatalogDataModal()" aria-label="Закрыть">×</button>
+            <button type="button" class="nika-data-modal__close" onclick="closeCatalogDataModal()" aria-label="Закрыть"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></button>
         </div>
 
         <div class="nika-data-actions-grid">
             <a class="nika-data-action" href="/items/export.xlsx">
-                <span class="nika-data-action__icon">↓</span>
+                <span class="nika-data-action__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-download"></use></svg></span>
                 <span><b>Экспорт Excel</b><small>Скачать текущие данные</small></span>
             </a>
             <a class="nika-data-action" href="/items/import-template.xlsx">
-                <span class="nika-data-action__icon">▤</span>
+                <span class="nika-data-action__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-file"></use></svg></span>
                 <span><b>Скачать шаблон</b><small>Правильная структура файла</small></span>
             </a>
             <button class="nika-data-action nika-data-action--button" type="button" onclick="openCatalogEnrichmentModal()">
-                <span class="nika-data-action__icon">✦</span>
+                <span class="nika-data-action__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-spark"></use></svg></span>
                 <span><b>Обогатить каталог</b><small>Найти GTIN и NTIN по названию</small></span>
             </button>
             <button class="nika-data-action nika-data-action--button" type="button" onclick="closeCatalogDataModal(); openLabelManager()">
-                <span class="nika-data-action__icon">▥</span>
+                <span class="nika-data-action__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-barcode"></use></svg></span>
                 <span><b>Штрихкоды и этикетки</b><small>Создать коды и отправить на печать</small></span>
             </button>
         </div>
@@ -240,7 +240,7 @@
 
             <label class="nika-data-dropzone" id="catalogDataDropzone">
                 <input type="file" name="file" accept=".xlsx" required id="catalogDataFileInput">
-                <span class="nika-data-dropzone__icon">↑</span>
+                <span class="nika-data-dropzone__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-upload"></use></svg></span>
                 <b id="catalogDataFileName">Выберите Excel-файл</b>
                 <small>Нажмите сюда или перетащите файл .xlsx</small>
             </label>
@@ -277,7 +277,7 @@
                 <h2 id="catalogEnrichmentTitle">Обогащение каталога</h2>
                 <p>Поиск официальных карточек НКТ по названию. Данные применяются только после подтверждения.</p>
             </div>
-            <button type="button" class="nika-data-modal__close" onclick="closeCatalogEnrichmentModal()" aria-label="Закрыть">×</button>
+            <button type="button" class="nika-data-modal__close" onclick="closeCatalogEnrichmentModal()" aria-label="Закрыть"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></button>
         </div>
 
         <div class="catalog-enrichment-settings" id="catalogEnrichmentSettings">
@@ -574,7 +574,7 @@
                 <h2 id="catalogLabelTitle">Штрихкоды и этикетки</h2>
                 <p>Выберите товары, количество копий и формат печати.</p>
             </div>
-            <button type="button" class="nika-data-modal__close" onclick="closeLabelManager()" aria-label="Закрыть">×</button>
+            <button type="button" class="nika-data-modal__close" onclick="closeLabelManager()" aria-label="Закрыть"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></button>
         </div>
 
         <div class="catalog-label-toolbar">
@@ -595,7 +595,7 @@
 
         <div class="catalog-label-footer">
             <button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeLabelManager()">Закрыть</button>
-            <button type="button" class="nika-data-btn nika-data-btn--primary" onclick="printSelectedLabels()">Печатать выбранные</button>
+            <button type="button" class="nika-data-btn nika-data-btn--primary" onclick="printSelectedLabels()"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-printer"></use></svg><span>Печатать выбранные</span></button>
         </div>
     </div>
 </div>
@@ -609,14 +609,14 @@
                 <h2 id="catalogLabelPreviewTitle">Этикетки перед печатью</h2>
                 <p id="catalogLabelPreviewSubtitle">Проверьте расположение и запустите печать.</p>
             </div>
-            <button type="button" class="nika-data-modal__close" onclick="closeLabelPrintPreview()" aria-label="Закрыть">×</button>
+            <button type="button" class="nika-data-modal__close" onclick="closeLabelPrintPreview()" aria-label="Закрыть"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></button>
         </div>
         <div class="catalog-label-preview-modal__body">
             <iframe id="catalogLabelPreviewFrame" title="Предпросмотр этикеток"></iframe>
         </div>
         <div class="catalog-label-preview-modal__footer">
             <button type="button" class="nika-data-btn nika-data-btn--light" onclick="closeLabelPrintPreview()">Назад</button>
-            <button type="button" class="nika-data-btn nika-data-btn--primary" onclick="printLabelsFromPreview()">Печатать</button>
+            <button type="button" class="nika-data-btn nika-data-btn--primary" onclick="printLabelsFromPreview()"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-printer"></use></svg><span>Печатать</span></button>
         </div>
     </div>
 </div>
