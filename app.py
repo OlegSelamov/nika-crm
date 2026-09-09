@@ -33,7 +33,7 @@ from routes.clients import clients_bp
 from routes.tasks import tasks_bp
 from routes.items import items_bp
 from routes.sales import sales_bp
-from routes.rekassa_comrun import rekassa_comrun_bp
+from routes.rekassa_comrun import pay_sale_comrun, fiscalize_sale_comrun
 from routes.kaspi_pos import kaspi_pos_bp
 from models import init_db, get_db, pool
 from routes.sales import sales_api
@@ -96,7 +96,6 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(items_bp)
-app.register_blueprint(rekassa_comrun_bp)
 app.register_blueprint(sales_bp)
 app.register_blueprint(kaspi_pos_bp)
 app.register_blueprint(sales_api)
@@ -127,6 +126,12 @@ app.register_blueprint(mobile_api_bp)
 app.register_blueprint(esf_bp)
 app.register_blueprint(bcc_bp)
 app.register_blueprint(school_bp)
+
+# Keep the public URLs unchanged, but replace only the sale/fiscalization
+# handlers with the COMRUN-aware flow. This avoids duplicate Flask routes and
+# preserves compatibility with web, desktop and mobile clients.
+app.view_functions["sales.pay_sale"] = pay_sale_comrun
+app.view_functions["rekassa.retry_rekassa_fiscalization"] = fiscalize_sale_comrun
 
 MODULE_PATHS = (
     ("/school", "school"),
