@@ -328,61 +328,36 @@ def pay_sale():
         
         print("REKASSA RESULT:")
         print(rekassa_result)
-        
-        if rekassa_result.get("status") == "OK":
 
+        if rekassa_result.get("status") != "OK":
+            fiscal_error = (
+                rekassa_result.get("message")
+                or rekassa_result.get("error")
+                or "Чек не фискализирован"
+            )
             cur.execute("""
                 UPDATE sales
-                SET
-                    rekassa_ticket_id = %s,
-                    rekassa_ticket_number = %s,
-                    rekassa_qr = %s,
-                    rekassa_shift_number = %s,
-                    rekassa_status = %s,
-                    rekassa_document_number = %s,
-                    rekassa_rnm = %s,
-                    rekassa_znm = %s
+                SET rekassa_status = %s
                 WHERE id = %s
-            """, (
-                rekassa_result.get("id"),
-                rekassa_result.get("ticketNumber"),
-                rekassa_result.get("fdoQrCode"),
-                rekassa_result.get("shiftNumber"),
-                rekassa_result.get("status"),
-
-                rekassa_result["data"]["ticket"].get("printedDocumentNumber"),
-
-                rekassa_result["data"]["service"]["regInfo"]["kkm"].get("fnsKkmId"),
-
-                rekassa_result["data"]["service"]["regInfo"]["kkm"].get("serialNumber"),
-
-                sale_id
-            ))
-            
-            print(
-                "REKASSA DOC:",
-                rekassa_result["data"]["ticket"].get("printedDocumentNumber")
-            )
-
-            print(
-                "REKASSA RNM:",
-                rekassa_result["data"]["service"]["regInfo"]["kkm"].get("fnsKkmId")
-            )
-
-            print(
-                "REKASSA ZNM:",
-                rekassa_result["data"]["service"]["regInfo"]["kkm"].get("serialNumber")
-            )
-
-        print("REKASSA RESULT:")
-        print(rekassa_result)
+            """, (("ERROR: " + str(fiscal_error))[:500], sale_id))
 
         conn.commit()
 
     finally:
         pool.putconn(conn)
 
-    return {"success": True, "sale_id": sale_id}
+    return {
+        "success": True,
+        "sale_id": sale_id,
+        "fiscalized": rekassa_result.get("status") == "OK",
+        "rekassa": {
+            "status": rekassa_result.get("status"),
+            "message": rekassa_result.get("message") or rekassa_result.get("error"),
+            "ticket_id": rekassa_result.get("id"),
+            "ticket_number": rekassa_result.get("ticketNumber"),
+            "shift_number": rekassa_result.get("shiftNumber"),
+        }
+    }
 
 
 @sales_bp.route("/api/sale/<int:sale_id>")

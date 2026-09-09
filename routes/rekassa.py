@@ -706,6 +706,38 @@ def rekassa_test_ticket():
         "response": response.json()
     })
     
+@rekassa_bp.route("/api/rekassa/diagnostics", methods=["GET"])
+def rekassa_diagnostics():
+    context, error = _load_company_rekassa()
+    if error:
+        return error
+
+    try:
+        state, state_error = _register_state(context)
+    except requests.RequestException as exc:
+        return jsonify({
+            "success": False,
+            "stage": "register",
+            "error": f"Авторизация прошла, но касса не отвечает: {exc}"
+        }), 502
+
+    if state_error:
+        return state_error
+
+    register = state.get("register") or {}
+    return jsonify({
+        "success": True,
+        "stage": "ready",
+        "message": "reKassa полностью подключена и доступна для фискализации",
+        "crs_id": context.get("crs_id"),
+        "number": context["integration"].get("rekassa_number"),
+        "serial_number": register.get("serialNumber") or context["integration"].get("rekassa_serial_number") or "",
+        "shift_open": bool(register.get("shiftOpen")),
+        "shift_number": register.get("shiftNumber"),
+        "status": register.get("status")
+    })
+
+
 @rekassa_bp.route("/api/rekassa/settings", methods=["GET"])
 def get_rekassa_settings():
     from models import get_db, pool
@@ -887,27 +919,20 @@ def save_rekassa():
         pool.putconn(conn)
 
 def rekassa_sell(conn, sale_id):
-
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT *
-        FROM sales
-        WHERE id = %s
-    """, (
-        sale_id,
-    ))
-
+    cur.execute("SELECT * FROM sales WHERE id = %s", (sale_id,))
     sale = cur.fetchone()
-    
+    if not sale:
+        return {"status": "ERROR", "message": "Продажа не найдена"}
+
     cur.execute("""
         SELECT *
         FROM integrations
         WHERE company_id = %s
-    """, (
-        sale["company_id"],
-    ))
-
+        ORDER BY id DESC
+        LIMIT 1
+    """, (sale["company_id"],))
     integration = cur.fetchone()
 
     if (
@@ -915,204 +940,143 @@ def rekassa_sell(conn, sale_id):
         or not integration["rekassa_enabled"]
         or not integration["rekassa_number"]
         or not integration["rekassa_password"]
+        or not integration["rekassa_crs_id"]
     ):
-        return {
-            "status": "ERROR",
-            "message": "ReKassa не настроена для этой компании"
-        }
+        return {"status": "ERROR", "message": "reKassa не настроена для этой компании"}
 
     cur.execute("""
         SELECT *
         FROM sale_items
         WHERE sale_id = %s
-    """, (
-        sale_id,
-    ))
-
+        ORDER BY id
+    """, (sale_id,))
     items = cur.fetchall()
+    if not items:
+        return {"status": "ERROR", "message": "В продаже нет позиций для фискализации"}
 
-    auth = requests.post(
-        f"{REKASSA_URL}/api/auth/login",
-        params={
-            "apiKey": REKASSA_API_KEY,
-            "format": "json"
-        },
-        json={
-            "number": integration["rekassa_number"],
-            "password": integration["rekassa_password"]
-        },
-        timeout=30
-    )
-    
-    print("AUTH STATUS =", auth.status_code)
-    print("AUTH TEXT =", auth.text)
+    try:
+        auth = requests.post(
+            f"{REKASSA_URL}/api/auth/login",
+            params={"apiKey": REKASSA_API_KEY, "format": "json"},
+            json={
+                "number": integration["rekassa_number"],
+                "password": integration["rekassa_password"]
+            },
+            timeout=30
+        )
+    except requests.RequestException as exc:
+        return {"status": "ERROR", "message": f"reKassa не ответила при авторизации: {exc}"}
 
-    auth_data = auth.json()
-
-    token = auth_data["token"]
+    auth_data = _response_json(auth)
+    token = auth_data.get("token") if isinstance(auth_data, dict) else None
+    if auth.status_code >= 400 or not token:
+        return {
+            "status": "ERROR",
+            "message": _api_error_message(auth_data, "Не удалось авторизоваться в reKassa"),
+            "details": auth_data
+        }
 
     crs_id = integration["rekassa_crs_id"]
-
     now = datetime.now()
-
     ticket_items = []
-
     total = 0
 
     for item in items:
-
-        amount = int(item["total"])
-
+        amount = int(round(float(item["total"] or 0)))
         total += amount
-        
         commodity = {
-            "name": item["name"],
+            "name": item["name"] or "Позиция",
             "sectionCode": "1",
-            "quantity": int(item["quantity"] * 1000),
-
-            "price": {
-                "bills": str(int(item["price"])),
-                "coins": 0
-            },
-
-            "sum": {
-                "bills": str(amount),
-                "coins": 0
-            },
-
+            "quantity": int(round(float(item["quantity"] or 0) * 1000)),
+            "price": {"bills": str(int(round(float(item["price"] or 0)))), "coins": 0},
+            "sum": {"bills": str(amount), "coins": 0},
             "measureUnitCode": "796",
-
-            "auxiliary": [
-                {
-                    "key": "UNIT_TYPE",
-                    "value": "PIECE"
-                }
-            ]
+            "auxiliary": [{"key": "UNIT_TYPE", "value": "PIECE"}]
         }
-
         if item.get("gtin"):
             commodity["barcode"] = str(item.get("gtin"))
-
         if item.get("ntin"):
             commodity["ntin"] = str(item.get("ntin"))
-
         if item.get("excise_stamp"):
             commodity["excise_stamp"] = item.get("excise_stamp")
+        ticket_items.append({"type": "ITEM_TYPE_COMMODITY", "commodity": commodity})
 
-        ticket_items.append({
-            "type": "ITEM_TYPE_COMMODITY",
-            "commodity": commodity
-        })
-        
-    payment_type = "PAYMENT_CASH"
-
-    if sale["sale_type"] == "card":
-        payment_type = "PAYMENT_CARD"
-
-    elif sale["sale_type"] == "kaspi":
-        payment_type = "PAYMENT_CARD"
-        
-    amounts = {
-        "total": {
-            "bills": str(total),
-            "coins": 0
-        }
-    }
-    
+    payment_type = "PAYMENT_CARD" if sale["sale_type"] in ("card", "kaspi", "invoice") else "PAYMENT_CASH"
+    amounts = {"total": {"bills": str(total), "coins": 0}}
     if payment_type == "PAYMENT_CASH":
+        amounts["taken"] = {"bills": str(total), "coins": 0}
+        amounts["change"] = {"bills": "0", "coins": 0}
 
-        amounts["taken"] = {
-            "bills": str(total),
-            "coins": 0
-        }
-
-        amounts["change"] = {
-            "bills": "0",
-            "coins": 0
-        }
-    
     ticket = {
-
         "operation": "OPERATION_SELL",
-
         "dateTime": {
-            "date": {
-                "year": now.year,
-                "month": now.month,
-                "day": now.day
-            },
-            "time": {
-                "hour": now.hour,
-                "minute": now.minute,
-                "second": now.second
-            }
+            "date": {"year": now.year, "month": now.month, "day": now.day},
+            "time": {"hour": now.hour, "minute": now.minute, "second": now.second}
         },
-
-        "domain": {
-            "type": "DOMAIN_SERVICES"
-        },
-
+        "domain": {"type": "DOMAIN_SERVICES"},
         "items": ticket_items,
-
-        "payments": [
-            {
-                "type": payment_type,
-                "sum": {
-                    "bills": str(total),
-                    "coins": 0
-                }
-            }
-        ],
-
+        "payments": [{"type": payment_type, "sum": {"bills": str(total), "coins": 0}}],
         "amounts": amounts,
-
-        "operator": {
-            "code": 0
-        }
+        "operator": {"code": 0}
     }
 
-    response = requests.post(
-        f"{REKASSA_URL}/api/crs/{crs_id}/tickets",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "X-Request-ID": str(uuid.uuid4())
-        },
-        json=ticket,
-        timeout=30
-    )
-    
-    print("TICKET STATUS =", response.status_code)
-    print("TICKET TEXT =", response.text)
-    
-    result = response.json()
+    try:
+        response = requests.post(
+            f"{REKASSA_URL}/api/crs/{crs_id}/tickets",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "timezone": REKASSA_TIMEZONE,
+                "X-Request-ID": str(uuid.uuid4())
+            },
+            json=ticket,
+            timeout=30
+        )
+    except requests.RequestException as exc:
+        return {"status": "ERROR", "message": f"reKassa не ответила при фискализации: {exc}"}
 
-    if result.get("status") == "OK":
+    result = _response_json(response)
+    if response.status_code >= 400 or _is_api_error(result) or result.get("status") != "OK":
+        return {
+            "status": "ERROR",
+            "message": _api_error_message(result, "reKassa отклонила чек"),
+            "http_status": response.status_code,
+            "details": result
+        }
 
-        cur.execute("""
-            UPDATE sales
-            SET
-                rekassa_ticket_id = %s,
-                rekassa_ticket_number = %s,
-                rekassa_qr = %s,
-                rekassa_shift_number = %s,
-                rekassa_status = %s
-            WHERE id = %s
-        """, (
-            result.get("id"),
-            result.get("ticketNumber"),
-            result.get("qrCode"),
-            result.get("shiftNumber"),
-            result.get("status"),
-            sale_id
-        ))
+    data = result.get("data") or {}
+    ticket_data = data.get("ticket") or {}
+    service = data.get("service") or {}
+    reg_info = service.get("regInfo") or {}
+    kkm = reg_info.get("kkm") or {}
 
-        conn.commit()
-
+    cur.execute("""
+        UPDATE sales
+        SET
+            rekassa_ticket_id = %s,
+            rekassa_ticket_number = %s,
+            rekassa_qr = %s,
+            rekassa_shift_number = %s,
+            rekassa_status = %s,
+            rekassa_document_number = %s,
+            rekassa_rnm = %s,
+            rekassa_znm = %s
+        WHERE id = %s
+    """, (
+        result.get("id"),
+        result.get("ticketNumber"),
+        result.get("fdoQrCode") or result.get("qrCode"),
+        result.get("shiftNumber"),
+        result.get("status"),
+        ticket_data.get("printedDocumentNumber"),
+        kkm.get("fnsKkmId"),
+        kkm.get("serialNumber") or integration.get("rekassa_serial_number"),
+        sale_id
+    ))
+    conn.commit()
     return result
 
-    return response.json()
-    
+
 def rekassa_refund(conn, sale_id):
 
     cur = conn.cursor()
@@ -1135,6 +1099,8 @@ def rekassa_refund(conn, sale_id):
         SELECT *
         FROM integrations
         WHERE company_id = %s
+        ORDER BY id DESC
+        LIMIT 1
     """, (sale["company_id"],))
 
     integration = cur.fetchone()

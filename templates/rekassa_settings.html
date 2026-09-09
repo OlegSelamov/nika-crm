@@ -29,6 +29,10 @@
         Сохранить
     </button>
 
+    <button class="btn" onclick="diagnoseRekassa()">
+        Проверить интеграцию
+    </button>
+
     <div id="rekassaStatus">
       {% if rekassa.rekassa_enabled %}
       <div style="color:green;margin-top:12px">
@@ -88,6 +92,33 @@ async function checkRekassa(){
         ).innerHTML = `
             <div style="color:red">
                 ❌ Ошибка подключения
+            </div>
+        `;
+    }
+}
+
+async function diagnoseRekassa(){
+    const status = document.getElementById("rekassaStatus");
+    status.innerHTML = '<div style="color:#666">Проверяем сохранённую кассу, CRS и состояние смены…</div>';
+
+    const response = await fetch("/api/rekassa/diagnostics");
+    const result = await response.json().catch(() => ({}));
+
+    if(response.ok && result.success){
+        status.innerHTML = `
+            <div style="color:green;margin-top:12px">
+                ✅ reKassa полностью подключена<br>
+                ID кассы: ${result.crs_id || "—"}<br>
+                ЗНМ: ${result.serial_number || result.number || "—"}<br>
+                Смена: ${result.shift_open ? "открыта №" + (result.shift_number || "—") : "закрыта"}
+            </div>
+        `;
+    }else{
+        status.innerHTML = `
+            <div style="color:red;margin-top:12px">
+                ❌ Интеграция не готова<br>
+                Этап: ${result.stage || "подключение"}<br>
+                ${result.error || result.message || "Неизвестная ошибка reKassa"}
             </div>
         `;
     }
