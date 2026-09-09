@@ -14,7 +14,7 @@ OFD_MESSAGE = "Требуется оплатить ОФД COMRUN"
 
 def _payment_url():
     from routes.rekassa import REKASSA_URL
-    return "https://ofd-test.rekassa.kz" if "test" in str(REKASSA_URL or "").lower() else "https://ofd.rekassa.kz"
+    return "https://account.apps-test.rekassa.kz/" if "test" in str(REKASSA_URL or "").lower() else "https://account.apps.rekassa.kz/"
 
 
 def _integration(conn, company_id):
