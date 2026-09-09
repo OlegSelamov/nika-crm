@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'services/api_service.dart';
 import 'services/nika_assistant_controller.dart';
 import 'services/app_update_service.dart';
@@ -33,6 +34,17 @@ class NikaBusinessApp extends StatelessWidget {
       navigatorKey: appNavigatorKey,
       title: 'Nika Business',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('ru', 'RU'),
+      supportedLocales: const [
+        Locale('ru', 'RU'),
+        Locale('kk', 'KZ'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
 	  theme: AppTheme.light(),
       themeMode: ThemeMode.light,
       builder: (context, child) => NikaVoiceOverlay(

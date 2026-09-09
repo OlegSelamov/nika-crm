@@ -437,7 +437,14 @@ def _extract_closed_shifts(payload):
     return list(unique.values())
 
 
-def _local_closed_shifts(company_id, open_shift_number, page, size):
+def _local_closed_shifts(
+    company_id,
+    open_shift_number,
+    page,
+    size,
+    date_from="",
+    date_to="",
+):
     """Build a reliable archive from fiscal metadata already stored on sales."""
     from models import get_db, pool
 
@@ -464,6 +471,8 @@ def _local_closed_shifts(company_id, open_shift_number, page, size):
             WHERE company_id = %s
               AND rekassa_shift_number IS NOT NULL
               AND (%s IS NULL OR rekassa_shift_number <> %s)
+              AND (%s = '' OR DATE(COALESCE(refunded_at, created_at)) >= %s::date)
+              AND (%s = '' OR DATE(COALESCE(refunded_at, created_at)) <= %s::date)
             GROUP BY rekassa_shift_number, COALESCE(rekassa_znm, '')
             ORDER BY MAX(COALESCE(refunded_at, created_at)) DESC
             LIMIT %s OFFSET %s
@@ -471,6 +480,10 @@ def _local_closed_shifts(company_id, open_shift_number, page, size):
             company_id,
             open_shift_number,
             open_shift_number,
+            date_from,
+            date_from,
+            date_to,
+            date_to,
             size,
             page * size,
         ))
@@ -1480,6 +1493,9 @@ def rekassa_shift_history():
             "error": "Некорректные параметры страницы"
         }), 400
 
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+
     open_shift_number = None
     try:
         state, state_error = _register_state(context)
@@ -1519,6 +1535,8 @@ def rekassa_shift_history():
             open_shift_number,
             page,
             size,
+            date_from=date_from,
+            date_to=date_to,
         )
     except Exception:
         local_shifts = []
@@ -1528,13 +1546,20 @@ def rekassa_shift_history():
                 "error": warning or "Не удалось загрузить историю смен",
             }), 502
 
-    history = _merge_closed_shifts(remote_shifts, local_shifts, size)
+    if date_from or date_to:
+        history = _merge_closed_shifts([], local_shifts, size)
+    else:
+        history = _merge_closed_shifts(remote_shifts, local_shifts, size)
     return jsonify({
         "success": True,
         "history": history,
         "page": page,
         "size": size,
-        "has_more": len(remote_shifts) >= size or len(local_shifts) >= size,
+        "has_more": (
+            len(local_shifts) >= size
+            if (date_from or date_to)
+            else len(remote_shifts) >= size or len(local_shifts) >= size
+        ),
         "warning": warning,
     })
 

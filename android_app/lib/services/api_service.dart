@@ -290,6 +290,10 @@ class ApiService {
     bool allHistory = false,
     int page = 0,
     int size = 50,
+    String? queryText,
+    String kind = 'all',
+    String? dateFrom,
+    String? dateTo,
   }) async =>
       List<dynamic>.from(await _request(
         'GET',
@@ -298,6 +302,10 @@ class ApiService {
           'shift_number': shiftNumber?.toString(),
           'serial_number': serialNumber,
           if (allHistory) 'scope': 'all',
+          if (queryText != null && queryText.trim().isNotEmpty) 'q': queryText.trim(),
+          if (kind != 'all') 'kind': kind,
+          if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+          if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
           'page': '$page',
           'size': '$size',
         },
@@ -598,11 +606,18 @@ class ApiService {
   static Future<Map<String, dynamic>> shiftHistory({
     int page = 0,
     int size = 20,
+    String? dateFrom,
+    String? dateTo,
   }) async =>
       Map<String, dynamic>.from(await _request(
         'GET',
         '/api/rekassa/shifts',
-        query: {'page': '$page', 'size': '$size'},
+        query: {
+          'page': '$page',
+          'size': '$size',
+          if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+          if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+        },
       ));
 
   static Future<Map<String, dynamic>> zReport(int shiftNumber) async =>

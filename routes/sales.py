@@ -494,8 +494,11 @@ def sales_history():
     serial_number = (request.args.get("serial_number") or "").strip()
     query = (request.args.get("q") or "").strip()
     kind = (request.args.get("kind") or "all").strip().lower()
-    if kind not in {"all", "sales", "invoices", "refunds"}:
+    if kind not in {"all", "sales", "receipts", "invoices", "refunds"}:
         kind = "all"
+
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
 
     try:
         page = max(int(request.args.get("page", 0)), 0)
@@ -556,19 +559,25 @@ def sales_history():
                     OR COALESCE(journal.sale_number::TEXT, journal.id::TEXT) ILIKE '%%' || %s || '%%'
                     OR COALESCE(clients.full_name, 'Частное лицо') ILIKE '%%' || %s || '%%'
                     OR COALESCE(clients.company_name, '') ILIKE '%%' || %s || '%%'
+                    OR COALESCE(journal.total_amount::TEXT, '') ILIKE '%%' || REPLACE(%s, ',', '.') || '%%'
                 )
                 AND (
                     %s = 'all'
                     OR (%s = 'sales' AND journal.sale_type <> 'invoice' AND journal.sale_refunded = FALSE)
+                    OR (%s = 'receipts' AND journal.sale_type <> 'invoice')
                     OR (%s = 'invoices' AND journal.sale_type = 'invoice')
                     OR (%s = 'refunds' AND journal.sale_refunded = TRUE)
                 )
+                AND (%s = '' OR journal.event_at::date >= %s::date)
+                AND (%s = '' OR journal.event_at::date <= %s::date)
                 ORDER BY journal.event_at DESC, journal.id DESC
                 LIMIT %s OFFSET %s
             """, (
                 session.get("company_id"),
-                query, query, query, query,
-                kind, kind, kind, kind,
+                query, query, query, query, query,
+                kind, kind, kind, kind, kind,
+                date_from, date_from,
+                date_to, date_to,
                 size,
                 page * size,
             ))

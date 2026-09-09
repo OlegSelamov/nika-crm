@@ -17,15 +17,22 @@ class SalesHistoryScreen extends StatefulWidget {
 }
 
 class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
-  static const pageSize = 50;
+  static const pageSize = 20;
+  static const documentPageSize = 20;
 
   bool loading = true;
   int historyTab = 0;
-  int documentFilter = 0;
+  String documentKind = 'all';
+  final TextEditingController documentSearchController = TextEditingController();
   final List<Map<String, dynamic>> documentSales = [];
+  DateTimeRange? shiftPeriod;
+  DateTimeRange? documentPeriod;
   bool loadingMore = false;
   bool hasMore = false;
   int page = 0;
+  bool loadingMoreDocuments = false;
+  bool documentsHasMore = false;
+  int documentPage = 0;
   String? error;
   String? historyWarning;
   Map<String, dynamic> status = {};
@@ -36,6 +43,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   void initState() {
     super.initState();
     loadHistory();
+  }
+
+  @override
+  void dispose() {
+    documentSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> loadHistory() async {
@@ -54,9 +67,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       final number = shiftNumberFrom(openedShift);
       final serial = shiftSerialFrom(openedShift);
       final results = await Future.wait<dynamic>([
-        ApiService.shiftHistory(page: 0, size: pageSize).catchError(
-          (e) => <String, dynamic>{'_error': readableError(e)},
-        ),
+        ApiService.shiftHistory(
+          page: 0,
+          size: pageSize,
+          dateFrom: _apiDate(shiftPeriod?.start),
+          dateTo: _apiDate(shiftPeriod?.end),
+        ).catchError((e) => <String, dynamic>{'_error': readableError(e)}),
         isOpen && number != null
             ? ApiService.getSalesHistory(
                 shiftNumber: number,
@@ -65,7 +81,15 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 size: pageSize,
               ).catchError((_) => <dynamic>[])
             : Future<dynamic>.value(<dynamic>[]),
-        ApiService.getSalesHistory(allHistory: true, page: 0, size: 100).catchError((_) => <dynamic>[]),
+        ApiService.getSalesHistory(
+          allHistory: true,
+          page: 0,
+          size: documentPageSize,
+          queryText: documentSearchController.text,
+          kind: documentKind,
+          dateFrom: _apiDate(documentPeriod?.start),
+          dateTo: _apiDate(documentPeriod?.end),
+        ).catchError((_) => <dynamic>[]),
       ]);
       final historyResponse = Map<String, dynamic>.from(results[0] as Map);
       final loaded = _extractHistory(historyResponse['history']);
@@ -91,11 +115,11 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           ..addAll(docs);
         _sortAndDeduplicate();
         page = 0;
+        documentPage = 0;
         hasMore = historyResponse['has_more'] == true ||
             (historyResponse['_error'] == null && loaded.length >= pageSize);
-        historyWarning = (historyResponse['_error'] ??
-                historyResponse['warning'])
-            ?.toString();
+        documentsHasMore = docs.length >= documentPageSize;
+        historyWarning = (historyResponse['_error'] ?? historyResponse['warning'])?.toString();
         loading = false;
       });
     } catch (e) {
@@ -115,6 +139,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       final response = await ApiService.shiftHistory(
         page: nextPage,
         size: pageSize,
+        dateFrom: _apiDate(shiftPeriod?.start),
+        dateTo: _apiDate(shiftPeriod?.end),
       );
       final loaded = _extractHistory(response['history']);
       if (!mounted) return;
@@ -133,6 +159,110 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     } finally {
       if (mounted) setState(() => loadingMore = false);
     }
+  }
+
+  Future<void> _loadMoreDocuments() async {
+    if (loadingMoreDocuments || !documentsHasMore) return;
+    setState(() => loadingMoreDocuments = true);
+    try {
+      final nextPage = documentPage + 1;
+      final rows = await ApiService.getSalesHistory(
+        allHistory: true,
+        page: nextPage,
+        size: documentPageSize,
+        queryText: documentSearchController.text,
+        kind: documentKind,
+        dateFrom: _apiDate(documentPeriod?.start),
+        dateTo: _apiDate(documentPeriod?.end),
+      );
+      final loaded = rows.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      if (!mounted) return;
+      setState(() {
+        documentSales.addAll(loaded);
+        documentPage = nextPage;
+        documentsHasMore = loaded.length >= documentPageSize;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => loadingMoreDocuments = false);
+    }
+  }
+
+  String? _apiDate(DateTime? date) {
+    if (date == null) return null;
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${date.year}-${two(date.month)}-${two(date.day)}';
+  }
+
+  String _shortDate(DateTime date) {
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(date.day)}.${two(date.month)}.${date.year}';
+  }
+
+  String _periodLabel(DateTimeRange? period) {
+    if (period == null) return 'За всё время';
+    if (_apiDate(period.start) == _apiDate(period.end)) return _shortDate(period.start);
+    return '${_shortDate(period.start)} — ${_shortDate(period.end)}';
+  }
+
+  Future<DateTimeRange?> _pickRussianPeriod(DateTimeRange? current) async {
+    final now = DateTime.now();
+    return showDateRangePicker(
+      context: context,
+      locale: const Locale('ru', 'RU'),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: current,
+      helpText: 'Выберите период',
+      cancelText: 'Отмена',
+      confirmText: 'Применить',
+      saveText: 'Применить',
+      fieldStartHintText: 'Начало',
+      fieldEndHintText: 'Конец',
+      fieldStartLabelText: 'Дата начала',
+      fieldEndLabelText: 'Дата окончания',
+      errorFormatText: 'Введите дату в формате ДД.ММ.ГГГГ',
+      errorInvalidText: 'Некорректная дата',
+      errorInvalidRangeText: 'Дата окончания раньше даты начала',
+    );
+  }
+
+  Future<void> _changeShiftPeriod() async {
+    final selected = await _pickRussianPeriod(shiftPeriod);
+    if (selected == null) return;
+    setState(() => shiftPeriod = selected);
+    await loadHistory();
+  }
+
+  Future<void> _changeDocumentPeriod() async {
+    final selected = await _pickRussianPeriod(documentPeriod);
+    if (selected == null) return;
+    setState(() => documentPeriod = selected);
+    await loadHistory();
+  }
+
+  Future<void> _resetShiftPeriod() async {
+    if (shiftPeriod == null) return;
+    setState(() => shiftPeriod = null);
+    await loadHistory();
+  }
+
+  Future<void> _resetDocumentFilters() async {
+    documentSearchController.clear();
+    setState(() {
+      documentPeriod = null;
+      documentKind = 'all';
+    });
+    await loadHistory();
+  }
+
+  Future<void> _setDocumentKind(String kind) async {
+    if (documentKind == kind) return;
+    setState(() => documentKind = kind);
+    await loadHistory();
   }
 
   List<Map<String, dynamic>> _extractHistory(dynamic raw) {
@@ -243,6 +373,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         slivers: [
           SliverToBoxAdapter(child: _historyTabs()),
           if (historyTab == 1) ..._documentSlivers() else ...[
+          SliverToBoxAdapter(child: _shiftFilterCard()),
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
@@ -345,45 +476,192 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }
 
   List<Widget> _documentSlivers() {
-    const names = ['Все', 'Счета', 'Накладные', 'Акты', 'ЭСФ'];
     return [
-      SliverToBoxAdapter(
-        child: SizedBox(
-          height: 48,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            scrollDirection: Axis.horizontal,
-            itemCount: names.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 7),
-            itemBuilder: (_, i) => ChoiceChip(
-              label: Text(names[i]),
-              selected: documentFilter == i,
-              showCheckmark: false,
-              onSelected: (_) => setState(() => documentFilter = i),
-            ),
-          ),
-        ),
-      ),
+      SliverToBoxAdapter(child: _documentFilterCard()),
       const SliverToBoxAdapter(child: SizedBox(height: 10)),
       if (documentSales.isEmpty)
         const SliverFillRemaining(
           hasScrollBody: false,
           child: ScreenStateView(
             icon: Icons.description_outlined,
-            title: 'Документов пока нет',
-            message: 'Счета и документы по продажам будут собраны здесь.',
+            title: 'Ничего не найдено',
+            message: 'Измените период, вид документа или поисковый запрос.',
           ),
         )
-      else
+      else ...[
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           sliver: SliverList.separated(
             itemCount: documentSales.length,
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (_, i) => _documentSaleCard(documentSales[i]),
           ),
         ),
+        if (documentsHasMore)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+              child: OutlinedButton.icon(
+                onPressed: loadingMoreDocuments ? null : _loadMoreDocuments,
+                icon: loadingMoreDocuments
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.expand_more_rounded),
+                label: Text(loadingMoreDocuments ? 'Загрузка…' : 'Показать ещё'),
+              ),
+            ),
+          ),
+      ],
     ];
+  }
+
+  Widget _shiftFilterCard() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+        child: _filterShell(
+          title: 'Период смен',
+          subtitle: 'Показываем по 20 смен, остальные — по кнопке «Показать ещё»',
+          children: [
+            Row(children: [
+              Expanded(
+                child: _periodButton(
+                  label: _periodLabel(shiftPeriod),
+                  onTap: _changeShiftPeriod,
+                ),
+              ),
+              if (shiftPeriod != null) ...[
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  onPressed: _resetShiftPeriod,
+                  tooltip: 'Сбросить период',
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ]),
+          ],
+        ),
+      );
+
+  Widget _documentFilterCard() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+        child: _filterShell(
+          title: 'Найти документы',
+          subtitle: 'По номеру, клиенту или сумме · по 20 записей',
+          children: [
+            TextField(
+              controller: documentSearchController,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => loadHistory(),
+              decoration: InputDecoration(
+                hintText: 'Номер, клиент или сумма',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: documentSearchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          documentSearchController.clear();
+                          setState(() {});
+                          loadHistory();
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                filled: true,
+                fillColor: const Color(0xFFF7F7FC),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: _periodButton(label: _periodLabel(documentPeriod), onTap: _changeDocumentPeriod)),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: _resetDocumentFilters,
+                tooltip: 'Сбросить фильтры',
+                icon: const Icon(Icons.restart_alt_rounded),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: _kindButton('all', 'Все', Icons.folder_copy_outlined)),
+              const SizedBox(width: 8),
+              Expanded(child: _kindButton('receipts', 'Чеки', Icons.receipt_long_outlined)),
+              const SizedBox(width: 8),
+              Expanded(child: _kindButton('invoices', 'Счета', Icons.request_quote_outlined)),
+            ]),
+          ],
+        ),
+      );
+
+  Widget _filterShell({
+    required String title,
+    required String subtitle,
+    required List<Widget> children,
+  }) => Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.96),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 18, offset: const Offset(0, 7))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+            ])),
+          ]),
+          const SizedBox(height: 13),
+          ...children,
+        ]),
+      );
+
+  Widget _periodButton({required String label, required VoidCallback onTap}) => OutlinedButton.icon(
+        onPressed: onTap,
+        icon: const Icon(Icons.calendar_month_rounded, size: 19),
+        label: Align(alignment: Alignment.centerLeft, child: Text(label, overflow: TextOverflow.ellipsis)),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          alignment: Alignment.centerLeft,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        ),
+      );
+
+  Widget _kindButton(String kind, String label, IconData icon) {
+    final selected = documentKind == kind;
+    return InkWell(
+      onTap: () => _setDocumentKind(kind),
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : const Color(0xFFF7F7FC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: selected ? AppColors.primary : AppColors.border),
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 17, color: selected ? Colors.white : AppColors.muted),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: selected ? Colors.white : AppColors.navy),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   List<Map<String, dynamic>> _saleItems(Map<String, dynamic> sale) {
