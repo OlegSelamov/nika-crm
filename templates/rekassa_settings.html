@@ -4,6 +4,12 @@
 
 <h2>🧾 ReKassa</h2>
 
+<div style="margin:0 0 16px;padding:14px 16px;border:1px solid #dbe9ff;border-radius:14px;background:#f5f9ff;color:#44506a;line-height:1.5;font-size:13px">
+    <strong style="color:#263653">ОФД: COMRUN</strong><br>
+    Интеграция Nika с reKassa рассчитана на кассы, работающие с ОФД COMRUN.
+    Если обслуживание ОФД не оплачено, продажа всё равно сохранится в Nika, а система предложит перейти к оплате COMRUN и затем повторно фискализировать этот же чек.
+</div>
+
 <div class="card">
 
     <label>ЗНМ</label>
@@ -114,6 +120,7 @@ async function diagnoseRekassa(){
                 ✅ Связь с reKassa установлена<br>
                 ID кассы: ${result.crs_id || "—"}<br>
                 ЗНМ: ${result.serial_number || result.number || "—"}<br>
+                ОФД: COMRUN<br>
                 Смена: ${result.shift_open ? "открыта №" + (result.shift_number || "—") : "закрыта"}
             </div>
             ${fiscalError ? `
@@ -150,6 +157,11 @@ async function retryFiscalization(saleId){
     if(response.ok && result.fiscalized){
         alert("Чек фискализирован. Смена №" + (result.shift_number || "—"));
         await diagnoseRekassa();
+    }else if(result.code === "REKASSA_OFD_PAYMENT_REQUIRED"){
+        alert("Требуется оплатить ОФД COMRUN. Продажа уже сохранена в Nika; после оплаты повторите фискализацию.");
+        if(result.comrun_payment_url){
+            window.open(result.comrun_payment_url, "_blank", "noopener,noreferrer");
+        }
     }else{
         alert("reKassa отклонила чек: " + (result.error || result.message || "Неизвестная ошибка"));
         await diagnoseRekassa();
@@ -211,6 +223,7 @@ async function saveRekassa(){
     document.getElementById("rekassaStatus").innerHTML = `
       <div style="color:green;margin-top:12px">
         ✅ reKassa сохранена<br>
+        ОФД: COMRUN<br>
         ЗНМ: ${saved.serial_number || number}<br>
         ID: ${saved.crs_id || auth.id}
       </div>
