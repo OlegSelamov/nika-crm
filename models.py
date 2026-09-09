@@ -1083,6 +1083,11 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_school_attendance_date ON school_attendance(company_id, attendance_date)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_school_schedule_class_day ON school_schedule(company_id, class_id, weekday)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_school_topics_class_date ON school_lesson_topics(company_id, class_id, lesson_date)")
+    cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS methodic_url TEXT")
+    cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS methodic_name TEXT")
+    cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'planned'")
+    cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS conducted_at TIMESTAMP")
+    cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS conducted_by INTEGER")
 
     # Эти изменения безопасно выполняются повторно при каждом запуске.
     cur.execute("""

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block content %}
+{% block content %}<link rel="stylesheet" href="/static/css/school_unified.css">
 <style>
 .school-page,.school-page *{min-width:0}
 .school-page{width:100%;max-width:100%;padding:4px 0 30px;overflow:hidden}
@@ -42,9 +42,9 @@
 .modal-backdrop{align-items:center!important;justify-content:center!important}
 </style>
 
-<div class="school-page">
+<div class="school-page school-shell">
   <div class="school-heading"><img class="school-heading-icon" src="/static/icons/school.png" alt=""><div><h1 class="school-title">Школа</h1><p class="school-subtitle">Классные руководители и ежедневный учёт питания</p></div></div>
-  <nav class="school-tabs"><a href="{{ url_for('school.classes') }}">Классы</a><a href="{{ url_for('school.schedule') }}">Расписание</a><a href="{{ url_for('school.topics') }}">Темы уроков</a><a class="active" href="{{ url_for('school.leaders') }}">Классные руководители</a><a href="{{ url_for('school.meals') }}">Питание</a></nav>
+  <nav class="school-tabs"><a href="{{ url_for('school.journal') }}">Журнал</a><a href="{{ url_for('school.classes') }}">Классы</a><a href="{{ url_for('school.schedule') }}">Расписание</a><a href="{{ url_for('school.topics') }}">Темы уроков</a><a class="active" href="{{ url_for('school.leaders') }}">Классные руководители</a><a href="{{ url_for('school.meals') }}">Питание</a></nav>
   {% if request.args.get('success') %}<div class="notice ok">{{ request.args.get('success') }}</div>{% endif %}{% if request.args.get('error') %}<div class="notice err">{{ request.args.get('error') }}</div>{% endif %}
 
   <section class="school-card leader-filters">

@@ -11,6 +11,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from models import get_db, pool
 
 
+from services.media import upload_file
 school_bp = Blueprint("school", __name__, url_prefix="/school")
 
 
@@ -98,7 +99,7 @@ def _style_sheet(ws, widths):
 
 @school_bp.route("")
 def index():
-    return redirect(url_for("school.classes"))
+    return redirect(url_for("school.journal"))
 
 
 @school_bp.route("/leaders")
@@ -601,15 +602,90 @@ def topics():
 def save_topic():
     company_id=_company_id(); class_id=request.form.get("class_id",type=int); lesson_date=request.form.get("lesson_date") or date.today().isoformat(); lesson=request.form.get("lesson_number",type=int); topic=request.form.get("topic","").strip()
     if not company_id or not class_id or not lesson or not topic: return redirect(url_for("school.topics",class_id=class_id,date=lesson_date,error="Укажите урок и тему"))
+
+    methodic = request.files.get("methodic")
+    methodic_url = None
+    methodic_name = None
+    if methodic and methodic.filename:
+        try:
+            methodic_name = methodic.filename
+            methodic_url = upload_file(
+                methodic,
+                company_id=company_id,
+                namespace=f"school/classes/{class_id}/methodics",
+            )
+        except ValueError as exc:
+            return redirect(url_for("school.topics",class_id=class_id,date=lesson_date,error=str(exc)))
+
     conn=get_db()
     try:
         cur=conn.cursor(); cur.execute("""
-            INSERT INTO school_lesson_topics(company_id,class_id,lesson_date,lesson_number,subject,topic,homework,teacher,created_by)
-            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT(company_id,class_id,lesson_date,lesson_number) DO UPDATE SET subject=EXCLUDED.subject,topic=EXCLUDED.topic,homework=EXCLUDED.homework,teacher=EXCLUDED.teacher,created_by=EXCLUDED.created_by,updated_at=NOW()
-        """,(company_id,class_id,lesson_date,lesson,request.form.get("subject","").strip(),topic,request.form.get("homework","").strip(),request.form.get("teacher","").strip(),session.get("user_id"))); conn.commit()
+            INSERT INTO school_lesson_topics(company_id,class_id,lesson_date,lesson_number,subject,topic,homework,teacher,created_by,methodic_url,methodic_name)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT(company_id,class_id,lesson_date,lesson_number) DO UPDATE SET
+                subject=EXCLUDED.subject,topic=EXCLUDED.topic,homework=EXCLUDED.homework,
+                teacher=EXCLUDED.teacher,created_by=EXCLUDED.created_by,
+                methodic_url=COALESCE(EXCLUDED.methodic_url,school_lesson_topics.methodic_url),
+                methodic_name=COALESCE(EXCLUDED.methodic_name,school_lesson_topics.methodic_name),
+                updated_at=NOW()
+        """,(company_id,class_id,lesson_date,lesson,request.form.get("subject","").strip(),topic,request.form.get("homework","").strip(),request.form.get("teacher","").strip(),session.get("user_id"),methodic_url,methodic_name)); conn.commit()
     finally: pool.putconn(conn)
     return redirect(url_for("school.topics",class_id=class_id,date=lesson_date,success="Тема урока сохранена"))
+
+
+@school_bp.route("/topics/<int:topic_id>/conduct",methods=["POST"])
+def conduct_topic(topic_id):
+    company_id=_company_id()
+    if not company_id: return redirect("/login")
+    class_id=request.form.get("class_id",type=int); lesson_date=request.form.get("lesson_date") or date.today().isoformat()
+    conn=get_db()
+    try:
+        cur=conn.cursor(); cur.execute("""
+            UPDATE school_lesson_topics
+            SET status='conducted',conducted_at=NOW(),conducted_by=%s,updated_at=NOW()
+            WHERE id=%s AND company_id=%s
+        """,(session.get("user_id"),topic_id,company_id)); conn.commit()
+    finally: pool.putconn(conn)
+    return redirect(request.form.get("next") or url_for("school.topics",class_id=class_id,date=lesson_date,success="Тема отмечена как проведённая"))
+
+
+@school_bp.route("/journal")
+def journal():
+    company_id=_company_id()
+    if not company_id: return redirect("/login")
+    selected_date=request.args.get("date") or date.today().isoformat()
+    try:
+        day=date.fromisoformat(selected_date)
+    except ValueError:
+        day=date.today(); selected_date=day.isoformat()
+    weekday=day.isoweekday()
+
+    conn=get_db()
+    try:
+        cur=conn.cursor(); classes=_school_classes(cur,company_id)
+        class_id=request.args.get("class_id",type=int) or (classes[0]["id"] if classes else None)
+        lessons=[]; students=[]
+        if class_id:
+            cur.execute("""
+                SELECT sc.id schedule_id,sc.lesson_number,sc.subject schedule_subject,sc.teacher schedule_teacher,
+                       sc.room,sc.start_time,sc.end_time,
+                       t.id topic_id,t.subject,t.topic,t.homework,t.teacher,t.methodic_url,t.methodic_name,
+                       COALESCE(t.status,'planned') status,t.conducted_at
+                FROM school_schedule sc
+                LEFT JOIN school_lesson_topics t
+                  ON t.company_id=sc.company_id AND t.class_id=sc.class_id
+                 AND t.lesson_date=%s AND t.lesson_number=sc.lesson_number
+                WHERE sc.company_id=%s AND sc.class_id=%s AND sc.weekday=%s
+                ORDER BY sc.lesson_number
+            """,(selected_date,company_id,class_id,weekday)); lessons=cur.fetchall()
+            cur.execute("""
+                SELECT s.id,s.full_name,COALESCE(a.is_present,TRUE) is_present,COALESCE(a.note,'') note
+                FROM school_students s
+                LEFT JOIN school_attendance a ON a.student_id=s.id AND a.company_id=s.company_id AND a.attendance_date=%s
+                WHERE s.company_id=%s AND s.class_id=%s AND s.is_active=TRUE ORDER BY s.full_name
+            """,(selected_date,company_id,class_id)); students=cur.fetchall()
+    finally: pool.putconn(conn)
+    return render_template("school_journal.html",classes=classes,lessons=lessons,students=students,selected_class_id=class_id,selected_date=selected_date)
 
 
 @school_bp.route("/topics/<int:topic_id>/delete",methods=["POST"])

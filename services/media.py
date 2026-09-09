@@ -12,6 +12,9 @@ from werkzeug.utils import secure_filename
 
 
 ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+
+ALLOWED_FILE_EXTENSIONS = {"pdf","doc","docx","xls","xlsx","ppt","pptx","jpg","jpeg","png","webp"}
+MAX_FILE_UPLOAD_BYTES = int(os.getenv("MEDIA_MAX_FILE_UPLOAD_MB", "30")) * 1024 * 1024
 MAX_UPLOAD_BYTES = int(os.getenv("MEDIA_MAX_UPLOAD_MB", "15")) * 1024 * 1024
 MAX_IMAGE_SIDE = int(os.getenv("MEDIA_MAX_IMAGE_SIDE", "1600"))
 WEBP_QUALITY = int(os.getenv("MEDIA_WEBP_QUALITY", "82"))
@@ -138,6 +141,49 @@ def upload_image(file_storage, *, company_id, namespace, name=None):
                 CacheControl="public, max-age=31536000, immutable",
             )
             return f"{_public_base()}/{object_key}"
+
+    root = Path(os.getenv("MEDIA_LOCAL_ROOT") or "static/uploads/media")
+    target = root / object_key
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(payload)
+    return "/" + target.as_posix().lstrip("/")
+
+
+def upload_file(file_storage, *, company_id, namespace, name=None):
+    """Store a general business attachment (PDF/Office/image) in R2 or local media."""
+    if not file_storage or not file_storage.filename:
+        return None
+
+    filename = secure_filename(file_storage.filename or "")
+    if "." not in filename:
+        raise ValueError("Не удалось определить формат файла.")
+
+    ext = filename.rsplit(".", 1)[1].lower()
+    if ext not in ALLOWED_FILE_EXTENSIONS:
+        raise ValueError("Разрешены PDF, Word, Excel, PowerPoint и изображения.")
+
+    file_storage.stream.seek(0)
+    payload = file_storage.stream.read()
+    if len(payload) > MAX_FILE_UPLOAD_BYTES:
+        raise ValueError(
+            f"Файл слишком большой. Максимум {MAX_FILE_UPLOAD_BYTES // 1024 // 1024} МБ."
+        )
+
+    content_type = file_storage.mimetype or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    object_key = _key(company_id, namespace, ext=ext, name=name or f"{uuid.uuid4().hex}_{filename}")
+
+    if _backend() == "r2" and _r2_ready():
+        _r2_client().put_object(
+            Bucket=os.environ["R2_BUCKET"],
+            Key=object_key,
+            Body=payload,
+            ContentType=content_type,
+            CacheControl="private, max-age=3600",
+        )
+        return f"{_public_base()}/{object_key}"
+
+    if _backend() == "r2" and (os.getenv("MEDIA_ALLOW_LOCAL_FALLBACK") or "true").lower() != "true":
+        raise RuntimeError("R2 не настроен полностью.")
 
     root = Path(os.getenv("MEDIA_LOCAL_ROOT") or "static/uploads/media")
     target = root / object_key
