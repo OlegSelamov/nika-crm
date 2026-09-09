@@ -211,6 +211,8 @@ def inject_storefront_workflow_assets(response):
         html = response.get_data(as_text=True)
         if "storefront_workflow.css" not in html and "</head>" in html:
             html = html.replace("</head>", '<link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-1">\n</head>', 1)
+        if request.path == "/sales" and "sales_client_desktop.css" not in html and "</head>" in html:
+            html = html.replace("</head>", '<link rel="stylesheet" href="/static/css/sales_client_desktop.css?v=20260909-1">\n</head>', 1)
         if "storefront_workflow.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/storefront_workflow.js?v=20260904-1"></script>\n</body>', 1)
         if "ai_error_patch.js" not in html and "</body>" in html:
