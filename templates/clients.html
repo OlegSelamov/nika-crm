@@ -9,9 +9,9 @@
         </div>
 
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <button class="nika-data-trigger" type="button" onclick="openClientsDataModal()"><span class="nika-data-trigger__icon">▤</span>Данные</button>
+            <button class="nika-data-trigger" type="button" onclick="openClientsDataModal()"><span class="nika-data-trigger__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-database"></use></svg></span>Данные</button>
             <button class="clients-btn clients-btn--primary" type="button" onclick="openClientModal()">
-                ＋ Добавить клиента
+                <svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-plus"></use></svg> Добавить клиента
             </button>
         </div>
     </div>
@@ -30,7 +30,7 @@
 
         <div class="clients-toolbar-row">
             <label class="clients-search">
-                <span>⌕</span>
+                <span><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-search"></use></svg></span>
                 <input id="clientSearch" type="search"
                        placeholder="Поиск по имени, компании, ИИН, телефону или адресу"
                        oninput="filterClients()">
@@ -167,7 +167,7 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="clients-empty"><span>👥</span><strong>Активных клиентов пока нет</strong><p>Добавьте первого клиента, чтобы начать работу.</p></div>
+            <div class="clients-empty"><span><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-users"></use></svg></span><strong>Активных клиентов пока нет</strong><p>Добавьте первого клиента, чтобы начать работу.</p></div>
             {% endif %}
         </div>
 
@@ -200,11 +200,11 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="clients-empty"><span>🗑</span><strong>Удалённых клиентов нет</strong><p>Удалённые клиенты будут отображаться здесь.</p></div>
+            <div class="clients-empty"><span><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-trash"></use></svg></span><strong>Удалённых клиентов нет</strong><p>Удалённые клиенты будут отображаться здесь.</p></div>
             {% endif %}
         </div>
 
-        <div class="clients-empty clients-empty--search" id="clientsSearchEmpty" hidden><span>⌕</span><strong>Клиенты не найдены</strong><p>Попробуйте изменить поисковый запрос.</p></div>
+        <div class="clients-empty clients-empty--search" id="clientsSearchEmpty" hidden><span><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-search"></use></svg></span><strong>Клиенты не найдены</strong><p>Попробуйте изменить поисковый запрос.</p></div>
     </section>
 </div>
 
@@ -218,16 +218,16 @@
                 <h2 id="clientsDataModalTitle">Данные: клиенты</h2>
                 <p>Импортируйте, выгружайте и сохраняйте рабочую базу в Excel.</p>
             </div>
-            <button type="button" class="nika-data-modal__close" onclick="closeClientsDataModal()" aria-label="Закрыть">×</button>
+            <button type="button" class="nika-data-modal__close" onclick="closeClientsDataModal()" aria-label="Закрыть"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></button>
         </div>
 
         <div class="nika-data-actions-grid">
             <a class="nika-data-action" href="/clients/export.xlsx">
-                <span class="nika-data-action__icon">↓</span>
+                <span class="nika-data-action__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-download"></use></svg></span>
                 <span><b>Экспорт Excel</b><small>Скачать текущие данные</small></span>
             </a>
             <a class="nika-data-action" href="/clients/import-template.xlsx">
-                <span class="nika-data-action__icon">▤</span>
+                <span class="nika-data-action__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-file"></use></svg></span>
                 <span><b>Скачать шаблон</b><small>Правильная структура файла</small></span>
             </a>
         </div>
@@ -240,7 +240,7 @@
 
             <label class="nika-data-dropzone" id="clientsDataDropzone">
                 <input type="file" name="file" accept=".xlsx" required id="clientsDataFileInput">
-                <span class="nika-data-dropzone__icon">↑</span>
+                <span class="nika-data-dropzone__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-upload"></use></svg></span>
                 <b id="clientsDataFileName">Выберите Excel-файл</b>
                 <small>Нажмите сюда или перетащите файл .xlsx</small>
             </label>
@@ -272,7 +272,7 @@
     <div class="client-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="clientModalTitle">
         <div class="client-modal-head">
             <div><h2 id="clientModalTitle">Новый клиент</h2><p id="clientModalNote">Заполните основные данные клиента</p></div>
-            <button type="button" class="client-modal-close" onclick="closeClientModal()">×</button>
+            <button type="button" class="client-modal-close" onclick="closeClientModal()"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></button>
         </div>
 
         <form id="clientForm" method="POST" action="/clients/add" enctype="multipart/form-data" class="client-form-grid">
@@ -296,7 +296,7 @@
                         <b>Фотографии клиента</b>
                         <small>Можно добавить несколько фото, выбрать главное и убрать лишние до сохранения.</small>
                     </div>
-                    <button class="client-media-add" type="button" onclick="document.getElementById('clientImagesInput').click()">+ Добавить фото</button>
+                    <button class="client-media-add" type="button" onclick="document.getElementById('clientImagesInput').click()"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-image"></use></svg> Добавить фото</button>
                 </div>
                 <input id="clientImagesInput" type="file" name="client_images" accept="image/*" multiple data-nika-media-custom="1" hidden>
                 <input id="clientRemoveUrls" type="hidden" name="remove_client_urls">
@@ -329,7 +329,7 @@
             </div>
             <div class="client-card-header-actions">
                 <button type="button" class="clients-btn clients-btn--light" id="clientCardEditBtn" onclick="enableClientCardEdit()">Редактировать</button>
-                <button type="button" class="client-modal-close" onclick="closeClientCard()">×</button>
+                <button type="button" class="client-modal-close" onclick="closeClientCard()"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-close"></use></svg></button>
             </div>
         </header>
 
