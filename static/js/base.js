@@ -398,3 +398,28 @@ document.addEventListener('DOMContentLoaded',()=>{
 document.addEventListener('click',event=>{const panel=document.getElementById('aiAssistantPanel'),aiButton=event.target.closest('[onclick="toggleAiAssistant()"]');if(panel&&panel.classList.contains('open')&&!panel.contains(event.target)&&!aiButton)closeAiAssistant()});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeWhatsappClientModal();closeAiAssistant()}});
 (function preserveAppShellState(){function saveSidebarScroll(){const sidebar=document.getElementById('sidebar');if(sidebar)sessionStorage.setItem('nikaSidebarScroll',String(sidebar.scrollTop))}document.addEventListener('click',event=>{const link=event.target.closest('.sidebar a[href]');if(link)saveSidebarScroll()},true);window.addEventListener('pagehide',saveSidebarScroll)})();
+
+
+// Normalize remaining presentation emoji in dynamic UI to the Nika icon language.
+(function(){
+  const map = new Map([
+    ['👥','users'],['🎙','mic'],['➤','send'],['↻','refresh'],['🏫','school'],['✓','check'],['✔','check']
+  ]);
+  function icon(name){
+    const span=document.createElement('span'); span.className='nika-semantic-icon';
+    span.innerHTML='<svg class="nika-ui-icon"><use href="#nika-'+name+'"></use></svg>'; return span;
+  }
+  function normalize(root){
+    const walker=document.createTreeWalker(root||document.body,NodeFilter.SHOW_TEXT);
+    const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+    for(const node of nodes){
+      const value=(node.nodeValue||'').trim();
+      if(!map.has(value)) continue;
+      const parent=node.parentElement;
+      if(!parent || ['SCRIPT','STYLE','TEXTAREA','INPUT'].includes(parent.tagName)) continue;
+      node.replaceWith(icon(map.get(value)));
+    }
+  }
+  document.addEventListener('DOMContentLoaded',()=>normalize(document.body));
+  new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1) normalize(n); else if(n.nodeType===3 && n.parentElement) normalize(n.parentElement)}))).observe(document.documentElement,{childList:true,subtree:true});
+})();
