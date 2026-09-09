@@ -779,14 +779,30 @@ def profile():
             return redirect("/logout")
 
         company = None
+        subscription = None
+        active_modules = []
         if company_id:
             cur.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
             company = cur.fetchone()
+            cur.execute("SELECT * FROM company_subscriptions WHERE company_id = %s", (company_id,))
+            subscription = cur.fetchone()
+            cur.execute("""
+                SELECT m.name
+                FROM company_modules cm
+                JOIN modules m ON m.id = cm.module_id
+                WHERE cm.company_id = %s
+                  AND cm.enabled = TRUE
+                  AND m.is_active = TRUE
+                ORDER BY m.sort_order, m.id
+            """, (company_id,))
+            active_modules = cur.fetchall()
 
         return render_template(
             "profile.html",
             user=user,
             company=company,
+            subscription=subscription,
+            active_modules=active_modules,
             can_manage_company=bool(
                 session.get("is_super_admin")
                 or session.get("role") in ("owner", "admin")
@@ -827,6 +843,73 @@ def save_personal_profile():
         pool.putconn(conn)
 
     return redirect("/profile?tab=personal&saved=1")
+
+
+@auth_bp.route("/profile/interface", methods=["POST"])
+def save_interface_profile():
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    start_page = (request.form.get("start_page") or "profile").strip()
+    allowed_pages = {"profile", "analytics", "sales", "tasks", "catalog"}
+    if start_page not in allowed_pages:
+        start_page = "profile"
+
+    compact_mode = request.form.get("compact_mode") == "on"
+    notifications_enabled = request.form.get("notifications_enabled") == "on"
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE users
+            SET start_page = %s,
+                compact_mode = %s,
+                notifications_enabled = %s
+            WHERE id = %s
+        """, (start_page, compact_mode, notifications_enabled, session["user_id"]))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+    return redirect("/profile?tab=interface&saved=1")
+
+
+@auth_bp.route("/profile/security", methods=["POST"])
+def save_profile_security():
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    current_password = request.form.get("current_password") or ""
+    new_password = request.form.get("new_password") or ""
+    confirm_password = request.form.get("confirm_password") or ""
+
+    if len(new_password) < 5:
+        return redirect("/profile?tab=security&error=short_password")
+    if new_password != confirm_password:
+        return redirect("/profile?tab=security&error=password_mismatch")
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT password FROM users WHERE id = %s", (session["user_id"],))
+        row = cur.fetchone()
+        if not row or row["password"] != current_password:
+            return redirect("/profile?tab=security&error=wrong_password")
+        cur.execute("UPDATE users SET password = %s WHERE id = %s", (new_password, session["user_id"]))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+    return redirect("/profile?tab=security&saved=1")
 
 
 @auth_bp.route("/users/delete/<int:user_id>")
