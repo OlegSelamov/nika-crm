@@ -38,12 +38,14 @@ function buildDesktopRow(item) {
     const category = escapeHtml(item.category || "Без категории");
     const unit = escapeHtml(item.unit || "—");
     const initial = escapeHtml((item.name || "Т").trim().charAt(0).toUpperCase() || "Т");
+    const image = escapeHtml(item.item_image || item.image || "");
+    const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
 
     return `
         <tr class="stock-record">
             <td>
                 <div class="stock-product">
-                    <div class="stock-product-icon">${initial}</div>
+                    ${visual}
                     <div><strong>${name}</strong><small>${status.text}</small></div>
                 </div>
             </td>
@@ -70,12 +72,14 @@ function buildMobileCard(item) {
     const category = escapeHtml(item.category || "Без категории");
     const unit = escapeHtml(item.unit || "");
     const initial = escapeHtml((item.name || "Т").trim().charAt(0).toUpperCase() || "Т");
+    const image = escapeHtml(item.item_image || item.image || "");
+    const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
 
     return `
         <article class="stock-mobile-card stock-record">
             <div class="stock-mobile-top">
                 <div class="stock-product">
-                    <div class="stock-product-icon">${initial}</div>
+                    ${visual}
                     <div><strong>${name}</strong><small>${category}</small></div>
                 </div>
                 <span class="stock-status stock-status--${status.key}">${status.text}</span>
