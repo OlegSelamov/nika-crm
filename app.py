@@ -88,6 +88,23 @@ try:
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS start_page TEXT DEFAULT 'profile'")
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_mode BOOLEAN NOT NULL DEFAULT FALSE")
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+    _media_schema_cur.execute("""
+        CREATE TABLE IF NOT EXISTS company_document_settings (
+            company_id INTEGER PRIMARY KEY,
+            custom_numbering_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+            invoice_next_number INTEGER NOT NULL DEFAULT 1,
+            nakladnaya_next_number INTEGER NOT NULL DEFAULT 1,
+            act_next_number INTEGER NOT NULL DEFAULT 1,
+            schet_factura_next_number INTEGER NOT NULL DEFAULT 1,
+            show_signature BOOLEAN NOT NULL DEFAULT FALSE,
+            show_stamp BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    _media_schema_cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS invoice_number INTEGER")
+    _media_schema_cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS nakladnaya_number INTEGER")
+    _media_schema_cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS act_number INTEGER")
+    _media_schema_cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS schet_factura_number INTEGER")
     _media_schema_conn.commit()
     _media_schema_cur.close()
     pool.putconn(_media_schema_conn)
