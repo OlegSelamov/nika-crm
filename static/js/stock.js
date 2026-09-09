@@ -40,6 +40,8 @@ function buildDesktopRow(item) {
     const initial = escapeHtml((item.name || "Т").trim().charAt(0).toUpperCase() || "Т");
     const image = escapeHtml(item.item_image || item.image || "");
     const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
+    const image = escapeHtml(item.item_image || item.image || "");
+    const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
 
     return `
         <tr class="stock-record">
@@ -72,6 +74,8 @@ function buildMobileCard(item) {
     const category = escapeHtml(item.category || "Без категории");
     const unit = escapeHtml(item.unit || "");
     const initial = escapeHtml((item.name || "Т").trim().charAt(0).toUpperCase() || "Т");
+    const image = escapeHtml(item.item_image || item.image || "");
+    const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
     const image = escapeHtml(item.item_image || item.image || "");
     const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
 
