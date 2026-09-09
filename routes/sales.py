@@ -1112,6 +1112,20 @@ def process_sale(conn, sale_id):
         sale_id,
     ))
 
+def format_contract_text(client):
+    """Единое отображение договора во всех документах."""
+    client = client or {}
+    number = str(client.get("contract_number") or "").strip()
+    date_value = client.get("contract_date")
+    if not number and not date_value:
+        return "Без договора"
+    if number and date_value:
+        return f"№ {number} от {format_date_ru(date_value)}"
+    if number:
+        return f"№ {number}"
+    return f"от {format_date_ru(date_value)}"
+
+
 def number_to_words_kz(n):
 
     try:
@@ -1236,6 +1250,7 @@ def invoice(sale_id):
         sale_date=sale_date,
         total_text=total_text,
         director_short=director_short,
+        contract_text=format_contract_text(client),
         format_date_ru=format_date_ru
     )
     
@@ -1699,6 +1714,7 @@ def schet_factura(sale_id):
         company=company,
         payment_type=payment_type,
         sale_date=sale_date,
+        contract_text=format_contract_text(client),
         format_date_ru=format_date_ru
     )
     
@@ -2823,6 +2839,7 @@ def act(sale_id):
         client=client,
         total=total,
         date=sale_date,
+        contract_text=format_contract_text(client),
         format_date_ru=format_date_ru
     )
 
