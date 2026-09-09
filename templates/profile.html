@@ -1,318 +1,105 @@
 {% extends "base.html" %}
 
-{% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
-{% endblock %}
-
 {% block content %}
+{% set active_tab = request.args.get('tab', 'company' if can_manage_company else 'personal') %}
+<style>
+.profile-settings{max-width:1180px;margin:0 auto;padding:8px 0 40px;color:#202434}
+.profile-settings__head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:20px}
+.profile-settings__head h1{margin:0;font-size:30px;letter-spacing:-.03em}
+.profile-settings__head p{margin:6px 0 0;color:#7b8294;font-size:13px}
+.profile-tabs{display:flex;gap:8px;margin:0 0 18px;padding:5px;background:#f1f3f8;border-radius:15px;width:max-content;max-width:100%}
+.profile-tab{padding:10px 16px;border-radius:11px;color:#697084;text-decoration:none;font-size:13px;font-weight:800}
+.profile-tab.active{background:#fff;color:#5c48d8;box-shadow:0 5px 16px rgba(49,53,78,.09)}
+.profile-card{background:#fff;border:1px solid #e7e9f1;border-radius:22px;box-shadow:0 12px 32px rgba(40,44,72,.07);padding:22px;margin-bottom:15px}
+.profile-card h2{margin:0 0 5px;font-size:18px}.profile-card__desc{margin:0 0 20px;color:#858b9b;font-size:12px}
+.profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+.profile-field{display:flex;flex-direction:column;gap:6px}.profile-field--wide{grid-column:1/-1}
+.profile-field label{font-size:11px;font-weight:800;color:#656d7f}
+.profile-field input{height:43px;border:1px solid #dfe3eb;border-radius:12px;padding:0 13px;font:inherit;color:#252a39;background:#fff;outline:none}
+.profile-field input:focus{border-color:#8a78ef;box-shadow:0 0 0 3px rgba(114,87,255,.09)}
+.profile-readonly{height:43px;display:flex;align-items:center;padding:0 13px;border:1px solid #edf0f5;border-radius:12px;background:#f8f9fc;color:#71798b;font-size:13px}
+.profile-actions{display:flex;justify-content:flex-end;margin-top:20px}
+.profile-save{border:0;border-radius:12px;background:#7257ff;color:#fff;padding:11px 18px;font-weight:850;cursor:pointer}
+.vat-switch{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px;border:1px solid #e4e7ef;border-radius:15px;background:#fafbfe}
+.vat-switch b{display:block;font-size:14px}.vat-switch span{display:block;margin-top:4px;color:#818899;font-size:11px;line-height:1.45}
+.switch{position:relative;width:50px;height:28px;flex:0 0 auto}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;inset:0;background:#cfd4df;border-radius:999px;cursor:pointer;transition:.2s}.slider:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,.18);transition:.2s}.switch input:checked+.slider{background:#7257ff}.switch input:checked+.slider:before{transform:translateX(22px)}
+.profile-saved{margin-bottom:14px;padding:11px 14px;border:1px solid #cdebd9;border-radius:12px;background:#effaf3;color:#218052;font-size:12px;font-weight:750}
+@media(max-width:700px){.profile-settings__head h1{font-size:25px}.profile-grid{grid-template-columns:1fr}.profile-field--wide{grid-column:auto}.profile-card{padding:16px;border-radius:18px}.profile-tabs{width:100%}.profile-tab{flex:1;text-align:center;padding:10px 8px}.vat-switch{grid-column:auto}}
+</style>
 
-{% set display_name = user.full_name or user.username or 'Сотрудник' %}
-{% set position_name = user.position or 'Сотрудник' %}
-{% set initials = employee_initials or display_name[:1]|upper %}
+<div class="profile-settings">
+  <div class="profile-settings__head">
+    <div>
+      <h1>Профиль</h1>
+      <p>{% if can_manage_company %}Личные данные и настройки организации{% else %}Ваши личные данные и настройки{% endif %}</p>
+    </div>
+  </div>
 
+  {% if request.args.get('saved') %}
+  <div class="profile-saved">Изменения сохранены.</div>
+  {% endif %}
 
-<div class="employee-dashboard">
+  <nav class="profile-tabs">
+    <a href="/profile?tab=personal" class="profile-tab {{ 'active' if active_tab == 'personal' else '' }}">Личные настройки</a>
+    {% if can_manage_company %}
+    <a href="/profile?tab=company" class="profile-tab {{ 'active' if active_tab == 'company' else '' }}">Организация</a>
+    {% endif %}
+  </nav>
 
-    <section class="employee-topbar">
-        <div class="employee-topbar__identity">
-            <div class="employee-topbar__avatar">
-                {{ initials }}
-                <span class="employee-topbar__presence-dot {{ 'online' if is_online else 'offline' }}"></span>
-            </div>
-
-            <div class="employee-topbar__identity-copy">
-                <span class="employee-topbar__eyebrow">Личный кабинет сотрудника</span>
-                <h1>{{ display_name }}</h1>
-                <div class="employee-topbar__meta">
-                    <span>{{ position_name }}</span>
-                    <span>{{ user.company_name or 'Компания не указана' }}</span>
-                    <span class="{{ 'online' if is_online else 'offline' }}">
-                        {{ 'В сети' if is_online else 'Не в сети' }}
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <div class="employee-topbar__metrics">
-            <article class="employee-topbar__metric">
-                <div class="metric-icon metric-icon--purple"><img src="{{ url_for('static', filename='icons/trending-up.png') }}" alt="Сегодня"></div>
-                <span>Сегодня</span>
-                <b>{{ "{:,.0f}".format(today_stats.revenue or 0).replace(",", " ") }} ₸</b>
-                <small>{{ today_stats.sales_count or 0 }} продаж</small>
-                <i style="--value: {{ [((today_stats.revenue or 0) / (bonus_target or 1) * 100), 100]|min }}%"></i>
-            </article>
-
-            <article class="employee-topbar__metric">
-                <div class="metric-icon metric-icon--blue"><img src="{{ url_for('static', filename='icons/calendar-month.png') }}" alt="За месяц"></div>
-                <span>За месяц</span>
-                <b>{{ "{:,.0f}".format(month_stats.revenue or 0).replace(",", " ") }} ₸</b>
-                <small>{{ month_stats.sales_count or 0 }} продаж</small>
-                <i style="--value: {{ [((month_stats.revenue or 0) / (bonus_target or 1) * 100), 100]|min }}%"></i>
-            </article>
-
-            <article class="employee-topbar__metric">
-                <div class="metric-icon metric-icon--green"><img src="{{ url_for('static', filename='icons/wallet.png') }}" alt="Зарплата"></div>
-                <span>Зарплата</span>
-                <b>{{ "{:,.0f}".format(salary_payable or 0).replace(",", " ") }} ₸</b>
-                <small>к выплате</small>
-                <i style="--value: {{ bonus_progress or 0 }}%"></i>
-            </article>
-
-            <article class="employee-topbar__metric">
-                <div class="metric-icon metric-icon--orange"><img src="{{ url_for('static', filename='icons/tasks-check.png') }}" alt="Мои задачи"></div>
-                <span>Мои задачи</span>
-                <b>{{ task_summary.active_count or 0 }}</b>
-                <small>{{ task_summary.overdue_count or 0 }} просрочено</small>
-                <i style="--value: {{ 100 if not (task_summary.active_count or 0) else [(((task_summary.done_month_count or 0) / ((task_summary.done_month_count or 0) + (task_summary.active_count or 0))) * 100), 100]|min }}%"></i>
-            </article>
-
-            <article class="employee-topbar__metric">
-                <div class="metric-icon metric-icon--cyan"><img src="{{ url_for('static', filename='icons/target.png') }}" alt="План"></div>
-                <span>План</span>
-                <b>{{ bonus_progress or 0 }}%</b>
-                <small>выполнено</small>
-                <i style="--value: {{ bonus_progress or 0 }}%"></i>
-            </article>
-        </div>
+  {% if active_tab == 'company' and can_manage_company %}
+  <form method="post" action="/company/profile">
+    <section class="profile-card">
+      <h2>Настройки организации</h2>
+      <p class="profile-card__desc">Реквизиты принадлежат организации и используются в документах, налогах и интеграциях.</p>
+      <div class="profile-grid">
+        <div class="profile-field"><label>Название организации</label><input name="name" value="{{ company.name or '' }}" autocomplete="organization"></div>
+        <div class="profile-field"><label>БИН / ИИН</label><input name="bin" value="{{ company.bin or '' }}" inputmode="numeric"></div>
+        <div class="profile-field profile-field--wide"><label>Адрес</label><input name="address" value="{{ company.address or '' }}"></div>
+        <div class="profile-field"><label>Телефон организации</label><input name="phone" value="{{ company.phone or '' }}"></div>
+        <div class="profile-field"><label>Руководитель</label><input name="director" value="{{ company.director or '' }}"></div>
+      </div>
     </section>
 
-    <section class="employee-dashboard__grid">
-        <div class="employee-dashboard__main">
-
-            <section class="employee-card employee-tasks-card">
-                <div class="employee-card__head">
-                    <div class="employee-card__title">
-                        <div class="employee-card__icon"><img src="{{ url_for('static', filename='icons/workday.png') }}" alt="Рабочий день"></div>
-                        <div>
-                            <span>Рабочий день</span>
-                            <h2>Мои задачи</h2>
-                        </div>
-                    </div>
-
-                    <div class="employee-task-tabs">
-                        <span>Активные {{ task_summary.active_count or 0 }}</span>
-                        {% if task_summary.overdue_count or 0 %}
-                        <span class="danger">Просроченные {{ task_summary.overdue_count or 0 }}</span>
-                        {% endif %}
-                        <span>Сегодня {{ task_summary.today_count or 0 }}</span>
-                    </div>
-                </div>
-
-                {% if profile_tasks %}
-                <div class="employee-task-list">
-                    {% for task in profile_tasks %}
-                    <article class="employee-task-row {{ 'is-overdue' if task.overdue else '' }} {{ 'is-done' if task.status == 'done' else '' }}">
-                        <div class="employee-task-row__badge priority-{{ task.priority }}">
-                            {% if task.priority == 'urgent' %}<img src="{{ url_for('static', filename='icons/priority-urgent.png') }}" alt="Срочно">{% elif task.priority == 'high' %}<img src="{{ url_for('static', filename='icons/priority-high.png') }}" alt="Высокий приоритет">{% elif task.priority == 'medium' %}<img src="{{ url_for('static', filename='icons/priority-medium.png') }}" alt="Средний приоритет">{% else %}<img src="{{ url_for('static', filename='icons/priority-low.png') }}" alt="Низкий приоритет">{% endif %}
-                        </div>
-
-                        <div class="employee-task-row__content">
-                            <h3>{{ task.title }}</h3>
-                            {% if task.description %}
-                            <p>{{ task.description }}</p>
-                            {% endif %}
-                        </div>
-
-                        <div class="employee-task-row__date {{ 'danger' if task.overdue else '' }}">
-                            <span class="employee-inline-icon"><img src="{{ url_for('static', filename='icons/calendar-date.png') }}" alt="Дата"></span>
-                            {{ task.due_date_label }}
-                        </div>
-
-                        <div class="employee-task-row__priority priority-{{ task.priority }}">
-                            {{ task.priority_label }}
-                        </div>
-
-                        <select
-                            class="employee-task-row__status status-{{ task.status }}"
-                            data-previous="{{ task.status }}"
-                            onchange="changeProfileTaskStatus({{ task.id }}, this)">
-                            {% for key, label in task_statuses.items() %}
-                            <option value="{{ key }}" {% if task.status == key %}selected{% endif %}>
-                                {{ label }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </article>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="employee-empty-state">
-                    <div><img src="{{ url_for('static', filename='icons/tasks-empty.png') }}" alt="Нет задач"></div>
-                    <b>Задач пока нет</b>
-                    <span>Новые задачи руководителя появятся здесь.</span>
-                </div>
-                {% endif %}
-            </section>
-
-            <section class="employee-card employee-chart-card">
-                <div class="employee-card__head">
-                    <div class="employee-card__title">
-                        <div class="employee-card__icon"><img src="{{ url_for('static', filename='icons/sales-chart.png') }}" alt="Динамика продаж"></div>
-                        <div>
-                            <span>Динамика</span>
-                            <h2>Продажи за месяц</h2>
-                        </div>
-                    </div>
-                    <strong class="employee-chart-total">
-                        {{ "{:,.0f}".format(chart_total or 0).replace(",", " ") }} ₸
-                    </strong>
-                </div>
-
-                <div class="employee-chart-wrap">
-                    {% if chart_total and chart_total > 0 %}
-                    <canvas id="employeeSalesChart"></canvas>
-                    {% else %}
-                    <div class="employee-empty-state employee-empty-state--chart">
-                        <div><img src="{{ url_for('static', filename='icons/chart-empty.png') }}" alt="Нет продаж"></div>
-                        <b>Пока нет продаж</b>
-                        <span>Когда появятся продажи, здесь будет график.</span>
-                    </div>
-                    {% endif %}
-                </div>
-            </section>
-
-            <section class="employee-card employee-sales-card">
-                <div class="employee-card__head">
-                    <div class="employee-card__title">
-                        <div class="employee-card__icon"><img src="{{ url_for('static', filename='icons/sales-history.png') }}" alt="История продаж"></div>
-                        <div>
-                            <span>История</span>
-                            <h2>Последние продажи</h2>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="employee-sales-table">
-                    {% for sale in recent_sales %}
-                    <article class="employee-sale-row">
-                        <div class="employee-sale-row__icon"><img src="{{ url_for('static', filename='icons/receipt.png') }}" alt="Чек"></div>
-                        <div class="employee-sale-row__main">
-                            <b>Чек № {{ sale.sale_number or sale.id }}</b>
-                            <span>{{ sale.created_at.strftime('%d.%m.%Y %H:%M') if sale.created_at else '—' }}</span>
-                        </div>
-                        <div class="employee-sale-row__method">
-                            {% if sale.sale_type == 'cash' %}Наличные
-                            {% elif sale.sale_type == 'card' %}Карта
-                            {% elif sale.sale_type == 'kaspi' %}Kaspi POS
-                            {% elif sale.sale_type == 'invoice' %}Счёт
-                            {% else %}{{ sale.sale_type or '—' }}{% endif %}
-                        </div>
-                        <strong>{{ "{:,.0f}".format(sale.total_amount or 0).replace(",", " ") }} ₸</strong>
-                        <span class="employee-sale-row__status {{ 'paid' if sale.status == 'Оплачено' else 'refund' }}">
-                            {{ sale.status or '—' }}
-                        </span>
-                    </article>
-                    {% else %}
-                    <div class="employee-empty-state">
-                        <div><img src="{{ url_for('static', filename='icons/receipt-empty.png') }}" alt="Нет чеков"></div>
-                        <b>Продаж пока нет</b>
-                        <span>Последние чеки появятся здесь.</span>
-                    </div>
-                    {% endfor %}
-                </div>
-            </section>
-
+    <section class="profile-card">
+      <h2>Налоги</h2>
+      <p class="profile-card__desc">Налоговые параметры организации. Они будут использоваться при формировании документов и расчётах.</p>
+      <div class="profile-grid">
+        <div class="vat-switch">
+          <div><b>Плательщик НДС</b><span>Включите, если организация состоит на регистрационном учёте по НДС.</span></div>
+          <label class="switch"><input type="checkbox" name="is_vat_payer" {% if company.is_vat_payer %}checked{% endif %}><span class="slider"></span></label>
         </div>
-
-        <aside class="employee-dashboard__side">
-
-            <section class="employee-card employee-stats-card">
-                <div class="employee-card__head">
-                    <div class="employee-card__title">
-                        <div class="employee-card__icon"><img src="{{ url_for('static', filename='icons/sales-chart.png') }}" alt="Динамика продаж"></div>
-                        <div>
-                            <span>Месяц</span>
-                            <h2>Моя статистика</h2>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="employee-stat-list">
-                    <div>
-                        <span>Выручка</span>
-                        <b>{{ "{:,.0f}".format(month_stats.revenue or 0).replace(",", " ") }} ₸</b>
-                    </div>
-                    <div>
-                        <span>Средний чек</span>
-                        <b>{{ "{:,.0f}".format(month_stats.average_check or 0).replace(",", " ") }} ₸</b>
-                    </div>
-                    <div>
-                        <span>Продаж</span>
-                        <b>{{ month_stats.sales_count or 0 }}</b>
-                    </div>
-                    <div>
-                        <span>Возвраты</span>
-                        <b>{{ refund_stats.refund_count or 0 }}</b>
-                    </div>
-                    <div>
-                        <span>Лучший день</span>
-                        <b>{{ "{:,.0f}".format(best_day_total or 0).replace(",", " ") }} ₸</b>
-                    </div>
-                    <div>
-                        <span>Дней с продажами</span>
-                        <b>{{ active_days or 0 }}</b>
-                    </div>
-                </div>
-            </section>
-
-            <section class="employee-card employee-salary-card">
-                <div class="employee-card__head">
-                    <div class="employee-card__title">
-                        <div class="employee-card__icon employee-card__icon--green"><img src="{{ url_for('static', filename='icons/salary.png') }}" alt="Зарплата"></div>
-                        <div>
-                            <span>Финансы</span>
-                            <h2>Моя зарплата</h2>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="employee-salary-total">
-                    <span>К выплате за месяц</span>
-                    <b>{{ "{:,.0f}".format(salary_payable or 0).replace(",", " ") }} ₸</b>
-                    <i style="--value: {{ bonus_progress or 0 }}%"></i>
-                </div>
-
-                <div class="employee-salary-breakdown">
-                    <div><span>Оклад</span><b>{{ "{:,.0f}".format(base_salary or 0).replace(",", " ") }} ₸</b></div>
-                    <div><span>Процент от продаж</span><b>{{ user.percent_rate or 0 }}%</b></div>
-                    <div><span>Начислено</span><b>{{ "{:,.0f}".format(month_reward or 0).replace(",", " ") }} ₸</b></div>
-                    <div><span>Удержания</span><b>- {{ "{:,.0f}".format(salary_deductions or 0).replace(",", " ") }} ₸</b></div>
-                </div>
-            </section>
-
-            <details class="employee-card employee-profile-card">
-                <summary>
-                    <div class="employee-card__title">
-                        <div class="employee-card__icon"><img src="{{ url_for('static', filename='icons/user-profile.png') }}" alt="Профиль"></div>
-                        <div>
-                            <span>Профиль</span>
-                            <h2>О сотруднике</h2>
-                        </div>
-                    </div>
-                    <b class="employee-profile-card__chevron"><img src="{{ url_for('static', filename='icons/chevron-down.png') }}" alt="Развернуть"></b>
-                </summary>
-
-                <div class="employee-profile-details">
-                    <div><span>Телефон</span><b>{{ user.phone or 'Не заполнено' }}</b></div>
-                    <div><span>Логин</span><b>{{ user.username or '—' }}</b></div>
-                    <div><span>Должность</span><b>{{ position_name }}</b></div>
-                    <div><span>Последний вход</span><b>{{ user.last_login_at.strftime('%d.%m.%Y %H:%M') if user.last_login_at else 'Ещё не входил' }}</b></div>
-                    <div><span>В компании с</span><b>{{ user.created_at.strftime('%d.%m.%Y') if user.created_at else '—' }}</b></div>
-                    <div><span>Руководитель</span><b>{{ user.company_director or '—' }}</b></div>
-                </div>
-            </details>
-
-        </aside>
+      </div>
     </section>
 
+    <section class="profile-card">
+      <h2>Банковские реквизиты</h2>
+      <p class="profile-card__desc">Используются в счетах, накладных, актах и других документах.</p>
+      <div class="profile-grid">
+        <div class="profile-field"><label>ИИК</label><input name="iik" value="{{ company.iik or '' }}"></div>
+        <div class="profile-field"><label>БИК</label><input name="bik" value="{{ company.bik or '' }}"></div>
+        <div class="profile-field"><label>Банк</label><input name="bank" value="{{ company.bank or '' }}"></div>
+        <div class="profile-field"><label>КБЕ</label><input name="kbe" value="{{ company.kbe or '' }}"></div>
+        <div class="profile-field"><label>КНП</label><input name="knp" value="{{ company.knp or '' }}"></div>
+      </div>
+      <div class="profile-actions"><button class="profile-save" type="submit">Сохранить организацию</button></div>
+    </section>
+  </form>
+  {% else %}
+  <form method="post" action="/profile/personal">
+    <section class="profile-card">
+      <h2>Личные настройки</h2>
+      <p class="profile-card__desc">Эти данные относятся только к вашей учётной записи и не меняют реквизиты организации.</p>
+      <div class="profile-grid">
+        <div class="profile-field"><label>ФИО</label><input name="full_name" value="{{ user.full_name or '' }}" autocomplete="name"></div>
+        <div class="profile-field"><label>Телефон</label><input name="phone" value="{{ user.phone or '' }}" autocomplete="tel"></div>
+        <div class="profile-field"><label>Должность</label><input name="position" value="{{ user.position or '' }}"></div>
+        <div class="profile-field"><label>Логин</label><div class="profile-readonly">{{ user.username or '—' }}</div></div>
+        <div class="profile-field"><label>Роль</label><div class="profile-readonly">{{ user.role or 'employee' }}</div></div>
+        <div class="profile-field"><label>Организация</label><div class="profile-readonly">{{ user.company_name or 'Не указана' }}</div></div>
+      </div>
+      <div class="profile-actions"><button class="profile-save" type="submit">Сохранить личные данные</button></div>
+    </section>
+  </form>
+  {% endif %}
 </div>
-
-{% endblock %}
-
-{% block page_js %}
-<script>
-    window.employeeChartLabels = {{ chart_labels | tojson }};
-    window.employeeChartValues = {{ chart_values | tojson }};
-</script>
-<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
 {% endblock %}
