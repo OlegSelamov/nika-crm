@@ -2,30 +2,42 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Счёт на оплату</title>
-
 <style>
 @page {
     size: A4 portrait;
     margin: 12mm;
 }
 
-* {
-    box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html, body {
     margin: 0;
     padding: 0;
-    width: auto;
-    max-width: 100%;
+}
+
+html {
+    background: #eef1f5;
 }
 
 body {
-    font-family: Arial, sans-serif;
-    font-size: 12px;
-    line-height: 1.25;
+    padding: 18px;
+    background: #eef1f5;
     color: #000;
+    font-family: Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.25;
+}
+
+.invoice-page {
+    width: 186mm;
+    max-width: 100%;
+    min-height: 273mm;
+    margin: 0 auto;
+    padding: 0;
+    background: #fff;
+    box-shadow: 0 8px 28px rgba(20, 28, 45, .12);
 }
 
 .top-block {
@@ -37,15 +49,13 @@ body {
     width: 68%;
     margin-left: auto;
     text-align: center;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: normal;
+    font-size: 9pt;
     line-height: 1.2;
+    overflow-wrap: break-word;
 }
 
 table {
     width: 100%;
-    max-width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
 }
@@ -54,12 +64,7 @@ td, th {
     border: 1px solid #000;
     padding: 5px;
     vertical-align: top;
-    overflow-wrap: anywhere;
-    word-break: normal;
-}
-
-.no-border {
-    table-layout: fixed;
+    overflow-wrap: break-word;
 }
 
 .no-border td {
@@ -68,16 +73,16 @@ td, th {
 }
 
 .no-border td:first-child {
-    width: 26mm !important;
+    width: 27mm;
 }
 
 .center { text-align: center; }
 .right { text-align: right; white-space: nowrap; }
-.bold { font-weight: bold; }
+.bold { font-weight: 700; }
 
 h2 {
-    margin: 16px 0 8px 0;
-    font-size: 20px;
+    margin: 16px 0 8px;
+    font-size: 15pt;
     line-height: 1.15;
 }
 
@@ -98,7 +103,7 @@ hr {
 .items-table td,
 .items-table th {
     padding: 5px 4px;
-    font-size: 11px;
+    font-size: 9pt;
 }
 
 .totals {
@@ -116,122 +121,98 @@ hr {
 
 .btn-pdf {
     padding: 10px 20px;
-    background: black;
-    color: white;
-    border: none;
+    border: 0;
+    background: #111827;
+    color: #fff;
     cursor: pointer;
 }
 
+@media (max-width: 760px) {
+    body {
+        padding: 8px;
+        overflow-x: auto;
+    }
+
+    .invoice-page {
+        width: 186mm;
+        max-width: none;
+    }
+}
+
 @media print {
+    html,
+    body {
+        width: auto !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        overflow: visible !important;
+    }
+
+    .invoice-page {
+        width: 186mm !important;
+        max-width: 186mm !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        transform: none !important;
+        zoom: 1 !important;
+    }
+
     .btn-pdf {
-        display: none;
+        display: none !important;
     }
 }
 </style>
 </head>
-
 <body>
+<main class="invoice-page">
 
-<!-- 🔝 ВЕРХ -->
 <div class="top-block">
-    <div></div>
-
     <div class="warning">
         Внимание! Оплата данного счета означает согласие с условиями поставки товара.<br>
         Уведомление об оплате обязательно, в противном случае не гарантируется наличие<br>
         товара на складе. Товар отпускается по факту прихода денег на р/с Поставщика<br>
-		самовывозом, при наличии доверенности и документов удостоверяющих личность.
+        самовывозом, при наличии доверенности и документов удостоверяющих личность.
     </div>
 </div>
 
 <br>
-
 <div class="bold">Образец платежного поручения</div>
 
 <table>
 <tr>
-<td style="width:50%;">
-<b>Бенефициар:</b><br>
-{{ company.name }}
-</td>
-
-<td class="center" style="width:25%;">
-<b>ИИК</b><br>
-{{ company.iik }}
-</td>
-
-<td class="center" style="width:25%;">
-<b>Кбе</b><br>
-{{ company.kbe or "19" }}
-</td>
+<td style="width:50%;"><b>Бенефициар:</b><br>{{ company.name }}</td>
+<td class="center" style="width:25%;"><b>ИИК</b><br>{{ company.iik }}</td>
+<td class="center" style="width:25%;"><b>Кбе</b><br>{{ company.kbe or "19" }}</td>
 </tr>
-
 <tr>
-<td>
-БИН: {{ company.bin }}<br>
-Банк бенефициара:<br>
-{{ company.bank }}
-</td>
-
-<td class="center">
-<b>БИК</b><br>
-{{ company.bik }}
-</td>
-
-<td class="center">
-<b>Код назначения платежа</b><br>
-{{ company.knp or "890" }}
-</td>
+<td>БИН: {{ company.bin }}<br>Банк бенефициара:<br>{{ company.bank }}</td>
+<td class="center"><b>БИК</b><br>{{ company.bik }}</td>
+<td class="center"><b>Код назначения платежа</b><br>{{ company.knp or "890" }}</td>
 </tr>
 </table>
 
-<h2>
-Счет на оплату №{{ sale.document_number or sale.sale_number }} от {{ sale_date }}
-</h2>
-
+<h2>Счет на оплату №{{ sale.document_number or sale.sale_number }} от {{ sale_date }}</h2>
 <hr>
 
 <table class="no-border">
-<tr>
-<td style="width:150px;"><b>Поставщик:</b></td>
-<td>{{ company.name }}, {{ company.address or "" }}</td>
-</tr>
-
-<tr>
-<td><b>Покупатель:</b></td>
-<td>
-ИИН/БИН: {{ client.iin or "" }},
-{{ client.company_name or client.full_name }},
-{{ client.address or "" }}
-</td>
-</tr>
-
-<tr>
-    <td><b>Договор:</b></td>
-    <td>
-        {{ contract_text }}
-    </td>
-</tr>
+<tr><td><b>Поставщик:</b></td><td>{{ company.name }}, {{ company.address or "" }}</td></tr>
+<tr><td><b>Покупатель:</b></td><td>ИИН/БИН: {{ client.iin or "" }}, {{ client.company_name or client.full_name }}, {{ client.address or "" }}</td></tr>
+<tr><td><b>Договор:</b></td><td>{{ contract_text }}</td></tr>
 </table>
 
 <br>
-
-<!-- 🔥 ТАБЛИЦА -->
 <table class="items-table">
 <colgroup>
     <col class="num"><col class="code"><col class="name"><col class="qty">
     <col class="unit"><col class="price"><col class="sum">
 </colgroup>
 <tr class="center bold">
-<td>№</td>
-<td>Код</td>
-<td>Наименование</td>
-<td>Кол-во</td>
-<td>Ед.изм.</td>
-<td>Цена</td>
-<td>Сумма</td>
+<td>№</td><td>Код</td><td>Наименование</td><td>Кол-во</td><td>Ед.изм.</td><td>Цена</td><td>Сумма</td>
 </tr>
-
 {% for i in items %}
 <tr>
 <td class="center">{{ loop.index }}</td>
@@ -245,49 +226,24 @@ hr {
 {% endfor %}
 </table>
 
-<!-- 💰 ИТОГИ СПРАВА -->
 <div class="totals">
-    <div>
-        <span class="bold">Итого:</span>
-        <span class="bold">{{ "{:,.2f}".format(sale.total_amount).replace(",", " ") }}</span>
-    </div>
-    <div>
-        <span>В том числе НДС:</span>
-        <span>{{ sale.nds or "0" }}</span>
-    </div>
+    <div><span class="bold">Итого:</span><span class="bold">{{ "{:,.2f}".format(sale.total_amount).replace(",", " ") }}</span></div>
+    <div><span>В том числе НДС:</span><span>{{ sale.nds or "0" }}</span></div>
 </div>
 
 <br>
-
-<div>
-Всего наименований {{ items|length }}, на сумму {{ "{:,.2f}".format(sale.total_amount).replace(",", " ") }} KZT
-</div>
-
-<div>
-Всего к оплате: <b>{{ total_text }}</b>
-</div>
-
+<div>Всего наименований {{ items|length }}, на сумму {{ "{:,.2f}".format(sale.total_amount).replace(",", " ") }} KZT</div>
+<div>Всего к оплате: <b>{{ total_text }}</b></div>
 <hr>
 
 <table class="no-border">
-<tr>
-<td style="width:150px;">Исполнитель</td>
-<td>___________________________ / {{ director_short }} /</td>
-</tr>
+<tr><td>Исполнитель</td><td>___________________________ / {{ director_short }} /</td></tr>
 </table>
 
-<div style="margin-top:20px; text-align:right;">
-    <button onclick="downloadPDF()" class="btn-pdf">
-        📄 Скачать/Печать
-    </button>
+<div style="margin-top:20px;text-align:right;">
+    <button type="button" onclick="window.print()" class="btn-pdf">Скачать / Печать</button>
 </div>
 
+</main>
 </body>
-
-<script>
-function downloadPDF() {
-    window.print();
-}
-</script>
-
 </html>
