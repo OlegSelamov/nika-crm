@@ -1,5 +1,6 @@
 import os
 import socket
+from copy import deepcopy
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -63,9 +64,30 @@ from routes.storefront_notifications import storefront_notifications_bp
 from routes.whatsapp import whatsapp_bp
 from routes.mobile_api import mobile_api_bp
 from routes.esf import esf_bp
+import routes.esf as esf_module
 from routes.bcc import bcc_bp
 from routes.school import school_bp
 from datetime import timedelta
+
+# Keep non-sent ESF drafts in sync with the current client contract.
+# Old drafts may have been stored before contract_number/contract_date were filled.
+_original_esf_document_view = esf_module._document_view
+
+def _esf_document_view_with_current_contract(row, fallback_payload):
+    if row and not row.get("external_id") and isinstance(fallback_payload, dict):
+        merged_row = dict(row)
+        saved_payload = deepcopy(row.get("payload") or {})
+        delivery = saved_payload.setdefault("delivery", {})
+        current_delivery = fallback_payload.get("delivery") or {}
+        if not str(delivery.get("contract_num") or "").strip():
+            delivery["contract_num"] = current_delivery.get("contract_num") or ""
+        if not str(delivery.get("contract_date") or "").strip():
+            delivery["contract_date"] = current_delivery.get("contract_date") or ""
+        merged_row["payload"] = saved_payload
+        row = merged_row
+    return _original_esf_document_view(row, fallback_payload)
+
+esf_module._document_view = _esf_document_view_with_current_contract
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"), static_folder=os.path.join(BASE_DIR, "static"))
 app.secret_key = os.getenv("SECRET_KEY", "nika_super_secret_key")
