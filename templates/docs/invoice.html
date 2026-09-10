@@ -67,6 +67,16 @@ td, th {
     overflow-wrap: break-word;
 }
 
+.bank-table col.beneficiary { width: 48%; }
+.bank-table col.iik { width: 30%; }
+.bank-table col.kbe { width: 22%; }
+.bank-table .iik-cell {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    font-size: 8.5pt;
+}
+
 .no-border td {
     border: none;
     padding: 5px 4px;
@@ -167,6 +177,11 @@ hr {
         width: 34mm !important;
         white-space: nowrap !important;
     }
+
+    .bank-table .iik-cell {
+        white-space: nowrap !important;
+        font-size: 8.5pt !important;
+    }
 }
 </style>
 </head>
@@ -185,11 +200,14 @@ hr {
 <br>
 <div class="bold">Образец платежного поручения</div>
 
-<table>
+<table class="bank-table">
+<colgroup>
+    <col class="beneficiary"><col class="iik"><col class="kbe">
+</colgroup>
 <tr>
-<td style="width:50%;"><b>Бенефициар:</b><br>{{ company.name }}</td>
-<td class="center" style="width:25%;"><b>ИИК</b><br>{{ company.iik }}</td>
-<td class="center" style="width:25%;"><b>Кбе</b><br>{{ company.kbe or "19" }}</td>
+<td><b>Бенефициар:</b><br>{{ company.name }}</td>
+<td class="center iik-cell"><b>ИИК</b><br>{{ company.iik }}</td>
+<td class="center"><b>Кбе</b><br>{{ company.kbe or "19" }}</td>
 </tr>
 <tr>
 <td>БИН: {{ company.bin }}<br>Банк бенефициара:<br>{{ company.bank }}</td>
