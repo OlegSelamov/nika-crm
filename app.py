@@ -313,6 +313,18 @@ def inject_storefront_workflow_assets(response):
             html = html.replace("</body>", '<script src="/static/js/sales_hid_scanner.js?v=20260904-3"></script>\n</body>', 1)
         if request.path == "/sales" and "sales_rekassa_comrun.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/sales_rekassa_comrun.js?v=20260909-1"></script>\n</body>', 1)
+        if request.path == "/sales" and 'data-esf="delivery.contract_num"' not in html:
+            contract_fields = (
+                '<div class="esf-fields">'
+                '<label>Договор №<input data-esf="delivery.contract_num" placeholder="Без договора"></label>'
+                '<label>Дата договора<input data-esf="delivery.contract_date" type="date"></label>'
+                '</div>'
+            )
+            html = html.replace(
+                '<label>Способ расчета\n                            <select data-esf="delivery.payment_form">',
+                contract_fields + '\n                        <label>Способ расчета\n                            <select data-esf="delivery.payment_form">',
+                1,
+            )
         scanner_pages = {"/items", "/stock", "/stock/income", "/stock/writeoff", "/stock/movements", "/clients"}
         if request.path in scanner_pages and "global_hid_scanner.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/global_hid_scanner.js?v=20260904-1"></script>\n</body>', 1)
