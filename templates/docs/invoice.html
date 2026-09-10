@@ -7,7 +7,7 @@
 <style>
 @page {
     size: A4 portrait;
-    margin: 12mm;
+    margin: 0;
 }
 
 * { box-sizing: border-box; }
@@ -132,12 +132,19 @@ hr {
 }
 
 @media print {
-    html,
-    body {
-        width: auto !important;
-        min-width: 0 !important;
+    html {
+        width: 210mm !important;
+        height: auto !important;
         margin: 0 !important;
         padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body {
+        width: 210mm !important;
+        min-width: 210mm !important;
+        margin: 0 !important;
+        padding: 12mm !important;
         background: #fff !important;
         overflow: visible !important;
     }
