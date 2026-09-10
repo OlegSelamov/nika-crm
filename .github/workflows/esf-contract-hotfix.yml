@@ -1,0 +1,78 @@
+name: ESF contract hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/esf-contract-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch ESF contract synchronization
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('routes/esf.py')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''            "contract_num": client.get("contract_number") or "",
+            "contract_date": _date_text(client.get("contract_date")),'''
+          new = '''            "contract_num": client.get("contract_number") or client.get("contract_num") or "",
+            "contract_date": _date_text(client.get("contract_date")),'''
+          if old in text:
+              text = text.replace(old, new, 1)
+
+          old = '''def _document_view(row, fallback_payload):
+    payload = _normalize_payload(row.get("payload") if row else fallback_payload)
+    errors = _validation_errors(payload)
+    api_config = esf_api_configuration()
+    status = row.get("status") if row else "new"
+    has_external_id = bool(row and row.get("external_id"))'''
+          new = '''def _document_view(row, fallback_payload):
+    payload = _normalize_payload(row.get("payload") if row else fallback_payload)
+    status = row.get("status") if row else "new"
+    has_external_id = bool(row and row.get("external_id"))
+
+    # Черновик мог быть создан раньше, когда договор в карточке клиента ещё
+    # не был заполнен. Для неотправленной ЭСФ подтягиваем недостающие реквизиты
+    # договора из актуальных данных продажи/клиента. Уже отправленные ЭСФ не
+    # меняем, чтобы экран всегда отражал фактически отправленный XML.
+    if not has_external_id and isinstance(fallback_payload, dict):
+        delivery = payload.setdefault("delivery", {})
+        fallback_delivery = fallback_payload.get("delivery") or {}
+        if not str(delivery.get("contract_num") or "").strip():
+            delivery["contract_num"] = fallback_delivery.get("contract_num") or ""
+        if not str(delivery.get("contract_date") or "").strip():
+            delivery["contract_date"] = fallback_delivery.get("contract_date") or ""
+
+    errors = _validation_errors(payload)
+    api_config = esf_api_configuration()'''
+          if old not in text:
+              raise SystemExit('document_view anchor not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit hotfix
+        run: |
+          if git diff --quiet -- routes/esf.py; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git config user.name "Nika Business Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add routes/esf.py
+          git commit -m "Fix ESF contract synchronization"
+          git push origin main
