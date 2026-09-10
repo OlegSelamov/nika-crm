@@ -73,7 +73,10 @@ td, th {
 }
 
 .no-border td:first-child {
-    width: 27mm;
+    width: 34mm;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
 }
 
 .center { text-align: center; }
@@ -158,6 +161,11 @@ hr {
         box-shadow: none !important;
         transform: none !important;
         zoom: 1 !important;
+    }
+
+    .no-border td:first-child {
+        width: 34mm !important;
+        white-space: nowrap !important;
     }
 }
 </style>
