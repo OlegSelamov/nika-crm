@@ -29,7 +29,6 @@ body {
     margin-bottom: 10px;
 }
 
-/* строки как в PDF */
 .row {
     display: flex;
     margin-bottom: 5px;
@@ -46,7 +45,6 @@ body {
     padding-left: 5px;
 }
 
-/* таблица */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -59,278 +57,81 @@ td, th {
     text-align: center;
 }
 
-.left {
-    text-align: left;
-}
+.left { text-align: left; }
 
-/* подписи */
-.signatures {
-    margin-top: 25px;
-}
-
-.sign-row {
-    display: flex;
-    margin-bottom: 10px;
-}
-
-.sign-block {
-    flex: 1;
-    border-bottom: 1px solid #000;
-    margin-right: 10px;
-    padding-bottom: 3px;
-}
-
-.sign-block:last-child {
-    margin-right: 0;
-}
-
-.note {
-    font-size: 9px;
-    margin-top: 10px;
-}
-
-.sf-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-    font-size: 10px;
-}
-
-.sf-table th,
-.sf-table td {
-    border: 1px solid #000;
-    padding: 3px;
-    text-align: center;
-}
-
-.sf-table .left {
-    text-align: left;
-}
-
-.sf-table .right {
-    text-align: right;
-}
-
-.sf-table .numbers td {
-    font-size: 8px;
-}
-
-.sign-block {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 25px;
-}
-
-.sign-left, .sign-right {
-    width: 48%;
-}
-
-.sign-line {
-    border-bottom: 1px solid #000;
-    height: 18px;
-    margin-top: 3px;
-}
-
-.sign-note {
-    font-size: 8px;
-    text-align: center;
-}
-
-.note {
-    margin-top: 15px;
-    font-size: 9px;
-}
+.signatures { margin-top: 25px; }
+.sign-row { display: flex; margin-bottom: 10px; }
+.sign-block { flex: 1; border-bottom: 1px solid #000; margin-right: 10px; padding-bottom: 3px; }
+.sign-block:last-child { margin-right: 0; }
+.note { font-size: 9px; margin-top: 10px; }
+.sf-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+.sf-table th, .sf-table td { border: 1px solid #000; padding: 3px; text-align: center; }
+.sf-table .left { text-align: left; }
+.sf-table .right { text-align: right; }
+.sf-table .numbers td { font-size: 8px; }
+.sign-block { display: flex; justify-content: space-between; margin-top: 25px; }
+.sign-left, .sign-right { width: 48%; }
+.sign-line { border-bottom: 1px solid #000; height: 18px; margin-top: 3px; }
+.sign-note { font-size: 8px; text-align: center; }
+.note { margin-top: 15px; font-size: 9px; }
 </style>
 </head>
-
 <body>
-
 <div class="page">
-
-<div class="title">
-Счет-фактура № {{ sale.document_number or sale.sale_number }} от {{ sale_date }}
-</div>
-
-<div class="row">
-    <div class="label">Дата совершения оборота:</div>
-    <div class="value">{{ sale_date }}</div>
-</div>
-
-<div class="row">
-    <div class="label">Поставщик:</div>
-    <div class="value">
-        {{ company.name }}
-    </div>
-</div>
-
-<div class="row">
-    <div class="label">БИН и адрес места нахождения поставщика:</div>
-    <div class="value">
-        ИИН/БИН: {{ company.bin }}, {{ company.address }}
-    </div>
-</div>
-
-<div class="row">
-    <div class="label">ИИК поставщика:</div>
-    <div class="value">
-        {{ company.iik }}, в банке {{ company.bank }}, БИК {{ company.bik }}
-    </div>
-</div>
-
-<div class="row">
-    <div class="label">Договор (контракт) на поставку товаров (работ, услуг):</div>
-    <div class="value">{{ contract_text }}</div>
-</div>
-
-<div class="row">
-    <div class="label">Условия оплаты по договору (контракту):</div>
-    <div class="value">{{ payment_type }}</div>
-</div>
-
-<div class="row">
-    <div class="label">Пункт назначения поставляемых товаров (работ, услуг): </div>
-    <div class="value"></div>
-</div>
-
-<div class="row">
-    <div class="label">Поставка товаров (работ,услуг) осуществлена по доверенности: </div>
-    <div class="value">Без доверенности</div>
-</div>
-
-<div class="row">
-    <div class="label">Способ отправления: </div>
-    <div class="value">Самовывоз</div>
-</div>
-
-<div class="row">
-    <div class="label">Товарно-транспортная накладная: </div>
-    <div class="value"></div>
-</div>
-
-<div class="row">
-    <div class="label">Грузоотправитель:</div>
-    <div class="value">
-        {{ company.bin }}, {{ company.name }}, {{ company.address }}
-    </div>
-</div>
-
-<div class="row">
-    <div class="label">Грузополучатель:</div>
-    <div class="value">
-        {{ client.iin }}, {{ client.company_name or client.full_name }}, {{ client.address }}
-    </div>
-</div>
-
-<div class="row">
-    <div class="label">Получатель:</div>
-    <div class="value">
-        {{ client.company_name or client.full_name }}
-    </div>
-</div>
-
-<div class="row">
-    <div class="label">БИН и адрес места нахождения получателя:</div>
-    <div class="value">
-        ИИН/БИН: {{ client.iin }}, {{ client.address }}
-    </div>
-</div>
-
-<div class="row">
-    <div class="label">ИИК получателя:</div>
-    <div class="value">
-        
-    </div>
-</div>
+<div class="title">Счет-фактура № {{ sale.document_number or sale.sale_number }} от {{ sale_date }}</div>
+<div class="row"><div class="label">Дата совершения оборота:</div><div class="value">{{ sale_date }}</div></div>
+<div class="row"><div class="label">Поставщик:</div><div class="value">{{ company.name }}</div></div>
+<div class="row"><div class="label">БИН и адрес места нахождения поставщика:</div><div class="value">ИИН/БИН: {{ company.bin }}, {{ company.address }}</div></div>
+<div class="row"><div class="label">ИИК поставщика:</div><div class="value">{{ company.iik }}, в банке {{ company.bank }}, БИК {{ company.bik }}</div></div>
+<div class="row"><div class="label">Договор (контракт) на поставку товаров (работ, услуг):</div><div class="value">{{ contract_text }}</div></div>
+<div class="row"><div class="label">Условия оплаты по договору (контракту):</div><div class="value">{{ payment_type }}</div></div>
+<div class="row"><div class="label">Пункт назначения поставляемых товаров (работ, услуг): </div><div class="value"></div></div>
+<div class="row"><div class="label">Поставка товаров (работ,услуг) осуществлена по доверенности: </div><div class="value">Без доверенности</div></div>
+<div class="row"><div class="label">Способ отправления: </div><div class="value">Самовывоз</div></div>
+<div class="row"><div class="label">Товарно-транспортная накладная: </div><div class="value"></div></div>
+<div class="row"><div class="label">Грузоотправитель:</div><div class="value">{{ company.bin }}, {{ company.name }}, {{ company.address }}</div></div>
+<div class="row"><div class="label">Грузополучатель:</div><div class="value">{{ client.iin }}, {{ client.company_name or client.full_name }}, {{ client.address }}</div></div>
+<div class="row"><div class="label">Получатель:</div><div class="value">{{ client.company_name or client.full_name }}</div></div>
+<div class="row"><div class="label">БИН и адрес места нахождения получателя:</div><div class="value">ИИН/БИН: {{ client.iin }}, {{ client.address }}</div></div>
+<div class="row"><div class="label">ИИК получателя:</div><div class="value"></div></div>
 
 <table class="sf-table">
-    <tr>
-        <th rowspan="2">№ п/п</th>
-        <th rowspan="2">Наименование товаров (работ, услуг)</th>
-        <th rowspan="2">Ед. изм.</th>
-        <th rowspan="2">Кол-во (объем)</th>
-        <th rowspan="2">Цена (KZT)</th>
-        <th rowspan="2">Стоимость товаров (работ, услуг) без НДС</th>
-        <th colspan="2">НДС</th>
-        <th rowspan="2">Всего стоимость реализации</th>
-        <th colspan="2">Акциз</th>
-    </tr>
-    <tr>
-        <th>Ставка</th>
-        <th>Сумма</th>
-        <th>Ставка</th>
-        <th>Сумма</th>
-    </tr>
-
-    <tr class="numbers">
-        <td>1</td>
-        <td>2</td>
-        <td>3</td>
-        <td>4</td>
-        <td>5</td>
-        <td>6</td>
-        <td>7</td>
-        <td>8</td>
-        <td>9</td>
-        <td>10</td>
-        <td>11</td>
-    </tr>
-
-    {% set total = 0 %}
-    {% for item in items %}
-    {% set total = total + item.total %}
-    <tr>
-        <td>{{ loop.index }}</td>
-        <td class="left">{{ item.name }}</td>
-		<td>{{ item.unit or "шт" }}</td>
-        <td>{{ item.quantity }}</td>
-        <td>{{ "{:,.2f}".format(item.price) }}</td>
-        <td>{{ "{:,.2f}".format(item.total) }}</td>
-        <td>Без НДС</td>
-        <td>0,00</td>
-        <td>{{ "{:,.2f}".format(item.total) }}</td>
-        <td></td>
-        <td></td>
-    </tr>
-    {% endfor %}
-
-    <tr>
-        <td colspan="5" class="right"><b>Всего по счету:</b></td>
-        <td><b>{{ "{:,.2f}".format(total) }}</b></td>
-        <td></td>
-        <td><b>0,00</b></td>
-        <td><b>{{ "{:,.2f}".format(total) }}</b></td>
-        <td></td>
-        <td></td>
-    </tr>
+<tr>
+<th rowspan="2">№ п/п</th><th rowspan="2">Наименование товаров (работ, услуг)</th><th rowspan="2">Ед. изм.</th><th rowspan="2">Кол-во (объем)</th><th rowspan="2">Цена (KZT)</th><th rowspan="2">Стоимость товаров (работ, услуг) без НДС</th><th colspan="2">НДС</th><th rowspan="2">Всего стоимость реализации</th><th colspan="2">Акциз</th>
+</tr>
+<tr><th>Ставка</th><th>Сумма</th><th>Ставка</th><th>Сумма</th></tr>
+<tr class="numbers"><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td></tr>
+{% for item in items %}
+<tr>
+<td>{{ loop.index }}</td>
+<td class="left">{{ item.name }}</td>
+<td>{{ item.unit or "шт" }}</td>
+<td>{{ item.quantity }}</td>
+<td>{{ "{:,.2f}".format(item.price) }}</td>
+<td>{{ "{:,.2f}".format(item.total) }}</td>
+<td>Без НДС</td><td>0,00</td>
+<td>{{ "{:,.2f}".format(item.total) }}</td><td></td><td></td>
+</tr>
+{% endfor %}
+{% set invoice_total = items|sum(attribute='total') %}
+<tr>
+<td colspan="5" class="right"><b>Всего по счету:</b></td>
+<td><b>{{ "{:,.2f}".format(invoice_total) }}</b></td>
+<td></td><td><b>0,00</b></td>
+<td><b>{{ "{:,.2f}".format(invoice_total) }}</b></td><td></td><td></td>
+</tr>
 </table>
 
 <div class="sign-block">
-
-    <div class="sign-left">
-        <div><b>Руководитель:</b></div>
-        <div class="sign-line">{{ company.director }}</div>
-        <div class="sign-note">(Ф.И.О., подпись)</div>
-
-        <div style="margin-top:10px;"><b>Главный бухгалтер: не предусмотрен</b></div>
-        <div class="sign-line">Не предусмотрен</div>
-        <div class="sign-note">(Ф.И.О., подпись)</div>
-    </div>
-
-    <div class="sign-right">
-        <div><b>ВЫДАЛ (ответственное лицо поставщика)</b></div>
-        <div class="sign-line"></div>
-        <div class="sign-note">(должность)</div>
-
-        <div class="sign-line" style="margin-top:20px;"></div>
-        <div class="sign-note">(Ф.И.О., подпись)</div>
-    </div>
-
+<div class="sign-left">
+<div><b>Руководитель:</b></div><div class="sign-line">{{ company.director }}</div><div class="sign-note">(Ф.И.О., подпись)</div>
+<div style="margin-top:10px;"><b>Главный бухгалтер: не предусмотрен</b></div><div class="sign-line">Не предусмотрен</div><div class="sign-note">(Ф.И.О., подпись)</div>
 </div>
-
-<div class="note">
-    Примечание: Без печати недействительно. Оригинал (первый экземпляр) - покупателю.
-    Копия (второй экземпляр) - поставщику.
+<div class="sign-right">
+<div><b>ВЫДАЛ (ответственное лицо поставщика)</b></div><div class="sign-line"></div><div class="sign-note">(должность)</div>
+<div class="sign-line" style="margin-top:20px;"></div><div class="sign-note">(Ф.И.О., подпись)</div>
 </div>
-
+</div>
+<div class="note">Примечание: Без печати недействительно. Оригинал (первый экземпляр) - покупателю. Копия (второй экземпляр) - поставщику.</div>
 </body>
 </html>
