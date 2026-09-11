@@ -1,10 +1,12 @@
-from flask import Blueprint, redirect, request, session, url_for
+from flask import redirect, request, session, url_for
 
 from models import get_db, pool
-from routes.subscriptions import BASE_MONTHLY_PRICE, calculate_total, employee_price
-
-
-subscription_selection_bp = Blueprint("subscription_selection", __name__)
+from routes.subscriptions import (
+    BASE_MONTHLY_PRICE,
+    calculate_total,
+    employee_price,
+    subscriptions_bp,
+)
 
 
 def _owner_allowed():
@@ -15,18 +17,9 @@ def _owner_allowed():
     )
 
 
-@subscription_selection_bp.route("/subscription/selection", methods=["POST"])
+@subscriptions_bp.route("/subscription/selection", methods=["POST"])
 def save_subscription_selection():
-    """
-    Save the selected module set.
-
-    During trial this only changes the trial configuration and future price.
-    No payment is started and the original trial end date is preserved.
-
-    After trial (or for another non-trial status) the same action finalizes the
-    selected configuration, moves the subscription to pending_payment and starts
-    Halyk ePay.
-    """
+    """Save module selection without forcing payment while the trial is active."""
     if not session.get("user_id"):
         return redirect(url_for("auth.login"))
     if not _owner_allowed():
@@ -77,6 +70,7 @@ def save_subscription_selection():
         next_status = "trial" if is_trial else "pending_payment"
 
         if is_trial:
+            # Preserve trial_ends_at: adding a module never restarts or extends trial.
             cur.execute("""
                 UPDATE company_subscriptions
                 SET billing_period = %s,
@@ -127,7 +121,7 @@ def save_subscription_selection():
                     company_id, module_id, enabled, status, price,
                     billing_period, activated_at, expires_at, updated_at
                 )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                VALUES (%s,%s,%s,%s,%s,%s,NOW(),%s,NOW())
                 ON CONFLICT (company_id, module_id)
                 DO UPDATE SET
                     enabled = EXCLUDED.enabled,
@@ -147,7 +141,6 @@ def save_subscription_selection():
                 module_status,
                 module["monthly_price"] or 0,
                 billing_period,
-                None if not enabled else subscription.get("period_start"),
                 expires_at,
             ))
 
