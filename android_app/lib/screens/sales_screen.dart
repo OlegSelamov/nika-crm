@@ -1304,7 +1304,7 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
       final defaultRaw = result['default_client'];
       final privateClient = defaultRaw is Map
           ? Map<String, dynamic>.from(defaultRaw)
-          : Map<String, dynamic>.from(_SalesScreenState.anonymousClient);
+          : Map<String, dynamic>.from(SalesScreenState.anonymousClient);
       if (!mounted || currentRequest != requestId) return;
       setState(() {
         if (reset) {
