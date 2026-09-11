@@ -1,6 +1,8 @@
 import hashlib
+import os
 import re
 
+import psycopg2
 from flask import g, jsonify, redirect, request, session
 
 from models import get_db, pool
@@ -33,14 +35,12 @@ def _lock_key(company_id, field, value):
     return int.from_bytes(hashlib.sha256(raw).digest()[:8], "big", signed=True)
 
 
-def _find_duplicate(company_id, *, barcode="", gtin="", ntin="", exclude_id=None, conn=None):
+def _find_duplicate(company_id, *, barcode="", gtin="", ntin="", exclude_id=None):
     active = _identifier_values(barcode=barcode, gtin=gtin, ntin=ntin)
     if not active:
         return None
 
-    own_conn = conn is None
-    if own_conn:
-        conn = get_db()
+    conn = get_db()
     cur = conn.cursor()
     try:
         params = [company_id]
@@ -82,8 +82,7 @@ def _find_duplicate(company_id, *, barcode="", gtin="", ntin="", exclude_id=None
         return None
     finally:
         cur.close()
-        if own_conn:
-            pool.putconn(conn)
+        pool.putconn(conn)
 
 
 def _release_item_locks():
@@ -95,15 +94,14 @@ def _release_item_locks():
         cur = conn.cursor()
         for key in reversed(keys):
             cur.execute("SELECT pg_advisory_unlock(%s)", (key,))
-        conn.commit()
         cur.close()
     except Exception:
+        pass
+    finally:
         try:
-            conn.rollback()
+            conn.close()
         except Exception:
             pass
-    finally:
-        pool.putconn(conn)
         g._item_duplicate_lock_conn = None
         g._item_duplicate_lock_keys = []
 
@@ -151,24 +149,26 @@ def prevent_duplicate_item_submit():
     if not active:
         return None
 
-    # Session-level PostgreSQL advisory locks serialize creates/edits sharing
-    # any identifier. This closes the race where two devices pass a normal
-    # SELECT check before either INSERT is committed.
-    conn = get_db()
-    cur = conn.cursor()
+    # Use a dedicated PostgreSQL connection for session advisory locks rather
+    # than consuming a pooled app connection while the original item handler
+    # performs its INSERT/UPDATE. Requests sharing any identifier serialize.
+    database_url = os.environ.get("DATABASE_URL")
+    lock_conn = psycopg2.connect(database_url)
+    lock_conn.autocommit = True
+    lock_cur = lock_conn.cursor()
     keys = sorted({_lock_key(company_id, field, value) for field, _label, value in active})
     try:
         for key in keys:
-            cur.execute("SELECT pg_advisory_lock(%s)", (key,))
-        g._item_duplicate_lock_conn = conn
+            lock_cur.execute("SELECT pg_advisory_lock(%s)", (key,))
+        g._item_duplicate_lock_conn = lock_conn
         g._item_duplicate_lock_keys = keys
     except Exception:
-        cur.close()
-        pool.putconn(conn)
+        lock_cur.close()
+        lock_conn.close()
         raise
     finally:
-        if not cur.closed:
-            cur.close()
+        if not lock_cur.closed:
+            lock_cur.close()
 
     exclude_id = int(edit_match.group(1)) if edit_match else None
     duplicate = _find_duplicate(
@@ -177,7 +177,6 @@ def prevent_duplicate_item_submit():
         gtin=gtin,
         ntin=ntin,
         exclude_id=exclude_id,
-        conn=conn,
     )
     if not duplicate:
         # Keep locks until the original items.add_item/edit_item request commits.
