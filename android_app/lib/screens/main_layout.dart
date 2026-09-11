@@ -1,3 +1,7 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -50,6 +54,8 @@ class _MainLayoutState extends State<MainLayout> {
     autoStart: false,
     detectionSpeed: DetectionSpeed.normal,
   );
+  final quickScanPlayer = AudioPlayer(playerId: 'quick-sales-scanner');
+  final quickScanBeep = _createBarcodeBeep();
   final Set<String> quickScannedCodes = <String>{};
   bool quickScannerActive = false;
   bool quickScanBusy = false;
@@ -64,6 +70,7 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   void initState() {
     super.initState();
+    quickScanPlayer.setPlayerMode(PlayerMode.lowLatency);
     SalesVoiceBridge.instance.setSalesVisible(false);
     nika.setHandlers(
       onNavigate: _openVoiceTarget,
@@ -104,6 +111,7 @@ class _MainLayoutState extends State<MainLayout> {
     nika.clearHandlers();
     nika.deactivate();
     quickScannerController.dispose();
+    quickScanPlayer.dispose();
     super.dispose();
   }
 
@@ -313,7 +321,15 @@ class _MainLayoutState extends State<MainLayout> {
         quickScan: true,
       );
       if (added == true) {
-        await SystemSound.play(SystemSoundType.click);
+        try {
+          await quickScanPlayer.stop();
+          await quickScanPlayer.play(
+            BytesSource(quickScanBeep),
+            volume: 1,
+          );
+        } catch (_) {
+          await SystemSound.play(SystemSoundType.alert);
+        }
         await HapticFeedback.mediumImpact();
       }
     } finally {
@@ -587,19 +603,92 @@ class _SalesScannerNavButtonState extends State<_SalesScannerNavButton> {
         height: pressed ? 50 : 54,
         transform: Matrix4.translationValues(0, -13, 0),
         decoration: BoxDecoration(
-          color: pressed ? AppColors.navy : AppColors.primary,
+          color: pressed ? const Color(0xFF1677FF) : AppColors.primary,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 4),
-          boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(.30), blurRadius: 18, offset: const Offset(0, 7))],
+          border: Border.all(
+            color: pressed ? const Color(0xFFD8F0FF) : Colors.white,
+            width: 4,
+          ),
+          boxShadow: pressed
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF52B9FF).withOpacity(.82),
+                    blurRadius: 28,
+                    spreadRadius: 7,
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFF1677FF).withOpacity(.38),
+                    blurRadius: 42,
+                    spreadRadius: 11,
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(.30),
+                    blurRadius: 18,
+                    offset: const Offset(0, 7),
+                  ),
+                ],
         ),
         child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 27),
       ),
       Transform.translate(
         offset: const Offset(0, -8),
-        child: Text(pressed ? 'Сканирую…' : 'Сканер', maxLines: 1, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
+        child: Text(
+          pressed ? 'Сканирую…' : 'Сканер',
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+            color: pressed ? const Color(0xFF1677FF) : AppColors.primary,
+          ),
+        ),
       ),
     ]),
   );
+}
+
+Uint8List _createBarcodeBeep() {
+  const sampleRate = 22050;
+  const durationMs = 150;
+  final sampleCount = sampleRate * durationMs ~/ 1000;
+  final dataLength = sampleCount * 2;
+  final bytes = Uint8List(44 + dataLength);
+  final data = ByteData.view(bytes.buffer);
+
+  void writeAscii(int offset, String value) {
+    for (var i = 0; i < value.length; i++) {
+      bytes[offset + i] = value.codeUnitAt(i);
+    }
+  }
+
+  writeAscii(0, 'RIFF');
+  data.setUint32(4, 36 + dataLength, Endian.little);
+  writeAscii(8, 'WAVE');
+  writeAscii(12, 'fmt ');
+  data.setUint32(16, 16, Endian.little);
+  data.setUint16(20, 1, Endian.little);
+  data.setUint16(22, 1, Endian.little);
+  data.setUint32(24, sampleRate, Endian.little);
+  data.setUint32(28, sampleRate * 2, Endian.little);
+  data.setUint16(32, 2, Endian.little);
+  data.setUint16(34, 16, Endian.little);
+  writeAscii(36, 'data');
+  data.setUint32(40, dataLength, Endian.little);
+
+  for (var i = 0; i < sampleCount; i++) {
+    final progress = i / sampleCount;
+    final frequency = 950 + (progress * 350);
+    final attack = math.min(1.0, i / (sampleRate * .008));
+    final fade = math.min(1.0, (sampleCount - i) / (sampleRate * .025));
+    final sample = (math.sin(2 * math.pi * frequency * i / sampleRate) *
+            28000 *
+            attack *
+            fade)
+        .round();
+    data.setInt16(44 + (i * 2), sample, Endian.little);
+  }
+  return bytes;
 }
 
 class _MoreScreen extends StatelessWidget {
