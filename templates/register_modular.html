@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Регистрация — Nika Business</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:'Segoe UI',Arial,sans-serif;background:linear-gradient(135deg,#0f172a,#1e3a8a);display:flex;align-items:center;justify-content:center;padding:30px 18px;color:#0f172a}
+.card{background:rgba(255,255,255,.97);backdrop-filter:blur(12px);width:min(980px,100%);border-radius:24px;box-shadow:0 25px 60px rgba(0,0,0,.38);overflow:hidden}
+.head{padding:26px 30px 18px;border-bottom:1px solid #e8edf5}.logo{text-align:center;font-size:24px;font-weight:800}.logo span{color:#3b82f6}
+.progress{display:flex;gap:7px;margin-top:22px}.bar{height:5px;flex:1;border-radius:10px;background:#e2e8f0;transition:.25s}.bar.active{background:#3b82f6}
+.content{padding:28px 30px 30px}.step{display:none}.step.active{display:block}.eyebrow{font-size:12px;font-weight:800;color:#3b82f6;text-transform:uppercase;letter-spacing:.08em}
+h2{margin:7px 0 5px;font-size:25px}.desc{color:#64748b;font-size:14px;line-height:1.45;margin-bottom:22px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}
+label.field{display:block;font-size:12px;font-weight:650;color:#64748b;margin:0 0 6px}.field input{width:100%;height:45px;padding:11px 13px;border-radius:11px;border:1px solid #dbe3ef;font-size:14px;outline:none;background:#fff}.field input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}.optional{font-weight:400;color:#94a3b8}
+.actions{display:flex;gap:10px;margin-top:24px}.btn{border:0;border-radius:12px;padding:13px 18px;font-weight:750;cursor:pointer;font-size:14px}.next,.submit{margin-left:auto;background:linear-gradient(135deg,#6366f1,#3b82f6);color:#fff;min-width:180px}.back{background:#eef2f7;color:#475569}.error{padding:11px 13px;border-radius:11px;background:#fee2e2;color:#991b1b;margin-bottom:18px;font-size:13px}
+.recommend{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 15px;border:1px solid #dbeafe;border-radius:14px;background:#eff6ff;margin-bottom:16px}.recommend span{font-size:12px;color:#64748b}.recommend strong{display:block;color:#1e3a8a}.recommend b{color:#2563eb;font-size:12px}
+.module-layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start}.module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:470px;overflow:auto;padding-right:2px}.module-card{position:relative;display:flex;flex-direction:column;min-height:134px;padding:14px;border:1px solid #e2e8f0;border-radius:16px;background:#fff;cursor:pointer;transition:.16s}.module-card:hover{border-color:#a5b4fc;transform:translateY(-1px)}.module-card:has(input:checked){border-color:#6366f1;background:#f8faff;box-shadow:0 0 0 2px rgba(99,102,241,.08)}.module-top{display:flex;justify-content:space-between;gap:10px}.module-name{font-size:14px;font-weight:900}.module-desc{font-size:11px;color:#64748b;line-height:1.4;margin:7px 0 10px}.module-price{font-size:13px;font-weight:900;margin-top:auto}.module-card input{appearance:none;width:22px;height:22px;border:2px solid #cbd5e1;border-radius:7px;background:#fff;display:grid;place-items:center;flex:0 0 auto}.module-card input:checked{background:#6366f1;border-color:#6366f1}.module-card input:checked:after{content:'✓';color:#fff;font-size:13px;font-weight:900}.module-card input:disabled{opacity:.65}.core-badge{font-size:9px;color:#64748b;background:#f1f5f9;border-radius:999px;padding:4px 7px;width:max-content;margin-top:6px}
+.price-box{position:sticky;top:10px;border-radius:18px;padding:18px;background:linear-gradient(155deg,#0f172a,#312e81);color:#fff;box-shadow:0 18px 38px rgba(15,23,42,.2)}.price-box h3{margin:0 0 4px;font-size:19px}.price-box>p{margin:0 0 13px;color:#cbd5e1;font-size:11px}.price-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px}.price-row span{color:#cbd5e1}.price-total-label{margin-top:15px;color:#cbd5e1;font-size:10px}.price-total{font-size:29px;font-weight:950;margin-top:3px}.trial-note{margin-top:10px;color:#c4b5fd;font-size:10px;line-height:1.45}
+.summary{display:grid;gap:10px}.summary-row{display:flex;justify-content:space-between;gap:15px;padding:13px 15px;border-radius:12px;background:#f8fafc;color:#475569}.summary-row strong{color:#0f172a;text-align:right}.trial{margin-top:16px;padding:16px;border-radius:14px;background:#eff6ff;color:#1e40af}.trial strong{display:block;color:#1e3a8a;margin-bottom:4px}.bottom{text-align:center;padding:0 30px 24px;font-size:14px;color:#64748b}.bottom a{color:#6366f1;text-decoration:none;font-weight:650}
+@media(max-width:780px){.module-layout{grid-template-columns:1fr}.price-box{position:static;order:-1}.module-grid{max-height:none}.grid{grid-template-columns:1fr}.full{grid-column:auto}.content,.head{padding-left:20px;padding-right:20px}.actions{flex-wrap:wrap}.next,.submit,.back{width:100%;margin-left:0}}
+@media(max-width:520px){.module-grid{grid-template-columns:1fr}.recommend{align-items:flex-start;flex-direction:column}}
+</style>
+<link rel="stylesheet" href="/static/css/nika-public-assistant.css">
+<link rel="stylesheet" href="/static/css/nika_icons.css?v=20260910-1">
+</head>
+<body data-nika-assistant-page="register" data-nika-assistant-authenticated="false">
+<div class="card">
+  <div class="head">
+    <div class="logo">Nika <span>Business</span></div>
+    <div class="progress"><div class="bar active"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
+  </div>
+  <div class="content">
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <div class="recommend">
+      <div><span>С лендинга выбран рекомендованный набор</span><strong>{{ selected_plan_info.name }}</strong></div>
+      <b>Можно изменить модули ниже</b>
+    </div>
+    <form method="POST" id="registerForm">
+      <input type="hidden" name="plan" value="{{ selected_plan }}">
+
+      <section class="step active">
+        <div class="eyebrow">Шаг 1 из 5</div><h2>Создадим ваш аккаунт</h2><div class="desc">Данные владельца для входа в Nika Business.</div>
+        <div class="grid">
+          <div class="full field"><label>ФИО владельца</label><input name="director" id="director" value="{{ form.director if form else '' }}" placeholder="Например, Иван Иванов"></div>
+          <div class="field"><label>Телефон</label><input name="phone" id="phone" value="{{ form.phone if form else '' }}" placeholder="+7 777 000 00 00"></div><div></div>
+          <div class="field"><label>Логин</label><input name="username" id="username" value="{{ form.username if form else '' }}" required></div>
+          <div class="field"><label>Пароль</label><input name="password" id="password" type="password" minlength="6" required></div>
+        </div>
+        <div class="actions"><button class="btn next" type="button" onclick="goNext()">Продолжить →</button></div>
+      </section>
+
+      <section class="step">
+        <div class="eyebrow">Шаг 2 из 5</div><h2>Теперь о компании</h2><div class="desc">Основные данные бизнеса. Они будут использоваться в документах и системе.</div>
+        <div class="grid">
+          <div class="full field"><label>Название компании</label><input name="name" id="name" value="{{ form.name if form else '' }}" required></div>
+          <div class="field"><label>БИН / ИИН <span class="optional">можно позже</span></label><input name="bin" id="bin" value="{{ form.bin if form else '' }}"></div>
+          <div class="field"><label>Адрес <span class="optional">можно позже</span></label><input name="address" id="address" value="{{ form.address if form else '' }}"></div>
+        </div>
+        <div class="actions"><button class="btn back" type="button" onclick="goBack()">← Назад</button><button class="btn next" type="button" onclick="goNext()">Продолжить →</button></div>
+      </section>
+
+      <section class="step">
+        <div class="eyebrow">Шаг 3 из 5</div><h2>Выберите модули</h2><div class="desc">Оплачиваете только выбранные возможности. Итоговая сумма сразу станет ценой вашей подписки после пробного периода.</div>
+        <div class="module-layout">
+          <div class="module-grid">
+            {% for module in modules %}
+            <label class="module-card">
+              <div class="module-top"><div class="module-name">{{ module.name }}</div><input class="module-check" type="checkbox" name="modules" value="{{ module.code }}" data-price="{{ module.monthly_price }}" {% if module.code in selected_codes %}checked{% endif %} {% if module.is_core %}disabled{% endif %}></div>
+              {% if module.is_core %}<input type="hidden" name="modules" value="{{ module.code }}">{% endif %}
+              <div class="module-desc">{{ module.description }}</div>
+              <div class="module-price">{% if module.monthly_price|float > 0 %}{{ '{:,.0f}'.format(module.monthly_price|float).replace(',', ' ') }} ₸/мес{% else %}Включено{% endif %}</div>
+              {% if module.is_core %}<div class="core-badge">Базовый модуль</div>{% endif %}
+            </label>
+            {% endfor %}
+          </div>
+          <aside class="price-box">
+            <h3>Ваша подписка</h3><p>Цена пересчитывается сразу</p>
+            <div class="price-row"><span>База Nika</span><b id="priceBase">{{ '{:,.0f}'.format(base_price|float).replace(',', ' ') }} ₸</b></div>
+            <div class="price-row"><span>Выбранные модули</span><b id="priceModules">{{ '{:,.0f}'.format(modules_price|float).replace(',', ' ') }} ₸</b></div>
+            <div class="price-total-label">Итого в месяц</div><div class="price-total" id="priceTotal">{{ '{:,.0f}'.format(monthly_total|float).replace(',', ' ') }} ₸</div>
+            <div class="trial-note">Первые 14 дней — бесплатно. Эта сумма начнёт действовать только после окончания trial.</div>
+          </aside>
+        </div>
+        <div class="actions"><button class="btn back" type="button" onclick="goBack()">← Назад</button><button class="btn next" type="button" onclick="goNext()">Продолжить →</button></div>
+      </section>
+
+      <section class="step">
+        <div class="eyebrow">Шаг 4 из 5</div><h2>Реквизиты</h2><div class="desc">Необязательно заполнять сейчас — можно добавить позже.</div>
+        <div class="grid">
+          <div class="field"><label>ИИК</label><input name="iik" value="{{ form.iik if form else '' }}"></div><div class="field"><label>БИК</label><input name="bik" value="{{ form.bik if form else '' }}"></div>
+          <div class="full field"><label>Банк</label><input name="bank" value="{{ form.bank if form else '' }}"></div><div class="field"><label>КБЕ</label><input name="kbe" value="{{ form.kbe if form else '' }}"></div><div class="field"><label>КНП</label><input name="knp" value="{{ form.knp if form else '' }}"></div>
+        </div>
+        <div class="actions"><button class="btn back" type="button" onclick="goBack()">← Назад</button><button class="btn next" type="button" onclick="goNext()">Продолжить →</button></div>
+      </section>
+
+      <section class="step">
+        <div class="eyebrow">Шаг 5 из 5</div><h2>Всё готово</h2><div class="desc">Проверьте данные и выбранную стоимость подписки.</div>
+        <div class="summary">
+          <div class="summary-row"><span>Владелец</span><strong id="sumDirector">—</strong></div><div class="summary-row"><span>Компания</span><strong id="sumCompany">—</strong></div>
+          <div class="summary-row"><span>Логин</span><strong id="sumLogin">—</strong></div><div class="summary-row"><span>БИН / ИИН</span><strong id="sumBin">Не указан</strong></div>
+          <div class="summary-row"><span>Модулей выбрано</span><strong id="sumModules">—</strong></div><div class="summary-row"><span>Подписка</span><strong id="sumPrice">—</strong></div>
+        </div>
+        <div class="trial"><strong>14 дней бесплатно</strong>Оплата сейчас не требуется. После trial цена останется такой, какую вы собрали из модулей.</div>
+        <div class="actions"><button class="btn back" type="button" onclick="goBack()">← Назад</button><button class="btn submit" type="submit">Создать компанию →</button></div>
+      </section>
+    </form>
+  </div>
+  <div class="bottom">Уже есть аккаунт? <a href="/login">Войти</a></div>
+</div>
+<script>
+let currentStep=0;
+const steps=[...document.querySelectorAll('.step')],bars=[...document.querySelectorAll('.bar')];
+const basePrice={{ base_price|float }};
+function money(v){return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(v)+' ₸'}
+function calculatePrice(){
+  let modules=0,count=0;
+  document.querySelectorAll('.module-check').forEach(x=>{if(x.checked){modules+=Number(x.dataset.price||0);count++}});
+  document.getElementById('priceModules').textContent=money(modules);
+  document.getElementById('priceTotal').textContent=money(basePrice+modules);
+  return {modules,total:basePrice+modules,count};
+}
+document.querySelectorAll('.module-check').forEach(x=>x.addEventListener('change',calculatePrice));
+function renderStep(){steps.forEach((el,i)=>el.classList.toggle('active',i===currentStep));bars.forEach((el,i)=>el.classList.toggle('active',i<=currentStep));if(currentStep===4)fillSummary();window.scrollTo({top:0,behavior:'smooth'})}
+function validateCurrent(){for(const input of steps[currentStep].querySelectorAll('[required]')){if(!input.checkValidity()){input.reportValidity();return false}}return true}
+function goNext(){if(!validateCurrent())return;if(currentStep<steps.length-1){currentStep++;renderStep()}}
+function goBack(){if(currentStep>0){currentStep--;renderStep()}}
+function fillSummary(){const p=calculatePrice();document.getElementById('sumDirector').textContent=document.getElementById('director').value||'Не указан';document.getElementById('sumCompany').textContent=document.getElementById('name').value||'—';document.getElementById('sumLogin').textContent=document.getElementById('username').value||'—';document.getElementById('sumBin').textContent=document.getElementById('bin').value||'Не указан';document.getElementById('sumModules').textContent=String(p.count);document.getElementById('sumPrice').textContent=money(p.total)+'/месяц'}
+calculatePrice();
+</script>
+<script src="/static/js/nika-public-assistant.js" defer></script><script src="/static/js/nika_icons.js?v=20260910-1"></script>
+</body>
+</html>
