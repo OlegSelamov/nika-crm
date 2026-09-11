@@ -44,6 +44,7 @@ from routes.ai import ai_bp
 from routes.voice import voice_bp
 from routes.auth import auth_bp
 from routes.stock import stock_bp
+from routes.suppliers import suppliers_bp
 from routes.webkassa import webkassa_bp
 from routes.settings import settings_bp
 from routes.reports import reports_bp
@@ -197,6 +198,7 @@ app.register_blueprint(ai_bp)
 app.register_blueprint(voice_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(stock_bp)
+app.register_blueprint(suppliers_bp)
 app.register_blueprint(webkassa_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(reports_bp)
@@ -240,6 +242,8 @@ MODULE_PATHS = (
     ("/tasks", "tasks"),
     ("/items", "catalog"),
     ("/categories", "catalog"),
+    ("/suppliers", "warehouse"),
+    ("/api/suppliers", "warehouse"),
     ("/stock", "warehouse"),
     ("/sales", "sales"),
     ("/api/sales", "sales"),
@@ -325,6 +329,11 @@ def inject_storefront_workflow_assets(response):
                 contract_fields + '\n                        <label>Способ расчета\n                            <select data-esf="delivery.payment_form">',
                 1,
             )
+        if request.path == "/stock/income" and "stock_income_suppliers.js" not in html and "</body>" in html:
+            html = html.replace("</body>", '<script src="/static/js/stock_income_suppliers.js?v=20260911-1"></script>\n</body>', 1)
+        if '/suppliers' not in html and '<a href="/stock/income" class="menu-link">' in html:
+            supplier_menu = '<a href="/suppliers" class="menu-link"><img src="/static/icons/company.png" class="menu-icon"><span class="text">Поставщики</span></a>\n            '
+            html = html.replace('<a href="/stock/income" class="menu-link">', supplier_menu + '<a href="/stock/income" class="menu-link">', 1)
         scanner_pages = {"/items", "/stock", "/stock/income", "/stock/writeoff", "/stock/movements", "/clients"}
         if request.path in scanner_pages and "global_hid_scanner.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/global_hid_scanner.js?v=20260904-1"></script>\n</body>', 1)
