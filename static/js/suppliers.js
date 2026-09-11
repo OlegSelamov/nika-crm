@@ -4,6 +4,14 @@
     const lookupButton = document.getElementById('supplierLookupBtn');
     const lookupStatus = document.getElementById('supplierLookupStatus');
 
+    // The page content lives inside transformed/layout containers. A fixed
+    // modal left there is positioned against that inner block instead of the
+    // browser viewport. Move it to body once so the backdrop covers the whole
+    // screen, including the sidebar/topbar, and centering uses the viewport.
+    if (modal && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+
     function ensureSupplierMenuLink() {
         if (document.querySelector('.sidebar a[href="/suppliers"]')) return;
         const incomeLink = document.querySelector('.sidebar a[href="/stock/income"]');
