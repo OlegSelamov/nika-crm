@@ -70,7 +70,11 @@
                                 <button type="button" class="icon-btn" title="Изменить"
                                     data-supplier='{{ {"id":s.id,"name":s.name,"bin_iin":s.bin_iin,"contact_name":s.contact_name,"phone":s.phone,"email":s.email,"address":s.address,"comment":s.comment}|tojson|forceescape }}'
                                     onclick="editSupplierFromButton(this)">✎</button>
-                                <button type="button" class="icon-btn danger" title="Удалить" onclick="archiveSupplier({{ s.id }}, {{ s.name|tojson }})">×</button>
+                                <button type="button"
+                                        class="icon-btn danger js-supplier-delete"
+                                        title="Удалить"
+                                        data-supplier-id="{{ s.id }}"
+                                        data-supplier-name="{{ s.name|e }}">×</button>
                             </div>
                         </td>
                     </tr>
@@ -149,5 +153,5 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{{ url_for('static', filename='js/suppliers.js') }}?v=20260911-4"></script>
+<script src="{{ url_for('static', filename='js/suppliers.js') }}?v=20260911-5"></script>
 {% endblock %}

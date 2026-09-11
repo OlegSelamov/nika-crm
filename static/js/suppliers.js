@@ -127,39 +127,39 @@
         }
     };
 
-    window.archiveSupplier = async function (id, name) {
+    async function deleteSupplier(button) {
+        const id = Number(button.dataset.supplierId || 0);
+        const name = button.dataset.supplierName || 'поставщика';
+        if (!id) {
+            alert('Не удалось определить поставщика');
+            return;
+        }
         if (!confirm(`Удалить поставщика «${name}»? Если по нему уже были приходы, история сохранится.`)) return;
 
-        const button = document.querySelector(`button[onclick*="archiveSupplier(${id},"]`);
-        if (button) button.disabled = true;
-
+        button.disabled = true;
         try {
-            const response = await fetch(`/api/suppliers/${id}`, {
-                method: 'DELETE',
-                headers: { 'Accept': 'application/json' },
+            const response = await fetch(`/api/suppliers/${id}/delete`, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             });
             const data = await response.json().catch(() => ({}));
-
             if (!response.ok || !data.success) {
                 alert(data.error || 'Не удалось удалить поставщика');
                 return;
             }
 
-            const row = button?.closest('.supplier-row');
-            if (row) row.remove();
-
+            button.closest('.supplier-row')?.remove();
             const rowsLeft = document.querySelectorAll('.supplier-row').length;
             const activeStat = document.querySelector('.suppliers-summary > div:first-child strong');
             if (activeStat) activeStat.textContent = String(rowsLeft);
-
             if (!rowsLeft) location.reload();
         } catch (error) {
             console.error('SUPPLIER DELETE ERROR:', error);
             alert('Не удалось удалить поставщика');
         } finally {
-            if (button) button.disabled = false;
+            button.disabled = false;
         }
-    };
+    }
 
     lookupButton?.addEventListener('click', lookupSupplier);
     document.getElementById('supplierBin')?.addEventListener('keydown', (event) => {
@@ -194,6 +194,15 @@
         document.querySelectorAll('.supplier-row').forEach(row => {
             row.style.display = !q || (row.dataset.search || '').includes(q) ? '' : 'none';
         });
+    });
+
+    document.addEventListener('click', (event) => {
+        const deleteButton = event.target.closest('.js-supplier-delete');
+        if (deleteButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            deleteSupplier(deleteButton);
+        }
     });
 
     modal?.addEventListener('click', (event) => {
