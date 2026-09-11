@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/hold_scanner_button.dart';
 import '../widgets/stock_widgets.dart';
 import 'movements_screen.dart';
-import 'scanner_screen.dart';
 
 class WriteoffScreen extends StatefulWidget {
   const WriteoffScreen({super.key});
@@ -82,10 +82,8 @@ class _WriteoffScreenState extends State<WriteoffScreen> {
     if (picked != null) _selectItem(picked);
   }
 
-  Future<void> scanBarcode() async {
-    final barcode = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen()));
-    if (barcode == null || !mounted) return;
-    final code = barcode.toString().trim();
+  Future<void> scanBarcode(String code) async {
+    if (!mounted) return;
     Map<String, dynamic>? found;
     for (final item in items) {
       if ([item['barcode'], item['gtin'], item['ntin']].any((value) => '${value ?? ''}'.trim() == code)) {
@@ -217,7 +215,11 @@ class _WriteoffScreenState extends State<WriteoffScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            IconButton.filledTonal(onPressed: scanBarcode, icon: const Icon(Icons.qr_code_scanner)),
+                            HoldScannerButton(
+                              enabled: items.isNotEmpty,
+                              onScan: scanBarcode,
+                              tooltip: 'Удерживайте для выбора товара',
+                            ),
                           ],
                         ),
                         if (selectedItem != null) ...[

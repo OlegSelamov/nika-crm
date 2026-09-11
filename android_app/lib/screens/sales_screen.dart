@@ -11,6 +11,7 @@ import '../services/nika_assistant_controller.dart';
 import '../services/sales_voice_bridge.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/hold_scanner_button.dart';
 import 'check_screen.dart';
 import 'add_client_screen.dart';
 import 'scanner_screen.dart';
@@ -1338,13 +1339,12 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
             decoration: const InputDecoration(hintText: 'Имя, компания, телефон или ИИН', prefixIcon: Icon(Icons.search_rounded)),
           )),
           const SizedBox(width: 8),
-          _PickerActionButton(
-            icon: Icons.qr_code_scanner_rounded,
-            tooltip: 'Сканировать ИИН',
-            onTap: () async {
-              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen()));
-              if (result == null || !context.mounted) return;
-              search.text = result.toString();
+          HoldScannerButton(
+            size: 42,
+            tooltip: 'Удерживайте для поиска клиента',
+            onScan: (code) async {
+              if (!context.mounted) return;
+              search.text = code.replaceAll(RegExp(r'\D'), '');
               onSearch(search.text);
             },
           ),
@@ -1588,7 +1588,28 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
     child: Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: TextField(controller: search, onChanged: onSearch, autofocus: true, decoration: const InputDecoration(hintText: 'Название или штрихкод', prefixIcon: Icon(Icons.search_rounded))),
+        child: Row(children: [
+          Expanded(
+            child: TextField(
+              controller: search,
+              onChanged: onSearch,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Название или штрихкод',
+                prefixIcon: Icon(Icons.search_rounded),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          HoldScannerButton(
+            size: 42,
+            tooltip: 'Удерживайте для поиска товара',
+            onScan: (code) async {
+              search.text = code;
+              onSearch(code);
+            },
+          ),
+        ]),
       ),
       Expanded(
         child: loading

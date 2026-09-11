@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/hold_scanner_button.dart';
 import '../widgets/stock_widgets.dart';
 import 'income_screen.dart';
 import 'movements_screen.dart';
@@ -99,6 +100,11 @@ class _StockScreenState extends State<StockScreen> {
   Future<void> _openOperation(Widget screen, {bool refreshAfter = false}) async {
     final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => screen));
     if (refreshAfter && changed == true) await loadStock();
+  }
+
+  Future<void> _scanBarcode(String code) async {
+    searchController.text = code;
+    if (mounted) setState(() {});
   }
 
   Widget _metric(String title, String value, IconData icon, Color color) => SizedBox(
@@ -256,9 +262,14 @@ class _StockScreenState extends State<StockScreen> {
             TextField(
               controller: searchController,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Название, категория или код товара',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: HoldScannerButton(
+                  size: 40,
+                  onScan: _scanBarcode,
+                  tooltip: 'Удерживайте для поиска на складе',
+                ),
               ),
             ),
             const SizedBox(height: 12),

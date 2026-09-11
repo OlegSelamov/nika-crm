@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/hold_scanner_button.dart';
 import '../widgets/stock_widgets.dart';
 
 class MovementsScreen extends StatefulWidget {
@@ -115,6 +116,28 @@ class _MovementsScreenState extends State<MovementsScreen> {
       dateFrom = null;
       dateTo = null;
     });
+  }
+
+  Future<void> _scanBarcode(String code) async {
+    try {
+      final result = await ApiService.barcode(code);
+      if (!mounted) return;
+      searchController.text = result['found'] == true
+          ? '${result['name'] ?? code}'
+          : code;
+      setState(() {});
+      if (result['found'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Товар с кодом $code не найден')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(error))),
+        );
+      }
+    }
   }
 
   String _shortDate(DateTime? value) {
@@ -272,9 +295,14 @@ class _MovementsScreenState extends State<MovementsScreen> {
                         TextField(
                           controller: searchController,
                           onChanged: (_) => setState(() {}),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             hintText: 'Товар, операция или комментарий',
-                            prefixIcon: Icon(Icons.search),
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: HoldScannerButton(
+                              size: 40,
+                              onScan: _scanBarcode,
+                              tooltip: 'Удерживайте для поиска движений товара',
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),

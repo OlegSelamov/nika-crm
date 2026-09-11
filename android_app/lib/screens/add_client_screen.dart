@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
-import 'scanner_screen.dart';
+import '../widgets/hold_scanner_button.dart';
 
 class AddClientScreen extends StatefulWidget {
   final Map<String, dynamic>? client;
@@ -151,13 +151,8 @@ class _AddClientScreenState extends State<AddClientScreen> {
     }
   }
 
-  Future<void> _scanIin() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ScannerScreen()),
-    );
-    if (result == null) return;
-    final identifier = result.toString().replaceAll(RegExp(r'\D'), '');
+  Future<void> _scanIin(String code) async {
+    final identifier = code.replaceAll(RegExp(r'\D'), '');
     iinController.text = identifier.length > 12
         ? identifier.substring(0, 12)
         : identifier;
@@ -285,7 +280,11 @@ class _AddClientScreenState extends State<AddClientScreen> {
                         padding: EdgeInsets.all(14),
                         child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
                       )
-                    : IconButton(icon: const Icon(Icons.qr_code_scanner), onPressed: _scanIin),
+                    : HoldScannerButton(
+                        size: 40,
+                        onScan: _scanIin,
+                        tooltip: 'Удерживайте для сканирования ИИН/БИН',
+                      ),
               ),
               if (lookupMessage.isNotEmpty) ...[
                 const SizedBox(height: 6),
