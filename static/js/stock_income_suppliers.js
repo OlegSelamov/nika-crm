@@ -43,6 +43,7 @@
 
         const select = document.getElementById('incomeSupplier');
         const hint = document.getElementById('incomeSupplierHint');
+        const submit = form.querySelector('.income-submit');
 
         try {
             const response = await fetch('/api/suppliers', { headers: { Accept: 'application/json' } });
@@ -64,11 +65,14 @@
 
             if (!suppliers.length) {
                 select.disabled = true;
+                if (submit) submit.disabled = true;
                 if (hint) hint.innerHTML = 'Сначала <a href="/suppliers">добавьте поставщика</a>, затем оформляйте приход.';
             }
         } catch (error) {
             console.error('SUPPLIERS LOAD ERROR:', error);
             select.innerHTML = '<option value="">Не удалось загрузить поставщиков</option>';
+            select.disabled = true;
+            if (submit) submit.disabled = true;
             if (hint) hint.textContent = 'Обновите страницу или откройте раздел «Поставщики».';
         }
     });
