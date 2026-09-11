@@ -53,6 +53,42 @@ def _ensure_subscription_catalog_once():
         pool.putconn(conn)
 
 
+def _supplier_module_enabled(company_id):
+    """New subscriptions use a separate suppliers module; old companies keep legacy warehouse access until first resave."""
+    if not company_id or session.get("is_super_admin"):
+        return True
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT cm.enabled, cm.status
+            FROM company_modules cm
+            JOIN modules m ON m.id = cm.module_id
+            WHERE cm.company_id = %s AND m.code = 'suppliers'
+            LIMIT 1
+        """, (company_id,))
+        supplier_row = cur.fetchone()
+        if supplier_row:
+            return bool(supplier_row["enabled"] and supplier_row["status"] in ("trial", "active"))
+
+        # Backward compatibility for companies created before Suppliers became
+        # its own paid module.
+        cur.execute("""
+            SELECT 1
+            FROM company_modules cm
+            JOIN modules m ON m.id = cm.module_id
+            WHERE cm.company_id = %s
+              AND m.code = 'warehouse'
+              AND cm.enabled = TRUE
+              AND cm.status IN ('trial', 'active')
+            LIMIT 1
+        """, (company_id,))
+        return bool(cur.fetchone())
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
 @suppliers_bp.before_app_request
 def modular_registration_bootstrap():
     """Make modular registration the public flow without changing old route URLs."""
@@ -71,6 +107,93 @@ def modular_registration_bootstrap():
         from routes.modular_registration import onboarding_finish_modular
         return onboarding_finish_modular()
     return None
+
+
+@suppliers_bp.before_request
+def guard_suppliers_module():
+    company_id = session.get("company_id")
+    if not company_id:
+        return None
+    if _supplier_module_enabled(company_id):
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({
+            "success": False,
+            "error": "Модуль «Поставщики» не подключён",
+            "module": "suppliers",
+        }), 403
+    return redirect("/subscription?required=suppliers")
+
+
+@suppliers_bp.after_app_request
+def inject_trial_subscription_ui(response):
+    """Switch subscription form to trial-safe save flow without duplicating the large template."""
+    if request.path != "/subscription":
+        return response
+    content_type = response.headers.get("Content-Type", "")
+    if "text/html" not in content_type.lower():
+        return response
+    try:
+        html = response.get_data(as_text=True)
+        html = html.replace(
+            'action="/subscription/update"',
+            'action="/subscription/selection"',
+        )
+        html = html.replace(
+            'action="{{ url_for(\'subscriptions.subscription_update\') }}"',
+            'action="/subscription/selection"',
+        )
+        if "trial-subscription-flow-20260911" not in html and "</body>" in html:
+            script = r'''
+<script id="trial-subscription-flow-20260911">
+(function(){
+  const statusEl=document.getElementById('subStatus');
+  const form=document.getElementById('subscriptionForm');
+  const saveBtn=form?.querySelector('.save-btn');
+  const total=document.getElementById('grandTotal');
+  const summaryLabel=form?.querySelector('.summary-total-label');
+  const note=form?.querySelector('.summary-note');
+  if(!form || !saveBtn || !statusEl) return;
+
+  form.action='/subscription/selection';
+  const status=statusEl.dataset.status || '';
+
+  if(new URLSearchParams(location.search).get('saved')==='1'){
+    const banner=document.createElement('div');
+    banner.className='trial-note';
+    banner.style.background='#ecfdf5';
+    banner.style.borderColor='#a7f3d0';
+    banner.style.color='#047857';
+    banner.innerHTML='<b>Набор модулей сохранён.</b> Можно продолжать тестирование до конца пробного периода. Оплата сейчас не требуется.';
+    const hero=document.querySelector('.sub-hero');
+    hero?.insertAdjacentElement('afterend',banner);
+  }
+
+  function updateAction(){
+    const amount=(total?.textContent || '').replace(/\s+/g,' ').trim();
+    if(status==='trial'){
+      if(summaryLabel) summaryLabel.textContent='После пробного периода';
+      saveBtn.textContent='Сохранить набор модулей';
+      if(note) note.textContent='Во время пробного периода оплата не требуется. Можно менять модули до его окончания; дата окончания trial не продлевается.';
+    }else if(status==='expired' || status==='pending_payment' || status==='suspended' || status==='cancelled'){
+      if(summaryLabel) summaryLabel.textContent='К оплате';
+      saveBtn.textContent='Оплатить '+amount+' и продолжить работу';
+      if(note) note.textContent='После успешной оплаты будут активированы только выбранные модули.';
+    }
+  }
+
+  updateAction();
+  if(total){
+    new MutationObserver(updateAction).observe(total,{childList:true,subtree:true,characterData:true});
+  }
+})();
+</script>
+'''
+            html = html.replace("</body>", script + "\n</body>", 1)
+        response.set_data(html)
+    except Exception as exc:
+        print("SUBSCRIPTION TRIAL UI INJECT ERROR:", exc)
+    return response
 
 
 def _supplier_for_company(cur, supplier_id, company_id):
@@ -347,3 +470,8 @@ def stock_income_with_supplier():
         return redirect("/stock/income")
     finally:
         pool.putconn(conn)
+
+
+# Import for side effect: attaches /subscription/selection to the already
+# registered subscriptions blueprint before Flask starts serving requests.
+from routes import subscription_selection as _subscription_selection  # noqa: E402,F401
