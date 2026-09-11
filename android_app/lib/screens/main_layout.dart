@@ -59,6 +59,7 @@ class _MainLayoutState extends State<MainLayout> {
   final Set<String> quickScannedCodes = <String>{};
   bool quickScannerActive = false;
   bool quickScanBusy = false;
+  int quickScanSession = 0;
   final nika = NikaAssistantController.instance;
   Set<String>? enabledModules;
   String currentRole = 'employee';
@@ -287,25 +288,32 @@ class _MainLayoutState extends State<MainLayout> {
   void _startQuickScanner() {
     if (quickScannerActive || selectedIndex != 1) return;
     quickScannedCodes.clear();
-    setState(() => quickScannerActive = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || !quickScannerActive) return;
-      try {
-        await quickScannerController.start();
-      } catch (_) {
-        if (mounted) {
-          setState(() => quickScannerActive = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Не удалось запустить камеру')),
-          );
-        }
+    quickScannerActive = true;
+    final session = ++quickScanSession;
+    _activateQuickScanner(session);
+  }
+
+  Future<void> _activateQuickScanner(int session) async {
+    try {
+      await quickScannerController.start();
+      if (!quickScannerActive || session != quickScanSession) {
+        await quickScannerController.stop();
       }
-    });
+    } catch (_) {
+      if (session != quickScanSession) return;
+      quickScannerActive = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось запустить камеру')),
+        );
+      }
+    }
   }
 
   Future<void> _stopQuickScanner() async {
     if (!quickScannerActive) return;
-    setState(() => quickScannerActive = false);
+    quickScannerActive = false;
+    quickScanSession++;
     await quickScannerController.stop();
   }
 
@@ -483,18 +491,17 @@ class _MainLayoutState extends State<MainLayout> {
                 ])
               : content,
             ),
-            if (quickScannerActive)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.01,
-                    child: MobileScanner(
-                      controller: quickScannerController,
-                      onDetect: _onQuickBarcode,
-                    ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: 0.01,
+                  child: MobileScanner(
+                    controller: quickScannerController,
+                    onDetect: _onQuickBarcode,
                   ),
                 ),
               ),
+            ),
           ]),
           bottomNavigationBar: tablet
               ? null
@@ -576,26 +583,33 @@ class _SalesScannerNavButton extends StatefulWidget {
 
 class _SalesScannerNavButtonState extends State<_SalesScannerNavButton> {
   bool pressed = false;
+  DateTime? pressedAt;
 
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: () {
+  void startHold() {
+    pressedAt = DateTime.now();
+    if (!pressed) setState(() => pressed = true);
+    widget.onHoldStart();
+  }
+
+  void finishHold() {
+    final wasQuickTap = pressedAt != null &&
+        DateTime.now().difference(pressedAt!).inMilliseconds < 180;
+    pressedAt = null;
+    widget.onHoldEnd();
+    if (mounted) setState(() => pressed = false);
+    if (wasQuickTap) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Удерживайте кнопку и наведите камеру на штрихкод')),
       );
-    },
-    onLongPressStart: (_) {
-      setState(() => pressed = true);
-      widget.onHoldStart();
-    },
-    onLongPressEnd: (_) {
-      widget.onHoldEnd();
-      if (mounted) setState(() => pressed = false);
-    },
-    onLongPressCancel: () {
-      widget.onHoldEnd();
-      if (mounted) setState(() => pressed = false);
-    },
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTapDown: (_) => startHold(),
+    onTapUp: (_) => finishHold(),
+    onTapCancel: finishHold,
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       AnimatedContainer(
         duration: const Duration(milliseconds: 140),
