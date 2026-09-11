@@ -6,6 +6,7 @@ from utils.timezone import now_kz
 PUBLIC_ENDPOINTS = {
     "auth.login", "auth.logout", "auth.register", "auth.api_login",
     "landing", "static", "subscriptions.subscription", "subscriptions.subscription_update",
+    "subscriptions.save_subscription_selection",
     "subscriptions.epay_start", "subscriptions.epay_callback",
     "subscriptions.epay_failure_callback", "subscriptions.epay_success",
     "subscriptions.epay_failure"
@@ -92,7 +93,7 @@ def sync_subscription_lifecycle(company_id):
                 cur, company_id, subscription["id"],
                 "subscription_payment_required",
                 "Требуется оплата подписки",
-                "Рабочий доступ к Nika Business приостановлен до подтверждения оплаты. Откройте подписку и завершите оплату.",
+                "Набор модулей выбран. Рабочий доступ будет восстановлен после оплаты подписки.",
             )
 
         if subscription["status"] == "trial" and subscription.get("trial_ends_at"):
@@ -127,21 +128,21 @@ def sync_subscription_lifecycle(company_id):
                     cur, company_id, subscription["id"],
                     "subscription_trial_expired",
                     "Пробный период завершён",
-                    "Доступ к рабочим разделам Nika Business приостановлен. Выберите подписку, чтобы продолжить работу.",
+                    "Рабочий доступ приостановлен. Откройте подписку, оставьте только нужные модули и оплатите итоговую сумму.",
                 )
             elif trial_state == "1d":
                 _notify_subscription(
                     cur, company_id, subscription["id"],
                     "subscription_trial_1d",
                     "Пробный период заканчивается",
-                    "До окончания пробного периода Nika Business осталось меньше суток. Выберите подписку, чтобы сохранить доступ.",
+                    "До окончания пробного периода осталось меньше суток. Проверьте выбранные модули: после trial доступ приостановится до оплаты.",
                 )
             elif trial_state == "3d":
                 _notify_subscription(
                     cur, company_id, subscription["id"],
                     "subscription_trial_3d",
                     "До конца пробного периода 3 дня",
-                    "Пробный период Nika Business скоро завершится. Можно заранее выбрать подписку.",
+                    "Проверьте модули в разделе «Подписка». До конца trial их можно менять и тестировать без оплаты.",
                 )
 
         conn.commit()

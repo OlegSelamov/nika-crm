@@ -113,6 +113,13 @@ let currentStep=0;
 const steps=[...document.querySelectorAll('.step')],bars=[...document.querySelectorAll('.bar')];
 const basePrice={{ base_price|float }};
 function money(v){return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(v)+' ₸'}
+function enforceModuleDependencies(changed){
+  const suppliers=document.querySelector('.module-check[value="suppliers"]');
+  const warehouse=document.querySelector('.module-check[value="warehouse"]');
+  if(!suppliers || !warehouse) return;
+  if(changed===suppliers && suppliers.checked && !warehouse.checked){warehouse.checked=true;}
+  if(changed===warehouse && !warehouse.checked && suppliers.checked){suppliers.checked=false;}
+}
 function calculatePrice(){
   let modules=0,count=0;
   document.querySelectorAll('.module-check').forEach(x=>{if(x.checked){modules+=Number(x.dataset.price||0);count++}});
@@ -120,13 +127,13 @@ function calculatePrice(){
   document.getElementById('priceTotal').textContent=money(basePrice+modules);
   return {modules,total:basePrice+modules,count};
 }
-document.querySelectorAll('.module-check').forEach(x=>x.addEventListener('change',calculatePrice));
+document.querySelectorAll('.module-check').forEach(x=>x.addEventListener('change',()=>{enforceModuleDependencies(x);calculatePrice()}));
 function renderStep(){steps.forEach((el,i)=>el.classList.toggle('active',i===currentStep));bars.forEach((el,i)=>el.classList.toggle('active',i<=currentStep));if(currentStep===4)fillSummary();window.scrollTo({top:0,behavior:'smooth'})}
 function validateCurrent(){for(const input of steps[currentStep].querySelectorAll('[required]')){if(!input.checkValidity()){input.reportValidity();return false}}return true}
 function goNext(){if(!validateCurrent())return;if(currentStep<steps.length-1){currentStep++;renderStep()}}
 function goBack(){if(currentStep>0){currentStep--;renderStep()}}
 function fillSummary(){const p=calculatePrice();document.getElementById('sumDirector').textContent=document.getElementById('director').value||'Не указан';document.getElementById('sumCompany').textContent=document.getElementById('name').value||'—';document.getElementById('sumLogin').textContent=document.getElementById('username').value||'—';document.getElementById('sumBin').textContent=document.getElementById('bin').value||'Не указан';document.getElementById('sumModules').textContent=String(p.count);document.getElementById('sumPrice').textContent=money(p.total)+'/месяц'}
-calculatePrice();
+enforceModuleDependencies(null);calculatePrice();
 </script>
 <script src="/static/js/nika-public-assistant.js" defer></script><script src="/static/js/nika_icons.js?v=20260910-1"></script>
 </body>
