@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -24,7 +26,6 @@ import 'profile_screen.dart';
 import 'school_screen.dart';
 import 'sales_history_screen.dart';
 import 'sales_screen.dart';
-import 'scanner_screen.dart';
 import 'settings_screen.dart';
 import 'shift_screen.dart';
 import 'stock_screen.dart';
@@ -44,6 +45,14 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int selectedIndex = 0;
+  final salesKey = GlobalKey<SalesScreenState>();
+  final quickScannerController = MobileScannerController(
+    autoStart: false,
+    detectionSpeed: DetectionSpeed.normal,
+  );
+  final Set<String> quickScannedCodes = <String>{};
+  bool quickScannerActive = false;
+  bool quickScanBusy = false;
   final nika = NikaAssistantController.instance;
   Set<String>? enabledModules;
   String currentRole = 'employee';
@@ -94,6 +103,7 @@ class _MainLayoutState extends State<MainLayout> {
     SalesVoiceBridge.instance.setSalesVisible(false);
     nika.clearHandlers();
     nika.deactivate();
+    quickScannerController.dispose();
     super.dispose();
   }
 
@@ -266,18 +276,56 @@ class _MainLayoutState extends State<MainLayout> {
     });
   }
 
-  Future<void> _openSalesScanner() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ScannerScreen()),
-    );
+  void _startQuickScanner() {
+    if (quickScannerActive || selectedIndex != 1) return;
+    quickScannedCodes.clear();
+    setState(() => quickScannerActive = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !quickScannerActive) return;
+      try {
+        await quickScannerController.start();
+      } catch (_) {
+        if (mounted) {
+          setState(() => quickScannerActive = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось запустить камеру')),
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> _stopQuickScanner() async {
+    if (!quickScannerActive) return;
+    setState(() => quickScannerActive = false);
+    await quickScannerController.stop();
+  }
+
+  Future<void> _onQuickBarcode(BarcodeCapture capture) async {
+    if (!quickScannerActive || quickScanBusy || capture.barcodes.isEmpty) return;
+    final code = capture.barcodes.first.rawValue?.trim() ?? '';
+    if (code.isEmpty || quickScannedCodes.contains(code)) return;
+    quickScannedCodes.add(code);
+    quickScanBusy = true;
+    try {
+      final added = await salesKey.currentState?.addBarcodeToCart(
+        code,
+        quickScan: true,
+      );
+      if (added == true) {
+        await SystemSound.play(SystemSoundType.click);
+        await HapticFeedback.mediumImpact();
+      }
+    } finally {
+      quickScanBusy = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final screens = [
       DashboardScreen(onOpenSection: openCore),
-      const SalesScreen(),
+      SalesScreen(key: salesKey),
       const SalesHistoryScreen(),
       _MoreScreen(openPage: openPage, logout: logout, enabledModules: enabledModules, currentRole: currentRole),
     ];
@@ -370,7 +418,9 @@ class _MainLayoutState extends State<MainLayout> {
               const SizedBox(width: 4),
             ],
           ),
-          body: tablet
+          body: Stack(children: [
+            Positioned.fill(
+              child: tablet
               ? Row(children: [
                   NavigationRail(
                     selectedIndex: navSelectedIndex,
@@ -416,6 +466,20 @@ class _MainLayoutState extends State<MainLayout> {
                   Expanded(child: content),
                 ])
               : content,
+            ),
+            if (quickScannerActive)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.01,
+                    child: MobileScanner(
+                      controller: quickScannerController,
+                      onDetect: _onQuickBarcode,
+                    ),
+                  ),
+                ),
+              ),
+          ]),
           bottomNavigationBar: tablet
               ? null
               : selectedIndex == 1
@@ -435,7 +499,10 @@ class _MainLayoutState extends State<MainLayout> {
                         Expanded(child: _SalesNavButton(icon: Icons.warehouse_outlined, label: 'Склад', onTap: () {
                           if (hasModule('warehouse')) { openPage(const ModulePage(title: 'Склад', child: StockScreen())); } else { _moduleDenied(); }
                         })),
-                        Expanded(child: _SalesScannerNavButton(onTap: _openSalesScanner)),
+                        Expanded(child: _SalesScannerNavButton(
+                          onHoldStart: _startQuickScanner,
+                          onHoldEnd: _stopQuickScanner,
+                        )),
                         Expanded(child: _SalesNavButton(icon: Icons.history_rounded, label: 'История', onTap: () => openCore(2))),
                         Expanded(child: _SalesNavButton(icon: Icons.more_horiz_rounded, label: 'Ещё', onTap: () => openCore(3))),
                       ]),
@@ -483,8 +550,9 @@ class _SalesNavButton extends StatelessWidget {
 }
 
 class _SalesScannerNavButton extends StatefulWidget {
-  final VoidCallback onTap;
-  const _SalesScannerNavButton({required this.onTap});
+  final VoidCallback onHoldStart;
+  final Future<void> Function() onHoldEnd;
+  const _SalesScannerNavButton({required this.onHoldStart, required this.onHoldEnd});
 
   @override
   State<_SalesScannerNavButton> createState() => _SalesScannerNavButtonState();
@@ -495,9 +563,23 @@ class _SalesScannerNavButtonState extends State<_SalesScannerNavButton> {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: widget.onTap,
-    onLongPressStart: (_) { setState(() => pressed = true); widget.onTap(); },
-    onLongPressEnd: (_) { if (mounted) setState(() => pressed = false); },
+    onTap: () {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Удерживайте кнопку и наведите камеру на штрихкод')),
+      );
+    },
+    onLongPressStart: (_) {
+      setState(() => pressed = true);
+      widget.onHoldStart();
+    },
+    onLongPressEnd: (_) {
+      widget.onHoldEnd();
+      if (mounted) setState(() => pressed = false);
+    },
+    onLongPressCancel: () {
+      widget.onHoldEnd();
+      if (mounted) setState(() => pressed = false);
+    },
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       AnimatedContainer(
         duration: const Duration(milliseconds: 140),

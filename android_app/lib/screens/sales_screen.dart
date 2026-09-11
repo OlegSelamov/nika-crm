@@ -20,10 +20,10 @@ class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
 
   @override
-  State<SalesScreen> createState() => _SalesScreenState();
+  State<SalesScreen> createState() => SalesScreenState();
 }
 
-class _SalesScreenState extends State<SalesScreen> {
+class SalesScreenState extends State<SalesScreen> {
   static const Map<String, dynamic> anonymousClient = {
     'id': null,
     'full_name': 'Частное лицо',
@@ -121,24 +121,41 @@ class _SalesScreenState extends State<SalesScreen> {
     );
     if (barcode == null) return;
     final code = barcode.toString().trim();
+    await addBarcodeToCart(code);
+  }
+
+  Future<bool> addBarcodeToCart(
+    String rawCode, {
+    bool quickScan = false,
+  }) async {
+    final code = rawCode.trim();
+    if (code.isEmpty) return false;
     try {
       if (code.startsWith('01') && code.length > 16) {
         final result = await ApiService.findByGtin(code.substring(2, 16));
         if (result['found'] == true) {
           result['excise_stamp'] = code;
-          await addToCart(result);
-          return;
+          await addToCart(result, requestMeasuredQuantity: !quickScan);
+          return true;
         }
       }
       final result = await ApiService.barcode(code);
       if (result['found'] == true) {
-        await addToCart(result);
+        await addToCart(result, requestMeasuredQuantity: !quickScan);
+        return true;
       } else if (mounted) {
-        await showAddNewItemDialog(barcode: code);
+        if (quickScan) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Штрихкод $code не найден в каталоге')),
+          );
+        } else {
+          await showAddNewItemDialog(barcode: code);
+        }
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
     }
+    return false;
   }
 
   Future<void> addToCart(
