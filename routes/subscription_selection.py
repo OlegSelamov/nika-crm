@@ -30,6 +30,11 @@ def save_subscription_selection():
         return "Компания не выбрана", 400
 
     selected_codes = set(request.form.getlist("modules"))
+    # Suppliers are used inside stock income, therefore warehouse is a required
+    # dependency whenever the Suppliers module is selected.
+    if "suppliers" in selected_codes:
+        selected_codes.add("warehouse")
+
     billing_period = request.form.get("billing_period", "month")
     if billing_period not in {"month", "year"}:
         billing_period = "month"
