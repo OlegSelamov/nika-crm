@@ -125,23 +125,58 @@ def api_suppliers():
 @suppliers_bp.route("/api/suppliers/<int:supplier_id>", methods=["PUT", "DELETE"])
 def api_supplier_detail(supplier_id):
     company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+
     conn = get_db()
     try:
         ensure_supplier_schema(conn)
         cur = conn.cursor()
 
-        cur.execute("SELECT id FROM suppliers WHERE id = %s AND company_id = %s", (supplier_id, company_id))
-        if not cur.fetchone():
+        cur.execute(
+            "SELECT id, name FROM suppliers WHERE id = %s AND company_id = %s",
+            (supplier_id, company_id),
+        )
+        supplier = cur.fetchone()
+        if not supplier:
             return jsonify({"success": False, "error": "Поставщик не найден"}), 404
 
         if request.method == "DELETE":
+            # If this supplier has never been used, remove the row completely.
+            # If there are historical stock movements, keep the row as archived
+            # so old receipts/stock history continue to point to the same supplier.
             cur.execute("""
-                UPDATE suppliers
-                SET is_active = FALSE, updated_at = NOW()
-                WHERE id = %s AND company_id = %s
-            """, (supplier_id, company_id))
+                SELECT COUNT(*) AS linked_count
+                FROM stock_movements
+                WHERE company_id = %s AND supplier_id = %s
+            """, (company_id, supplier_id))
+            linked_count = int(cur.fetchone()["linked_count"] or 0)
+
+            if linked_count == 0:
+                cur.execute(
+                    "DELETE FROM suppliers WHERE id = %s AND company_id = %s",
+                    (supplier_id, company_id),
+                )
+                action = "deleted"
+            else:
+                cur.execute("""
+                    UPDATE suppliers
+                    SET is_active = FALSE, updated_at = NOW()
+                    WHERE id = %s AND company_id = %s
+                """, (supplier_id, company_id))
+                action = "archived"
+
             conn.commit()
-            return jsonify({"success": True})
+            return jsonify({
+                "success": True,
+                "action": action,
+                "linked_count": linked_count,
+                "message": (
+                    "Поставщик удалён"
+                    if action == "deleted"
+                    else "Поставщик скрыт из активных. История приходов сохранена"
+                ),
+            })
 
         data = request.get_json(silent=True) or {}
         name = str(data.get("name") or "").strip()
