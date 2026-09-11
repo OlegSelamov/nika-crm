@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/suppliers.css') }}?v=20260911-1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/suppliers.css') }}?v=20260911-2">
 {% endblock %}
 
 {% block content %}
@@ -89,25 +89,59 @@
 </div>
 
 <div id="supplierModal" class="supplier-modal" hidden>
-    <div class="supplier-modal-card">
+    <div class="supplier-modal-card" role="dialog" aria-modal="true" aria-labelledby="supplierModalTitle">
         <div class="supplier-modal-head">
-            <div><strong id="supplierModalTitle">Новый поставщик</strong><span>Данные контрагента для закупок</span></div>
-            <button type="button" onclick="closeSupplierModal()">×</button>
+            <div class="supplier-modal-title-wrap">
+                <div class="supplier-modal-icon">П</div>
+                <div>
+                    <strong id="supplierModalTitle">Новый поставщик</strong>
+                    <span>Данные контрагента для закупок</span>
+                </div>
+            </div>
+            <button type="button" class="supplier-modal-close" onclick="closeSupplierModal()" aria-label="Закрыть">×</button>
         </div>
+
         <form id="supplierForm">
             <input type="hidden" id="supplierId">
-            <div class="supplier-form-grid">
-                <label class="wide">Название *<input id="supplierName" required placeholder="Например: ТОО Альфа Трейд"></label>
-                <label>БИН / ИИН<input id="supplierBin" inputmode="numeric" placeholder="12 цифр"></label>
-                <label>Контактное лицо<input id="supplierContact" placeholder="ФИО"></label>
-                <label>Телефон<input id="supplierPhone" placeholder="+7 ..."></label>
-                <label>E-mail<input id="supplierEmail" type="email" placeholder="mail@example.kz"></label>
-                <label class="wide">Адрес<input id="supplierAddress" placeholder="Город, улица, дом"></label>
-                <label class="wide">Комментарий<textarea id="supplierComment" rows="3" placeholder="Условия поставки, отсрочка, примечание"></textarea></label>
+
+            <div class="supplier-form-body">
+                <div class="supplier-lookup-box">
+                    <div class="supplier-lookup-copy">
+                        <strong>Поиск по БИН / ИИН</strong>
+                        <span>Введите 12 цифр — Nika найдёт данные в подключённых справочниках КГД</span>
+                    </div>
+                    <div class="supplier-lookup-row">
+                        <input id="supplierBin" inputmode="numeric" maxlength="12" autocomplete="off" placeholder="БИН / ИИН — 12 цифр">
+                        <button type="button" id="supplierLookupBtn" class="supplier-lookup-btn">Найти</button>
+                    </div>
+                    <div id="supplierLookupStatus" class="supplier-lookup-status" hidden></div>
+                </div>
+
+                <div class="supplier-form-grid">
+                    <label class="wide">Название *
+                        <input id="supplierName" required placeholder="Например: ТОО Альфа Трейд">
+                    </label>
+                    <label>Контактное лицо
+                        <input id="supplierContact" placeholder="ФИО директора или менеджера">
+                    </label>
+                    <label>Телефон
+                        <input id="supplierPhone" placeholder="+7 ...">
+                    </label>
+                    <label>E-mail
+                        <input id="supplierEmail" type="email" placeholder="mail@example.kz">
+                    </label>
+                    <label class="wide">Адрес
+                        <input id="supplierAddress" placeholder="Город, улица, дом">
+                    </label>
+                    <label class="wide">Комментарий
+                        <textarea id="supplierComment" rows="3" placeholder="Условия поставки, отсрочка, примечание"></textarea>
+                    </label>
+                </div>
             </div>
+
             <div class="supplier-modal-actions">
                 <button type="button" class="supplier-btn secondary" onclick="closeSupplierModal()">Закрыть</button>
-                <button type="submit" class="supplier-btn primary">Сохранить</button>
+                <button type="submit" class="supplier-btn primary">Сохранить поставщика</button>
             </div>
         </form>
     </div>
@@ -115,5 +149,5 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{{ url_for('static', filename='js/suppliers.js') }}?v=20260911-1"></script>
+<script src="{{ url_for('static', filename='js/suppliers.js') }}?v=20260911-2"></script>
 {% endblock %}
