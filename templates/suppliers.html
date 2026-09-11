@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/suppliers.css') }}?v=20260911-1">
+{% endblock %}
+
+{% block content %}
+<div class="suppliers-page">
+    <header class="suppliers-head">
+        <div>
+            <h1>Поставщики</h1>
+            <p>Контрагенты для закупок и прихода товара</p>
+        </div>
+        <div class="suppliers-head-actions">
+            <a href="/stock/income" class="supplier-btn secondary">← Приход товара</a>
+            <button type="button" class="supplier-btn primary" onclick="openSupplierModal()">+ Добавить поставщика</button>
+        </div>
+    </header>
+
+    <section class="suppliers-summary">
+        <div><span>Активных поставщиков</span><strong>{{ suppliers|length }}</strong></div>
+        <div><span>Всего приходов</span><strong>{{ suppliers|sum(attribute='income_count') }}</strong></div>
+        <div><span>Закупки по поставщикам</span><strong>{{ "{:,.0f}".format(suppliers|sum(attribute='income_total')).replace(',', ' ') }} ₸</strong></div>
+    </section>
+
+    <section class="suppliers-card">
+        <div class="suppliers-toolbar">
+            <div>
+                <h2>Список поставщиков</h2>
+                <p>Выберите поставщика при оформлении прихода товара</p>
+            </div>
+            <input id="supplierSearch" type="search" placeholder="Поиск по названию, БИН, телефону" autocomplete="off">
+        </div>
+
+        {% if suppliers %}
+        <div class="suppliers-table-wrap">
+            <table class="suppliers-table">
+                <thead>
+                    <tr>
+                        <th>Поставщик</th>
+                        <th>БИН / ИИН</th>
+                        <th>Контакты</th>
+                        <th>Приходы</th>
+                        <th>Сумма закупок</th>
+                        <th>Последний приход</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="supplierRows">
+                {% for s in suppliers %}
+                    <tr class="supplier-row" data-search="{{ ((s.name or '') ~ ' ' ~ (s.bin_iin or '') ~ ' ' ~ (s.phone or '') ~ ' ' ~ (s.contact_name or ''))|lower }}">
+                        <td>
+                            <div class="supplier-name-cell">
+                                <span class="supplier-avatar">{{ (s.name or 'П')[:1]|upper }}</span>
+                                <div><strong>{{ s.name }}</strong><small>{{ s.address or 'Адрес не указан' }}</small></div>
+                            </div>
+                        </td>
+                        <td>{{ s.bin_iin or '—' }}</td>
+                        <td>
+                            <div class="supplier-contact">
+                                <strong>{{ s.contact_name or '—' }}</strong>
+                                <span>{{ s.phone or s.email or 'Контакты не указаны' }}</span>
+                            </div>
+                        </td>
+                        <td><strong>{{ s.income_count or 0 }}</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(s.income_total or 0).replace(',', ' ') }} ₸</strong></td>
+                        <td>{{ s.last_income_at.strftime('%d.%m.%Y') if s.last_income_at else '—' }}</td>
+                        <td>
+                            <div class="supplier-actions">
+                                <button type="button" class="icon-btn" title="Изменить"
+                                    data-supplier='{{ {"id":s.id,"name":s.name,"bin_iin":s.bin_iin,"contact_name":s.contact_name,"phone":s.phone,"email":s.email,"address":s.address,"comment":s.comment}|tojson|forceescape }}'
+                                    onclick="editSupplierFromButton(this)">✎</button>
+                                <button type="button" class="icon-btn danger" title="Архивировать" onclick="archiveSupplier({{ s.id }}, {{ s.name|tojson }})">×</button>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="supplier-empty">
+            <strong>Поставщиков пока нет</strong>
+            <span>Добавьте первого поставщика, после этого он появится в списке при оформлении прихода.</span>
+            <button type="button" class="supplier-btn primary" onclick="openSupplierModal()">Добавить поставщика</button>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<div id="supplierModal" class="supplier-modal" hidden>
+    <div class="supplier-modal-card">
+        <div class="supplier-modal-head">
+            <div><strong id="supplierModalTitle">Новый поставщик</strong><span>Данные контрагента для закупок</span></div>
+            <button type="button" onclick="closeSupplierModal()">×</button>
+        </div>
+        <form id="supplierForm">
+            <input type="hidden" id="supplierId">
+            <div class="supplier-form-grid">
+                <label class="wide">Название *<input id="supplierName" required placeholder="Например: ТОО Альфа Трейд"></label>
+                <label>БИН / ИИН<input id="supplierBin" inputmode="numeric" placeholder="12 цифр"></label>
+                <label>Контактное лицо<input id="supplierContact" placeholder="ФИО"></label>
+                <label>Телефон<input id="supplierPhone" placeholder="+7 ..."></label>
+                <label>E-mail<input id="supplierEmail" type="email" placeholder="mail@example.kz"></label>
+                <label class="wide">Адрес<input id="supplierAddress" placeholder="Город, улица, дом"></label>
+                <label class="wide">Комментарий<textarea id="supplierComment" rows="3" placeholder="Условия поставки, отсрочка, примечание"></textarea></label>
+            </div>
+            <div class="supplier-modal-actions">
+                <button type="button" class="supplier-btn secondary" onclick="closeSupplierModal()">Закрыть</button>
+                <button type="submit" class="supplier-btn primary">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script src="{{ url_for('static', filename='js/suppliers.js') }}?v=20260911-1"></script>
+{% endblock %}
