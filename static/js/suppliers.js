@@ -4,10 +4,6 @@
     const lookupButton = document.getElementById('supplierLookupBtn');
     const lookupStatus = document.getElementById('supplierLookupStatus');
 
-    // The page content lives inside transformed/layout containers. A fixed
-    // modal left there is positioned against that inner block instead of the
-    // browser viewport. Move it to body once so the backdrop covers the whole
-    // screen, including the sidebar/topbar, and centering uses the viewport.
     if (modal && modal.parentElement !== document.body) {
         document.body.appendChild(modal);
     }
@@ -132,14 +128,37 @@
     };
 
     window.archiveSupplier = async function (id, name) {
-        if (!confirm(`Архивировать поставщика «${name}»? Старые приходы сохранят связь с ним.`)) return;
-        const response = await fetch(`/api/suppliers/${id}`, { method: 'DELETE' });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.success) {
-            alert(data.error || 'Не удалось архивировать поставщика');
-            return;
+        if (!confirm(`Удалить поставщика «${name}»? Если по нему уже были приходы, история сохранится.`)) return;
+
+        const button = document.querySelector(`button[onclick*="archiveSupplier(${id},"]`);
+        if (button) button.disabled = true;
+
+        try {
+            const response = await fetch(`/api/suppliers/${id}`, {
+                method: 'DELETE',
+                headers: { 'Accept': 'application/json' },
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data.success) {
+                alert(data.error || 'Не удалось удалить поставщика');
+                return;
+            }
+
+            const row = button?.closest('.supplier-row');
+            if (row) row.remove();
+
+            const rowsLeft = document.querySelectorAll('.supplier-row').length;
+            const activeStat = document.querySelector('.suppliers-summary > div:first-child strong');
+            if (activeStat) activeStat.textContent = String(rowsLeft);
+
+            if (!rowsLeft) location.reload();
+        } catch (error) {
+            console.error('SUPPLIER DELETE ERROR:', error);
+            alert('Не удалось удалить поставщика');
+        } finally {
+            if (button) button.disabled = false;
         }
-        location.reload();
     };
 
     lookupButton?.addEventListener('click', lookupSupplier);
