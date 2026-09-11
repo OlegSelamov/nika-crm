@@ -8,6 +8,7 @@ from routes.stock import is_product
 
 
 suppliers_bp = Blueprint("suppliers", __name__)
+_subscription_catalog_ready = False
 
 
 def ensure_supplier_schema(conn):
@@ -32,6 +33,44 @@ def ensure_supplier_schema(conn):
     cur.execute("ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS supplier_id INTEGER")
     conn.commit()
     cur.close()
+
+
+def _ensure_subscription_catalog_once():
+    global _subscription_catalog_ready
+    if _subscription_catalog_ready:
+        return
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        from routes.modular_registration import ensure_supplier_subscription_module
+        ensure_supplier_subscription_module(cur)
+        conn.commit()
+        _subscription_catalog_ready = True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@suppliers_bp.before_app_request
+def modular_registration_bootstrap():
+    """Make modular registration the public flow without changing old route URLs."""
+    _ensure_subscription_catalog_once()
+
+    if request.path == "/register":
+        from routes.modular_registration import register_modular
+        return register_modular()
+    if request.path == "/onboarding":
+        from routes.modular_registration import onboarding_modular
+        return onboarding_modular()
+    if request.path == "/onboarding/save":
+        from routes.modular_registration import onboarding_save_modular
+        return onboarding_save_modular()
+    if request.path == "/onboarding/finish":
+        from routes.modular_registration import onboarding_finish_modular
+        return onboarding_finish_modular()
+    return None
 
 
 def _supplier_for_company(cur, supplier_id, company_id):
