@@ -161,3 +161,9 @@ def save_subscription_selection():
     finally:
         cur.close()
         pool.putconn(conn)
+
+
+# Imported here because this module is already loaded for side effects by the
+# Suppliers bootstrap before blueprints are registered. The duplicate guard
+# attaches its routes/hooks to the existing items blueprint.
+from routes import item_duplicate_guard as _item_duplicate_guard  # noqa: E402,F401
