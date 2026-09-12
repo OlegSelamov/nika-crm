@@ -7,6 +7,11 @@ on:
         description: "Existing release version, for example 1.2.12"
         required: true
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-windows-legacy.yml"
 
 permissions:
   contents: write
@@ -18,6 +23,7 @@ concurrency:
 jobs:
   windows_legacy:
     name: Build and publish Windows 8.1 installer
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-legacy]')
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -31,9 +37,16 @@ jobs:
           cache-dependency-path: desktop/legacy/package-lock.json
       - name: Resolve version
         id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         shell: pwsh
         run: |
-          $version = "${{ inputs.version }}".Trim()
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}".Trim()
+          } else {
+            $version = (gh release view --json tagName --jq .tagName).Trim().TrimStart("v")
+          }
           if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "Invalid version: $version" }
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version" >> $env:GITHUB_OUTPUT
