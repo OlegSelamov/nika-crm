@@ -316,13 +316,11 @@ class _MainLayoutState extends State<MainLayout> {
     quickScannedCodes.add(code);
     quickScanBusy = true;
     try {
-      final added = await salesKey.currentState?.addBarcodeToCart(
+      await ScannerFeedbackService.play();
+      await salesKey.currentState?.addBarcodeToCart(
         code,
         quickScan: true,
       );
-      if (added == true) {
-        await ScannerFeedbackService.play();
-      }
     } finally {
       quickScanBusy = false;
     }

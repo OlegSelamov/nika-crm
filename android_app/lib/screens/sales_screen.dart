@@ -145,13 +145,7 @@ class SalesScreenState extends State<SalesScreen> {
         await addToCart(result, requestMeasuredQuantity: !quickScan);
         return true;
       } else if (mounted) {
-        if (quickScan) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Штрихкод $code не найден в каталоге')),
-          );
-        } else {
-          await showAddNewItemDialog(barcode: code);
-        }
+        await showAddNewItemDialog(barcode: code);
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
