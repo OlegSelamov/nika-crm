@@ -314,7 +314,7 @@ def inject_storefront_workflow_assets(response):
         if "ai_error_patch.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/ai_error_patch.js?v=20260904-1"></script>\n</body>', 1)
         if request.path == "/sales" and "sales_hid_scanner.js" not in html and "</body>" in html:
-            html = html.replace("</body>", '<script src="/static/js/sales_hid_scanner.js?v=20260904-3"></script>\n</body>', 1)
+            html = html.replace("</body>", '<script src="/static/js/sales_hid_scanner.js?v=20260912-marking-1"></script>\n</body>', 1)
         if request.path == "/sales" and "sales_rekassa_comrun.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/sales_rekassa_comrun.js?v=20260909-1"></script>\n</body>', 1)
         if request.path == "/sales" and 'data-esf="delivery.contract_num"' not in html:
@@ -336,7 +336,7 @@ def inject_storefront_workflow_assets(response):
             html = html.replace('<a href="/stock/income" class="menu-link">', supplier_menu + '<a href="/stock/income" class="menu-link">', 1)
         scanner_pages = {"/items", "/stock", "/stock/income", "/stock/writeoff", "/stock/movements", "/clients"}
         if request.path in scanner_pages and "global_hid_scanner.js" not in html and "</body>" in html:
-            html = html.replace("</body>", '<script src="/static/js/global_hid_scanner.js?v=20260904-1"></script>\n</body>', 1)
+            html = html.replace("</body>", '<script src="/static/js/global_hid_scanner.js?v=20260912-marking-1"></script>\n</body>', 1)
         response.set_data(html)
     except Exception as exc:
         print("COMMON CRM ASSET INJECT ERROR:", exc)

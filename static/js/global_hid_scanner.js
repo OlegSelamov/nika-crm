@@ -72,6 +72,17 @@
         return true;
     }
 
+    function productLookupCode(value) {
+        let payload = String(value || '').trim()
+            .replace(/^[\x00-\x20\x7f]+/, '')
+            .replace(/^\][A-Za-z0-9]{2}/, '')
+            .replace(/^[\x00-\x20\x7f]+/, '');
+        const match = payload.match(/^(?:\(01\)|01)(\d{14})/);
+        if (!match) return payload;
+        const gtin = match[1];
+        return gtin.startsWith('0') ? gtin.slice(1) : gtin;
+    }
+
     async function resolveStockItem(code) {
         try {
             const params = new URLSearchParams({
@@ -118,7 +129,8 @@
         return true;
     }
 
-    async function routeScan(code) {
+    async function routeScan(rawCode) {
+        const code = path === '/clients' ? rawCode : productLookupCode(rawCode);
         // Активная модалка всегда имеет приоритет над поиском страницы.
         // Иначе HID-сканер записывает код в поле, находящееся "за" модальным окном.
         if (path === '/items' && isOpenModal('itemModal')) {

@@ -10,7 +10,7 @@
     }
     if (!document.querySelector('script[src*="sales_quick_add.js"]')) {
         const script = document.createElement('script');
-        script.src = '/static/js/sales_quick_add.js?v=20260904-1';
+        script.src = '/static/js/sales_quick_add.js?v=20260912-marking-1';
         script.defer = true;
         document.body.appendChild(script);
     }
@@ -158,10 +158,24 @@
     }
 
     document.addEventListener('keydown', function (event) {
-        if (event.ctrlKey || event.altKey || event.metaKey) return;
-
         const now = Date.now();
         const key = event.key;
+
+        // USB scanners commonly transmit the GS1 group separator (ASCII 29)
+        // as Ctrl+]. Keep it in the fiscal marking code instead of dropping it.
+        if (event.ctrlKey && !event.altKey && !event.metaKey) {
+            const isGroupSeparator = key === '\x1d' || key === ']' || event.code === 'BracketRight';
+            if (buffer && isGroupSeparator) {
+                buffer += '\x1d';
+                lastKeyAt = now;
+                scheduleAutoFinish();
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+            return;
+        }
+
+        if (event.altKey || event.metaKey) return;
 
         if (key === 'Enter' || key === 'Tab') {
             if (buffer.length >= MIN_BARCODE_LENGTH) {

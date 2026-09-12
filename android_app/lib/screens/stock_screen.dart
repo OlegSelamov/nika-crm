@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/product_code_parser.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
@@ -104,7 +105,7 @@ class _StockScreenState extends State<StockScreen> {
   }
 
   Future<void> _handleBarcode(String code) async {
-    searchController.text = code;
+    searchController.text = ScannedProductCode.parse(code).lookupCode;
     if (mounted) setState(() {});
   }
 

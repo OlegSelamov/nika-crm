@@ -16,6 +16,7 @@ from decimal import Decimal, InvalidOperation
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from services.media import upload_image, delete_media
+from utils.product_codes import parse_scanned_product_code
 
 UPLOAD_DIR = os.path.join(
     "static",
@@ -138,7 +139,7 @@ def _catalog_item_payload(item):
 @items_bp.route("/api/catalog/items")
 def api_catalog_items():
     company_id = session.get("company_id")
-    query = (request.args.get("q") or "").strip()
+    query = parse_scanned_product_code(request.args.get("q")).lookup_code
     item_type = (request.args.get("type") or "all").strip().lower()
     category = (request.args.get("category") or "all").strip()
 
@@ -803,40 +804,50 @@ def barcode_info(barcode):
 
     import requests
 
+    scanned_code = parse_scanned_product_code(barcode)
+    barcode = scanned_code.lookup_code
+
     db = get_db()
     cur = db.cursor()
 
     item_type = request.args.get("item_type", "product")
 
-    if item_type == "service":
-        cur.execute("""
-            SELECT *
-            FROM items
-            WHERE barcode = %s
-              AND company_id = %s
-              AND item_type = 'service'
-        """, (
-            barcode,
-            session.get("company_id")
-        ))
-    else:
-        cur.execute("""
-            SELECT *
-            FROM items
-            WHERE barcode = %s
-              AND company_id = %s
-              AND COALESCE(item_type, 'product') = 'product'
-        """, (
-            barcode,
-            session.get("company_id")
-        ))
+    item = None
+    for candidate in scanned_code.lookup_candidates:
+        if item_type == "service":
+            cur.execute("""
+                SELECT *
+                FROM items
+                WHERE barcode = %s
+                  AND company_id = %s
+                  AND item_type = 'service'
+                LIMIT 1
+            """, (
+                candidate,
+                session.get("company_id")
+            ))
+        else:
+            cur.execute("""
+                SELECT *
+                FROM items
+                WHERE company_id = %s
+                  AND COALESCE(item_type, 'product') = 'product'
+                  AND (barcode = %s OR gtin = %s OR ntin = %s)
+                LIMIT 1
+            """, (
+                session.get("company_id"),
+                candidate,
+                candidate,
+                candidate,
+            ))
 
-    item = cur.fetchone()
+        item = cur.fetchone()
+        if item:
+            break
 
     # ✅ нашли локально
     if item:
-
-        return jsonify({
+        result = jsonify({
 
             "found": True,
 
@@ -854,8 +865,9 @@ def barcode_info(barcode):
             
             "is_marked": item.get("is_marked"),
             "item_type": item.get("item_type") or "product",
-
         })
+        pool.putconn(db)
+        return result
 
     if item_type == "service":
         pool.putconn(db)

@@ -2,6 +2,7 @@ from routes.clients import format_date_ru
 from flask import Blueprint, render_template, request, jsonify, redirect, make_response, send_file, current_app
 from models import get_db, pool
 from datetime import datetime, timedelta
+from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from flask import render_template
 from num2words import num2words
@@ -2659,21 +2660,46 @@ def analytics_api():
     
 @sales_bp.route("/api/barcode", methods=["POST"])
 def barcode():
-    data = request.get_json()
-    code = data.get("barcode")
+    data = request.get_json(silent=True) or {}
+    scanned_code = parse_scanned_product_code(data.get("barcode"))
+
+    if not scanned_code.lookup_candidates:
+        return {"found": False}
 
     conn = get_db()
-    
     cur = conn.cursor()
-
-    cur.execute(
-        "SELECT * FROM items WHERE barcode = %s AND company_id = %s LIMIT 1",
-        (code, session.get("company_id"))
-    )
-
-    item = cur.fetchone()
-
-    pool.putconn(conn)
+    item = None
+    try:
+        for candidate in scanned_code.lookup_candidates:
+            cur.execute("""
+                SELECT *
+                FROM items
+                WHERE company_id = %s
+                  AND (
+                      barcode = %s
+                      OR gtin = %s
+                      OR ntin = %s
+                  )
+                ORDER BY
+                    CASE
+                        WHEN barcode = %s THEN 0
+                        WHEN gtin = %s THEN 1
+                        ELSE 2
+                    END
+                LIMIT 1
+            """, (
+                session.get("company_id"),
+                candidate,
+                candidate,
+                candidate,
+                candidate,
+                candidate,
+            ))
+            item = cur.fetchone()
+            if item:
+                break
+    finally:
+        pool.putconn(conn)
 
     if item:
         return {
@@ -2682,9 +2708,13 @@ def barcode():
             "name": item["name"],
             "price": item["retail_price"],
             "unit": item.get("unit"),
-            "gtin": item.get("gtin"),
+            "barcode": item.get("barcode"),
+            "gtin": item.get("gtin") or scanned_code.gtin,
             "ntin": item.get("ntin"),
-            "is_marked": item.get("is_marked")
+            "is_marked": item.get("is_marked"),
+            "item_type": item.get("item_type") or "product",
+            "excise_stamp": scanned_code.marking_code,
+            "lookup_code": scanned_code.lookup_code,
         }
 
     return {"found": False}
@@ -3222,27 +3252,29 @@ def refund_sale(sale_id):
         
 @sales_bp.route("/api/gtin", methods=["POST"])
 def find_by_gtin():
+    data = request.get_json(silent=True) or {}
+    scanned_code = parse_scanned_product_code(data.get("gtin"))
 
-    data = request.get_json()
-
-    gtin = data.get("gtin")
+    if not scanned_code.lookup_candidates:
+        return {"found": False}
 
     conn = get_db()
     cur = conn.cursor()
-
-    cur.execute("""
-        SELECT *
-        FROM items
-        WHERE gtin = %s
-        AND company_id = %s
-    """, (
-        gtin,
-        session.get("company_id")
-    ))
-
-    item = cur.fetchone()
-
-    pool.putconn(conn)
+    item = None
+    try:
+        for candidate in scanned_code.lookup_candidates:
+            cur.execute("""
+                SELECT *
+                FROM items
+                WHERE gtin = %s
+                  AND company_id = %s
+                LIMIT 1
+            """, (candidate, session.get("company_id")))
+            item = cur.fetchone()
+            if item:
+                break
+    finally:
+        pool.putconn(conn)
 
     if not item:
         return {"found": False}
@@ -3252,8 +3284,13 @@ def find_by_gtin():
         "id": item["id"],
         "name": item["name"],
         "price": item["retail_price"],
+        "unit": item.get("unit"),
+        "barcode": item.get("barcode"),
         "gtin": item["gtin"],
-        "ntin": item["ntin"]
+        "ntin": item["ntin"],
+        "is_marked": item.get("is_marked"),
+        "item_type": item.get("item_type") or "product",
+        "excise_stamp": scanned_code.marking_code,
     }
     
 @sales_bp.route("/api/items/search")

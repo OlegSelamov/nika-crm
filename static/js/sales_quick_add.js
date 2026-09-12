@@ -86,7 +86,15 @@
         if (!event.target.closest('.category-wrapper')) closeDropdown();
     });
 
-    window.openAddItemModal = function (code) {
+    let pendingMarkingCode = '';
+
+    window.openAddItemModal = function (rawCode) {
+        const parsed = typeof window.parseNikaScannedProductCode === 'function'
+            ? window.parseNikaScannedProductCode(rawCode)
+            : {lookupCode: String(rawCode || '').trim(), gtin: '', markingCode: ''};
+        const code = parsed.lookupCode;
+        pendingMarkingCode = parsed.markingCode || '';
+
         modal.style.display = 'flex';
         document.getElementById('newBarcode').value = code || '';
         document.getElementById('newName').value = '';
@@ -98,17 +106,21 @@
         categoryDropdown.innerHTML = '';
         closeDropdown();
 
+        const gtinNode = document.getElementById('newGtin');
+        const ntinNode = document.getElementById('newNtin');
+        const markedNode = document.getElementById('newIsMarked');
+        if (gtinNode) gtinNode.value = parsed.gtin || '';
+        if (ntinNode) ntinNode.value = '';
+        if (markedNode) markedNode.checked = Boolean(parsed.markingCode);
+
         fetch('/api/barcode-info/' + encodeURIComponent(code || ''))
             .then(res => res.json())
             .then(data => {
-                if (!data || !data.name) return;
-                document.getElementById('newName').value = data.name || '';
-                const gtinNode = document.getElementById('newGtin');
-                const ntinNode = document.getElementById('newNtin');
-                const markedNode = document.getElementById('newIsMarked');
-                if (gtinNode) gtinNode.value = data.gtin || '';
+                if (!data) return;
+                if (data.name) document.getElementById('newName').value = data.name;
+                if (gtinNode) gtinNode.value = data.gtin || parsed.gtin || '';
                 if (ntinNode) ntinNode.value = data.ntin || '';
-                if (markedNode) markedNode.checked = Boolean(data.is_marked);
+                if (markedNode) markedNode.checked = Boolean(data.is_marked || parsed.markingCode);
             })
             .catch(() => {});
 
@@ -184,7 +196,9 @@
             }
 
             const item = data.item;
+            const markingCode = pendingMarkingCode;
             window.closeAddItemModal();
+            pendingMarkingCode = '';
             if (typeof selectItemForSale === 'function') {
                 selectItemForSale(
                     Number(item.id),
@@ -192,7 +206,8 @@
                     Number(item.retail_price || retailPrice),
                     item.unit || unit,
                     item.gtin || gtin,
-                    item.ntin || ntin
+                    item.ntin || ntin,
+                    markingCode
                 );
             } else if (typeof addToCart === 'function') {
                 addToCart(Number(item.id), item.name || name, Number(item.retail_price || retailPrice));

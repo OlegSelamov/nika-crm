@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/product_code_parser.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
@@ -89,15 +90,16 @@ class _IncomeScreenState extends State<IncomeScreen> {
 
   Future<void> scanBarcode(String code) async {
     if (!mounted) return;
+    final scannedCode = ScannedProductCode.parse(code);
     Map<String, dynamic>? found;
     for (final item in items) {
-      if ([item['barcode'], item['gtin'], item['ntin']].any((value) => '${value ?? ''}'.trim() == code)) {
+      if (scannedCode.matchesItem(item)) {
         found = item;
         break;
       }
     }
     if (found == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Товар с кодом $code не найден')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Товар с кодом ${scannedCode.lookupCode} не найден')));
       return;
     }
     _selectItem(found);

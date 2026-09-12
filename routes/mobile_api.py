@@ -14,6 +14,7 @@ from flask import (
 )
 
 from models import get_db, pool
+from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from routes.auth import load_user_module_codes
 from routes.tasks import (
@@ -1706,7 +1707,7 @@ def mobile_sale_items():
     if denied:
         return denied
     company_id = session["company_id"]
-    query = str(request.args.get("q") or "").strip()
+    query = parse_scanned_product_code(request.args.get("q")).lookup_code
     page, limit, offset = _pagination()
     conn = get_db()
     cur = conn.cursor()
@@ -1737,9 +1738,16 @@ def mobile_sale_items():
                   %s=''
                   OR COALESCE(i.name,'') ILIKE %s
                   OR COALESCE(i.barcode,'') ILIKE %s
+                  OR COALESCE(i.gtin,'') ILIKE %s
+                  OR COALESCE(i.ntin,'') ILIKE %s
               )
             ORDER BY
-                CASE WHEN %s<>'' AND i.barcode=%s THEN 0 ELSE 1 END,
+                CASE
+                    WHEN %s<>'' AND i.barcode=%s THEN 0
+                    WHEN %s<>'' AND i.gtin=%s THEN 1
+                    WHEN %s<>'' AND i.ntin=%s THEN 2
+                    ELSE 3
+                END,
                 i.id DESC
             LIMIT %s OFFSET %s
         """, (
@@ -1747,6 +1755,12 @@ def mobile_sale_items():
             query,
             f"%{query}%",
             f"{query}%",
+            f"{query}%",
+            f"{query}%",
+            query,
+            query,
+            query,
+            query,
             query,
             query,
             limit + 1,

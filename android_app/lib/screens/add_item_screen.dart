@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/product_code_parser.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
@@ -228,7 +229,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Future<void> _handleBarcode(String barcode) async {
-    barcodeController.text = barcode;
+    final scannedCode = ScannedProductCode.parse(barcode);
+    barcodeController.text = scannedCode.lookupCode;
+    if (itemType == 'product' && scannedCode.gtin != null) {
+      gtinController.text = scannedCode.gtin!;
+      if (scannedCode.isMarkingCode) isMarked = true;
+    }
     await _lookupBarcode();
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/scanner_screen.dart';
+import '../services/product_code_parser.dart';
 import '../theme/app_theme.dart';
 import 'app_widgets.dart';
 import 'hold_scanner_button.dart';
@@ -148,8 +149,9 @@ class _StockProductPickerSheetState extends State<_StockProductPickerSheet> {
   }
 
   Future<void> _handleBarcode(String code) async {
-    searchController.text = code;
-    if (mounted) setState(() => query = code);
+    final lookupCode = ScannedProductCode.parse(code).lookupCode;
+    searchController.text = lookupCode;
+    if (mounted) setState(() => query = lookupCode);
   }
 
   Future<void> _openScanner() async {

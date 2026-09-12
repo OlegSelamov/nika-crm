@@ -8,6 +8,7 @@ import 'package:printing/printing.dart';
 import '../services/api_service.dart';
 import '../services/kaspi_pos_service.dart';
 import '../services/nika_assistant_controller.dart';
+import '../services/product_code_parser.dart';
 import '../services/sales_voice_bridge.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
@@ -129,23 +130,39 @@ class SalesScreenState extends State<SalesScreen> {
     String rawCode, {
     bool quickScan = false,
   }) async {
-    final code = rawCode.trim();
-    if (code.isEmpty) return false;
+    final scannedCode = ScannedProductCode.parse(rawCode);
+    if (scannedCode.isEmpty) return false;
     try {
-      if (code.startsWith('01') && code.length > 16) {
-        final result = await ApiService.findByGtin(code.substring(2, 16));
+      var result = <String, dynamic>{'found': false};
+
+      for (final candidate in scannedCode.lookupCandidates) {
+        result = await ApiService.barcode(candidate);
         if (result['found'] == true) {
-          result['excise_stamp'] = code;
-          await addToCart(result, requestMeasuredQuantity: !quickScan);
-          return true;
+          break;
         }
       }
-      final result = await ApiService.barcode(code);
+
+      // Compatibility fallback for servers where /api/barcode still searches
+      // only the barcode column.
+      if (result['found'] != true && scannedCode.gtin != null) {
+        result = await ApiService.findByGtin(scannedCode.gtin!);
+      }
+
       if (result['found'] == true) {
+        if (scannedCode.markingCode != null) {
+          result['excise_stamp'] = scannedCode.markingCode;
+          if ('${result['gtin'] ?? ''}'.trim().isEmpty) {
+            result['gtin'] = scannedCode.gtin;
+          }
+        }
         await addToCart(result, requestMeasuredQuantity: !quickScan);
         return true;
       } else if (mounted) {
-        await showAddNewItemDialog(barcode: code);
+        await showAddNewItemDialog(
+          barcode: scannedCode.lookupCode,
+          scannedGtin: scannedCode.gtin,
+          markingCode: scannedCode.markingCode,
+        );
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
@@ -298,7 +315,11 @@ class SalesScreenState extends State<SalesScreen> {
     return result;
   }
 
-  Future<void> showAddNewItemDialog({required String barcode}) async {
+  Future<void> showAddNewItemDialog({
+    required String barcode,
+    String? scannedGtin,
+    String? markingCode,
+  }) async {
     Map<String, dynamic> info = {};
     try {
       info = await ApiService.getBarcodeInfo(barcode);
@@ -309,6 +330,11 @@ class SalesScreenState extends State<SalesScreen> {
     final purchase = TextEditingController();
     final retail = TextEditingController();
     final quantity = TextEditingController(text: '1');
+    final catalogGtin = '${info['gtin'] ?? ''}'.trim();
+    final resolvedGtin = catalogGtin.isNotEmpty
+        ? catalogGtin
+        : (scannedGtin ?? '');
+    final isMarked = info['is_marked'] == true || markingCode != null;
     String unit = '${info['measure'] ?? ''}'.toLowerCase().contains('кил') ? 'кг' : 'шт';
     bool saving = false;
 
@@ -358,9 +384,9 @@ class SalesScreenState extends State<SalesScreen> {
                     purchasePrice: asDouble(purchase.text.replaceAll(',', '.')),
                     retailPrice: asDouble(retail.text.replaceAll(',', '.')),
                     quantity: asDouble(quantity.text.replaceAll(',', '.')),
-                    gtin: '${info['gtin'] ?? ''}',
+                    gtin: resolvedGtin,
                     ntin: '${info['ntin'] ?? ''}',
-                    isMarked: info['is_marked'] == true,
+                    isMarked: isMarked,
                   );
                   if (!dialogContext.mounted) return;
                   Navigator.pop(dialogContext);
@@ -370,8 +396,9 @@ class SalesScreenState extends State<SalesScreen> {
                     'price': asDouble(retail.text.replaceAll(',', '.')),
                     'unit': unit,
                     'qty': 1,
-                    'gtin': info['gtin'],
+                    'gtin': resolvedGtin,
                     'ntin': info['ntin'],
+                    'excise_stamp': markingCode,
                   });
                 } catch (e) {
                   if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(readableError(e))));
@@ -1554,8 +1581,9 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
   }
 
   Future<void> _handleScannedItem(String code) async {
-    search.text = code;
-    onSearch(code);
+    final lookupCode = ScannedProductCode.parse(code).lookupCode;
+    search.text = lookupCode;
+    onSearch(lookupCode);
   }
 
   Future<void> _openItemScanner() async {

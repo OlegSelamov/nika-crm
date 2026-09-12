@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/product_code_parser.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
@@ -121,15 +122,23 @@ class _MovementsScreenState extends State<MovementsScreen> {
 
   Future<void> _handleBarcode(String code) async {
     try {
-      final result = await ApiService.barcode(code);
+      final scannedCode = ScannedProductCode.parse(code);
+      var result = <String, dynamic>{'found': false};
+      for (final candidate in scannedCode.lookupCandidates) {
+        result = await ApiService.barcode(candidate);
+        if (result['found'] == true) break;
+      }
+      if (result['found'] != true && scannedCode.gtin != null) {
+        result = await ApiService.findByGtin(scannedCode.gtin!);
+      }
       if (!mounted) return;
       searchController.text = result['found'] == true
-          ? '${result['name'] ?? code}'
-          : code;
+          ? '${result['name'] ?? scannedCode.lookupCode}'
+          : scannedCode.lookupCode;
       setState(() {});
       if (result['found'] != true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Товар с кодом $code не найден')),
+          SnackBar(content: Text('Товар с кодом ${scannedCode.lookupCode} не найден')),
         );
       }
     } catch (error) {

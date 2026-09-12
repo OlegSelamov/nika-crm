@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, session
 from models import get_db, pool
 from datetime import datetime, timedelta
 from flask import jsonify
+from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting
 
@@ -335,7 +336,7 @@ def stock_writeoff():
 def api_stock():
     company_id = session.get("company_id")
     legacy_mode = not bool(request.args)
-    query = (request.args.get("q") or "").strip()
+    query = parse_scanned_product_code(request.args.get("q")).lookup_code
     category = (request.args.get("category") or "").strip()
     status = (request.args.get("status") or "all").strip().lower()
     sort = (request.args.get("sort") or "name").strip().lower()

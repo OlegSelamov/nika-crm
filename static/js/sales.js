@@ -6,6 +6,27 @@ let currentDocumentType = "check";
 let currentDocumentId = null;
 let pendingQuantityItem = null;
 
+function parseNikaScannedProductCode(value) {
+    const raw = String(value || '').trim();
+    let payload = raw
+        .replace(/^[\x00-\x20\x7f]+/, '')
+        .replace(/^\][A-Za-z0-9]{2}/, '')
+        .replace(/^[\x00-\x20\x7f]+/, '');
+    const match = payload.match(/^(?:\(01\)|01)(\d{14})/);
+    const gtin = match ? match[1] : '';
+    const ean13 = gtin.startsWith('0') ? gtin.slice(1) : '';
+    return {
+        raw,
+        payload,
+        gtin,
+        ean13,
+        lookupCode: ean13 || gtin || payload,
+        markingCode: match && payload.length > match[0].length ? payload : ''
+    };
+}
+
+window.parseNikaScannedProductCode = parseNikaScannedProductCode;
+
 const documentConfig = {
     check: {
         title: "Чек",
@@ -83,13 +104,13 @@ function isVariableQuantityUnit(unit) {
     ].includes(normalizeUnit(unit));
 }
 
-function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "") {
+function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "", exciseStamp = "") {
     if (isVariableQuantityUnit(unit)) {
-        openQuantityModal({ id, name, price, unit, gtin, ntin });
+        openQuantityModal({ id, name, price, unit, gtin, ntin, exciseStamp });
         return;
     }
 
-    addToCart(id, name, price, 1, gtin, ntin, unit);
+    addToCart(id, name, price, 1, gtin, ntin, unit, exciseStamp);
 }
 
 function openQuantityModal(item) {
@@ -173,14 +194,18 @@ function confirmQuantity() {
     }
 
     const item = pendingQuantityItem;
-    addToCart(item.id, item.name, item.price, qty, item.gtin, item.ntin, item.unit);
+    addToCart(item.id, item.name, item.price, qty, item.gtin, item.ntin, item.unit, item.exciseStamp);
     closeQuantityModal();
 }
 
 // добавление в корзину
-function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт") {
+function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт", exciseStamp = "") {
 
-    const existing = cart.find(i => i.id === id);
+    // Every marked unit keeps its own DataMatrix code. Ordinary products can
+    // still be merged into one cart row by quantity.
+    const existing = exciseStamp
+        ? null
+        : cart.find(i => i.id === id && !i.excise_stamp);
 
     if (existing) {
         existing.qty += Number(qty) || 1;
@@ -192,7 +217,8 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт"
 			qty,
 			gtin,
 			ntin,
-            unit
+            unit,
+            excise_stamp: exciseStamp || null
 		});
     }
 
@@ -1525,7 +1551,8 @@ function handleBarcode(code) {
                 data.price,
                 data.unit || "шт",
                 data.gtin || "",
-                data.ntin || ""
+                data.ntin || "",
+                data.excise_stamp || ""
             );
 
         }
@@ -1541,7 +1568,16 @@ function handleBarcode(code) {
 
 }
 
-function openAddItemModal(code) {
+function openAddItemModal(rawCode) {
+
+    const parsedCode = parseNikaScannedProductCode(rawCode);
+    const code = parsedCode.lookupCode;
+    currentBarcodeData = {
+        gtin: parsedCode.gtin || "",
+        ntin: "",
+        is_marked: Boolean(parsedCode.markingCode),
+        marking_code: parsedCode.markingCode || ""
+    };
 
     document.getElementById(
         "addItemModal"
@@ -1550,6 +1586,10 @@ function openAddItemModal(code) {
     document.getElementById(
         "newBarcode"
     ).value = code;
+
+    document.getElementById("newGtin").value = currentBarcodeData.gtin;
+    document.getElementById("newNtin").value = "";
+    document.getElementById("newIsMarked").checked = currentBarcodeData.is_marked;
 	
 	// 🔥 загружаем категории
 	fetch("/api/categories")
@@ -1591,33 +1631,30 @@ function openAddItemModal(code) {
 	});
 
     // 🔥 пробуем National Catalog
-    fetch("/api/barcode-info/" + code)
+    fetch("/api/barcode-info/" + encodeURIComponent(code))
 
     .then(res => res.json())
 
 	.then(data => {
 
-		currentBarcodeData = data;
+			currentBarcodeData = {
+				...currentBarcodeData,
+				...data,
+				gtin: data.gtin || currentBarcodeData.gtin || "",
+				is_marked: Boolean(data.is_marked || currentBarcodeData.is_marked)
+			};
 
-		if (data.name) {
+			if (data.name) {
 
 			document.getElementById(
 				"newName"
 			).value = data.name;
 			
-			document.getElementById(
-				"newGtin"
-			).value = data.gtin || "";
+			}
 
-			document.getElementById(
-				"newNtin"
-			).value = data.ntin || "";
-
-			document.getElementById(
-				"newIsMarked"
-			).checked = data.is_marked || false;
-
-		}
+			document.getElementById("newGtin").value = currentBarcodeData.gtin;
+			document.getElementById("newNtin").value = currentBarcodeData.ntin || "";
+			document.getElementById("newIsMarked").checked = currentBarcodeData.is_marked;
 
 	});
 
@@ -1792,10 +1829,15 @@ function saveNewItem() {
             ).style.display = "none";
 
             addToCart(
-                data.item.id,
-                data.item.name,
-                data.item.price
-            );
+				data.item.id,
+				data.item.name,
+				data.item.price,
+				1,
+				data.item.gtin || currentBarcodeData.gtin || "",
+				data.item.ntin || currentBarcodeData.ntin || "",
+				data.item.unit || "шт",
+				currentBarcodeData.marking_code || ""
+			);
 			
 			loadItems();
 
