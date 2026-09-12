@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../screens/scanner_screen.dart';
 import '../theme/app_theme.dart';
 import 'app_widgets.dart';
+import 'hold_scanner_button.dart';
 
 double stockNumber(dynamic value) => double.tryParse('${value ?? 0}') ?? 0;
 
@@ -145,6 +147,19 @@ class _StockProductPickerSheetState extends State<_StockProductPickerSheet> {
     }).toList();
   }
 
+  Future<void> _handleBarcode(String code) async {
+    searchController.text = code;
+    if (mounted) setState(() => query = code);
+  }
+
+  Future<void> _openScanner() async {
+    final barcode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (barcode != null) await _handleBarcode(barcode.toString());
+  }
+
   @override
   Widget build(BuildContext context) {
     final values = filtered;
@@ -169,9 +184,13 @@ class _StockProductPickerSheetState extends State<_StockProductPickerSheet> {
               controller: searchController,
               autofocus: true,
               onChanged: (value) => setState(() => query = value),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Название, штрихкод, GTIN или NTIN',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: IconButton(
+                  onPressed: _openScanner,
+                  icon: const Icon(Icons.qr_code_scanner),
+                ),
               ),
             ),
           ),
@@ -220,6 +239,7 @@ class _StockProductPickerSheetState extends State<_StockProductPickerSheet> {
                     },
                   ),
           ),
+          QuickScannerBottomBar(onScan: _handleBarcode),
         ],
       ),
     );

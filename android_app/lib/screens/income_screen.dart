@@ -6,6 +6,7 @@ import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
 import '../widgets/stock_widgets.dart';
 import 'movements_screen.dart';
+import 'scanner_screen.dart';
 
 class IncomeScreen extends StatefulWidget {
   const IncomeScreen({super.key});
@@ -103,6 +104,14 @@ class _IncomeScreenState extends State<IncomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Найден товар: ${found['name']}')));
   }
 
+  Future<void> openScanner() async {
+    final barcode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (barcode != null) await scanBarcode(barcode.toString());
+  }
+
   double get quantity => stockNumber(qtyController.text.replaceAll(',', '.'));
   double get price => stockNumber(priceController.text.replaceAll(',', '.'));
   double get total => quantity * price;
@@ -198,10 +207,9 @@ class _IncomeScreenState extends State<IncomeScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            HoldScannerButton(
-                              enabled: items.isNotEmpty,
-                              onScan: scanBarcode,
-                              tooltip: 'Удерживайте для выбора товара',
+                            IconButton.filledTonal(
+                              onPressed: items.isEmpty ? null : openScanner,
+                              icon: const Icon(Icons.qr_code_scanner),
                             ),
                           ],
                         ),
@@ -278,6 +286,10 @@ class _IncomeScreenState extends State<IncomeScreen> {
                     ),
                   ),
                 ),
+      bottomNavigationBar: QuickScannerBottomBar(
+        enabled: !loading && error == null && items.isNotEmpty,
+        onScan: scanBarcode,
+      ),
     );
   }
 

@@ -6,6 +6,7 @@ import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
 import 'add_client_screen.dart';
 import 'client_detail_screen.dart';
+import 'scanner_screen.dart';
 
 class ClientsScreen extends StatefulWidget {
   const ClientsScreen({super.key});
@@ -95,7 +96,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
     if (changed == true) loadClients();
   }
 
-  Future<void> _scanClient(String code) async {
+  Future<void> _handleClientCode(String code) async {
     final iin = code.replaceAll(RegExp(r'\D'), '');
     try {
       final response = await ApiService.getClientByIin(iin);
@@ -116,6 +117,14 @@ class _ClientsScreenState extends State<ClientsScreen> {
         );
       }
     }
+  }
+
+  Future<void> _scanClient() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (result != null) await _handleClientCode(result.toString());
   }
 
   Future<bool> _confirm(String title, String message, String action) async =>
@@ -286,10 +295,9 @@ class _ClientsScreenState extends State<ClientsScreen> {
             decoration: InputDecoration(
               hintText: 'Имя, компания, ИИН, телефон или адрес',
               prefixIcon: const Icon(Icons.search),
-              suffixIcon: HoldScannerButton(
-                size: 40,
-                onScan: _scanClient,
-                tooltip: 'Удерживайте для поиска клиента',
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.qr_code_scanner),
+                onPressed: _scanClient,
               ),
             ),
           ),
@@ -323,6 +331,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                   ),
           ),
         ),
+        QuickScannerBottomBar(onScan: _handleClientCode),
       ],
     );
   }

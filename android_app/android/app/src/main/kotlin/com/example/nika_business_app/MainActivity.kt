@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -16,8 +18,10 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val updateChannel = "com.nikabusiness.app/updates"
+    private val scannerChannel = "com.nikabusiness.app/scanner"
     private var updateDownloadId: Long = -1
     private var receiverRegistered = false
+    private var scannerTone: ToneGenerator? = null
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -47,6 +51,24 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, scannerChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "playBeep" -> {
+                        try {
+                            if (scannerTone == null) {
+                                scannerTone = ToneGenerator(AudioManager.STREAM_ALARM, 90)
+                            }
+                            scannerTone?.stopTone()
+                            scannerTone?.startTone(ToneGenerator.TONE_PROP_BEEP, 170)
+                            result.success(null)
+                        } catch (error: Exception) {
+                            result.error("BEEP_FAILED", error.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, updateChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -98,6 +120,8 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         if (receiverRegistered) unregisterReceiver(downloadReceiver)
         receiverRegistered = false
+        scannerTone?.release()
+        scannerTone = null
         super.onDestroy()
     }
 }

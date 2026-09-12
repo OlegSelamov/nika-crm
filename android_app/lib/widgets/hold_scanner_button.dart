@@ -1,11 +1,7 @@
-import 'dart:math' as math;
-import 'dart:typed_data';
-
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../services/scanner_feedback_service.dart';
 import '../theme/app_theme.dart';
 
 class HoldScannerButton extends StatefulWidget {
@@ -31,8 +27,6 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
     autoStart: false,
     detectionSpeed: DetectionSpeed.normal,
   );
-  final player = AudioPlayer();
-  final beep = _createBarcodeBeep();
   final scannedCodes = <String>{};
   bool pressed = false;
   bool scanBusy = false;
@@ -40,15 +34,8 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
   DateTime? pressedAt;
 
   @override
-  void initState() {
-    super.initState();
-    player.setPlayerMode(PlayerMode.lowLatency);
-  }
-
-  @override
   void dispose() {
     scannerController.dispose();
-    player.dispose();
     super.dispose();
   }
 
@@ -98,13 +85,7 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
     scannedCodes.add(code);
     scanBusy = true;
     try {
-      try {
-        await player.stop();
-        await player.play(BytesSource(beep), volume: 1);
-      } catch (_) {
-        await SystemSound.play(SystemSoundType.alert);
-      }
-      await HapticFeedback.mediumImpact();
+      await ScannerFeedbackService.play();
       await widget.onScan(code);
     } finally {
       scanBusy = false;
@@ -182,45 +163,61 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
       );
 }
 
-Uint8List _createBarcodeBeep() {
-  const sampleRate = 22050;
-  const durationMs = 150;
-  final sampleCount = sampleRate * durationMs ~/ 1000;
-  final dataLength = sampleCount * 2;
-  final bytes = Uint8List(44 + dataLength);
-  final data = ByteData.view(bytes.buffer);
+class QuickScannerBottomBar extends StatelessWidget {
+  final Future<void> Function(String code) onScan;
+  final bool enabled;
 
-  void writeAscii(int offset, String value) {
-    for (var i = 0; i < value.length; i++) {
-      bytes[offset + i] = value.codeUnitAt(i);
-    }
-  }
+  const QuickScannerBottomBar({
+    super.key,
+    required this.onScan,
+    this.enabled = true,
+  });
 
-  writeAscii(0, 'RIFF');
-  data.setUint32(4, 36 + dataLength, Endian.little);
-  writeAscii(8, 'WAVE');
-  writeAscii(12, 'fmt ');
-  data.setUint32(16, 16, Endian.little);
-  data.setUint16(20, 1, Endian.little);
-  data.setUint16(22, 1, Endian.little);
-  data.setUint32(24, sampleRate, Endian.little);
-  data.setUint32(28, sampleRate * 2, Endian.little);
-  data.setUint16(32, 2, Endian.little);
-  data.setUint16(34, 16, Endian.little);
-  writeAscii(36, 'data');
-  data.setUint32(40, dataLength, Endian.little);
-
-  for (var i = 0; i < sampleCount; i++) {
-    final progress = i / sampleCount;
-    final frequency = 950 + (progress * 350);
-    final attack = math.min(1.0, i / (sampleRate * .008));
-    final fade = math.min(1.0, (sampleCount - i) / (sampleRate * .025));
-    final sample = (math.sin(2 * math.pi * frequency * i / sampleRate) *
-            28000 *
-            attack *
-            fade)
-        .round();
-    data.setInt16(44 + (i * 2), sample, Endian.little);
-  }
-  return bytes;
+  @override
+  Widget build(BuildContext context) => SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+        child: Container(
+          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.08),
+                blurRadius: 22,
+                offset: const Offset(0, 7),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Быстрый сканер',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Удерживайте кнопку',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              HoldScannerButton(
+                enabled: enabled,
+                size: 50,
+                onScan: onScan,
+              ),
+            ],
+          ),
+        ),
+      );
 }

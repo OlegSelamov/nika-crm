@@ -7,6 +7,7 @@ import '../widgets/hold_scanner_button.dart';
 import '../widgets/stock_widgets.dart';
 import 'income_screen.dart';
 import 'movements_screen.dart';
+import 'scanner_screen.dart';
 import 'writeoff_screen.dart';
 
 class StockScreen extends StatefulWidget {
@@ -102,9 +103,17 @@ class _StockScreenState extends State<StockScreen> {
     if (refreshAfter && changed == true) await loadStock();
   }
 
-  Future<void> _scanBarcode(String code) async {
+  Future<void> _handleBarcode(String code) async {
     searchController.text = code;
     if (mounted) setState(() {});
+  }
+
+  Future<void> _scanBarcode() async {
+    final barcode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (barcode != null) await _handleBarcode(barcode.toString());
   }
 
   Widget _metric(String title, String value, IconData icon, Color color) => SizedBox(
@@ -189,8 +198,11 @@ class _StockScreenState extends State<StockScreen> {
     }
 
     final visible = filteredItems;
-    return AdaptiveContent(
-      child: RefreshIndicator(
+    return Column(
+      children: [
+        Expanded(
+          child: AdaptiveContent(
+            child: RefreshIndicator(
         onRefresh: loadStock,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -265,10 +277,9 @@ class _StockScreenState extends State<StockScreen> {
               decoration: InputDecoration(
                 hintText: 'Название, категория или код товара',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: HoldScannerButton(
-                  size: 40,
-                  onScan: _scanBarcode,
-                  tooltip: 'Удерживайте для поиска на складе',
+                suffixIcon: IconButton(
+                  onPressed: _scanBarcode,
+                  icon: const Icon(Icons.qr_code_scanner),
                 ),
               ),
             ),
@@ -330,7 +341,11 @@ class _StockScreenState extends State<StockScreen> {
               ...visible.map(_stockCard),
           ],
         ),
-      ),
+            ),
+          ),
+        ),
+        QuickScannerBottomBar(onScan: _handleBarcode),
+      ],
     );
   }
 

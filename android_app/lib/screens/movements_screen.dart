@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
 import '../widgets/stock_widgets.dart';
+import 'scanner_screen.dart';
 
 class MovementsScreen extends StatefulWidget {
   final String initialType;
@@ -118,7 +119,7 @@ class _MovementsScreenState extends State<MovementsScreen> {
     });
   }
 
-  Future<void> _scanBarcode(String code) async {
+  Future<void> _handleBarcode(String code) async {
     try {
       final result = await ApiService.barcode(code);
       if (!mounted) return;
@@ -138,6 +139,14 @@ class _MovementsScreenState extends State<MovementsScreen> {
         );
       }
     }
+  }
+
+  Future<void> _scanBarcode() async {
+    final barcode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (barcode != null) await _handleBarcode(barcode.toString());
   }
 
   String _shortDate(DateTime? value) {
@@ -298,10 +307,9 @@ class _MovementsScreenState extends State<MovementsScreen> {
                           decoration: InputDecoration(
                             hintText: 'Товар, операция или комментарий',
                             prefixIcon: const Icon(Icons.search),
-                            suffixIcon: HoldScannerButton(
-                              size: 40,
-                              onScan: _scanBarcode,
-                              tooltip: 'Удерживайте для поиска движений товара',
+                            suffixIcon: IconButton(
+                              onPressed: _scanBarcode,
+                              icon: const Icon(Icons.qr_code_scanner),
                             ),
                           ),
                         ),
@@ -348,6 +356,10 @@ class _MovementsScreenState extends State<MovementsScreen> {
                     ),
                   ),
                 ),
+      bottomNavigationBar: QuickScannerBottomBar(
+        enabled: !loading && error == null,
+        onScan: _handleBarcode,
+      ),
     );
   }
 

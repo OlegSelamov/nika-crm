@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
 import 'category_management_screen.dart';
+import 'scanner_screen.dart';
 
 class AddItemScreen extends StatefulWidget {
   final Map<String, dynamic>? item;
@@ -226,9 +227,17 @@ class _AddItemScreenState extends State<AddItemScreen> {
     _recalculatePricesByLastSource();
   }
 
-  Future<void> _scanBarcode(String barcode) async {
+  Future<void> _handleBarcode(String barcode) async {
     barcodeController.text = barcode;
     await _lookupBarcode();
+  }
+
+  Future<void> _scanBarcode() async {
+    final barcode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (barcode != null) await _handleBarcode(barcode.toString());
   }
 
   Future<void> _lookupBarcode() async {
@@ -373,10 +382,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
               Row(children: [
                 Expanded(child: _field('Штрихкод', barcodeController, type: TextInputType.number, suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: loading ? null : _lookupBarcode))),
                 const SizedBox(width: 8),
-                HoldScannerButton(
-                  enabled: !loading,
-                  onScan: _scanBarcode,
-                  tooltip: 'Удерживайте для сканирования штрихкода',
+                IconButton.filledTonal(
+                  onPressed: loading ? null : _scanBarcode,
+                  icon: const Icon(Icons.qr_code_scanner),
                 ),
               ]),
               const SizedBox(height: 16),
@@ -469,6 +477,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
               ),
             ],
           ),
+        ),
+        bottomNavigationBar: QuickScannerBottomBar(
+          enabled: !loading,
+          onScan: _handleBarcode,
         ),
       );
 }

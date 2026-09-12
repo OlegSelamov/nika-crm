@@ -1286,6 +1286,19 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
     debounce = Timer(const Duration(milliseconds: 350), () => load(reset: true));
   }
 
+  Future<void> _handleScannedClient(String code) async {
+    search.text = code.replaceAll(RegExp(r'\D'), '');
+    onSearch(search.text);
+  }
+
+  Future<void> _openClientScanner() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (result != null) await _handleScannedClient(result.toString());
+  }
+
   Future<void> load({bool reset = false}) async {
     final currentRequest = ++requestId;
     final query = search.text.trim();
@@ -1339,14 +1352,10 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
             decoration: const InputDecoration(hintText: 'Имя, компания, телефон или ИИН', prefixIcon: Icon(Icons.search_rounded)),
           )),
           const SizedBox(width: 8),
-          HoldScannerButton(
-            size: 42,
-            tooltip: 'Удерживайте для поиска клиента',
-            onScan: (code) async {
-              if (!context.mounted) return;
-              search.text = code.replaceAll(RegExp(r'\D'), '');
-              onSearch(search.text);
-            },
+          _PickerActionButton(
+            icon: Icons.qr_code_scanner_rounded,
+            tooltip: 'Сканировать ИИН',
+            onTap: _openClientScanner,
           ),
           const SizedBox(width: 8),
           _PickerActionButton(
@@ -1389,6 +1398,7 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                             },
                           ),
       ),
+      QuickScannerBottomBar(onScan: _handleScannedClient),
     ]),
   );
 }
@@ -1549,6 +1559,19 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
     debounce = Timer(const Duration(milliseconds: 350), () => load(reset: true));
   }
 
+  Future<void> _handleScannedItem(String code) async {
+    search.text = code;
+    onSearch(code);
+  }
+
+  Future<void> _openItemScanner() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (result != null) await _handleScannedItem(result.toString());
+  }
+
   Future<void> load({bool reset = false}) async {
     final currentRequest = ++requestId;
     final query = search.text.trim();
@@ -1601,13 +1624,10 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
             ),
           ),
           const SizedBox(width: 8),
-          HoldScannerButton(
-            size: 42,
-            tooltip: 'Удерживайте для поиска товара',
-            onScan: (code) async {
-              search.text = code;
-              onSearch(code);
-            },
+          _PickerActionButton(
+            icon: Icons.qr_code_scanner_rounded,
+            tooltip: 'Сканировать товар',
+            onTap: _openItemScanner,
           ),
         ]),
       ),
@@ -1642,6 +1662,7 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
                             },
                           ),
       ),
+      QuickScannerBottomBar(onScan: _handleScannedItem),
     ]),
   );
 }

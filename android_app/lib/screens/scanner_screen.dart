@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../services/scanner_feedback_service.dart';
+
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
 
@@ -11,7 +13,7 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen> {
   bool scanned = false;
 
-  void onDetect(BarcodeCapture capture) {
+  Future<void> onDetect(BarcodeCapture capture) async {
     if (scanned) return;
 
     final barcode = capture.barcodes.first.rawValue;
@@ -20,9 +22,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
     scanned = true;
 
+    await ScannerFeedbackService.play();
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.pop(context, barcode);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         content: Text("Считан штрихкод: $barcode"),
       ),

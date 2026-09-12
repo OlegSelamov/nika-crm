@@ -7,6 +7,7 @@ import '../widgets/hold_scanner_button.dart';
 import 'add_item_screen.dart';
 import 'category_management_screen.dart';
 import 'item_detail_screen.dart';
+import 'scanner_screen.dart';
 
 class ItemsScreen extends StatefulWidget {
   const ItemsScreen({super.key});
@@ -134,9 +135,17 @@ class _ItemsScreenState extends State<ItemsScreen> {
     }
   }
 
-  Future<void> _scanBarcode(String barcode) async {
+  Future<void> _handleBarcode(String barcode) async {
     searchController.text = barcode;
     setState(() {});
+  }
+
+  Future<void> _scanBarcode() async {
+    final barcode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (barcode != null) await _handleBarcode(barcode.toString());
   }
 
   Future<void> _manageCategories() async {
@@ -256,10 +265,9 @@ class _ItemsScreenState extends State<ItemsScreen> {
               decoration: InputDecoration(
                 hintText: 'Название, штрихкод, GTIN или NTIN',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: HoldScannerButton(
-                  size: 40,
-                  onScan: _scanBarcode,
-                  tooltip: 'Удерживайте для поиска товара',
+                suffixIcon: IconButton(
+                  onPressed: _scanBarcode,
+                  icon: const Icon(Icons.qr_code_scanner),
                 ),
               ),
             ),
@@ -303,6 +311,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
                 ),
         ),
       ),
+      QuickScannerBottomBar(onScan: _handleBarcode),
     ]);
   }
 }

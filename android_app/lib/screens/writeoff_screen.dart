@@ -6,6 +6,7 @@ import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
 import '../widgets/stock_widgets.dart';
 import 'movements_screen.dart';
+import 'scanner_screen.dart';
 
 class WriteoffScreen extends StatefulWidget {
   const WriteoffScreen({super.key});
@@ -97,6 +98,14 @@ class _WriteoffScreenState extends State<WriteoffScreen> {
     }
     _selectItem(found);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Найден товар: ${found['name']}')));
+  }
+
+  Future<void> openScanner() async {
+    final barcode = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (barcode != null) await scanBarcode(barcode.toString());
   }
 
   double get currentStock => stockNumber(selectedItem?['stock']);
@@ -215,10 +224,9 @@ class _WriteoffScreenState extends State<WriteoffScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            HoldScannerButton(
-                              enabled: items.isNotEmpty,
-                              onScan: scanBarcode,
-                              tooltip: 'Удерживайте для выбора товара',
+                            IconButton.filledTonal(
+                              onPressed: items.isEmpty ? null : openScanner,
+                              icon: const Icon(Icons.qr_code_scanner),
                             ),
                           ],
                         ),
@@ -298,6 +306,10 @@ class _WriteoffScreenState extends State<WriteoffScreen> {
                     ),
                   ),
                 ),
+      bottomNavigationBar: QuickScannerBottomBar(
+        enabled: !loading && error == null && items.isNotEmpty,
+        onScan: scanBarcode,
+      ),
     );
   }
 
