@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/catalog_display_preferences.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import 'add_item_screen.dart';
@@ -101,18 +102,25 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               padding: const EdgeInsets.all(18),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Container(
-                    width: 82,
-                    height: 82,
-                    decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(18)),
-                    child: image.isNotEmpty
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: Image.network('${ApiService.baseUrl}$image', fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(isService ? Icons.design_services : Icons.inventory_2, color: AppColors.primary, size: 34)),
-                          )
-                        : Icon(isService ? Icons.design_services : Icons.inventory_2, color: AppColors.primary, size: 34),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: CatalogDisplayPreferences.showImages,
+                    builder: (context, showImages, _) => showImages
+                        ? Row(mainAxisSize: MainAxisSize.min, children: [
+                            Container(
+                              width: 82,
+                              height: 82,
+                              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(18)),
+                              child: image.isNotEmpty
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: Image.network('${ApiService.baseUrl}$image', fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(isService ? Icons.design_services : Icons.inventory_2, color: AppColors.primary, size: 34)),
+                                    )
+                                  : Icon(isService ? Icons.design_services : Icons.inventory_2, color: AppColors.primary, size: 34),
+                            ),
+                            const SizedBox(width: 14),
+                          ])
+                        : const SizedBox.shrink(),
                   ),
-                  const SizedBox(width: 14),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(value('name'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 5),

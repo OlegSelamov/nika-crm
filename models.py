@@ -69,6 +69,7 @@ def init_db():
         role TEXT DEFAULT 'cashier',
         company_id INTEGER,
         is_super_admin BOOLEAN DEFAULT FALSE,
+        show_catalog_images BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMP
     )
     """)
@@ -1108,6 +1109,7 @@ def init_db():
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS start_page TEXT DEFAULT 'profile'")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_mode BOOLEAN NOT NULL DEFAULT FALSE")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS show_catalog_images BOOLEAN NOT NULL DEFAULT TRUE")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS company_document_settings (

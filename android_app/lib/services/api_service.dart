@@ -179,6 +179,22 @@ class ApiService {
   static Future<Map<String, dynamic>> mobileProfile() async =>
       Map<String, dynamic>.from(await _request('GET', '/api/mobile/profile'));
 
+  static Future<Map<String, dynamic>> interfaceSettings() async =>
+      Map<String, dynamic>.from(
+        await _request('GET', '/api/mobile/interface-settings'),
+      );
+
+  static Future<Map<String, dynamic>> saveInterfaceSettings({
+    required bool showCatalogImages,
+  }) async =>
+      Map<String, dynamic>.from(
+        await _request(
+          'POST',
+          '/api/mobile/interface-settings',
+          body: {'show_catalog_images': showCatalogImages},
+        ),
+      );
+
   static Future<Map<String, dynamic>> schoolLeaders() async =>
       Map<String, dynamic>.from(await _request('GET', '/api/mobile/school/leaders'));
 

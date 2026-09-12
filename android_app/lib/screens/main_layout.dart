@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/catalog_display_preferences.dart';
 import '../services/nika_assistant_controller.dart';
 import '../services/scanner_feedback_service.dart';
 import '../services/sales_voice_bridge.dart';
@@ -74,6 +75,7 @@ class _MainLayoutState extends State<MainLayout> {
       if (mounted) nika.activate();
     });
     _loadModules();
+    CatalogDisplayPreferences.load().catchError((_) {});
   }
 
   Future<void> _loadModules() async {

@@ -226,3 +226,34 @@ html:not(.ui-ready) .sidebar,html:not(.ui-ready) .content,html:not(.ui-ready) .t
 .chat-composer button .nika-ui-icon,.wa-icon-btn .nika-ui-icon,.ai-command-btn .nika-ui-icon,.ai-mic-btn .nika-ui-icon{width:20px;height:20px}
 .nika-semantic-icon{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,rgba(99,102,241,.14),rgba(139,92,246,.12));color:#6d5ee8;border:1px solid rgba(99,102,241,.12)}
 .nika-semantic-icon .nika-ui-icon{width:19px;height:19px}
+
+/* Profile -> Interface: compact internal product lists without catalog photos. */
+body.catalog-images-hidden .catalog-product__image,
+body.catalog-images-hidden .stock-product-image,
+body.catalog-images-hidden .stock-product-icon,
+body.catalog-images-hidden .history-product-image,
+body.catalog-images-hidden .history-product > span,
+body.catalog-images-hidden .movement-product-image,
+body.catalog-images-hidden .movement-product-icon,
+body.catalog-images-hidden .product-option-avatar,
+body.catalog-images-hidden .selected-product-avatar,
+body.catalog-images-hidden .item-image {
+    display:none !important;
+}
+body.catalog-images-hidden .items-dropdown {
+    grid-template-columns:1fr !important;
+    gap:6px !important;
+}
+body.catalog-images-hidden .item-card {
+    width:100% !important;
+}
+body.catalog-images-hidden .item-info {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+}
+body.catalog-images-hidden .item-name {
+    min-height:0;
+    height:auto;
+}

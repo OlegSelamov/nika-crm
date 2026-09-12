@@ -231,6 +231,47 @@ def mobile_profile():
         pool.putconn(conn)
 
 
+@mobile_api_bp.route("/interface-settings", methods=["GET", "POST"])
+def mobile_interface_settings():
+    denied = _guard()
+    if denied:
+        return denied
+
+    user_id = session["user_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        if request.method == "POST":
+            raw_value = _payload().get("show_catalog_images", True)
+            show_catalog_images = (
+                raw_value
+                if isinstance(raw_value, bool)
+                else str(raw_value).strip().lower() in {"1", "true", "yes", "on"}
+            )
+            cur.execute(
+                "UPDATE users SET show_catalog_images=%s WHERE id=%s",
+                (show_catalog_images, user_id),
+            )
+            conn.commit()
+            session["show_catalog_images"] = show_catalog_images
+
+        cur.execute(
+            "SELECT COALESCE(show_catalog_images, TRUE) AS show_catalog_images FROM users WHERE id=%s",
+            (user_id,),
+        )
+        settings = cur.fetchone() or {"show_catalog_images": True}
+        return jsonify({
+            "success": True,
+            "show_catalog_images": bool(settings.get("show_catalog_images", True)),
+        })
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
 @mobile_api_bp.route("/school/leaders", methods=["GET", "POST"])
 def mobile_school_leaders():
     denied = _guard()

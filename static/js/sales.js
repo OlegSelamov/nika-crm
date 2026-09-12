@@ -511,6 +511,7 @@ function renderItemSearchResults(items, hasMore) {
     items.forEach(item => {
         const card = document.createElement("div");
         card.className = "item-card";
+        const showCatalogImages = window.NIKA_SHOW_CATALOG_IMAGES !== false;
 
         const imageBlock = document.createElement("div");
         imageBlock.className = "item-image";
@@ -523,17 +524,17 @@ function renderItemSearchResults(items, hasMore) {
             imageBlock.appendChild(placeholder);
         };
 
-        if (item.image) {
+        if (showCatalogImages && item.image) {
             const image = document.createElement("img");
             image.src = item.image;
             image.alt = "";
             image.addEventListener("error", showImagePlaceholder, { once: true });
             imageBlock.appendChild(image);
-        } else {
+        } else if (showCatalogImages) {
             showImagePlaceholder();
         }
 
-        if (Number(item.discount_percent || 0) > 0) {
+        if (showCatalogImages && Number(item.discount_percent || 0) > 0) {
             const badge = document.createElement("div");
             badge.className = "discount-badge";
             badge.textContent = `-${item.discount_percent}%`;
@@ -564,7 +565,7 @@ function renderItemSearchResults(items, hasMore) {
 
         info.appendChild(name);
         info.appendChild(priceBlock);
-        card.appendChild(imageBlock);
+        if (showCatalogImages) card.appendChild(imageBlock);
         card.appendChild(info);
 
         card.addEventListener("click", () => {

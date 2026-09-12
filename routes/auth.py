@@ -165,6 +165,7 @@ def refresh_current_user_access():
     session["role"] = user.get("role") or "employee"
     session["company_id"] = user.get("company_id")
     session["is_super_admin"] = bool(user.get("is_super_admin"))
+    session["show_catalog_images"] = user.get("show_catalog_images") is not False
     session["employee_modules"] = load_user_module_codes(user)
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -213,6 +214,7 @@ def login():
         session["phone"] = user["phone"]
         session["percent_rate"] = user["percent_rate"]
         session["is_super_admin"] = bool(user["is_super_admin"])
+        session["show_catalog_images"] = user.get("show_catalog_images") is not False
         session["is_creator"] = False  # устаревшее поле: права определяются через role
         session["employee_modules"] = load_user_module_codes(user)
         session["presence_heartbeat_at"] = now_kz().isoformat()
@@ -283,6 +285,7 @@ def api_login():
     session["phone"] = user["phone"]
     session["percent_rate"] = user["percent_rate"]
     session["is_super_admin"] = bool(user["is_super_admin"])
+    session["show_catalog_images"] = user.get("show_catalog_images") is not False
     session["is_creator"] = False  # устаревшее поле: права определяются через role
     session["employee_modules"] = load_user_module_codes(user)
     session["presence_heartbeat_at"] = now_kz().isoformat()
@@ -935,6 +938,7 @@ def save_interface_profile():
 
     compact_mode = request.form.get("compact_mode") == "on"
     notifications_enabled = request.form.get("notifications_enabled") == "on"
+    show_catalog_images = request.form.get("show_catalog_images") == "on"
 
     conn = get_db()
     cur = conn.cursor()
@@ -943,10 +947,18 @@ def save_interface_profile():
             UPDATE users
             SET start_page = %s,
                 compact_mode = %s,
-                notifications_enabled = %s
+                notifications_enabled = %s,
+                show_catalog_images = %s
             WHERE id = %s
-        """, (start_page, compact_mode, notifications_enabled, session["user_id"]))
+        """, (
+            start_page,
+            compact_mode,
+            notifications_enabled,
+            show_catalog_images,
+            session["user_id"],
+        ))
         conn.commit()
+        session["show_catalog_images"] = show_catalog_images
     except Exception:
         conn.rollback()
         raise

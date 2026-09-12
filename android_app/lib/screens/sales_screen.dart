@@ -6,6 +6,7 @@ import 'package:file_saver/file_saver.dart';
 import 'package:printing/printing.dart';
 
 import '../services/api_service.dart';
+import '../services/catalog_display_preferences.dart';
 import '../services/kaspi_pos_service.dart';
 import '../services/nika_assistant_controller.dart';
 import '../services/product_code_parser.dart';
@@ -764,10 +765,16 @@ class SalesScreenState extends State<SalesScreen> {
       decoration: BoxDecoration(color: (service ? AppColors.cyan : AppColors.primary).withOpacity(.1), borderRadius: BorderRadius.circular(13)),
       child: Icon(service ? Icons.design_services_outlined : Icons.inventory_2_outlined, color: service ? AppColors.cyan : AppColors.primary),
     );
-    if (url.isEmpty) return fallback();
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(13),
-      child: Image.network(url, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback()),
+    return ValueListenableBuilder<bool>(
+      valueListenable: CatalogDisplayPreferences.showImages,
+      builder: (context, showImages, _) {
+        if (!showImages) return const SizedBox.shrink();
+        if (url.isEmpty) return fallback();
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(13),
+          child: Image.network(url, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback()),
+        );
+      },
     );
   }
 
@@ -1703,8 +1710,14 @@ class _CatalogThumb extends StatelessWidget {
       decoration: BoxDecoration(color: (service ? AppColors.cyan : AppColors.primary).withOpacity(.1), borderRadius: BorderRadius.circular(13)),
       child: Icon(service ? Icons.design_services_outlined : Icons.inventory_2_outlined, color: service ? AppColors.cyan : AppColors.primary),
     );
-    if (url.isEmpty) return fallback();
-    return ClipRRect(borderRadius: BorderRadius.circular(13), child: Image.network(url, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback()));
+    return ValueListenableBuilder<bool>(
+      valueListenable: CatalogDisplayPreferences.showImages,
+      builder: (context, showImages, _) {
+        if (!showImages) return const SizedBox.shrink();
+        if (url.isEmpty) return fallback();
+        return ClipRRect(borderRadius: BorderRadius.circular(13), child: Image.network(url, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback()));
+      },
+    );
   }
 }
 

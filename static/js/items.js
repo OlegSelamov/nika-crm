@@ -133,10 +133,13 @@ function catalogDesktopRow(item) {
         : data.ntin ? 'NTIN: ' + escapeCatalogHtml(data.ntin)
         : 'ID: ' + escapeCatalogHtml(data.id);
     var image = escapeCatalogHtml(data.image || '/static/img/no-photo.png');
+    var imageHtml = window.NIKA_SHOW_CATALOG_IMAGES === false
+        ? ''
+        : '<img class="catalog-product__image" src="' + image + '" alt="" onerror="this.onerror=null;this.src=\'/static/img/no-photo.png\'">';
 
     return '<tr class="catalog-item" data-item-type="' + itemType + '">' +
         '<td><div class="catalog-product">' +
-            '<img class="catalog-product__image" src="' + image + '" alt="" onerror="this.onerror=null;this.src=\'/static/img/no-photo.png\'">' +
+            imageHtml +
             '<div class="catalog-product__info"><strong>' + escapeCatalogHtml(data.name) +
             ' <span class="catalog-item-type catalog-item-type--' + itemType + '">' + typeLabel + '</span></strong>' +
             '<small>' + secondary + '</small></div></div></td>' +
@@ -160,10 +163,13 @@ function catalogMobileCard(item) {
     var itemType = data.item_type === 'service' ? 'service' : 'product';
     var typeLabel = itemType === 'service' ? 'Услуга' : 'Товар';
     var image = escapeCatalogHtml(data.image || '/static/img/no-photo.png');
+    var imageHtml = window.NIKA_SHOW_CATALOG_IMAGES === false
+        ? ''
+        : '<img class="catalog-product__image" src="' + image + '" alt="" onerror="this.onerror=null;this.src=\'/static/img/no-photo.png\'">';
 
     return '<article class="catalog-mobile-card catalog-item" data-item-type="' + itemType + '">' +
         '<div class="catalog-mobile-card__top"><div class="catalog-product">' +
-            '<img class="catalog-product__image" src="' + image + '" alt="" onerror="this.onerror=null;this.src=\'/static/img/no-photo.png\'">' +
+            imageHtml +
             '<div class="catalog-product__info"><strong>' + escapeCatalogHtml(data.name) +
             ' <span class="catalog-item-type catalog-item-type--' + itemType + '">' + typeLabel + '</span></strong>' +
             '<small>' + escapeCatalogHtml(data.category) + '</small></div></div>' +

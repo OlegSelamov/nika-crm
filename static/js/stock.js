@@ -39,9 +39,11 @@ function buildDesktopRow(item) {
     const unit = escapeHtml(item.unit || "—");
     const initial = escapeHtml((item.name || "Т").trim().charAt(0).toUpperCase() || "Т");
     const image = escapeHtml(item.item_image || item.image || "");
-    const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
-    const image = escapeHtml(item.item_image || item.image || "");
-    const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
+    const visual = window.NIKA_SHOW_CATALOG_IMAGES === false
+        ? ""
+        : image
+            ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">`
+            : `<div class="stock-product-icon">${initial}</div>`;
 
     return `
         <tr class="stock-record">
@@ -75,9 +77,11 @@ function buildMobileCard(item) {
     const unit = escapeHtml(item.unit || "");
     const initial = escapeHtml((item.name || "Т").trim().charAt(0).toUpperCase() || "Т");
     const image = escapeHtml(item.item_image || item.image || "");
-    const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
-    const image = escapeHtml(item.item_image || item.image || "");
-    const visual = image ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">` : `${visual}`;
+    const visual = window.NIKA_SHOW_CATALOG_IMAGES === false
+        ? ""
+        : image
+            ? `<img class="stock-product-image" src="${image}" alt="" loading="lazy">`
+            : `<div class="stock-product-icon">${initial}</div>`;
 
     return `
         <article class="stock-mobile-card stock-record">

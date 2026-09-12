@@ -42,12 +42,12 @@
         html:not(.sidebar-scroll-restored) .sidebar { visibility: hidden; }
     </style>
 
-    <link rel="stylesheet" href="/static/css/base.css?v=20260904-1">
+    <link rel="stylesheet" href="/static/css/base.css?v=20260912-1">
     <link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-5">
     {% block page_css %}{% endblock %}
 <link rel="stylesheet" href="/static/css/nika_icons.css?v=20260910-1">
 </head>
-<body><svg class="nika-icon-sprite" aria-hidden="true"><defs>
+<body class="{{ 'catalog-images-hidden' if not session.get('show_catalog_images', true) else '' }}"><svg class="nika-icon-sprite" aria-hidden="true"><defs>
 <symbol id="nika-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
 <symbol id="nika-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
 <symbol id="nika-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></symbol>
@@ -60,6 +60,7 @@
 {% if not session.get("user_id") %}
 <script>window.location.href = "/login";</script>
 {% endif %}
+<script>window.NIKA_SHOW_CATALOG_IMAGES = {{ session.get('show_catalog_images', true)|tojson }};</script>
 
 <div class="layout">
     <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Меню"><svg class="nika-ui-icon"><use href="#nika-menu"/></svg></button>

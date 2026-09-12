@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/catalog_display_preferences.dart';
 import '../services/product_code_parser.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
@@ -176,26 +177,30 @@ class _ItemsScreenState extends State<ItemsScreen> {
   Widget _card(Map<String, dynamic> item) {
     final service = item['item_type'] == 'service';
     final image = '${item['image'] ?? ''}';
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
+    return ValueListenableBuilder<bool>(
+      valueListenable: CatalogDisplayPreferences.showImages,
+      builder: (context, showImages, _) => Card(
+        margin: const EdgeInsets.only(bottom: 10),
+        child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () => _open(item),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
-              child: image.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.network('${ApiService.baseUrl}$image', fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(service ? Icons.design_services : Icons.inventory_2, color: AppColors.primary)),
-                    )
-                  : Icon(service ? Icons.design_services : Icons.inventory_2, color: AppColors.primary, size: 30),
-            ),
-            const SizedBox(width: 13),
+            if (showImages) ...[
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
+                child: image.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network('${ApiService.baseUrl}$image', fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(service ? Icons.design_services : Icons.inventory_2, color: AppColors.primary)),
+                      )
+                    : Icon(service ? Icons.design_services : Icons.inventory_2, color: AppColors.primary, size: 30),
+              ),
+              const SizedBox(width: 13),
+            ],
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -225,6 +230,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
               ],
             ),
           ]),
+        ),
         ),
       ),
     );

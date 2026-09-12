@@ -82,7 +82,7 @@
                         data-search="{{ ((i.name or '') ~ ' ' ~ (i.barcode or '') ~ ' ' ~ (i.gtin or '') ~ ' ' ~ (i.ntin or '') ~ ' ' ~ category_name)|lower }}">
                         <td>
                             <div class="catalog-product">
-                                <img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">
+                                {% if session.get('show_catalog_images', true) %}<img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">{% endif %}
                                 <div class="catalog-product__info">
                                     <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else "Товар" }}</span></strong>
                                     <small>
@@ -143,7 +143,7 @@
                      data-search="{{ ((i.name or '') ~ ' ' ~ (i.barcode or '') ~ ' ' ~ (i.gtin or '') ~ ' ' ~ (i.ntin or '') ~ ' ' ~ category_name)|lower }}">
                 <div class="catalog-mobile-card__top">
                     <div class="catalog-product">
-                        <img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">
+                        {% if session.get('show_catalog_images', true) %}<img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">{% endif %}
                         <div class="catalog-product__info">
                             <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else "Товар" }}</span></strong>
                             <small>{{ category_name }}</small>
@@ -627,5 +627,5 @@
 
 {% block page_js %}
 
-<script charset="UTF-8" src="{{ url_for('static', filename='js/items.js') }}?v=20260908-4"></script>
+<script charset="UTF-8" src="{{ url_for('static', filename='js/items.js') }}?v=20260912-1"></script>
 {% endblock %}

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/catalog_display_preferences.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -12,6 +14,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? data;
   String? error;
   bool loading = true;
+  bool savingCatalogDisplay = false;
 
   @override
   void initState() { super.initState(); load(); }
@@ -19,6 +22,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> load() async {
     try {
       final result = await ApiService.mobileProfile();
+      try {
+        await CatalogDisplayPreferences.load();
+      } catch (_) {}
       if (mounted) setState(() { data = result; error = null; loading = false; });
     } catch (e) {
       if (mounted) setState(() { error = e.toString(); loading = false; });
@@ -26,6 +32,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String money(dynamic v) => '${(num.tryParse('${v ?? 0}') ?? 0).toStringAsFixed(0)} ₸';
+
+  Future<void> setCatalogImages(bool value) async {
+    setState(() => savingCatalogDisplay = true);
+    try {
+      await CatalogDisplayPreferences.setShowImages(value);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value
+                ? 'Фотографии товаров включены во всей системе'
+                : 'Включён компактный список без фотографий',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => savingCatalogDisplay = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +82,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Text(user['company_name'] ?? '', style: const TextStyle(color: AppColors.muted)),
             ]))
           ]))),
+          const SizedBox(height: 12),
+          Card(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: CatalogDisplayPreferences.showImages,
+              builder: (context, showImages, _) => SwitchListTile.adaptive(
+                value: showImages,
+                onChanged: savingCatalogDisplay ? null : setCatalogImages,
+                secondary: Icon(
+                  showImages
+                      ? Icons.photo_library_outlined
+                      : Icons.view_list_rounded,
+                  color: AppColors.primary,
+                ),
+                title: const Text(
+                  'Фотографии товаров',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  showImages
+                      ? 'Каталог, продажи и склад отображаются с фотографиями'
+                      : 'Во всей системе используется компактный список',
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           Text('Сегодня', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),

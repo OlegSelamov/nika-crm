@@ -131,12 +131,14 @@ document.addEventListener("DOMContentLoaded", function () {
         option.dataset.ntin = item.ntin || "";
         option.dataset.unit = item.unit || "";
         option.dataset.stock = item.stock ?? 0;
-        option.dataset.image = item.item_image || item.image || "";
+        option.dataset.image = window.NIKA_SHOW_CATALOG_IMAGES === false
+            ? ""
+            : item.item_image || item.image || "";
         option.dataset.price = item.purchase_price ?? 0;
 
         const avatar = document.createElement("span");
         avatar.className = "product-option-avatar";
-        if (item.item_image || item.image) { const img = document.createElement("img"); img.src = item.item_image || item.image; img.alt = ""; img.loading = "lazy"; avatar.appendChild(img); } else { avatar.textContent = (item.name || "Т").slice(0, 1).toUpperCase(); }
+        if (window.NIKA_SHOW_CATALOG_IMAGES === false) { avatar.hidden = true; } else if (item.item_image || item.image) { const img = document.createElement("img"); img.src = item.item_image || item.image; img.alt = ""; img.loading = "lazy"; avatar.appendChild(img); } else { avatar.textContent = (item.name || "Т").slice(0, 1).toUpperCase(); }
 
         const main = document.createElement("span");
         main.className = "product-option-main";

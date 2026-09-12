@@ -202,7 +202,7 @@
 
                         <td>
                             <div class="movement-product">
-                                {% if row.item_image %}<img class="movement-product-image" src="{{ row.item_image }}" alt="" loading="lazy">{% else %}<div class="movement-product-icon movement-product-icon--{{ row.movement_type }}">{{ (row.item_name or "Т")[:1]|upper }}</div>{% endif %}
+                                {% if session.get('show_catalog_images', true) %}{% if row.item_image %}<img class="movement-product-image" src="{{ row.item_image }}" alt="" loading="lazy">{% else %}<div class="movement-product-icon movement-product-icon--{{ row.movement_type }}">{{ (row.item_name or "Т")[:1]|upper }}</div>{% endif %}{% endif %}
 
                                 <div>
                                     <strong>{{ row.item_name or "Без названия" }}</strong>
@@ -267,7 +267,7 @@
 
                 <div class="movement-mobile-top">
                     <div class="movement-product">
-                        {% if row.item_image %}<img class="movement-product-image" src="{{ row.item_image }}" alt="" loading="lazy">{% else %}<div class="movement-product-icon movement-product-icon--{{ row.movement_type }}">{{ (row.item_name or "Т")[:1]|upper }}</div>{% endif %}
+                        {% if session.get('show_catalog_images', true) %}{% if row.item_image %}<img class="movement-product-image" src="{{ row.item_image }}" alt="" loading="lazy">{% else %}<div class="movement-product-icon movement-product-icon--{{ row.movement_type }}">{{ (row.item_name or "Т")[:1]|upper }}</div>{% endif %}{% endif %}
 
                         <div>
                             <strong>{{ row.item_name or "Без названия" }}</strong>

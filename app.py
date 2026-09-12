@@ -111,6 +111,7 @@ try:
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS start_page TEXT DEFAULT 'profile'")
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_mode BOOLEAN NOT NULL DEFAULT FALSE")
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+    _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS show_catalog_images BOOLEAN NOT NULL DEFAULT TRUE")
     _media_schema_cur.execute("""
         CREATE TABLE IF NOT EXISTS company_document_settings (
             company_id INTEGER PRIMARY KEY,
