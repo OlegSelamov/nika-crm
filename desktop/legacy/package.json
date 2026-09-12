@@ -1,0 +1,50 @@
+{
+  "name": "nika-business-legacy",
+  "version": "1.2.0",
+  "description": "Nika Business for Windows 8.1 and low-power computers",
+  "author": "Nika Business",
+  "productName": "Nika Business Legacy",
+  "main": "main.js",
+  "scripts": {
+    "build": "electron-builder --win --ia32 --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.6.1"
+  },
+  "devDependencies": {
+    "electron": "22.3.27",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.nikabusiness.app.legacy",
+    "productName": "Nika Business Legacy",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "OlegSelamov",
+        "repo": "nika-crm",
+        "channel": "legacy",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Nika Business Legacy",
+      "artifactName": "NikaBusiness-Windows-8.1-Setup.${ext}"
+    }
+  }
+}

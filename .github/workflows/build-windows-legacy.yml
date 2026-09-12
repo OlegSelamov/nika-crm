@@ -1,0 +1,93 @@
+name: Build Nika Windows 8.1 Legacy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release version, for example 1.2.12"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nika-windows-legacy-release
+  cancel-in-progress: false
+
+jobs:
+  windows_legacy:
+    name: Build and publish Windows 8.1 installer
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: desktop/legacy/package-lock.json
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.version }}".Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "Invalid version: $version" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+      - name: Verify target release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: gh release view "${{ steps.version.outputs.tag }}"
+      - name: Prepare Legacy source
+        shell: pwsh
+        run: |
+          Copy-Item desktop/main.js desktop/legacy/main.js -Force
+          Copy-Item desktop/preload.js desktop/legacy/preload.js -Force
+          Copy-Item desktop/icon.ico desktop/legacy/icon.ico -Force
+      - name: Set app version
+        working-directory: desktop/legacy
+        shell: pwsh
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+      - name: Install dependencies
+        working-directory: desktop/legacy
+        run: npm ci
+      - name: Build Windows 8.1 installer
+        working-directory: desktop/legacy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build
+      - name: Verify build
+        shell: pwsh
+        run: |
+          if (!(Test-Path "desktop/legacy/dist/NikaBusiness-Windows-8.1-Setup.exe")) { throw "Legacy installer was not created" }
+          if (!(Test-Path "desktop/legacy/dist/legacy.yml")) { throw "legacy.yml was not created" }
+      - name: Collect artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path legacy-release-files | Out-Null
+          Copy-Item desktop/legacy/dist/NikaBusiness-Windows-8.1-Setup.exe legacy-release-files/
+          Copy-Item desktop/legacy/dist/legacy.yml legacy-release-files/
+          Get-ChildItem desktop/legacy/dist -Filter "*.blockmap" | Copy-Item -Destination legacy-release-files/
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nika-windows-8.1-${{ steps.version.outputs.version }}
+          path: legacy-release-files/*
+          if-no-files-found: error
+      - name: Add installer to existing release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          gh release upload "${{ steps.version.outputs.tag }}" legacy-release-files/NikaBusiness-Windows-8.1-Setup.exe legacy-release-files/legacy.yml legacy-release-files/*.blockmap --clobber
+      - name: Summary
+        shell: pwsh
+        run: |
+          "### Nika Business Legacy ${{ steps.version.outputs.version }}" >> $env:GITHUB_STEP_SUMMARY
+          "Windows 8.1 installer was added to release ${{ steps.version.outputs.tag }}." >> $env:GITHUB_STEP_SUMMARY

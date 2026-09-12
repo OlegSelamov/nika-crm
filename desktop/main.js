@@ -11,6 +11,7 @@ let updateCheckTimer;
 
 const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
+const LEGACY_MODE = process.env.NIKA_LEGACY === "1" || /legacy/i.test(app.getName());
 const APP_URL = DEV_MODE
     ? "http://127.0.0.1:5000"
     : "https://nikabusiness.com";
@@ -581,11 +582,13 @@ function createWindow() {
     win = new BrowserWindow({
         width: 1400,
         height: 900,
+        backgroundColor: "#f4f7fb",
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            spellcheck: false,
             preload: path.join(__dirname, "preload.js"),
-            partition: "persist:nika-business"
+            partition: LEGACY_MODE ? "persist:nika-business-legacy" : "persist:nika-business"
         }
     });
 
@@ -617,6 +620,11 @@ function configureAutoUpdates() {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowDowngrade = false;
+    if (LEGACY_MODE) {
+        // Windows 8.1 must remain on the Electron 22-compatible release line.
+        autoUpdater.channel = "legacy";
+        autoUpdater.allowPrerelease = false;
+    }
     // The GitHub feed is embedded into app-update.yml by electron-builder
     // from package.json. electron-updater reads latest.yml from the newest
     // published GitHub Release; setFeedURL must not be called here.

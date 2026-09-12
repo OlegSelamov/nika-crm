@@ -75,6 +75,67 @@ jobs:
           path: release-files/*
           if-no-files-found: error
 
+  windows_legacy:
+    name: Build Windows 8.1 app
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: desktop/legacy/package-lock.json
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}".Trim()
+          } else {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "Invalid version: $version" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Prepare Legacy source
+        shell: pwsh
+        run: |
+          Copy-Item desktop/main.js desktop/legacy/main.js -Force
+          Copy-Item desktop/preload.js desktop/legacy/preload.js -Force
+          Copy-Item desktop/icon.ico desktop/legacy/icon.ico -Force
+      - name: Set app version
+        working-directory: desktop/legacy
+        shell: pwsh
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+      - name: Install dependencies
+        working-directory: desktop/legacy
+        run: npm ci
+      - name: Build Windows 8.1 installer
+        working-directory: desktop/legacy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build
+      - name: Verify Legacy update files
+        shell: pwsh
+        run: |
+          if (!(Test-Path "desktop/legacy/dist/NikaBusiness-Windows-8.1-Setup.exe")) { throw "Legacy installer was not created" }
+          if (!(Test-Path "desktop/legacy/dist/legacy.yml")) { throw "legacy.yml was not created" }
+      - name: Collect Windows 8.1 release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path legacy-release-files | Out-Null
+          Copy-Item desktop/legacy/dist/NikaBusiness-Windows-8.1-Setup.exe legacy-release-files/
+          Copy-Item desktop/legacy/dist/legacy.yml legacy-release-files/
+          Get-ChildItem desktop/legacy/dist -Filter "*.blockmap" | Copy-Item -Destination legacy-release-files/
+      - name: Upload Windows 8.1 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nika-windows-legacy
+          path: legacy-release-files/*
+          if-no-files-found: error
+
   android:
     name: Build Android app
     runs-on: ubuntu-latest
@@ -153,7 +214,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [windows, android]
+    needs: [windows, windows_legacy, android]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -167,6 +228,11 @@ jobs:
         with:
           name: nika-android
           path: android-release
+      - name: Download Windows 8.1 build
+        uses: actions/download-artifact@v4
+        with:
+          name: nika-windows-legacy
+          path: legacy-release-files
       - name: Resolve release version
         id: version
         shell: bash
@@ -187,9 +253,9 @@ jobs:
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --target "${{ github.sha }}" --title "Nika Business $VERSION" --notes "Автоматическая сборка Nika Business $VERSION."
           fi
-          gh release upload "$TAG" release-files/NikaBusinessSetup.exe release-files/latest.yml release-files/*.blockmap android-release/NikaBusiness.apk android-release/NikaBusiness.apk.sha256 --clobber
+          gh release upload "$TAG" release-files/NikaBusinessSetup.exe release-files/latest.yml release-files/*.blockmap legacy-release-files/NikaBusiness-Windows-8.1-Setup.exe legacy-release-files/legacy.yml legacy-release-files/*.blockmap android-release/NikaBusiness.apk android-release/NikaBusiness.apk.sha256 --clobber
       - name: Summary
         shell: bash
         run: |
           echo "### Nika Business ${{ steps.version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Windows installer + Android APK published to GitHub Releases." >> "$GITHUB_STEP_SUMMARY"
+          echo "Windows installer + Windows 8.1 Legacy installer + Android APK published to GitHub Releases." >> "$GITHUB_STEP_SUMMARY"
