@@ -115,4 +115,28 @@
         min-height: 46px;
         margin: 0;
     }
+
+    /* После перехода на постоянную оболочку раздел Продажи работает внутри iframe.
+       Возвращаем собственный вертикальный скролл истории смен и модалок смен. */
+    #salesHistoryBox {
+        min-height: 0;
+        overflow-y: auto !important;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+    }
+
+    #salesShiftsModeView {
+        min-height: 0;
+    }
+
+    .shift-modal-dialog {
+        min-height: 0;
+    }
+
+    .shift-modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+    }
 }
