@@ -306,17 +306,18 @@ def inject_storefront_workflow_assets(response):
         return response
     try:
         html = response.get_data(as_text=True)
+        is_app_shell = "nika-app-shell" in html
         if "storefront_workflow.css" not in html and "</head>" in html:
             html = html.replace("</head>", '<link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-1">\n</head>', 1)
-        if request.path == "/sales" and "sales_client_desktop.css" not in html and "</head>" in html:
+        if not is_app_shell and request.path == "/sales" and "sales_client_desktop.css" not in html and "</head>" in html:
             html = html.replace("</head>", '<link rel="stylesheet" href="/static/css/sales_client_desktop.css?v=20260909-1">\n</head>', 1)
         if "storefront_workflow.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/storefront_workflow.js?v=20260904-1"></script>\n</body>', 1)
         if "ai_error_patch.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/ai_error_patch.js?v=20260904-1"></script>\n</body>', 1)
-        if request.path == "/sales" and "sales_hid_scanner.js" not in html and "</body>" in html:
+        if not is_app_shell and request.path == "/sales" and "sales_hid_scanner.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/sales_hid_scanner.js?v=20260912-marking-1"></script>\n</body>', 1)
-        if request.path == "/sales" and "sales_rekassa_comrun.js" not in html and "</body>" in html:
+        if not is_app_shell and request.path == "/sales" and "sales_rekassa_comrun.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/sales_rekassa_comrun.js?v=20260909-1"></script>\n</body>', 1)
         if request.path == "/sales" and 'data-esf="delivery.contract_num"' not in html:
             contract_fields = (
@@ -330,13 +331,13 @@ def inject_storefront_workflow_assets(response):
                 contract_fields + '\n                        <label>Способ расчета\n                            <select data-esf="delivery.payment_form">',
                 1,
             )
-        if request.path == "/stock/income" and "stock_income_suppliers.js" not in html and "</body>" in html:
+        if not is_app_shell and request.path == "/stock/income" and "stock_income_suppliers.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/stock_income_suppliers.js?v=20260911-1"></script>\n</body>', 1)
         if '/suppliers' not in html and '<a href="/stock/income" class="menu-link">' in html:
             supplier_menu = '<a href="/suppliers" class="menu-link"><img src="/static/icons/company.png" class="menu-icon"><span class="text">Поставщики</span></a>\n            '
             html = html.replace('<a href="/stock/income" class="menu-link">', supplier_menu + '<a href="/stock/income" class="menu-link">', 1)
         scanner_pages = {"/items", "/stock", "/stock/income", "/stock/writeoff", "/stock/movements", "/clients"}
-        if request.path in scanner_pages and "global_hid_scanner.js" not in html and "</body>" in html:
+        if not is_app_shell and request.path in scanner_pages and "global_hid_scanner.js" not in html and "</body>" in html:
             html = html.replace("</body>", '<script src="/static/js/global_hid_scanner.js?v=20260912-marking-1"></script>\n</body>', 1)
         response.set_data(html)
     except Exception as exc:

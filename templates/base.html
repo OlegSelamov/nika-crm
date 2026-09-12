@@ -1,3 +1,4 @@
+{% set nika_embedded_page = request.args.get('nika_embedded') == '1' or request.headers.get('Sec-Fetch-Dest') == 'iframe' %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -42,12 +43,14 @@
         html:not(.sidebar-scroll-restored) .sidebar { visibility: hidden; }
     </style>
 
-    <link rel="stylesheet" href="/static/css/base.css?v=20260912-1">
+    <link rel="stylesheet" href="/static/css/base.css?v=20260912-2">
     <link rel="stylesheet" href="/static/css/storefront_workflow.css?v=20260904-5">
+    {% if nika_embedded_page %}
     {% block page_css %}{% endblock %}
+    {% endif %}
 <link rel="stylesheet" href="/static/css/nika_icons.css?v=20260910-1">
 </head>
-<body class="{{ 'catalog-images-hidden' if not session.get('show_catalog_images', true) else '' }}"><svg class="nika-icon-sprite" aria-hidden="true"><defs>
+<body class="{{ 'catalog-images-hidden ' if not session.get('show_catalog_images', true) else '' }}{{ 'nika-embedded-page' if nika_embedded_page else 'nika-app-shell' }}"><svg class="nika-icon-sprite" aria-hidden="true"><defs>
 <symbol id="nika-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
 <symbol id="nika-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
 <symbol id="nika-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></symbol>
@@ -61,7 +64,18 @@
 <script>window.location.href = "/login";</script>
 {% endif %}
 <script>window.NIKA_SHOW_CATALOG_IMAGES = {{ session.get('show_catalog_images', true)|tojson }};</script>
+<script>
+window.NIKA_EMBEDDED_PAGE = {{ nika_embedded_page|tojson }};
+if (window.NIKA_EMBEDDED_PAGE && window.parent !== window && !window.nikaDesktop) {
+    try { window.nikaDesktop = window.parent.nikaDesktop; } catch (e) {}
+}
+</script>
 
+{% if nika_embedded_page %}
+<main class="embedded-page-root">
+    <div class="page-shell">{% block content %}{% endblock %}</div>
+</main>
+{% else %}
 <div class="layout">
     <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Меню"><svg class="nika-ui-icon"><use href="#nika-menu"/></svg></button>
     <div class="sidebar-backdrop"></div>
@@ -208,7 +222,13 @@
                 </a>
             </div>
         </header>
-        <div class="page-shell">{% block content %}{% endblock %}</div>
+        <div class="nika-frame-wrap" id="nikaFrameWrap">
+            <iframe id="nikaPageFrame" title="Рабочая область Nika Business" allow="camera; microphone; clipboard-read; clipboard-write"></iframe>
+            <div class="nika-frame-loader active" id="nikaFrameLoader" aria-live="polite">
+                <img src="/static/img/logo-mini.png" alt="">
+                <span>Открываю раздел…</span>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -300,13 +320,17 @@
         <div class="ai-composer__foot"><button id="aiSoundButton" class="ai-sound-toggle active" type="button" onclick="toggleVoice()"><img id="aiSoundIcon" src="/static/icons/ai-sound-on.png" alt=""><span id="aiSoundText">Озвучивание включено</span></button><span>Действия ограничены вашей ролью и организацией</span></div>
     </div>
 </div>
+{% endif %}
 
 <script>window.NIKA_APP_CONFIG = { currentUserId: {{ session.get("user_id") or 0 }} };</script>
-<script src="/static/js/base.js?v=20260904-1"></script>
+<script src="/static/js/base.js?v=20260912-2"></script>
 <script src="/static/js/storefront_workflow.js?v=20260904-4"></script>
 <script src="/static/js/media_upload.js?v=20260908-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/static/js/app_shell.js?v=20260912-1"></script>
+{% if nika_embedded_page %}
 {% block page_js %}{% endblock %}
+{% endif %}
 <script src="/static/js/nika_icons.js?v=20260910-1"></script>
 </body>
 </html>
