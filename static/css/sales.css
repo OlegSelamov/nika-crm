@@ -2937,6 +2937,7 @@
     }
 
     body.sales-page-open .cart-box {
+        position: relative;
         height: auto;
         min-height: 0;
         flex: 1 1 auto;
@@ -2949,6 +2950,31 @@
         height: 100%;
         min-height: 0;
         max-height: none;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+    }
+
+    /* История смен заполняет фактическую высоту корзины. Абсолютная область
+       нужна Electron/Chromium: процентная height внутри flex-контейнера могла
+       вычисляться по содержимому, из-за чего колесо мыши не включало скролл. */
+    body.sales-page-open #salesHistoryBox {
+        position: absolute;
+        inset: 0;
+        height: auto;
+    }
+
+    /* Заголовок и кнопки модалок остаются на месте, прокручивается только
+       список смен или полотно X/Z-отчёта. */
+    body.sales-page-open .shift-modal-head,
+    body.sales-page-open .shift-modal-actions {
+        flex: 0 0 auto;
+    }
+
+    body.sales-page-open:not(.shift-report-printing) .shift-modal-body {
+        min-height: 0;
+        flex: 1 1 auto;
         overflow-x: hidden;
         overflow-y: auto;
         overscroll-behavior: contain;
