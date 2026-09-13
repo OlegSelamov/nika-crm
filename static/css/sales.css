@@ -2326,6 +2326,36 @@
     font-weight: 700;
 }
 
+.quantity-mode-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-top: 20px;
+    padding: 4px;
+    border-radius: 14px;
+    background: #f1f5f9;
+}
+
+.quantity-mode-switch button {
+    min-height: 40px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: #64748b;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.quantity-mode-switch button.active {
+    background: #fff;
+    color: #4f46e5;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, .10);
+}
+
+.quantity-mode-switch + .quantity-label {
+    margin-top: 14px;
+}
+
 .quantity-input-wrap {
     display: flex;
     align-items: center;
@@ -2401,6 +2431,15 @@
     font-size: 20px;
 }
 
+.quantity-calculation-hint {
+    min-height: 18px;
+    margin-top: 8px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: right;
+}
+
 .quantity-confirm-btn {
     width: 100%;
     height: 52px;
@@ -2433,6 +2472,14 @@
 
     .quantity-quick-buttons {
         grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .quantity-mode-switch {
+        display: none;
+    }
+
+    .quantity-mode-switch + .quantity-label {
+        margin-top: 22px;
     }
 }
 

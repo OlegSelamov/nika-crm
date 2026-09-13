@@ -5,6 +5,7 @@ let currentBarcodeData = {};
 let currentDocumentType = "check";
 let currentDocumentId = null;
 let pendingQuantityItem = null;
+let pendingQuantityMode = "quantity";
 
 function parseNikaScannedProductCode(value) {
     const raw = String(value || '').trim();
@@ -104,6 +105,37 @@ function isVariableQuantityUnit(unit) {
     ].includes(normalizeUnit(unit));
 }
 
+function isExactAmountUnit(unit) {
+    return [
+        "кг", "килограмм", "килограммы",
+        "г", "гр", "грамм", "граммы",
+        "литр", "л", "литры",
+        "мл", "миллилитр", "миллилитры"
+    ].includes(normalizeUnit(unit));
+}
+
+function isWholeQuantityUnit(unit) {
+    return ["г", "гр", "грамм", "граммы", "мл", "миллилитр", "миллилитры"]
+        .includes(normalizeUnit(unit));
+}
+
+function isHourUnit(unit) {
+    return ["час", "ч", "часа", "часов"].includes(normalizeUnit(unit));
+}
+
+function roundedMeasuredTotal(price, quantity) {
+    return Math.round((Number(price) || 0) * (Number(quantity) || 0));
+}
+
+function cartItemTotal(item) {
+    const exact = Number(item.line_total);
+    if (item.line_total !== undefined && item.line_total !== null && Number.isFinite(exact)) {
+        return exact;
+    }
+    const raw = (Number(item.price) || 0) * (Number(item.qty) || 0);
+    return isVariableQuantityUnit(item.unit) ? Math.round(raw) : raw;
+}
+
 function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "", exciseStamp = "") {
     if (isVariableQuantityUnit(unit)) {
         openQuantityModal({ id, name, price, unit, gtin, ntin, exciseStamp });
@@ -116,36 +148,15 @@ function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "",
 function openQuantityModal(item) {
     pendingQuantityItem = item;
 
-    const unit = normalizeUnit(item.unit);
-    const input = document.getElementById("quantityInput");
-    const quick = document.getElementById("quantityQuickButtons");
-
     document.getElementById("quantityProductName").textContent = item.name;
     document.getElementById("quantityProductPrice").textContent =
         `${Number(item.price || 0).toLocaleString("ru-RU")} ₸ / ${item.unit}`;
-    document.getElementById("quantityUnitLabel").textContent = item.unit;
-
-    const wholeOnly = ["г", "гр", "грамм", "граммы", "мл", "миллилитр", "миллилитры"].includes(unit);
-    const isHour = ["час", "ч", "часа", "часов"].includes(unit);
-
-    input.step = wholeOnly ? "1" : (isHour ? String(1 / 60) : "0.001");
-    input.min = wholeOnly ? "1" : (isHour ? String(1 / 60) : "0.001");
-    input.value = wholeOnly ? "100" : "1";
-
-    const values = wholeOnly
-        ? [50, 100, 250, 500, 1000]
-        : (isHour ? [0.25, 0.5, 1, 1.5, 2] : [0.1, 0.25, 0.5, 1, 2]);
-
-    quick.innerHTML = values.map(value => `
-        <button type="button" onclick="setQuantityValue(${value})">
-            ${isHour ? formatHourQuantity(value) : String(value).replace('.', ',') + ' ' + item.unit}
-        </button>
-    `).join("");
-
-    updateQuantityPreview();
+    document.querySelector('[data-quantity-mode="amount"]').hidden = !isExactAmountUnit(item.unit);
+    setQuantityMode("quantity");
     document.getElementById("quantityModal").style.display = "flex";
 
     setTimeout(() => {
+        const input = document.getElementById("quantityInput");
         input.focus();
         input.select();
     }, 50);
@@ -154,6 +165,54 @@ function openQuantityModal(item) {
 function closeQuantityModal() {
     document.getElementById("quantityModal").style.display = "none";
     pendingQuantityItem = null;
+}
+
+function setQuantityMode(mode) {
+    if (!pendingQuantityItem) return;
+
+    pendingQuantityMode = mode === "amount" && isExactAmountUnit(pendingQuantityItem.unit)
+        ? "amount"
+        : "quantity";
+
+    const input = document.getElementById("quantityInput");
+    const quick = document.getElementById("quantityQuickButtons");
+    const unit = normalizeUnit(pendingQuantityItem.unit);
+    const wholeOnly = isWholeQuantityUnit(unit);
+    const isHour = isHourUnit(unit);
+
+    document.querySelectorAll("[data-quantity-mode]").forEach(button => {
+        button.classList.toggle("active", button.dataset.quantityMode === pendingQuantityMode);
+    });
+
+    if (pendingQuantityMode === "amount") {
+        document.getElementById("quantityInputLabel").textContent = "Введите сумму";
+        document.getElementById("quantityUnitLabel").textContent = "₸";
+        input.step = "1";
+        input.min = "1";
+        input.value = "1000";
+        quick.innerHTML = [500, 1000, 2000, 3000, 5000].map(value => `
+            <button type="button" onclick="setQuantityValue(${value})">${value.toLocaleString("ru-RU")} ₸</button>
+        `).join("");
+    } else {
+        document.getElementById("quantityInputLabel").textContent = "Введите количество";
+        document.getElementById("quantityUnitLabel").textContent = pendingQuantityItem.unit;
+        input.step = wholeOnly ? "1" : (isHour ? String(1 / 60) : "0.001");
+        input.min = wholeOnly ? "1" : (isHour ? String(1 / 60) : "0.001");
+        input.value = wholeOnly ? "100" : "1";
+
+        const values = wholeOnly
+            ? [50, 100, 250, 500, 1000]
+            : (isHour ? [0.25, 0.5, 1, 1.5, 2] : [0.1, 0.25, 0.5, 1, 2]);
+        quick.innerHTML = values.map(value => `
+            <button type="button" onclick="setQuantityValue(${value})">
+                ${isHour ? formatHourQuantity(value) : String(value).replace('.', ',') + ' ' + pendingQuantityItem.unit}
+            </button>
+        `).join("");
+    }
+
+    updateQuantityPreview();
+    input.focus();
+    input.select();
 }
 
 function formatHourQuantity(value) {
@@ -175,42 +234,76 @@ function updateQuantityPreview() {
     if (!pendingQuantityItem) return;
 
     const raw = String(document.getElementById("quantityInput").value || "").replace(",", ".");
-    const qty = parseFloat(raw) || 0;
-    const total = Number(pendingQuantityItem.price || 0) * qty;
+    const value = parseFloat(raw) || 0;
+    const price = Number(pendingQuantityItem.price || 0);
+    const totalNode = document.getElementById("quantityTotalPreview");
+    const hintNode = document.getElementById("quantityCalculationHint");
 
-    document.getElementById("quantityTotalPreview").textContent =
-        total.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " ₸";
+    if (pendingQuantityMode === "amount") {
+        const amount = Math.round(value);
+        const rawQuantity = price > 0 ? amount / price : 0;
+        const quantity = isWholeQuantityUnit(pendingQuantityItem.unit)
+            ? Math.round(rawQuantity)
+            : Number(rawQuantity.toFixed(3));
+        totalNode.textContent = amount.toLocaleString("ru-RU") + " ₸";
+        hintNode.textContent = quantity > 0
+            ? `Расчётное количество: ${formatQuantity(quantity, pendingQuantityItem.unit)}`
+            : "Укажите сумму больше нуля";
+        return;
+    }
+
+    const total = roundedMeasuredTotal(price, value);
+    totalNode.textContent = total.toLocaleString("ru-RU") + " ₸";
+    hintNode.textContent = "Сумма округлена до целого тенге";
 }
 
 function confirmQuantity() {
     if (!pendingQuantityItem) return;
 
     const input = document.getElementById("quantityInput");
-    const qty = parseFloat(String(input.value || "").replace(",", "."));
+    const enteredValue = parseFloat(String(input.value || "").replace(",", "."));
 
-    if (!Number.isFinite(qty) || qty <= 0) {
+    if (!Number.isFinite(enteredValue) || enteredValue <= 0) {
         input.focus();
         return;
     }
 
     const item = pendingQuantityItem;
-    addToCart(item.id, item.name, item.price, qty, item.gtin, item.ntin, item.unit, item.exciseStamp);
+    let qty = enteredValue;
+    let lineTotal = null;
+    if (pendingQuantityMode === "amount") {
+        const price = Number(item.price || 0);
+        if (price <= 0) {
+            input.focus();
+            return;
+        }
+        lineTotal = Math.round(enteredValue);
+        const rawQuantity = lineTotal / price;
+        qty = isWholeQuantityUnit(item.unit)
+            ? Math.round(rawQuantity)
+            : Number(rawQuantity.toFixed(3));
+        if (qty <= 0) {
+            input.focus();
+            return;
+        }
+    }
+    addToCart(item.id, item.name, item.price, qty, item.gtin, item.ntin, item.unit, item.exciseStamp, lineTotal);
     closeQuantityModal();
 }
 
 // добавление в корзину
-function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт", exciseStamp = "") {
+function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт", exciseStamp = "", lineTotal = null) {
 
     // Every marked unit keeps its own DataMatrix code. Ordinary products can
     // still be merged into one cart row by quantity.
-    const existing = exciseStamp
+    const existing = exciseStamp || lineTotal !== null
         ? null
-        : cart.find(i => i.id === id && !i.excise_stamp);
+        : cart.find(i => i.id === id && !i.excise_stamp && i.line_total === undefined);
 
     if (existing) {
         existing.qty += Number(qty) || 1;
     } else {
-		cart.push({
+		const cartItem = {
 			id,
 			name,
 			price,
@@ -219,7 +312,9 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт"
 			ntin,
             unit,
             excise_stamp: exciseStamp || null
-		});
+		};
+        if (lineTotal !== null) cartItem.line_total = Number(lineTotal);
+        cart.push(cartItem);
     }
 
     renderCart();
@@ -311,7 +406,7 @@ function renderCart() {
 
     cart.forEach((item, index) => {
         let qty = item.qty || 1;
-        let sum = item.price * qty;
+        let sum = cartItemTotal(item);
 
         total += sum;
 
@@ -349,7 +444,7 @@ function renderMobileCart() {
 	cart.forEach((item, index) => {
 
 		let qty = item.qty || 1;
-		let sum = item.price * qty;
+		let sum = cartItemTotal(item);
 
 		html += `
 			<div class="mobile-cart-item">
@@ -361,7 +456,7 @@ function renderMobileCart() {
 					</div>
 
 					<div class="mobile-cart-price">
-						${sum} ₸
+						${sum.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₸
 					</div>
 
 				</div>
@@ -396,6 +491,7 @@ function changeQty(index, delta) {
     const unit = normalizeUnit(item.unit);
     const step = ["кг", "килограмм", "килограммы", "литр", "л", "литры"].includes(unit) ? 0.1 : 1;
     item.qty = Number(((item.qty || step) + (delta * step)).toFixed(3));
+    delete item.line_total;
 
     if (cart[index].qty <= 0) {
         cart.splice(index, 1);

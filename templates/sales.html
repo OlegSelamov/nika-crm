@@ -510,7 +510,12 @@
         <div id="quantityProductName" class="quantity-product-name">Товар</div>
         <div id="quantityProductPrice" class="quantity-product-price">0 ₸ / шт</div>
 
-        <label for="quantityInput" class="quantity-label">Введите количество</label>
+        <div id="quantityModeSwitch" class="quantity-mode-switch" aria-label="Способ расчёта">
+            <button type="button" class="active" data-quantity-mode="quantity" onclick="setQuantityMode('quantity')">По количеству</button>
+            <button type="button" data-quantity-mode="amount" onclick="setQuantityMode('amount')">На сумму</button>
+        </div>
+
+        <label id="quantityInputLabel" for="quantityInput" class="quantity-label">Введите количество</label>
         <div class="quantity-input-wrap">
             <input id="quantityInput" type="number" inputmode="decimal" min="0" autocomplete="off">
             <span id="quantityUnitLabel">шт</span>
@@ -519,9 +524,10 @@
         <div id="quantityQuickButtons" class="quantity-quick-buttons"></div>
 
         <div class="quantity-preview">
-            <span>Сумма</span>
+            <span id="quantityPreviewLabel">К оплате</span>
             <strong id="quantityTotalPreview">0 ₸</strong>
         </div>
+        <div id="quantityCalculationHint" class="quantity-calculation-hint"></div>
 
         <button type="button" class="quantity-confirm-btn" onclick="confirmQuantity()">
             Добавить в продажу

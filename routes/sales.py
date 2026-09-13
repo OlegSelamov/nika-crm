@@ -4,6 +4,7 @@ from models import get_db, pool
 from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
+from utils.sale_amounts import normalize_sale_line
 from flask import render_template
 from num2words import num2words
 from flask import session
@@ -197,33 +198,31 @@ def pay_sale():
     kaspi_method = data.get("kaspi_method")
     payment_method = data.get("payment_method", "cash")
 
-    total = sum(
-        item.get("price", 0) * item.get("qty", 1)
-        for item in cart
-    )
-
-    cash = 0
-    card = 0
-    kaspi = 0
-
-    if payment_method == "cash":
-        cash = total
-
-    elif payment_method == "card":
-        card = total
-
-    elif payment_method == "kaspi":
-        kaspi = total
-
-    paid = total
-    status = "Оплачено"
-
     conn = get_db()
     
     cur = conn.cursor()
 
     try:
         cur = conn.cursor()
+
+        normalized_cart = []
+        for item in cart:
+            cur.execute(
+                "SELECT unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s",
+                (item.get("id"),)
+            )
+            db_item = cur.fetchone()
+            unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
+            item_type = (db_item["item_type"] if db_item else "product") or "product"
+            price, qty, line_total = normalize_sale_line(item, unit)
+            normalized_cart.append((item, unit, item_type, price, qty, line_total))
+
+        total = sum((line[5] for line in normalized_cart), start=0)
+        cash = total if payment_method == "cash" else 0
+        card = total if payment_method == "card" else 0
+        kaspi = total if payment_method == "kaspi" else 0
+        paid = total
+        status = "Оплачено"
         
         cur.execute("""
             SELECT COALESCE(MAX(sale_number), 0) + 1 AS next_number
@@ -273,21 +272,7 @@ def pay_sale():
 
         sale_id = cur.fetchone()["id"]
 
-        for item in cart:
-
-            cur.execute(
-                "SELECT unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s",
-                (item.get("id"),)
-            )
-
-            db_item = cur.fetchone()
-
-            unit = (
-                db_item["unit"]
-                if db_item and db_item["unit"]
-                else "шт"
-            )
-            item_type = (db_item["item_type"] if db_item else "product") or "product"
+        for item, unit, item_type, price, qty, line_total in normalized_cart:
 
             cur.execute("""
                 INSERT INTO sale_items (
@@ -308,9 +293,9 @@ def pay_sale():
                 sale_id,
                 item.get("id"),
                 item.get("name") or f"Товар #{item.get('id')}",
-                item.get("price", 0),
-                item.get("qty", 1),
-                item.get("price", 0) * item.get("qty", 1),
+                price,
+                qty,
+                line_total,
                 unit,
                 item.get("gtin"),
                 item.get("ntin"),
@@ -886,9 +871,20 @@ def create_invoice():
     
     cur = conn.cursor()
 
-    total = 0
-    for i in cart:
-        total += i.get("price", 0) * i.get("qty", 1)
+    normalized_cart = []
+    for item in cart:
+        cur.execute(
+            "SELECT name, unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s",
+            (item.get("id"),)
+        )
+        db_item = cur.fetchone()
+        name = db_item["name"] if db_item else "Товар"
+        unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
+        item_type = (db_item["item_type"] if db_item else "product") or "product"
+        price, qty, line_total = normalize_sale_line(item, unit)
+        normalized_cart.append((item, name, unit, item_type, price, qty, line_total))
+
+    total = sum((line[6] for line in normalized_cart), start=0)
         
     cur.execute("""
         SELECT COALESCE(MAX(sale_number), 0) + 1 AS next_number
@@ -924,20 +920,7 @@ def create_invoice():
 
     sale_id = cur.fetchone()["id"]
 
-    for item in cart:
-        cur.execute(
-            "SELECT name, unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s",
-            (item.get("id"),)
-        )
-
-        db_item = cur.fetchone()
-
-        name = db_item["name"] if db_item else "Товар"
-        unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
-        item_type = (db_item["item_type"] if db_item else "product") or "product"
-
-        qty = item.get("qty", 1)
-        price = item.get("price", 0)
+    for item, name, unit, item_type, price, qty, line_total in normalized_cart:
 
         cur.execute("""
             INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, unit, item_type)
@@ -948,7 +931,7 @@ def create_invoice():
             name,
             price,
             qty,
-            price * qty,
+            line_total,
             unit,
             item_type
         ))
@@ -1055,9 +1038,7 @@ def process_sale(conn, sale_id):
             else "product"
         )
 
-        profit = (
-            item["price"] - purchase_price
-        ) * item["quantity"]
+        profit = item["total"] - (purchase_price * item["quantity"])
 
         cur.execute("""
             UPDATE sale_items
@@ -1638,7 +1619,7 @@ def nakladnaya(sale_id):
     total_amount = 0
 
     for i in items:
-        amount = i["price"] * i["quantity"]
+        amount = i["total"]
 
         new_items.append({
             "name": i["name"],

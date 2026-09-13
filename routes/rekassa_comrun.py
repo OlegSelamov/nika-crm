@@ -3,6 +3,7 @@ from flask import jsonify, request, session
 from models import get_db, pool
 from services.fiscal_service import fiscalize_sale, provider_context
 from utils.timezone import now_kz
+from utils.sale_amounts import normalize_sale_line
 from routes.rekassa import rekassa_bp
 
 
@@ -198,18 +199,37 @@ def pay_sale_comrun():
     if payment_method not in {"cash", "card", "kaspi"}:
         payment_method = "cash"
 
-    total = sum(
-        float(item.get("price") or 0) * float(item.get("qty") or 1)
-        for item in cart
-        if isinstance(item, dict)
-    )
-    if total <= 0:
-        return jsonify({"success": False, "error": "Сумма продажи должна быть больше нуля"}), 400
-
     conn = get_db()
     try:
         cur = conn.cursor()
         try:
+            normalized_cart = []
+            for item in cart:
+                if not isinstance(item, dict):
+                    continue
+                item_id = item.get("id")
+                cur.execute(
+                    "SELECT unit, COALESCE(item_type,'product') AS item_type FROM items WHERE id=%s",
+                    (item_id,),
+                )
+                db_item = cur.fetchone()
+                unit = db_item["unit"] if db_item and db_item.get("unit") else "шт"
+                item_type = (db_item["item_type"] if db_item else "product") or "product"
+                price, qty, line_total = normalize_sale_line(item, unit)
+                normalized_cart.append({
+                    "source": item,
+                    "item_id": item_id,
+                    "unit": unit,
+                    "item_type": item_type,
+                    "price": price,
+                    "qty": qty,
+                    "total": line_total,
+                })
+
+            total = sum((item["total"] for item in normalized_cart), start=0)
+            if total <= 0:
+                return jsonify({"success": False, "error": "Сумма продажи должна быть больше нуля"}), 400
+
             cur.execute(
                 "SELECT COALESCE(MAX(sale_number),0)+1 AS next_number FROM sales WHERE company_id=%s",
                 (company_id,),
@@ -232,25 +252,17 @@ def pay_sale_comrun():
             ))
             sale_id = cur.fetchone()["id"]
 
-            for item in cart:
-                item_id = item.get("id")
-                cur.execute(
-                    "SELECT unit, COALESCE(item_type,'product') AS item_type FROM items WHERE id=%s",
-                    (item_id,),
-                )
-                db_item = cur.fetchone()
-                unit = db_item["unit"] if db_item and db_item.get("unit") else "шт"
-                item_type = (db_item["item_type"] if db_item else "product") or "product"
-                price = float(item.get("price") or 0)
-                qty = float(item.get("qty") or 1)
+            for normalized in normalized_cart:
+                item = normalized["source"]
+                item_id = normalized["item_id"]
                 cur.execute("""
                     INSERT INTO sale_items (
                         sale_id,item_id,name,price,quantity,total,unit,gtin,ntin,excise_stamp,item_type
                     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """, (
                     sale_id, item_id, item.get("name") or f"Товар #{item_id}",
-                    price, qty, price * qty, unit,
-                    item.get("gtin"), item.get("ntin"), item.get("excise_stamp"), item_type,
+                    normalized["price"], normalized["qty"], normalized["total"], normalized["unit"],
+                    item.get("gtin"), item.get("ntin"), item.get("excise_stamp"), normalized["item_type"],
                 ))
         finally:
             cur.close()
