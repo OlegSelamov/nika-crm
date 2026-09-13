@@ -48,7 +48,7 @@ from routes.suppliers import suppliers_bp
 from routes.webkassa import webkassa_bp
 from routes.settings import settings_bp
 from routes.reports import reports_bp
-from routes.expenses import expenses_bp
+from routes.expenses import expenses_bp, sync_missing_stock_income_expenses
 from routes.cto import cto_bp
 from routes.accounting import accounting_bp
 from routes.rekassa import rekassa_bp
@@ -185,6 +185,25 @@ except Exception as _media_schema_error:
     except Exception:
         pass
     print("ITEM MEDIA SCHEMA MIGRATION ERROR:", _media_schema_error)
+
+# Repair historical stock income rows that were created without a linked
+# purchase expense (notably initial stock entered from the mobile app).
+try:
+    _stock_expense_conn = get_db()
+    _stock_expense_cur = _stock_expense_conn.cursor()
+    _stock_expense_synced = sync_missing_stock_income_expenses(_stock_expense_cur)
+    _stock_expense_conn.commit()
+    _stock_expense_cur.close()
+    pool.putconn(_stock_expense_conn)
+    if _stock_expense_synced:
+        print("STOCK EXPENSE SYNC:", _stock_expense_synced)
+except Exception as _stock_expense_error:
+    try:
+        _stock_expense_conn.rollback()
+        pool.putconn(_stock_expense_conn)
+    except Exception:
+        pass
+    print("STOCK EXPENSE SYNC ERROR:", _stock_expense_error)
 
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(clients_bp)

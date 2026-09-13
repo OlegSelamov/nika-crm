@@ -10,7 +10,8 @@
 {% set gross_revenue_value = gross_revenue if gross_revenue is defined else revenue %}
 {% set net_profit = profit or 0 %}
 {% set expenses_total = expenses_total or 0 %}
-{% set gross_profit = gross_profit if gross_profit is not none else (net_profit + expenses_total) %}
+{% set operating_expenses_total = operating_expenses_total or 0 %}
+{% set gross_profit = gross_profit if gross_profit is not none else (net_profit + operating_expenses_total) %}
 {% set sales_qty = sales_count or 0 %}
 {% set average_receipt = average_check if average_check is not none else ((revenue / sales_qty) if sales_qty else 0) %}
 {% set returns_total = returns_total or 0 %}
@@ -208,11 +209,11 @@
                 </div>
 
                 <div class="analytics-profit-row">
-                    <span>Расходы</span>
-                    <strong class="analytics-negative">− {{ "{:,.0f}".format(expenses_total).replace(",", " ") }} ₸</strong>
+                    <span>Расходы без закупок</span>
+                    <strong class="analytics-negative">− {{ "{:,.0f}".format(operating_expenses_total).replace(",", " ") }} ₸</strong>
                 </div>
                 <div class="analytics-profit-progress analytics-profit-progress--expense">
-                    <i style="width:{{ ((expenses_total / revenue * 100) if revenue else 0)|round(1) }}%"></i>
+                    <i style="width:{{ ((operating_expenses_total / revenue * 100) if revenue else 0)|round(1) }}%"></i>
                 </div>
 
                 <div class="analytics-profit-result">

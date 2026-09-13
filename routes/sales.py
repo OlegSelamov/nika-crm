@@ -1793,6 +1793,7 @@ def analytics():
         salary_total = 0
         taxes_total = 0
         expenses_total = 0
+        operating_expenses_total = 0
         expense_categories = []
 
         cur.execute("""
@@ -1810,10 +1811,12 @@ def analytics():
             amount = float(row.get("total") or 0)
             if "закуп" in category or "товар" in category:
                 purchase_total += amount
-            elif "зарп" in category or "оклад" in category:
-                salary_total += amount
-            elif "налог" in category:
-                taxes_total += amount
+            else:
+                operating_expenses_total += amount
+                if "зарп" in category or "оклад" in category:
+                    salary_total += amount
+                elif "налог" in category:
+                    taxes_total += amount
 
         # =========================================================
         # ВОЗВРАТЫ
@@ -1856,7 +1859,9 @@ def analytics():
         refunded_profit = float((cur.fetchone() or {}).get("refunded_profit") or 0)
         total = gross_revenue - returns_total
         gross_profit = gross_profit - refunded_profit
-        profit = gross_profit - expenses_total
+        # Себестоимость проданных товаров уже вычтена в sale_items.profit.
+        # Повторно вычитаем только операционные расходы, не закупки склада.
+        profit = gross_profit - operating_expenses_total
         margin_percent = (profit / total * 100) if total > 0 else 0
 
         # =========================================================
@@ -1928,37 +1933,42 @@ def analytics():
         ))
 
         chart_rows = cur.fetchall() or []
-
-        chart_labels = [
-            row["date"].strftime("%d.%m")
+        revenue_by_date = {
+            row["date"]: float(row["total"] or 0)
             for row in chart_rows
-        ]
-
-        chart_values = [
-            float(row["total"] or 0)
-            for row in chart_rows
-        ]
+        }
 
         # =========================================================
         # ГРАФИК ПРИБЫЛИ
         # =========================================================
 
         cur.execute("""
-            SELECT
-                DATE(s.created_at) AS date,
-                COALESCE(SUM(si.profit), 0) AS total
-            FROM sales s
-            LEFT JOIN sale_items si
-                ON si.sale_id = s.id
-            WHERE s.company_id = %s
-              AND s.status = 'Оплачено'
-              AND DATE(s.created_at) BETWEEN %s AND %s
-            GROUP BY DATE(s.created_at)
-            ORDER BY DATE(s.created_at)
+            WITH movements AS (
+                SELECT DATE(s.created_at) AS date, COALESCE(si.profit, 0) AS amount
+                FROM sales s
+                LEFT JOIN sale_items si ON si.sale_id = s.id
+                WHERE s.company_id = %s
+                  AND s.status IN ('Оплачено', 'Возврат')
+                  AND DATE(s.created_at) BETWEEN %s AND %s
+                UNION ALL
+                SELECT DATE(COALESCE(s.refunded_at, s.created_at)), -COALESCE(si.profit, 0)
+                FROM sales s
+                LEFT JOIN sale_items si ON si.sale_id = s.id
+                WHERE s.company_id = %s
+                  AND (s.status = 'Возврат' OR COALESCE(s.is_refunded, FALSE) = TRUE)
+                  AND DATE(COALESCE(s.refunded_at, s.created_at)) BETWEEN %s AND %s
+            )
+            SELECT date, COALESCE(SUM(amount), 0) AS total
+            FROM movements
+            GROUP BY date
+            ORDER BY date
         """, (
             company_id,
             date_from,
-            date_to
+            date_to,
+            company_id,
+            date_from,
+            date_to,
         ))
 
         profit_rows = cur.fetchall() or []
@@ -1968,27 +1978,35 @@ def analytics():
             for row in profit_rows
         }
 
-        revenue_dates = [
-            row["date"]
-            for row in chart_rows
-        ]
-
-        profit_chart_values = [
-            profit_by_date.get(date, 0)
-            for date in revenue_dates
-        ]
-
         cur.execute("""
-            SELECT date, COALESCE(SUM(amount), 0) AS total
+            SELECT
+                date,
+                COALESCE(SUM(amount), 0) AS total,
+                COALESCE(SUM(amount) FILTER (
+                    WHERE LOWER(COALESCE(category, '')) NOT LIKE '%%закуп%%'
+                      AND LOWER(COALESCE(category, '')) NOT LIKE '%%товар%%'
+                ), 0) AS operating_total
             FROM expenses
             WHERE company_id = %s AND date BETWEEN %s AND %s
             GROUP BY date
         """, (company_id, date_from, date_to))
-        expenses_by_date = {
-            row["date"]: float(row["total"] or 0)
-            for row in (cur.fetchall() or [])
+        expense_rows = cur.fetchall() or []
+        expenses_by_date = {row["date"]: float(row["total"] or 0) for row in expense_rows}
+        operating_expenses_by_date = {
+            row["date"]: float(row["operating_total"] or 0)
+            for row in expense_rows
         }
-        expense_chart_values = [expenses_by_date.get(day, 0) for day in revenue_dates]
+
+        timeline_dates = sorted(
+            set(revenue_by_date) | set(profit_by_date) | set(expenses_by_date)
+        )
+        chart_labels = [day.strftime("%d.%m") for day in timeline_dates]
+        chart_values = [revenue_by_date.get(day, 0) for day in timeline_dates]
+        profit_chart_values = [
+            profit_by_date.get(day, 0) - operating_expenses_by_date.get(day, 0)
+            for day in timeline_dates
+        ]
+        expense_chart_values = [expenses_by_date.get(day, 0) for day in timeline_dates]
 
         # =========================================================
         # ТОП ТОВАРОВ
@@ -2239,6 +2257,7 @@ def analytics():
             returns_total=returns_total,
 
             expenses_total=expenses_total,
+            operating_expenses_total=operating_expenses_total,
             purchase_total=purchase_total,
             salary_total=salary_total,
             taxes_total=taxes_total,
@@ -2535,6 +2554,32 @@ def analytics_api():
     profit = cur.fetchone()["profit"] or 0
 
     cur.execute("""
+        SELECT
+            COALESCE(SUM(amount), 0) AS expenses_total,
+            COALESCE(SUM(amount) FILTER (
+                WHERE LOWER(COALESCE(category, '')) NOT LIKE '%%закуп%%'
+                  AND LOWER(COALESCE(category, '')) NOT LIKE '%%товар%%'
+            ), 0) AS operating_expenses_total,
+            COALESCE(SUM(amount) FILTER (
+                WHERE LOWER(COALESCE(category, '')) LIKE '%%закуп%%'
+                   OR LOWER(COALESCE(category, '')) LIKE '%%товар%%'
+            ), 0) AS purchase_total
+        FROM expenses
+        WHERE company_id = %s
+          AND date BETWEEN %s AND %s
+    """, (
+        company_id,
+        date_from,
+        date_to
+    ))
+    expense_totals = cur.fetchone() or {}
+    expenses_total = expense_totals.get("expenses_total") or 0
+    operating_expenses_total = expense_totals.get("operating_expenses_total") or 0
+    purchase_total = expense_totals.get("purchase_total") or 0
+    gross_profit = profit
+    profit = gross_profit - operating_expenses_total
+
+    cur.execute("""
         SELECT COUNT(*) as count
         FROM sales
         WHERE company_id = %s
@@ -2641,6 +2686,14 @@ def analytics_api():
         "revenue": revenue,
 
         "profit": profit,
+
+        "gross_profit": gross_profit,
+
+        "expenses_total": expenses_total,
+
+        "operating_expenses_total": operating_expenses_total,
+
+        "purchase_total": purchase_total,
 
         "sales_count": sales_count,
 

@@ -17,6 +17,12 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from services.media import upload_image, delete_media
 from utils.product_codes import parse_scanned_product_code
+from utils.timezone import now_kz
+from routes.expenses import (
+    _ensure_expenses_table,
+    _sync_expense_to_accounting,
+    upsert_expense_from_source,
+)
 
 UPLOAD_DIR = os.path.join(
     "static",
@@ -1028,6 +1034,7 @@ def api_create_item():
     purchase_price = float(data.get("purchase_price") or 0)
 
     if quantity > 0 and item_type == "product":
+        movement_datetime = now_kz()
         cur.execute("""
             INSERT INTO stock_movements (
                 company_id,
@@ -1040,6 +1047,7 @@ def api_create_item():
                 created_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             session.get("company_id"),
             item_id,
@@ -1048,8 +1056,26 @@ def api_create_item():
             purchase_price,
             quantity * purchase_price,
             "Первичный остаток при создании товара",
-            datetime.now()
+            movement_datetime
         ))
+
+        movement_id = cur.fetchone()["id"]
+        if purchase_price > 0:
+            _ensure_expenses_table(cur)
+            expense_id = upsert_expense_from_source(
+                cur,
+                company_id=session.get("company_id"),
+                source_type="stock_income",
+                source_id=movement_id,
+                category="Закупки",
+                description=f"Начальный остаток: {data.get('name', '')}",
+                amount=quantity * purchase_price,
+                expense_date=movement_datetime.date(),
+                payment_method=data.get("payment_method") or "Другое",
+                comment="Создано автоматически из начального остатка товара",
+                user_id=session.get("user_id"),
+            )
+            _sync_expense_to_accounting(cur, expense_id, session.get("company_id"))
 
     conn.commit()
 

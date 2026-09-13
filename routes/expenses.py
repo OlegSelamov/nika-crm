@@ -281,6 +281,80 @@ def upsert_expense_from_source(
     return cur.fetchone()["id"]
 
 
+def sync_missing_stock_income_expenses(cur, *, company_id=None, user_id=None):
+    """Create missing purchase expenses for stock income movements.
+
+    The source link makes the operation idempotent: movements that already
+    have an expense are left untouched, while old initial-stock movements are
+    repaired without creating duplicates.
+    """
+    _ensure_expenses_table(cur)
+
+    company_filter = ""
+    params = [user_id]
+    if company_id is not None:
+        company_filter = "AND sm.company_id = %s"
+        params.append(company_id)
+
+    cur.execute(f"""
+        INSERT INTO expenses (
+            company_id,
+            user_id,
+            category,
+            description,
+            amount,
+            payment_method,
+            comment,
+            date,
+            created_at,
+            updated_at,
+            source_type,
+            source_id
+        )
+        SELECT
+            sm.company_id,
+            %s,
+            'Закупки',
+            CASE
+                WHEN COALESCE(sm.comment, '') ILIKE '%%первичн%%остат%%'
+                    THEN 'Начальный остаток: ' || COALESCE(NULLIF(i.name, ''), 'Товар #' || sm.item_id)
+                ELSE 'Закуп товара: ' || COALESCE(NULLIF(i.name, ''), 'Товар #' || sm.item_id)
+            END,
+            COALESCE(NULLIF(sm.total, 0), sm.quantity * sm.price),
+            'Другое',
+            COALESCE(NULLIF(sm.comment, ''), 'Создано автоматически из прихода товара'),
+            DATE(COALESCE(sm.created_at, NOW())),
+            COALESCE(sm.created_at, NOW()),
+            NOW(),
+            'stock_income',
+            sm.id
+        FROM stock_movements sm
+        JOIN items i
+          ON i.id = sm.item_id
+         AND i.company_id = sm.company_id
+        WHERE sm.movement_type = 'income'
+          AND COALESCE(NULLIF(sm.total, 0), sm.quantity * sm.price, 0) > 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM expenses e
+              WHERE e.company_id = sm.company_id
+                AND e.source_type = 'stock_income'
+                AND e.source_id = sm.id
+          )
+          {company_filter}
+        ON CONFLICT (company_id, source_type, source_id)
+        WHERE source_type IS NOT NULL AND source_id IS NOT NULL
+        DO NOTHING
+        RETURNING id, company_id
+    """, tuple(params))
+
+    created = cur.fetchall() or []
+    for expense in created:
+        _sync_expense_to_accounting(cur, expense["id"], expense["company_id"])
+
+    return len(created)
+
+
 def delete_expense_by_source(cur, *, company_id, source_type, source_id):
     """Удаляет автоматический расход при отмене исходной операции."""
     cur.execute("""
