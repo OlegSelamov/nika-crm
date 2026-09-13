@@ -179,7 +179,6 @@ class QuickScannerBottomBar extends StatelessWidget {
         minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),
         child: Container(
           height: 72,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(24),
@@ -192,31 +191,12 @@ class QuickScannerBottomBar extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Быстрый сканер',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Удерживайте кнопку',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              HoldScannerButton(
-                enabled: enabled,
-                size: 50,
-                onScan: onScan,
-              ),
-            ],
+          child: Center(
+            child: HoldScannerButton(
+              enabled: enabled,
+              size: 56,
+              onScan: onScan,
+            ),
           ),
         ),
       );
