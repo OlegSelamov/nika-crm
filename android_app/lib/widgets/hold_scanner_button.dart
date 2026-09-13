@@ -63,9 +63,10 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
     }
   }
 
-  Future<void> _finish() async {
+  Future<void> _finish({bool showQuickTapHint = true}) async {
     if (!pressed) return;
-    final wasQuickTap = pressedAt != null &&
+    final wasQuickTap = showQuickTapHint &&
+        pressedAt != null &&
         DateTime.now().difference(pressedAt!).inMilliseconds < 180;
     pressedAt = null;
     scanSession++;
@@ -113,11 +114,13 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
                   ),
                 ),
               ),
-              GestureDetector(
+              Listener(
                 behavior: HitTestBehavior.opaque,
-                onTapDown: widget.enabled ? (_) => _start() : null,
-                onTapUp: widget.enabled ? (_) => _finish() : null,
-                onTapCancel: widget.enabled ? _finish : null,
+                onPointerDown: widget.enabled ? (_) => _start() : null,
+                onPointerUp: widget.enabled ? (_) => _finish() : null,
+                onPointerCancel: widget.enabled
+                    ? (_) => _finish(showQuickTapHint: false)
+                    : null,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 120),
                   width: widget.size,
