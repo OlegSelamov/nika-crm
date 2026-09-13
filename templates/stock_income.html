@@ -2,12 +2,7 @@
 
 {% block content %}
 
-{% set ns = namespace(count=0, total_sum=0, total_quantity=0) %}
-{% for row in income_rows %}
-    {% set ns.count = ns.count + 1 %}
-    {% set ns.total_sum = ns.total_sum + (row.total or 0) %}
-    {% set ns.total_quantity = ns.total_quantity + (row.quantity or 0) %}
-{% endfor %}
+{% set stats = income_stats|default({}) %}
 
 <div class="income-page">
 
@@ -32,9 +27,9 @@
         <article class="income-stat income-stat--purple">
             <div class="income-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-arrowRight"></use></svg></div>
             <div>
-                <span>Последних приходов</span>
-                <strong>{{ ns.count }}</strong>
-                <small>операций в журнале</small>
+                <span>Всего приходов</span>
+                <strong>{{ stats.total_count|default(0) }}</strong>
+                <small>операций за всё время</small>
             </div>
         </article>
 
@@ -42,8 +37,8 @@
             <div class="income-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-package"></use></svg></div>
             <div>
                 <span>Принято товаров</span>
-                <strong>{{ "{:,.3f}".format(ns.total_quantity).rstrip("0").rstrip(".").replace(",", " ") }}</strong>
-                <small>общее количество</small>
+                <strong>{{ "{:,.3f}".format(stats.total_quantity|default(0)).rstrip("0").rstrip(".").replace(",", " ") }}</strong>
+                <small>за всё время</small>
             </div>
         </article>
 
@@ -51,8 +46,8 @@
             <div class="income-stat-icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-money"></use></svg></div>
             <div>
                 <span>Сумма приходов</span>
-                <strong>{{ "{:,.0f}".format(ns.total_sum).replace(",", " ") }} ₸</strong>
-                <small>по текущему журналу</small>
+                <strong>{{ "{:,.0f}".format(stats.total_sum|default(0)).replace(",", " ") }} ₸</strong>
+                <small>за всё время</small>
             </div>
         </article>
     </section>
@@ -226,12 +221,12 @@
 
     </section>
 
-    <section class="income-history">
+    <section class="income-history" id="incomeHistory">
 
         <div class="income-history-head">
             <div>
                 <h2>Последние приходы</h2>
-                <p>Журнал недавно оформленных поступлений</p>
+                <p>Показано {{ income_rows|length }} из {{ stats.total_count|default(0) }} операций</p>
             </div>
 
             <div class="income-history-search">
@@ -346,6 +341,14 @@
             <strong>Ничего не найдено</strong>
             <span>Измените поисковый запрос</span>
         </div>
+
+        {% if history_has_more %}
+        <div class="income-history-more">
+            <a href="{{ url_for('stock.stock_income', limit=history_next_limit) }}#incomeHistory">
+                Показать ещё {{ [30, (stats.total_count|default(0)) - (income_rows|length)]|min }}
+            </a>
+        </div>
+        {% endif %}
 
         {% else %}
 

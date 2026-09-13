@@ -104,7 +104,34 @@ def stock_income():
 
         return redirect("/stock/income")
 
-    # Получаем последние приходы товара
+    try:
+        history_limit = int(request.args.get("limit", 30))
+    except (TypeError, ValueError):
+        history_limit = 30
+    max_history_limit = 5000
+    history_limit = min(max(history_limit, 30), max_history_limit)
+
+    # Верхние показатели отражают весь журнал, а не только загруженные строки.
+    cur.execute("""
+        SELECT
+            COUNT(*) AS total_count,
+            COALESCE(SUM(sm.quantity), 0) AS total_quantity,
+            COALESCE(SUM(sm.total), 0) AS total_sum
+        FROM stock_movements sm
+        JOIN items i
+          ON i.id = sm.item_id
+         AND i.company_id = sm.company_id
+        WHERE sm.company_id = %s
+          AND sm.movement_type = 'income'
+          AND COALESCE(i.item_type, 'product') = 'product'
+    """, (session.get("company_id"),))
+    income_stats = cur.fetchone() or {
+        "total_count": 0,
+        "total_quantity": 0,
+        "total_sum": 0,
+    }
+
+    # Получаем последние приходы товара порциями.
     cur.execute("""
         SELECT
             stock_movements.*,
@@ -123,18 +150,24 @@ def stock_income():
 
         ORDER BY stock_movements.id DESC
 
-        LIMIT 30
+        LIMIT %s
     """, (
         session.get("company_id"),
+        history_limit,
     ))
 
     income_rows = cur.fetchall()
+    total_count = int(income_stats.get("total_count") or 0)
 
     pool.putconn(conn)
 
     return render_template(
         "stock_income.html",
-        income_rows=income_rows
+        income_rows=income_rows,
+        income_stats=income_stats,
+        history_limit=history_limit,
+        history_has_more=len(income_rows) < total_count and history_limit < max_history_limit,
+        history_next_limit=min(history_limit + 30, total_count, max_history_limit),
     )
     
 @stock_bp.route("/stock")

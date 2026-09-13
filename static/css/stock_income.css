@@ -790,6 +790,35 @@
     font-size:9px;
 }
 
+.income-history-more{
+    display:flex;
+    justify-content:center;
+    padding-top:16px;
+}
+
+.income-history-more a{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:190px;
+    min-height:42px;
+    padding:9px 18px;
+    border:1px solid #ded8ff;
+    border-radius:11px;
+    color:var(--in-purple);
+    background:var(--in-purple-soft);
+    font-size:11px;
+    font-weight:800;
+    text-decoration:none;
+    transition:.18s ease;
+}
+
+.income-history-more a:hover{
+    border-color:var(--in-purple);
+    background:#eeeaff;
+    transform:translateY(-1px);
+}
+
 @media(max-width:1050px){
     .income-workspace{
         grid-template-columns:1fr;
