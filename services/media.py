@@ -215,6 +215,73 @@ def upload_local_path(path, *, company_id, namespace, name=None):
         holder.stream.close()
 
 
+
+def migrate_local_image(url, *, company_id, namespace, name=None):
+    """Move one legacy local image to the configured media backend."""
+    value = str(url or "").strip()
+    if not value or value.startswith(("http://", "https://")):
+        return value
+
+    source = Path(urlparse(value).path.lstrip("/"))
+    if not source.exists() or not source.is_file():
+        raise FileNotFoundError(str(source))
+
+    return upload_local_path(
+        source,
+        company_id=company_id,
+        namespace=namespace,
+        name=name,
+    )
+
+
+def copy_image_reference(url, *, company_id, namespace, name=None):
+    """Copy an exported catalog image into the destination company's R2 path.
+
+    URLs outside the configured R2 public base remain valid external references.
+    Legacy local paths are uploaded through the active media backend.
+    """
+    value = str(url or "").strip()
+    if not value:
+        return None
+
+    if not value.startswith(("http://", "https://")):
+        return migrate_local_image(
+            value,
+            company_id=company_id,
+            namespace=namespace,
+            name=name,
+        )
+
+    public_base = _public_base()
+    clean_value = value.split("?", 1)[0]
+    if public_base and clean_value.startswith(public_base + "/") and _r2_ready():
+        source_key = clean_value[len(public_base) + 1 :]
+        ext = source_key.rsplit(".", 1)[-1].lower() if "." in source_key else "webp"
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            ext = "webp"
+        target_key = _key(
+            company_id,
+            namespace,
+            ext=ext,
+            name=name,
+        )
+        if source_key == target_key:
+            return clean_value
+        _r2_client().copy_object(
+            Bucket=os.environ["R2_BUCKET"],
+            CopySource={
+                "Bucket": os.environ["R2_BUCKET"],
+                "Key": source_key,
+            },
+            Key=target_key,
+            CacheControl="public, max-age=31536000, immutable",
+            MetadataDirective="REPLACE",
+            ContentType=mimetypes.guess_type(target_key)[0] or "image/webp",
+        )
+        return f"{public_base}/{target_key}"
+
+    return value
+
 def delete_media(url):
     if not url:
         return
