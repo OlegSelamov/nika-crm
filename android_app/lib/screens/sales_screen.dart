@@ -19,6 +19,16 @@ import 'add_client_screen.dart';
 import 'scanner_screen.dart';
 import 'web_module_screen.dart';
 
+class _MeasuredSaleInput {
+  const _MeasuredSaleInput({
+    required this.quantity,
+    this.lineTotal,
+  });
+
+  final double quantity;
+  final double? lineTotal;
+}
+
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
 
@@ -46,9 +56,61 @@ class SalesScreenState extends State<SalesScreen> {
   List<Map<String, dynamic>> voiceCatalogCache = [];
   DateTime? voiceCatalogLoadedAt;
 
+  String _normalizedUnit(dynamic unit) => '${unit ?? ''}'.trim().toLowerCase();
+
+  bool _isVariableQuantityUnit(dynamic unit) => <String>{
+        'кг', 'килограмм', 'килограммы',
+        'г', 'гр', 'грамм', 'граммы',
+        'л', 'литр', 'литры',
+        'мл', 'миллилитр', 'миллилитры',
+        'час', 'ч', 'часа', 'часов',
+      }.contains(_normalizedUnit(unit));
+
+  bool _isExactAmountUnit(dynamic unit) => <String>{
+        'кг', 'килограмм', 'килограммы',
+        'г', 'гр', 'грамм', 'граммы',
+        'л', 'литр', 'литры',
+        'мл', 'миллилитр', 'миллилитры',
+      }.contains(_normalizedUnit(unit));
+
+  bool _isWholeQuantityUnit(dynamic unit) => <String>{
+        'г', 'гр', 'грамм', 'граммы',
+        'мл', 'миллилитр', 'миллилитры',
+      }.contains(_normalizedUnit(unit));
+
+  bool _isHourUnit(dynamic unit) => <String>{
+        'час', 'ч', 'часа', 'часов',
+      }.contains(_normalizedUnit(unit));
+
+  String _formatHourQuantity(double hours) {
+    final totalMinutes = (hours * 60).round();
+    final h = totalMinutes ~/ 60;
+    final m = totalMinutes % 60;
+    if (h > 0 && m > 0) return '$h ч $m мин';
+    if (h > 0) return '$h ч';
+    return '$m мин';
+  }
+
+  String _formatMeasuredQuantity(double quantity, String unit) {
+    if (_isHourUnit(unit)) return _formatHourQuantity(quantity);
+    if (_isWholeQuantityUnit(unit)) return '${quantity.round()} $unit';
+    final formatted = quantity
+        .toStringAsFixed(3)
+        .replaceFirst(RegExp(r'\.?0+$'), '');
+    return '$formatted $unit';
+  }
+
+  double _cartItemTotal(Map<String, dynamic> item) {
+    if (item['line_total'] != null) {
+      return asDouble(item['line_total']);
+    }
+    final raw = asDouble(item['price']) * asDouble(item['qty']);
+    return _isVariableQuantityUnit(item['unit']) ? raw.roundToDouble() : raw;
+  }
+
   double get total => cart.fold<double>(
         0,
-        (sum, item) => sum + asDouble(item['price']) * asDouble(item['qty']),
+        (sum, item) => sum + _cartItemTotal(item),
       );
 
   @override
@@ -127,10 +189,7 @@ class SalesScreenState extends State<SalesScreen> {
     await addBarcodeToCart(code);
   }
 
-  Future<bool> addBarcodeToCart(
-    String rawCode, {
-    bool quickScan = false,
-  }) async {
+  Future<bool> addBarcodeToCart(String rawCode) async {
     final scannedCode = ScannedProductCode.parse(rawCode);
     if (scannedCode.isEmpty) return false;
     try {
@@ -156,7 +215,7 @@ class SalesScreenState extends State<SalesScreen> {
             result['gtin'] = scannedCode.gtin;
           }
         }
-        await addToCart(result, requestMeasuredQuantity: !quickScan);
+        await addToCart(result);
         return true;
       } else if (mounted) {
         await showAddNewItemDialog(
@@ -178,28 +237,27 @@ class SalesScreenState extends State<SalesScreen> {
     final item = Map<String, dynamic>.from(source);
     item['price'] = asDouble(item['price'] ?? item['retail_price']);
     item['qty'] = asDouble(item['qty'] ?? 1);
-    final unit = '${item['unit'] ?? ''}'.toLowerCase();
-    final measuredUnit = <String>{
-      'кг', 'килограмм', 'килограммы', 'г', 'гр', 'грамм', 'граммы',
-      'л', 'литр', 'литры', 'мл', 'миллилитр', 'миллилитры',
-      'час', 'ч', 'часа', 'часов',
-    }.contains(unit);
+    final unit = _normalizedUnit(item['unit']);
+    final measuredUnit = _isVariableQuantityUnit(unit);
+
     if (requestMeasuredQuantity &&
         (measuredUnit || item['type'] == 'weight' || item['type'] == 'liter')) {
-      final isHour = <String>{'час', 'ч', 'часа', 'часов'}.contains(unit);
-      final quantity = await _quantityDialog(
-        item,
-        isHour ? 'Время (часы, например 1,5)' : 'Количество (${item['unit'] ?? unit})',
-        isHour: isHour,
-      );
-      if (quantity == null) return;
-      item['qty'] = quantity;
+      final measuredInput = await _quantityDialog(item);
+      if (measuredInput == null) return;
+      item['qty'] = measuredInput.quantity;
+      if (measuredInput.lineTotal != null) {
+        item['line_total'] = measuredInput.lineTotal;
+      }
     }
 
     final index = cart.indexWhere((value) => value['id'] == item['id']);
     setState(() {
       _clearPendingVoicePayment();
-      if (index >= 0 && item['excise_stamp'] == null) {
+      final canMerge = index >= 0 &&
+          item['excise_stamp'] == null &&
+          item['line_total'] == null &&
+          cart[index]['line_total'] == null;
+      if (canMerge) {
         cart[index]['qty'] = asDouble(cart[index]['qty']) + asDouble(item['qty']);
       } else {
         cart.add({
@@ -213,99 +271,321 @@ class SalesScreenState extends State<SalesScreen> {
           'ntin': item['ntin'],
           'excise_stamp': item['excise_stamp'],
           'image': item['image'] ?? item['image_url'] ?? '',
+          if (item['line_total'] != null)
+            'line_total': asDouble(item['line_total']),
         });
       }
     });
   }
 
-  Future<double?> _quantityDialog(
+  Future<_MeasuredSaleInput?> _quantityDialog(
     Map<String, dynamic> item,
-    String label, {
-    bool isHour = false,
-  }) async {
-    final controller = TextEditingController(text: '1');
+  ) async {
+    final unit = '${item['unit'] ?? ''}'.trim();
+    final price = asDouble(item['price']);
+    final isHour = _isHourUnit(unit);
+    final exactAmountAllowed = _isExactAmountUnit(unit);
+    final wholeQuantity = _isWholeQuantityUnit(unit);
+    var amountMode = false;
+    final controller = TextEditingController(
+      text: wholeQuantity ? '100' : '1',
+    );
+
     NikaAssistantController.instance.setOverlaySuppressed(true);
-    final result = await showModalBottomSheet<double>(
+    final result = await showModalBottomSheet<_MeasuredSaleInput>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setSheetState) {
-          double current() => double.tryParse(controller.text.replaceAll(',', '.')) ?? 0;
-          String hourLabel(double hours) {
-            final totalMinutes = (hours * 60).round();
-            final h = totalMinutes ~/ 60;
-            final m = totalMinutes % 60;
-            if (h > 0 && m > 0) return '$h ч $m мин';
-            if (h > 0) return '$h ч';
-            return '$m мин';
+          double current() =>
+              double.tryParse(controller.text.replaceAll(',', '.')) ?? 0;
+
+          double resolvedQuantity() {
+            if (!amountMode) return current();
+            if (price <= 0) return 0;
+            final quantity = current() / price;
+            if (wholeQuantity) return quantity.roundToDouble();
+            return double.parse(quantity.toStringAsFixed(3));
           }
-          final unit = '${item['unit'] ?? ''}'.trim();
-          final price = asDouble(item['price']);
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+
+          List<double> quickValues() {
+            if (amountMode) return const [500, 1000, 2000, 3000, 5000];
+            if (wholeQuantity) return const [50, 100, 250, 500, 1000];
+            if (isHour) return const [0.25, 0.5, 1, 1.5, 2];
+            return const [0.1, 0.25, 0.5, 1, 2];
+          }
+
+          String quickLabel(double value) {
+            if (amountMode) return '${value.round()} ₸';
+            if (isHour) return _formatHourQuantity(value);
+            if (wholeQuantity) return '${value.round()} $unit';
+            final compact = value == value.roundToDouble()
+                ? value.round().toString()
+                : value.toString();
+            return '$compact $unit';
+          }
+
+          void setValue(double value) {
+            controller.text = amountMode || wholeQuantity
+                ? value.round().toString()
+                : value.toString();
+            controller.selection = TextSelection.collapsed(
+              offset: controller.text.length,
+            );
+            setSheetState(() {});
+          }
+
+          void setMode(bool useAmount) {
+            amountMode = useAmount;
+            controller.text = useAmount
+                ? '1000'
+                : wholeQuantity
+                    ? '100'
+                    : '1';
+            controller.selection = TextSelection.collapsed(
+              offset: controller.text.length,
+            );
+            setSheetState(() {});
+          }
+
+          void submit() {
+            final entered = current();
+            final quantity = resolvedQuantity();
+            if (entered <= 0 || quantity <= 0) return;
+            Navigator.pop(
+              sheetContext,
+              _MeasuredSaleInput(
+                quantity: quantity,
+                lineTotal: amountMode ? entered.roundToDouble() : null,
               ),
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 44, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
-                const SizedBox(height: 16),
-                Row(children: [
-                  itemThumb(item, size: 56),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${item['name']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 4),
-                    Text('${money(price)} / $unit', style: const TextStyle(color: AppColors.muted)),
-                  ])),
-                  IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
-                ]),
-                const SizedBox(height: 18),
-                TextField(
-                  controller: controller,
-                  autofocus: false,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: label,
-                    helperText: isHour && current() > 0 ? hourLabel(current()) : null,
-                    helperStyle: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
-                  ),
-                  onChanged: (_) => setSheetState(() {}),
+            );
+          }
+
+          final entered = current();
+          final quantity = resolvedQuantity();
+          final valid = entered > 0 && quantity > 0;
+          final previewTotal = amountMode
+              ? entered.roundToDouble()
+              : (price * quantity).roundToDouble();
+          final hint = amountMode
+              ? 'Расчётное количество: ${_formatMeasuredQuantity(quantity, unit)}'
+              : isHour && quantity > 0
+                  ? 'Длительность: ${_formatHourQuantity(quantity)}'
+                  : 'Сумма округлена до целого тенге';
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
                 ),
-                if (isHour) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 7, runSpacing: 7,
-                    alignment: WrapAlignment.center,
-                    children: [0.25, 0.5, 1.0, 1.5, 2.0].map((hours) => ChoiceChip(
-                      label: Text(hourLabel(hours)),
-                      selected: (current() - hours).abs() < .001,
-                      onSelected: (_) { controller.text = hours.toString(); setSheetState(() {}); },
-                    )).toList(),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Сумма', style: TextStyle(fontWeight: FontWeight.w700)),
-                    Text(money(price * current()), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.primary)),
-                  ]),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        itemThumb(item, size: 56),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${item['name']}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${money(price)} / $unit',
+                                style: const TextStyle(color: AppColors.muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    if (exactAmountAllowed) ...[
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => setMode(false),
+                                borderRadius: BorderRadius.circular(11),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 160),
+                                  padding: const EdgeInsets.symmetric(vertical: 11),
+                                  decoration: BoxDecoration(
+                                    color: amountMode
+                                        ? Colors.transparent
+                                        : AppColors.primary,
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                  child: Text(
+                                    'По количеству',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: amountMode
+                                          ? AppColors.text
+                                          : Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => setMode(true),
+                                borderRadius: BorderRadius.circular(11),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 160),
+                                  padding: const EdgeInsets.symmetric(vertical: 11),
+                                  decoration: BoxDecoration(
+                                    color: amountMode
+                                        ? AppColors.primary
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                  child: Text(
+                                    'На сумму',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: amountMode
+                                          ? Colors.white
+                                          : AppColors.text,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: controller,
+                      autofocus: true,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      textInputAction: TextInputAction.done,
+                      decoration: InputDecoration(
+                        labelText: amountMode
+                            ? 'Введите сумму'
+                            : 'Введите количество',
+                        suffixText: amountMode ? '₸' : unit,
+                      ),
+                      onChanged: (_) => setSheetState(() {}),
+                      onSubmitted: (_) {
+                        if (valid) submit();
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      alignment: WrapAlignment.center,
+                      children: quickValues()
+                          .map(
+                            (value) => ChoiceChip(
+                              label: Text(quickLabel(value)),
+                              selected: (entered - value).abs() < .001,
+                              onSelected: (_) => setValue(value),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Сумма',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              Text(
+                                money(previewTotal),
+                                style: const TextStyle(
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            hint,
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: valid ? submit : null,
+                        child: const Text('Добавить в корзину'),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                SizedBox(width: double.infinity, height: 52, child: FilledButton(
-                  onPressed: current() > 0 ? () => Navigator.pop(sheetContext, current()) : null,
-                  child: const Text('Добавить в корзину'),
-                )),
-              ]),
+              ),
             ),
           );
         },
@@ -997,6 +1277,7 @@ class SalesScreenState extends State<SalesScreen> {
               ? 0.1
               : 1.0;
       final next = asDouble(cart[index]['qty']) + (delta * step);
+      cart[index].remove('line_total');
       if (next <= 0) {
         cart.removeAt(index);
       } else {
@@ -1094,7 +1375,7 @@ class SalesScreenState extends State<SalesScreen> {
                           ])),
                           const SizedBox(width: 8),
                           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text(money(asDouble(item['price']) * quantity), style: const TextStyle(fontWeight: FontWeight.w900)),
+                            Text(money(_cartItemTotal(item)), style: const TextStyle(fontWeight: FontWeight.w900)),
                             IconButton(onPressed: () => setState(() { cart.removeAt(index); _clearPendingVoicePayment(); }), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger), tooltip: 'Удалить'),
                           ]),
                         ]),
