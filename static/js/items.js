@@ -1349,7 +1349,7 @@ async function submitNikaDataImport(formId, url, resultId) {
         const errors = Array.isArray(data.errors) ? data.errors : [];
         let html = `Создано: <b>${data.created || 0}</b><br>` +
                    `Обновлено: <b>${data.updated || 0}</b><br>` +
-                   `Фотографий перенесено: <b>${data.images || 0}</b><br>` +
+                   `Фотографий подключено: <b>${data.images || 0}</b><br>` +
                    `Пропущено: <b>${data.skipped || 0}</b><br>` +
                    `Ошибок: <b>${errors.length}</b>`;
         if (errors.length) {
