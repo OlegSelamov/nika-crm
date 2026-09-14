@@ -1580,12 +1580,16 @@ def import_items_xlsx():
                     """, (company_id, name, item_type))
                     existing = cur.fetchone()
 
-                if existing and duplicate_mode == "skip":
+                skip_existing = bool(existing and duplicate_mode == "skip")
+                if skip_existing:
                     stats["skipped"] += 1
-                    continue
 
                 item_id = existing["id"] if existing else None
-                if existing:
+                if skip_existing:
+                    # Сам товар не меняем, но ниже восстанавливаем отсутствующие
+                    # фотографии. Это позволяет безопасно повторить прерванный импорт.
+                    pass
+                elif existing:
                     # При обновлении меняем только действительно заполненные
                     # колонки Excel. Пустые ячейки не стирают текущие данные.
                     updates = ["name=%s"]
@@ -1669,26 +1673,39 @@ def import_items_xlsx():
                         )
 
                 if image_urls:
-                    cur.execute(
-                        "SELECT COUNT(*) AS total FROM item_images WHERE item_id=%s",
-                        (item_id,),
+                    cur.execute("""
+                        SELECT image, COALESCE(is_main, FALSE) AS is_main
+                        FROM item_images
+                        WHERE item_id=%s
+                    """, (item_id,))
+                    current_images = cur.fetchall()
+                    existing_urls = {
+                        _catalog_text(image.get("image"))
+                        for image in current_images
+                        if _catalog_text(image.get("image"))
+                    }
+                    has_main_image = any(
+                        bool(image.get("is_main"))
+                        for image in current_images
                     )
-                    has_images = (cur.fetchone().get("total") or 0) > 0
-                    if not has_images:
-                        for image_index, source_url in enumerate(image_urls):
-                            stored_url = copy_image_reference(
-                                source_url,
-                                company_id=company_id,
-                                namespace=f"items/{item_id}",
-                                name=f"transfer_{uuid.uuid4().hex}",
-                            )
-                            if not stored_url:
-                                continue
-                            cur.execute("""
-                                INSERT INTO item_images (item_id, image, is_main)
-                                VALUES (%s, %s, %s)
-                            """, (item_id, stored_url, image_index == 0))
-                            stats["images"] += 1
+
+                    for image_index, source_url in enumerate(image_urls):
+                        stored_url = copy_image_reference(
+                            source_url,
+                            company_id=company_id,
+                            namespace=f"items/{item_id}",
+                            name=f"transfer_{uuid.uuid4().hex}",
+                        )
+                        if not stored_url or stored_url in existing_urls:
+                            continue
+                        make_main = not has_main_image and image_index == 0
+                        cur.execute("""
+                            INSERT INTO item_images (item_id, image, is_main)
+                            VALUES (%s, %s, %s)
+                        """, (item_id, stored_url, make_main))
+                        existing_urls.add(stored_url)
+                        has_main_image = has_main_image or make_main
+                        stats["images"] += 1
             except Exception as row_error:
                 stats["errors"].append({
                     "row": excel_row,
