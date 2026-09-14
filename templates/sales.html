@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20260913-full-height-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20260914-cash-change-1') }}">
 {% endblock %}
 
 {% block content %}
@@ -180,9 +180,9 @@
 
 			<div class="payment-methods">
 
-				<input id="cashInput" placeholder="Наличные" class="pay-input" onclick="fillPayment('cash')">
-				<input id="cardInput" placeholder="Карта" class="pay-input" onclick="fillPayment('card')">
-				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" onclick="fillPayment('kaspi')">
+				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" onclick="fillPayment('cash')">
+				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" onclick="fillPayment('card')">
+				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" onclick="fillPayment('kaspi')">
 
 			</div>
 
@@ -215,6 +215,48 @@
 </div>
 
 </div>
+</div>
+
+<div id="cashChangeModal" class="cash-change-modal" aria-hidden="true">
+	<div class="cash-change-modal__backdrop" onclick="closeCashChangeModal()"></div>
+	<div class="cash-change-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="cashChangeTitle">
+		<div class="cash-change-modal__head">
+			<div>
+				<span>НАЛИЧНАЯ ОПЛАТА</span>
+				<h2 id="cashChangeTitle">Расчёт сдачи</h2>
+			</div>
+			<button type="button" onclick="closeCashChangeModal()" aria-label="Закрыть">×</button>
+		</div>
+
+		<div class="cash-change-total">
+			<span>К оплате</span>
+			<strong id="cashChangeTotal">0 ₸</strong>
+		</div>
+
+		<label class="cash-change-field">
+			<span>Покупатель дал</span>
+			<div>
+				<input id="cashReceivedInput" inputmode="decimal" autocomplete="off"
+					   oninput="renderCashChange()" onkeydown="handleCashChangeKey(event)">
+				<b>₸</b>
+			</div>
+		</label>
+
+		<div id="cashQuickAmounts" class="cash-change-quick"></div>
+
+		<div id="cashChangeResult" class="cash-change-result">
+			<span id="cashChangeResultLabel">Сдача</span>
+			<strong id="cashChangeAmount">0 ₸</strong>
+			<small id="cashChangeHint">Можно проводить оплату</small>
+		</div>
+
+		<div class="cash-change-actions">
+			<button type="button" class="cash-change-cancel" onclick="closeCashChangeModal()">Отмена</button>
+			<button type="button" class="cash-change-confirm" id="cashChangeConfirm" onclick="confirmCashPayment()">
+				Провести оплату
+			</button>
+		</div>
+	</div>
 </div>
 
 <div id="clientSheet" class="sheet">
@@ -632,6 +674,6 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260826-4"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20260912-marking-catalog-1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20260914-cash-change-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
 {% endblock %}
