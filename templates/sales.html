@@ -188,7 +188,7 @@
 
 			<div class="payment-actions">
 
-				<button class="pay-btn" onclick="
+				<button type="button" class="pay-btn" onclick="
                     const cardAmount = Number(String(document.getElementById('cardInput').value || '').replace(',', '.')) || 0;
                     const kaspiAmount = Number(String(document.getElementById('kaspiInput').value || '').replace(',', '.')) || 0;
                     if (cardAmount > 0 || kaspiAmount > 0) {
