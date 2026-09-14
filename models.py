@@ -267,6 +267,17 @@ def init_db():
         conn.rollback()
 
     try:
+        cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS last_purchase_price NUMERIC(12,2)")
+        cur.execute("""
+            UPDATE items
+            SET last_purchase_price = purchase_price
+            WHERE last_purchase_price IS NULL
+        """)
+        conn.commit()
+    except:
+        conn.rollback()
+
+    try:
         cur.execute("ALTER TABLE items ADD COLUMN barcode TEXT")
         conn.commit()
     except:
