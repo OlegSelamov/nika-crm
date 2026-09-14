@@ -16,6 +16,7 @@ import requests
 from flask import session
 
 from models import get_db, pool
+from utils.stock_pricing import apply_income_pricing, as_bool
 from utils.timezone import now_kz
 
 
@@ -500,6 +501,7 @@ def _validate_target(action: str, data: dict[str, Any]) -> dict[str, Any]:
         normalized["quantity"] = str(_number(normalized, "quantity", minimum=Decimal("0.001")))
         if action == "stock_income":
             normalized["price"] = str(_number(normalized, "price", minimum=Decimal("0")))
+            normalized["update_retail"] = as_bool(normalized.get("update_retail"), default=False)
     elif action == "create_task":
         normalized["title"] = _text(normalized, "title", required=True, limit=220)
         priority = _text(normalized, "priority", limit=20) or "medium"
@@ -1075,6 +1077,14 @@ def _execute(cur, action: str, data: dict[str, Any]) -> dict[str, Any]:
             price = Decimal(str(item.get("purchase_price") or 0))
         else:
             price = Decimal(data["price"])
+            pricing = apply_income_pricing(
+                cur,
+                company_id=company_id,
+                item_id=item_id,
+                quantity=quantity,
+                price=price,
+                update_retail=as_bool(data.get("update_retail"), default=False),
+            )
         total = quantity * price
         cur.execute(
             """
@@ -1103,6 +1113,13 @@ def _execute(cur, action: str, data: dict[str, Any]) -> dict[str, Any]:
             )
             _sync_expense_to_accounting(cur, expense_id, company_id)
             after["expense_id"] = expense_id
+            after["pricing"] = {
+                "average_cost": float(pricing["average_cost"]),
+                "last_purchase_price": float(pricing["last_purchase_price"]),
+                "retail_price": float(pricing["retail_price"]),
+                "markup_percent": float(pricing["markup_percent"]),
+                "retail_updated": pricing["retail_updated"],
+            }
 
     elif action in {"create_task", "update_task", "change_task_status", "delete_task"}:
         if action == "create_task":
