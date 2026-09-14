@@ -1329,6 +1329,7 @@ def export_items_xlsx():
             JOIN items i ON i.id = ii.item_id
             WHERE i.company_id = %s
             ORDER BY ii.id
+            FOR UPDATE OF ii
         """, (company_id,))
         for image_row in cur.fetchall():
             image_url = _catalog_text(image_row.get("image"))
@@ -1338,6 +1339,7 @@ def export_items_xlsx():
                 image_url,
                 company_id=company_id,
                 namespace=f"items/{image_row['item_id']}",
+                name=f"legacy_{image_row['id']}",
             )
             cur.execute(
                 "UPDATE item_images SET image=%s WHERE id=%s",
