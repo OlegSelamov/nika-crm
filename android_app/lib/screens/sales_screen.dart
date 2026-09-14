@@ -1060,89 +1060,286 @@ class SalesScreenState extends State<SalesScreen> {
 
   Future<void> showPaymentSheet() async {
     if (cart.isEmpty || paying) return;
+    final saleTotal = total;
+    final cashController = TextEditingController(
+      text: saleTotal == saleTotal.roundToDouble()
+          ? saleTotal.toStringAsFixed(0)
+          : saleTotal.toStringAsFixed(2),
+    );
+
+    double enteredCash() {
+      final raw = cashController.text.trim().replaceAll(' ', '').replaceAll(',', '.');
+      return double.tryParse(raw) ?? 0;
+    }
+
+    List<double> quickCashAmounts() {
+      final values = <double>[saleTotal];
+      for (final step in <double>[500, 1000, 2000, 5000, 10000, 20000]) {
+        final rounded = (saleTotal / step).ceil() * step;
+        if (!values.any((value) => (value - rounded).abs() < .01)) {
+          values.add(rounded);
+        }
+      }
+      values.sort();
+      return values.take(5).toList();
+    }
+
     NikaAssistantController.instance.setOverlaySuppressed(true);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          Widget methodTile(String value, String label, IconData icon, Color color) {
-            final selected = paymentMethod == value;
-            return Expanded(
-              child: InkWell(
-                onTap: () { setState(() => paymentMethod = value); setSheetState(() {}); },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
-                  decoration: BoxDecoration(
-                    color: selected ? color.withOpacity(.10) : AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: selected ? color : AppColors.border, width: selected ? 1.8 : 1),
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (context, setSheetState) {
+            final received = enteredCash();
+            final change = received - saleTotal;
+            final cashSelected = paymentMethod == 'cash';
+            final cashEnough = !cashSelected || change >= -.009;
+
+            Widget methodTile(String value, String label, IconData icon, Color color) {
+              final selected = paymentMethod == value;
+              return Expanded(
+                child: InkWell(
+                  onTap: () {
+                    setState(() => paymentMethod = value);
+                    setSheetState(() {});
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: selected ? color.withOpacity(.10) : AppColors.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: selected ? color : AppColors.border,
+                        width: selected ? 1.8 : 1,
+                      ),
+                    ),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(icon, color: color),
+                      const SizedBox(height: 6),
+                      Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ]),
                   ),
+                ),
+              );
+            }
+
+            return AnimatedPadding(
+              duration: const Duration(milliseconds: 180),
+              padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+                child: SingleChildScrollView(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(icon, color: color),
-                    const SizedBox(height: 6),
-                    Text(label, textAlign: TextAlign.center, style: TextStyle(fontWeight: selected ? FontWeight.w900 : FontWeight.w700, fontSize: 12)),
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      const Expanded(
+                        child: Text(
+                          'Оплата',
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ]),
+                    Card(
+                      child: ListTile(
+                        leading: const CircleAvatar(
+                          backgroundColor: AppColors.primarySoft,
+                          child: Icon(Icons.person_outline_rounded, color: AppColors.primary),
+                        ),
+                        title: Text(
+                          clientName(selectedClient),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        subtitle: Text('${cart.length} поз.'),
+                        trailing: Text(
+                          money(saleTotal),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      methodTile('cash', 'Наличные', Icons.payments_outlined, Colors.green),
+                      const SizedBox(width: 7),
+                      methodTile('card', 'Карта', Icons.credit_card_rounded, Colors.blue),
+                      const SizedBox(width: 7),
+                      methodTile('kaspi', 'Kaspi POS', Icons.point_of_sale_rounded, Colors.red),
+                    ]),
+                    if (cashSelected) ...[
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: cashController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (_) => setSheetState(() {}),
+                        style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
+                        decoration: const InputDecoration(
+                          labelText: 'Покупатель дал',
+                          suffixText: '₸',
+                          prefixIcon: Icon(Icons.payments_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 7,
+                          runSpacing: 7,
+                          children: quickCashAmounts().map((amount) {
+                            final exact = (amount - saleTotal).abs() < .01;
+                            return OutlinedButton(
+                              onPressed: () {
+                                cashController.text = amount == amount.roundToDouble()
+                                    ? amount.toStringAsFixed(0)
+                                    : amount.toStringAsFixed(2);
+                                cashController.selection = TextSelection.collapsed(
+                                  offset: cashController.text.length,
+                                );
+                                setSheetState(() {});
+                              },
+                              child: Text(exact ? 'Без сдачи' : money(amount)),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: cashEnough
+                              ? AppColors.success.withOpacity(.10)
+                              : AppColors.danger.withOpacity(.10),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: cashEnough
+                                ? AppColors.success.withOpacity(.35)
+                                : AppColors.danger.withOpacity(.35),
+                          ),
+                        ),
+                        child: Row(children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  cashEnough ? 'Сдача' : 'Не хватает',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: cashEnough ? AppColors.success : AppColors.danger,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  cashEnough
+                                      ? (change > .009
+                                          ? 'Верните покупателю эту сумму'
+                                          : 'Оплата без сдачи')
+                                      : 'Введите сумму не меньше итога',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            money(change.abs()),
+                            style: TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                              color: cashEnough ? AppColors.success : AppColors.danger,
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: cashEnough
+                            ? () {
+                                final receivedValue = enteredCash();
+                                final selectedMethod = paymentMethod;
+                                Navigator.pop(sheetContext);
+                                paySale(
+                                  cashReceived:
+                                      selectedMethod == 'cash' ? receivedValue : null,
+                                );
+                              }
+                            : null,
+                        icon: const Icon(Icons.check_circle_outline_rounded),
+                        label: Text(
+                          cashSelected && change > .009
+                              ? 'Провести · сдача ${money(change)}'
+                              : 'Провести · ${money(saleTotal)}',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          createInvoiceSale();
+                        },
+                        icon: const Icon(Icons.description_outlined),
+                        label: const Text('Безнал · Выставить счёт'),
+                      ),
+                    ),
                   ]),
                 ),
               ),
             );
-          }
-          return Container(
-            decoration: const BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 42, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
-              const SizedBox(height: 12),
-              Row(children: [
-                const Expanded(child: Text('Оплата', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900))),
-                IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
-              ]),
-              Card(child: ListTile(
-                leading: const CircleAvatar(backgroundColor: AppColors.primarySoft, child: Icon(Icons.person_outline_rounded, color: AppColors.primary)),
-                title: Text(clientName(selectedClient), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
-                subtitle: Text('${cart.length} поз.'),
-                trailing: Text(money(total), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-              )),
-              const SizedBox(height: 10),
-              Row(children: [
-                methodTile('cash', 'Наличные', Icons.payments_outlined, Colors.green),
-                const SizedBox(width: 7),
-                methodTile('card', 'Карта', Icons.credit_card_rounded, Colors.blue),
-                const SizedBox(width: 7),
-                methodTile('kaspi', 'Kaspi POS', Icons.point_of_sale_rounded, Colors.red),
-              ]),
-              const SizedBox(height: 12),
-              SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(
-                onPressed: () { Navigator.pop(sheetContext); paySale(); },
-                icon: const Icon(Icons.check_circle_outline_rounded),
-                label: Text('Провести · ${money(total)}'),
-              )),
-              const SizedBox(height: 8),
-              SizedBox(width: double.infinity, height: 48, child: OutlinedButton.icon(
-                onPressed: () { Navigator.pop(sheetContext); createInvoiceSale(); },
-                icon: const Icon(Icons.description_outlined),
-                label: const Text('Безнал · Выставить счёт'),
-              )),
-            ]),
-          );
-        },
-      ),
-    );
-    NikaAssistantController.instance.setOverlaySuppressed(false);
+          },
+        ),
+      );
+    } finally {
+      NikaAssistantController.instance.setOverlaySuppressed(false);
+      cashController.dispose();
+    }
   }
 
-  Future<bool> paySale() async {
+  Future<bool> paySale({double? cashReceived}) async {
     if (cart.isEmpty || paying) return false;
+    final saleTotal = total;
     lastPaymentError = null;
     setState(() => paying = true);
     try {
       String? kaspiTransactionId;
       String? kaspiMethod;
       if (paymentMethod == 'kaspi') {
-        final kaspiResult = await KaspiPosService.startPayment(total.toInt());
+        final kaspiResult = await KaspiPosService.startPayment(saleTotal.toInt());
         if (kaspiResult['statusCode'] != 0) {
           throw ApiException('${kaspiResult['error'] ?? kaspiResult['message'] ?? 'Kaspi POS не принял оплату'}');
         }
@@ -1190,7 +1387,11 @@ class SalesScreenState extends State<SalesScreen> {
           await showDialog<void>(
             context: context,
             builder: (_) => AlertDialog(
-              icon: const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 38),
+              icon: const Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.danger,
+                size: 38,
+              ),
               title: const Text('Чек не фискализирован'),
               content: Text(
                 'Продажа сохранена, но reKassa не приняла чек.\n\n$reason\n\n'
@@ -1208,16 +1409,76 @@ class SalesScreenState extends State<SalesScreen> {
         return false;
       }
 
-      if (saleId != null) {
+      final change = paymentMethod == 'cash' && cashReceived != null
+          ? cashReceived - saleTotal
+          : 0.0;
+      if (change > .009 && mounted) {
+        NikaAssistantController.instance.setOverlaySuppressed(true);
+        try {
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              icon: const Icon(
+                Icons.payments_rounded,
+                color: AppColors.success,
+                size: 42,
+              ),
+              title: const Text(
+                'Сдача покупателю',
+                textAlign: TextAlign.center,
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    money(change),
+                    style: const TextStyle(
+                      color: AppColors.success,
+                      fontSize: 38,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Получено: ${money(cashReceived)} · покупка: ${money(saleTotal)}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.muted),
+                  ),
+                ],
+              ),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Показать чек'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } finally {
+          NikaAssistantController.instance.setOverlaySuppressed(false);
+        }
+      }
+
+      if (saleId != null && mounted) {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => CheckScreen(saleId: saleId, autoPrint: true)),
+          MaterialPageRoute(
+            builder: (_) => CheckScreen(saleId: saleId, autoPrint: true),
+          ),
         );
       }
       return true;
     } catch (e) {
       lastPaymentError = readableError(e);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(e))),
+        );
+      }
       return false;
     } finally {
       if (mounted) setState(() => paying = false);
