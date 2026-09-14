@@ -64,7 +64,7 @@ AI_INSTRUCTIONS = """
 сообщение клиенту в WhatsApp: client_id, recipient_query, message;\nсообщение сотруднику в WhatsApp: target_user_id, recipient_query, message;
 позиция: item_id, name, category, unit, description, retail_price, wholesale_price, purchase_price, discount_percent, barcode, gtin, ntin, is_marked, item_type product или service, service_sale_mode;
 категория: category_id, name, markup_percent, category_type product или service;
-склад: item_id, quantity, price для прихода, payment_method, comment;
+склад: item_id, quantity, price для прихода, payment_method, comment, update_retail true только если владелец подтвердил пересчёт розничной цены;
 задача: task_id, title, description, priority low medium high urgent, status new in_progress done cancelled, assigned_user_id, due_date;
 расход: expense_id, category, description, amount, payment_method, comment, date;
 документ: document_id, title, document_type invoice act waybill invoice_facture report payment check other, document_number, document_date, amount, counterparty, comment;

@@ -26,6 +26,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
   Map<String, dynamic>? selectedItem;
   bool loading = true;
   bool saving = false;
+  bool updateRetail = true;
   String? error;
 
   @override
@@ -74,8 +75,11 @@ class _IncomeScreenState extends State<IncomeScreen> {
   }
 
   void _selectItem(Map<String, dynamic> item) {
-    setState(() => selectedItem = item);
-    final previousPrice = stockNumber(item['purchase_price']);
+    setState(() {
+      selectedItem = item;
+      updateRetail = true;
+    });
+    final previousPrice = stockNumber(item['last_purchase_price'] ?? item['purchase_price']);
     if (previousPrice > 0) priceController.text = stockQuantity(previousPrice);
   }
 
@@ -117,6 +121,10 @@ class _IncomeScreenState extends State<IncomeScreen> {
   double get quantity => stockNumber(qtyController.text.replaceAll(',', '.'));
   double get price => stockNumber(priceController.text.replaceAll(',', '.'));
   double get total => quantity * price;
+  double get categoryMarkup => stockNumber(selectedItem?['category_markup']);
+  double get suggestedRetail => categoryMarkup > 0 && price > 0
+      ? (price * (1 + categoryMarkup / 100)).ceilToDouble()
+      : 0;
 
   Future<void> save() async {
     if (selectedItem == null) {
@@ -126,14 +134,20 @@ class _IncomeScreenState extends State<IncomeScreen> {
     if (!formKey.currentState!.validate() || saving) return;
     setState(() => saving = true);
     try {
-      await ApiService.stockIncome(
+      final result = await ApiService.stockIncome(
         itemId: stockNumber(selectedItem!['id']).toInt(),
         quantity: quantity,
         price: price,
         comment: commentController.text.trim(),
+        updateRetail: updateRetail && categoryMarkup > 0,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Приход проведён')));
+      final pricing = Map<String, dynamic>.from(result['pricing'] ?? const {});
+      final averageCost = money(pricing['average_cost']);
+      final message = pricing['retail_updated'] == true
+          ? 'Приход проведён · средняя себестоимость $averageCost · розничная ${money(pricing['retail_price'])}'
+          : 'Приход проведён · средняя себестоимость $averageCost';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
@@ -246,6 +260,29 @@ class _IncomeScreenState extends State<IncomeScreen> {
                             ),
                           ],
                         ),
+                        if (selectedItem != null) ...[
+                          const SizedBox(height: 12),
+                          Card(
+                            color: AppColors.primarySoft,
+                            child: CheckboxListTile(
+                              value: updateRetail && categoryMarkup > 0,
+                              onChanged: categoryMarkup > 0
+                                  ? (value) => setState(() => updateRetail = value ?? false)
+                                  : null,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: const Text(
+                                'Обновить розничную цену',
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                              ),
+                              subtitle: Text(
+                                categoryMarkup > 0
+                                    ? 'Текущая: ${money(selectedItem?['retail_price'])} → новая: ${money(suggestedRetail)} по наценке ${stockQuantity(categoryMarkup)}%'
+                                    : 'У категории не указана наценка — цена не изменится',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: commentController,

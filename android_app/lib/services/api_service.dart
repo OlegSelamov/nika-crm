@@ -346,19 +346,20 @@ class ApiService {
   static Future<List<dynamic>> getStockMovements() async =>
       List<dynamic>.from(await _request('GET', '/api/stock/movements'));
 
-  static Future<void> stockIncome({
+  static Future<Map<String, dynamic>> stockIncome({
     required int itemId,
     required double quantity,
     required double price,
     String comment = '',
-  }) async {
-    await _request('POST', '/api/stock/income', body: {
-      'item_id': itemId,
-      'quantity': quantity,
-      'price': price,
-      'comment': comment,
-    });
-  }
+    bool updateRetail = false,
+  }) async =>
+      Map<String, dynamic>.from(await _request('POST', '/api/stock/income', body: {
+        'item_id': itemId,
+        'quantity': quantity,
+        'price': price,
+        'comment': comment,
+        'update_retail': updateRetail,
+      }));
 
   static Future<void> stockWriteoff({
     required int itemId,
