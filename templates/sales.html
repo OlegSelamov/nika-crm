@@ -180,9 +180,9 @@
 
 			<div class="payment-methods">
 
-				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" onclick="fillPayment('cash')">
-				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" onclick="fillPayment('card')">
-				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" onclick="fillPayment('kaspi')">
+				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" autocomplete="off" onclick="fillPayment('cash')">
+				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" autocomplete="off" onclick="fillPayment('card')">
+				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" autocomplete="off" onclick="fillPayment('kaspi')">
 
 			</div>
 
@@ -675,5 +675,6 @@
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/sales.js', v='20260914-cash-change-1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260914-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
 {% endblock %}
