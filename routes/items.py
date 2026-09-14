@@ -15,7 +15,12 @@ from decimal import Decimal, InvalidOperation
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
-from services.media import upload_image, delete_media
+from services.media import (
+    upload_image,
+    delete_media,
+    migrate_local_image,
+    copy_image_reference,
+)
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from routes.expenses import (
@@ -79,6 +84,69 @@ def _item_barcode(cur, value, item_type="product"):
     if barcode or item_type == "service":
         return barcode
     return _generate_internal_barcode(cur)
+
+
+def _record_opening_balance(
+    cur,
+    *,
+    company_id,
+    user_id,
+    item_id,
+    item_name,
+    quantity,
+    purchase_price,
+    payment_method="Другое",
+):
+    quantity = Decimal(str(quantity or 0))
+    purchase_price = Decimal(str(purchase_price or 0))
+    if quantity <= 0:
+        return
+
+    movement_datetime = now_kz()
+    total = quantity * purchase_price
+    cur.execute("""
+        INSERT INTO stock_movements (
+            company_id,
+            item_id,
+            movement_type,
+            quantity,
+            price,
+            total,
+            comment,
+            created_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+    """, (
+        company_id,
+        item_id,
+        "income",
+        quantity,
+        purchase_price,
+        total,
+        "Первичный остаток при создании товара",
+        movement_datetime,
+    ))
+
+    movement_id = cur.fetchone()["id"]
+    if purchase_price <= 0:
+        return
+
+    _ensure_expenses_table(cur)
+    expense_id = upsert_expense_from_source(
+        cur,
+        company_id=company_id,
+        source_type="stock_income",
+        source_id=movement_id,
+        category="Закупки",
+        description=f"Начальный остаток: {item_name}",
+        amount=total,
+        expense_date=movement_datetime.date(),
+        payment_method=payment_method or "Другое",
+        comment="Создано автоматически из начального остатка товара",
+        user_id=user_id,
+    )
+    _sync_expense_to_accounting(cur, expense_id, company_id)
 
 
 @items_bp.route("/items")
@@ -1029,53 +1097,19 @@ def api_create_item():
 
     item_id = cur.fetchone()["id"]
 
-    # если количество больше 0 — создаём приход в движении товара
     quantity = float(data.get("quantity") or 0)
     purchase_price = float(data.get("purchase_price") or 0)
-
     if quantity > 0 and item_type == "product":
-        movement_datetime = now_kz()
-        cur.execute("""
-            INSERT INTO stock_movements (
-                company_id,
-                item_id,
-                movement_type,
-                quantity,
-                price,
-                total,
-                comment,
-                created_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            session.get("company_id"),
-            item_id,
-            "income",
-            quantity,
-            purchase_price,
-            quantity * purchase_price,
-            "Первичный остаток при создании товара",
-            movement_datetime
-        ))
-
-        movement_id = cur.fetchone()["id"]
-        if purchase_price > 0:
-            _ensure_expenses_table(cur)
-            expense_id = upsert_expense_from_source(
-                cur,
-                company_id=session.get("company_id"),
-                source_type="stock_income",
-                source_id=movement_id,
-                category="Закупки",
-                description=f"Начальный остаток: {data.get('name', '')}",
-                amount=quantity * purchase_price,
-                expense_date=movement_datetime.date(),
-                payment_method=data.get("payment_method") or "Другое",
-                comment="Создано автоматически из начального остатка товара",
-                user_id=session.get("user_id"),
-            )
-            _sync_expense_to_accounting(cur, expense_id, session.get("company_id"))
+        _record_opening_balance(
+            cur,
+            company_id=session.get("company_id"),
+            user_id=session.get("user_id"),
+            item_id=item_id,
+            item_name=data.get("name", ""),
+            quantity=quantity,
+            purchase_price=purchase_price,
+            payment_method=data.get("payment_method") or "Другое",
+        )
 
     conn.commit()
 
@@ -1176,7 +1210,8 @@ def api_delete_item(item_id):
 _CATALOG_HEADERS = [
     "Название", "Тип", "Категория", "Ед. изм.", "Штрихкод",
     "GTIN", "NTIN", "Закупочная цена", "Оптовая цена",
-    "Розничная цена", "Скидка %", "Описание", "Количество"
+    "Розничная цена", "Скидка %", "Описание", "Количество",
+    "Главное фото", "Фотографии"
 ]
 
 _CATALOG_ALIASES = {
@@ -1191,6 +1226,8 @@ _CATALOG_ALIASES = {
     "розничная цена": "retail_price", "цена": "retail_price",
     "скидка %": "discount_percent", "скидка": "discount_percent",
     "описание": "description", "количество": "quantity", "остаток": "quantity",
+    "главное фото": "main_image", "главная фотография": "main_image",
+    "фотографии": "images", "фото": "images", "ссылки на фото": "images",
 }
 
 
@@ -1210,6 +1247,16 @@ def _catalog_text(value):
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip()
+
+
+def _catalog_image_urls(main_image, images):
+    values = []
+    for raw in (main_image, images):
+        for value in re.split(r"[\r\n;]+", _catalog_text(raw)):
+            url = value.strip()
+            if url and url not in values:
+                values.append(url)
+    return values
 
 
 _UNIT_ALIASES = {
@@ -1257,7 +1304,7 @@ def _style_excel_sheet(ws):
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center")
     ws.freeze_panes = "A2"
-    widths = [34, 14, 24, 13, 20, 18, 18, 18, 18, 18, 12, 40, 14]
+    widths = [34, 14, 24, 13, 20, 18, 18, 18, 18, 18, 12, 40, 14, 52, 72]
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[chr(64 + index)].width = width
     ws.auto_filter.ref = ws.dimensions
@@ -1272,15 +1319,60 @@ def export_items_xlsx():
     conn = get_db()
     try:
         cur = conn.cursor()
+        _ensure_item_images_main(cur)
+
+        # Старые локальные фотографии переносим в R2 прямо перед экспортом.
+        # Благодаря этому Excel содержит постоянные публичные ссылки.
         cur.execute("""
-            SELECT name, item_type, category, unit, barcode, gtin, ntin,
-                   purchase_price, wholesale_price, retail_price,
-                   discount_percent, description, quantity
-            FROM items
-            WHERE company_id = %s
-            ORDER BY COALESCE(item_type, 'product'), category, name
+            SELECT ii.id, ii.item_id, ii.image
+            FROM item_images ii
+            JOIN items i ON i.id = ii.item_id
+            WHERE i.company_id = %s
+            ORDER BY ii.id
+        """, (company_id,))
+        for image_row in cur.fetchall():
+            image_url = _catalog_text(image_row.get("image"))
+            if not image_url or image_url.startswith(("http://", "https://")):
+                continue
+            migrated_url = migrate_local_image(
+                image_url,
+                company_id=company_id,
+                namespace=f"items/{image_row['item_id']}",
+            )
+            cur.execute(
+                "UPDATE item_images SET image=%s WHERE id=%s",
+                (migrated_url, image_row["id"]),
+            )
+        conn.commit()
+
+        cur.execute("""
+            SELECT
+                i.name, i.item_type, i.category, i.unit, i.barcode, i.gtin, i.ntin,
+                i.purchase_price, i.wholesale_price, i.retail_price,
+                i.discount_percent, i.description, i.quantity,
+                (
+                    SELECT ii.image
+                    FROM item_images ii
+                    WHERE ii.item_id = i.id
+                    ORDER BY COALESCE(ii.is_main, FALSE) DESC, ii.id
+                    LIMIT 1
+                ) AS main_image,
+                (
+                    SELECT string_agg(
+                        ii.image,
+                        E'\n' ORDER BY COALESCE(ii.is_main, FALSE) DESC, ii.id
+                    )
+                    FROM item_images ii
+                    WHERE ii.item_id = i.id
+                ) AS images
+            FROM items i
+            WHERE i.company_id = %s
+            ORDER BY COALESCE(i.item_type, 'product'), i.category, i.name
         """, (company_id,))
         rows = cur.fetchall()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         pool.putconn(conn)
 
@@ -1304,6 +1396,8 @@ def export_items_xlsx():
             row.get("discount_percent") or 0,
             row.get("description") or "",
             row.get("quantity") or 0,
+            row.get("main_image") or "",
+            row.get("images") or "",
         ])
 
     _style_excel_sheet(ws)
@@ -1327,12 +1421,12 @@ def items_import_template():
     ws.append([
         "Масло моторное 5W-30", "Товар", "Масла", "шт",
         "4870000000000", "", "", 12000, 0, 15500, 0,
-        "Пример товара. Эту строку можно удалить.", 10
+        "Пример товара. Эту строку можно удалить.", 10, "", ""
     ])
     ws.append([
         "Замена масла", "Услуга", "Автосервис", "услуга",
         "", "", "", 0, 0, 5000, 0,
-        "Пример услуги. Эту строку можно удалить.", 0
+        "Пример услуги. Эту строку можно удалить.", 0, "", ""
     ])
     _style_excel_sheet(ws)
     output = BytesIO()
@@ -1349,6 +1443,7 @@ def items_import_template():
 @items_bp.route("/items/import", methods=["POST"])
 def import_items_xlsx():
     company_id = session.get("company_id")
+    user_id = session.get("user_id")
     if not company_id:
         return jsonify({"success": False, "message": "Компания не выбрана"}), 403
 
@@ -1385,10 +1480,18 @@ def import_items_xlsx():
         column = header_map.get(field)
         return row[column - 1] if column else None
 
-    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
+    stats = {
+        "created": 0,
+        "updated": 0,
+        "skipped": 0,
+        "images": 0,
+        "errors": [],
+    }
     conn = get_db()
     try:
         cur = conn.cursor()
+        _ensure_item_images_main(cur)
+
         for excel_row, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             name = _catalog_text(value(row, "name"))
             if not name:
@@ -1408,6 +1511,10 @@ def import_items_xlsx():
                 discount_percent = int(_catalog_number(value(row, "discount_percent")))
                 description = _catalog_text(value(row, "description"))
                 quantity = _catalog_number(value(row, "quantity")) if item_type == "product" else Decimal("0")
+                image_urls = _catalog_image_urls(
+                    value(row, "main_image"),
+                    value(row, "images"),
+                )
 
                 cur.execute("""
                     INSERT INTO categories (company_id, name, markup_percent, category_type)
@@ -1442,10 +1549,10 @@ def import_items_xlsx():
                     stats["skipped"] += 1
                     continue
 
+                item_id = existing["id"] if existing else None
                 if existing:
                     # При обновлении меняем только действительно заполненные
-                    # колонки Excel. Пустые ячейки не должны стирать штрихкод,
-                    # цены, остаток и остальные данные существующего товара.
+                    # колонки Excel. Пустые ячейки не стирают текущие данные.
                     updates = ["name=%s"]
                     update_values = [name]
 
@@ -1485,7 +1592,7 @@ def import_items_xlsx():
                         ])
                         update_values.extend([item_type, item_type])
 
-                    update_values.extend([existing["id"], company_id])
+                    update_values.extend([item_id, company_id])
                     cur.execute(
                         f"UPDATE items SET {', '.join(updates)} "
                         "WHERE id=%s AND company_id=%s",
@@ -1504,16 +1611,54 @@ def import_items_xlsx():
                         ) VALUES (
                             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE,%s,%s,%s,%s
                         )
+                        RETURNING id
                     """, (
                         name, category, unit, description, retail_price,
                         wholesale_price, purchase_price, discount_percent,
                         barcode, gtin, ntin, item_type,
                         "order" if item_type == "service" else None,
-                        quantity, company_id
+                        quantity, company_id,
                     ))
+                    item_id = cur.fetchone()["id"]
                     stats["created"] += 1
+
+                    if item_type == "product" and quantity > 0:
+                        _record_opening_balance(
+                            cur,
+                            company_id=company_id,
+                            user_id=user_id,
+                            item_id=item_id,
+                            item_name=name,
+                            quantity=quantity,
+                            purchase_price=purchase_price,
+                        )
+
+                if image_urls:
+                    cur.execute(
+                        "SELECT COUNT(*) AS total FROM item_images WHERE item_id=%s",
+                        (item_id,),
+                    )
+                    has_images = (cur.fetchone().get("total") or 0) > 0
+                    if not has_images:
+                        for image_index, source_url in enumerate(image_urls):
+                            stored_url = copy_image_reference(
+                                source_url,
+                                company_id=company_id,
+                                namespace=f"items/{item_id}",
+                                name=f"transfer_{uuid.uuid4().hex}",
+                            )
+                            if not stored_url:
+                                continue
+                            cur.execute("""
+                                INSERT INTO item_images (item_id, image, is_main)
+                                VALUES (%s, %s, %s)
+                            """, (item_id, stored_url, image_index == 0))
+                            stats["images"] += 1
             except Exception as row_error:
-                stats["errors"].append({"row": excel_row, "message": str(row_error)[:180]})
+                stats["errors"].append({
+                    "row": excel_row,
+                    "message": str(row_error)[:180],
+                })
                 if len(stats["errors"]) >= 50:
                     break
 
