@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from flask import jsonify
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
+from utils.stock_pricing import apply_income_pricing, as_bool
 from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting
 
 stock_bp = Blueprint("stock", __name__)
@@ -41,19 +42,27 @@ def stock_income():
 
         comment = request.form.get("comment")
         company_id = session.get("company_id")
+        update_retail = as_bool(request.form.get("update_retail"))
 
         if not is_product(cur, item_id, company_id):
             pool.putconn(conn)
             return "Приход доступен только для товаров", 400
+        if quantity <= 0:
+            pool.putconn(conn)
+            return "Количество должно быть больше нуля", 400
+        if price < 0:
+            pool.putconn(conn)
+            return "Закупочная цена не может быть отрицательной", 400
 
-        cur.execute("""
-            SELECT name
-            FROM items
-            WHERE id = %s AND company_id = %s
-        """, (item_id, company_id))
-        item_row = cur.fetchone()
-
-        item_name = item_row["name"] if item_row else f"Товар #{item_id}"
+        pricing = apply_income_pricing(
+            cur,
+            company_id=company_id,
+            item_id=item_id,
+            quantity=quantity,
+            price=price,
+            update_retail=update_retail,
+        )
+        item_name = pricing["item_name"]
         total = quantity * price
         movement_datetime = datetime.utcnow() + timedelta(hours=5)
 
@@ -180,6 +189,14 @@ def stock():
         WITH stock_rows AS (
             SELECT
                 i.*,
+                COALESCE((
+                    SELECT c.markup_percent
+                    FROM categories c
+                    WHERE c.company_id = i.company_id
+                      AND LOWER(COALESCE(c.name, '')) = LOWER(COALESCE(i.category, ''))
+                    ORDER BY c.id
+                    LIMIT 1
+                ), 0) AS category_markup,
                 (SELECT ii.image FROM item_images ii WHERE ii.item_id = i.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1) AS item_image,
                 COALESCE(SUM(
                     CASE
@@ -427,6 +444,14 @@ def api_stock():
         WITH stock_rows AS (
             SELECT
                 i.*,
+                COALESCE((
+                    SELECT c.markup_percent
+                    FROM categories c
+                    WHERE c.company_id = i.company_id
+                      AND LOWER(COALESCE(c.name, '')) = LOWER(COALESCE(i.category, ''))
+                    ORDER BY c.id
+                    LIMIT 1
+                ), 0) AS category_markup,
                 (SELECT ii.image FROM item_images ii WHERE ii.item_id = i.id ORDER BY ii.is_main DESC, ii.id ASC LIMIT 1) AS item_image,
                 COALESCE(SUM(
                     CASE
@@ -530,13 +555,22 @@ def api_stock_income():
     comment = data.get("comment", "")
     movement_datetime = datetime.utcnow() + timedelta(hours=5)
 
-    cur.execute("""
-        SELECT name
-        FROM items
-        WHERE id = %s AND company_id = %s
-    """, (data["item_id"], company_id))
-    item_row = cur.fetchone()
-    item_name = item_row["name"] if item_row else f"Товар #{data['item_id']}"
+    if quantity <= 0:
+        pool.putconn(conn)
+        return jsonify({"success": False, "error": "Количество должно быть больше нуля"}), 400
+    if price < 0:
+        pool.putconn(conn)
+        return jsonify({"success": False, "error": "Закупочная цена не может быть отрицательной"}), 400
+
+    pricing = apply_income_pricing(
+        cur,
+        company_id=company_id,
+        item_id=data["item_id"],
+        quantity=quantity,
+        price=price,
+        update_retail=as_bool(data.get("update_retail"), default=False),
+    )
+    item_name = pricing["item_name"]
 
     cur.execute("""
         INSERT INTO stock_movements (
@@ -587,7 +621,14 @@ def api_stock_income():
     return jsonify({
         "success": True,
         "movement_id": movement_id,
-        "expense_id": expense_id
+        "expense_id": expense_id,
+        "pricing": {
+            "average_cost": float(pricing["average_cost"]),
+            "last_purchase_price": float(pricing["last_purchase_price"]),
+            "retail_price": float(pricing["retail_price"]),
+            "markup_percent": float(pricing["markup_percent"]),
+            "retail_updated": pricing["retail_updated"],
+        }
     })
     
 @stock_bp.route(
