@@ -1,0 +1,39 @@
+name: Stock pricing check
+
+on:
+  push:
+    branches:
+      - fix/weighted-average-stock-income
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Python syntax
+        run: python -m py_compile utils/stock_pricing.py routes/stock.py routes/ai_actions.py app.py models.py
+      - name: Run stock pricing tests
+        run: python -m unittest tests.test_stock_pricing
+      - name: Check browser JavaScript syntax
+        run: node --check static/js/stock_income.js
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install packages
+        run: flutter pub get
+      - name: Analyze changed mobile files
+        run: flutter analyze lib/screens/income_screen.dart lib/services/api_service.dart
