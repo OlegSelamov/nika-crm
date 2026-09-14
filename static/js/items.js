@@ -1233,6 +1233,74 @@ function showNikaDataResult(resultId, type, message) {
     result.className = 'nika-data-result ' + (type === 'success' ? 'is-success' : 'is-error');
     result.innerHTML = message;
 }
+async function downloadCatalogExport(event, link) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!link || link.dataset.exportBusy === '1') return false;
+    link.dataset.exportBusy = '1';
+    link.setAttribute('aria-busy', 'true');
+
+    const status = link.querySelector('small');
+    const originalStatus = status ? status.textContent : '';
+    if (status) status.textContent = 'Переносим фото в R2 и готовим Excel…';
+
+    try {
+        const response = await fetch(link.href, {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        if (!response.ok) {
+            const message = (await response.text()).trim();
+            throw new Error(message || 'Не удалось подготовить Excel-файл');
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        const plainName = disposition.match(/filename="?([^";]+)"?/i);
+        let fileName = 'nika_catalog.xlsx';
+        if (utf8Name && utf8Name[1]) {
+            try { fileName = decodeURIComponent(utf8Name[1]); } catch (_) {}
+        } else if (plainName && plainName[1]) {
+            fileName = plainName[1];
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = objectUrl;
+        downloadLink.download = fileName;
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+
+        if (status) status.textContent = 'Excel скачан';
+        showNikaDataResult(
+            'catalogDataImportResult',
+            'success',
+            'Каталог подготовлен. Фотографии перенесены в R2, Excel скачан.'
+        );
+    } catch (error) {
+        if (status) status.textContent = originalStatus;
+        showNikaDataResult(
+            'catalogDataImportResult',
+            'error',
+            escapeHtml(error.message || 'Не удалось скачать Excel')
+        );
+    } finally {
+        link.dataset.exportBusy = '0';
+        link.removeAttribute('aria-busy');
+        window.setTimeout(() => {
+            if (status && link.dataset.exportBusy !== '1') {
+                status.textContent = originalStatus;
+            }
+        }, 3000);
+    }
+    return false;
+}
+
 async function submitNikaDataImport(formId, url, resultId) {
     const form = document.getElementById(formId);
     if (!form) return;
