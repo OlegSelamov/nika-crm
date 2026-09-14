@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, jsonify, send_file
+from flask import Blueprint, render_template, request, redirect, jsonify, send_file, current_app
 from models import get_db, pool
 from werkzeug.utils import secure_filename
 from flask import session
@@ -1314,15 +1314,19 @@ def _style_excel_sheet(ws):
 def export_items_xlsx():
     company_id = session.get("company_id")
     if not company_id:
-        return "Компания не выбрана", 403
+        return jsonify({
+            "success": False,
+            "message": "Компания не выбрана",
+        }), 403
 
     conn = get_db()
+    migration_warnings = []
     try:
         cur = conn.cursor()
         _ensure_item_images_main(cur)
 
-        # Старые локальные фотографии переносим в R2 прямо перед экспортом.
-        # Благодаря этому Excel содержит постоянные публичные ссылки.
+        # Один повреждённый или уже удалённый локальный файл не должен
+        # отменять перенос остальных фотографий и скачивание каталога.
         cur.execute("""
             SELECT ii.id, ii.item_id, ii.image
             FROM item_images ii
@@ -1335,16 +1339,26 @@ def export_items_xlsx():
             image_url = _catalog_text(image_row.get("image"))
             if not image_url or image_url.startswith(("http://", "https://")):
                 continue
-            migrated_url = migrate_local_image(
-                image_url,
-                company_id=company_id,
-                namespace=f"items/{image_row['item_id']}",
-                name=f"legacy_{image_row['id']}",
-            )
-            cur.execute(
-                "UPDATE item_images SET image=%s WHERE id=%s",
-                (migrated_url, image_row["id"]),
-            )
+            try:
+                migrated_url = migrate_local_image(
+                    image_url,
+                    company_id=company_id,
+                    namespace=f"items/{image_row['item_id']}",
+                    name=f"legacy_{image_row['id']}",
+                )
+                cur.execute(
+                    "UPDATE item_images SET image=%s WHERE id=%s",
+                    (migrated_url, image_row["id"]),
+                )
+            except Exception as image_error:
+                migration_warnings.append(image_row["id"])
+                current_app.logger.warning(
+                    "Catalog export skipped local image id=%s company_id=%s: %s",
+                    image_row["id"],
+                    company_id,
+                    image_error,
+                    exc_info=True,
+                )
         conn.commit()
 
         cur.execute("""
@@ -1372,46 +1386,65 @@ def export_items_xlsx():
             ORDER BY COALESCE(i.item_type, 'product'), i.category, i.name
         """, (company_id,))
         rows = cur.fetchall()
-    except Exception:
+    except Exception as error:
         conn.rollback()
-        raise
+        current_app.logger.exception(
+            "Catalog export failed for company_id=%s",
+            company_id,
+        )
+        return jsonify({
+            "success": False,
+            "message": f"Не удалось подготовить каталог: {error}",
+        }), 500
     finally:
         pool.putconn(conn)
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Каталог"
-    ws.append(_CATALOG_HEADERS)
+    try:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Каталог"
+        ws.append(_CATALOG_HEADERS)
 
-    for row in rows:
-        ws.append([
-            row.get("name") or "",
-            "Услуга" if (row.get("item_type") or "product") == "service" else "Товар",
-            row.get("category") or "",
-            row.get("unit") or "",
-            row.get("barcode") or "",
-            row.get("gtin") or "",
-            row.get("ntin") or "",
-            row.get("purchase_price") or 0,
-            row.get("wholesale_price") or 0,
-            row.get("retail_price") or 0,
-            row.get("discount_percent") or 0,
-            row.get("description") or "",
-            row.get("quantity") or 0,
-            row.get("main_image") or "",
-            row.get("images") or "",
-        ])
+        for row in rows:
+            ws.append([
+                row.get("name") or "",
+                "Услуга" if (row.get("item_type") or "product") == "service" else "Товар",
+                row.get("category") or "",
+                row.get("unit") or "",
+                row.get("barcode") or "",
+                row.get("gtin") or "",
+                row.get("ntin") or "",
+                row.get("purchase_price") or 0,
+                row.get("wholesale_price") or 0,
+                row.get("retail_price") or 0,
+                row.get("discount_percent") or 0,
+                row.get("description") or "",
+                row.get("quantity") or 0,
+                row.get("main_image") or "",
+                row.get("images") or "",
+            ])
 
-    _style_excel_sheet(ws)
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=f"nika_catalog_company_{company_id}.xlsx",
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+        _style_excel_sheet(ws)
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        response = send_file(
+            output,
+            as_attachment=True,
+            download_name=f"nika_catalog_company_{company_id}.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response.headers["X-Nika-Photo-Warnings"] = str(len(migration_warnings))
+        return response
+    except Exception as error:
+        current_app.logger.exception(
+            "Catalog workbook generation failed for company_id=%s",
+            company_id,
+        )
+        return jsonify({
+            "success": False,
+            "message": f"Не удалось сформировать Excel: {error}",
+        }), 500
 
 
 @items_bp.route("/items/import-template.xlsx")
