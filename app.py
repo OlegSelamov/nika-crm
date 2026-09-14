@@ -105,6 +105,15 @@ try:
         ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT FALSE
     """)
     _media_schema_cur.execute("""
+        ALTER TABLE items
+        ADD COLUMN IF NOT EXISTS last_purchase_price NUMERIC(12,2)
+    """)
+    _media_schema_cur.execute("""
+        UPDATE items
+        SET last_purchase_price = purchase_price
+        WHERE last_purchase_price IS NULL
+    """)
+    _media_schema_cur.execute("""
         ALTER TABLE companies
         ADD COLUMN IF NOT EXISTS is_vat_payer BOOLEAN NOT NULL DEFAULT FALSE
     """)
