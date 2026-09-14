@@ -106,12 +106,25 @@ try:
     """)
     _media_schema_cur.execute("""
         ALTER TABLE items
+        ALTER COLUMN purchase_price TYPE NUMERIC(12,2)
+        USING purchase_price::NUMERIC(12,2)
+    """)
+    _media_schema_cur.execute("""
+        ALTER TABLE items
         ADD COLUMN IF NOT EXISTS last_purchase_price NUMERIC(12,2)
     """)
     _media_schema_cur.execute("""
-        UPDATE items
-        SET last_purchase_price = purchase_price
-        WHERE last_purchase_price IS NULL
+        UPDATE items i
+        SET last_purchase_price = COALESCE((
+            SELECT sm.price
+            FROM stock_movements sm
+            WHERE sm.company_id = i.company_id
+              AND sm.item_id = i.id
+              AND sm.movement_type = 'income'
+            ORDER BY sm.created_at DESC NULLS LAST, sm.id DESC
+            LIMIT 1
+        ), i.purchase_price)
+        WHERE i.last_purchase_price IS NULL
     """)
     _media_schema_cur.execute("""
         ALTER TABLE companies
