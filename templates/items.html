@@ -214,7 +214,7 @@
         </div>
 
         <div class="nika-data-actions-grid">
-            <a class="nika-data-action" href="/items/export.xlsx">
+            <a class="nika-data-action" href="/items/export.xlsx" download onclick="downloadCatalogExport(event, this); return false;">
                 <span class="nika-data-action__icon"><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-download"></use></svg></span>
                 <span><b>Экспорт Excel</b><small>Товары, остатки и ссылки на фотографии</small></span>
             </a>
