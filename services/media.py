@@ -235,10 +235,11 @@ def migrate_local_image(url, *, company_id, namespace, name=None):
 
 
 def copy_image_reference(url, *, company_id, namespace, name=None):
-    """Copy an exported catalog image into the destination company's R2 path.
+    """Attach an exported image URL to another company's catalog.
 
-    URLs outside the configured R2 public base remain valid external references.
-    Legacy local paths are uploaded through the active media backend.
+    Exported R2 URLs are permanent public references, so reusing them is safer
+    than asking R2 to duplicate the object with CopyObject. Legacy local paths
+    are still uploaded to the active media backend.
     """
     value = str(url or "").strip()
     if not value:
@@ -252,35 +253,7 @@ def copy_image_reference(url, *, company_id, namespace, name=None):
             name=name,
         )
 
-    public_base = _public_base()
-    clean_value = value.split("?", 1)[0]
-    if public_base and clean_value.startswith(public_base + "/") and _r2_ready():
-        source_key = clean_value[len(public_base) + 1 :]
-        ext = source_key.rsplit(".", 1)[-1].lower() if "." in source_key else "webp"
-        if ext not in ALLOWED_IMAGE_EXTENSIONS:
-            ext = "webp"
-        target_key = _key(
-            company_id,
-            namespace,
-            ext=ext,
-            name=name,
-        )
-        if source_key == target_key:
-            return clean_value
-        _r2_client().copy_object(
-            Bucket=os.environ["R2_BUCKET"],
-            CopySource={
-                "Bucket": os.environ["R2_BUCKET"],
-                "Key": source_key,
-            },
-            Key=target_key,
-            CacheControl="public, max-age=31536000, immutable",
-            MetadataDirective="REPLACE",
-            ContentType=mimetypes.guess_type(target_key)[0] or "image/webp",
-        )
-        return f"{public_base}/{target_key}"
-
-    return value
+    return value.split("?", 1)[0]
 
 def delete_media(url):
     if not url:
