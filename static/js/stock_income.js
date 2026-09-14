@@ -16,6 +16,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const quantityInput = document.getElementById("incomeQuantity");
     const priceInput = document.getElementById("incomePrice");
     const previousPriceHint = document.getElementById("previousPriceHint");
+    const updateRetailInput = document.getElementById("incomeUpdateRetail");
+    const retailHint = document.getElementById("incomeRetailHint");
 
     const summaryQuantity = document.getElementById("summaryQuantity");
     const summaryPrice = document.getElementById("summaryPrice");
@@ -24,6 +26,8 @@ document.addEventListener("DOMContentLoaded", function () {
     let highlightedIndex = -1;
     let searchTimer = null;
     let searchController = null;
+    let selectedMarkup = 0;
+    let selectedRetail = 0;
 
     function formatNumber(value, maximumFractionDigits = 3) {
         return new Intl.NumberFormat("ru-RU", {maximumFractionDigits})
@@ -33,6 +37,29 @@ document.addEventListener("DOMContentLoaded", function () {
     function formatMoney(value) {
         return new Intl.NumberFormat("ru-RU", {maximumFractionDigits: 2})
             .format(Number(value || 0)) + " ₸";
+    }
+
+    function updateRetailHint() {
+        if (!updateRetailInput || !retailHint) return;
+
+        const price = Number(priceInput?.value || 0);
+        const canRecalculate = selectedMarkup > 0 && price > 0;
+        updateRetailInput.disabled = !canRecalculate;
+
+        if (selectedMarkup <= 0) {
+            retailHint.textContent = itemIdInput?.value
+                ? "У категории не указана наценка — розничная цена не изменится"
+                : "Сначала выберите товар";
+            return;
+        }
+
+        if (price <= 0) {
+            retailHint.textContent = "Введите закупочную цену для расчёта";
+            return;
+        }
+
+        const suggestedRetail = Math.ceil(price * (1 + selectedMarkup / 100));
+        retailHint.textContent = `Текущая: ${formatMoney(selectedRetail)} → новая: ${formatMoney(suggestedRetail)} (наценка ${formatNumber(selectedMarkup, 2)}%)`;
     }
 
     function updateSummary() {
@@ -83,6 +110,10 @@ document.addEventListener("DOMContentLoaded", function () {
             searchInput.setCustomValidity("");
         }
         if (selectedBox) selectedBox.hidden = true;
+        selectedMarkup = 0;
+        selectedRetail = 0;
+        if (updateRetailInput) updateRetailInput.disabled = true;
+        if (retailHint) retailHint.textContent = "Сначала выберите товар";
         if (previousPriceHint) {
             previousPriceHint.textContent = "После выбора товара подставится последняя закупочная цена";
         }
@@ -94,7 +125,9 @@ document.addEventListener("DOMContentLoaded", function () {
         const name = option.dataset.name || "";
         const unit = option.dataset.unit || "";
         const stock = option.dataset.stock || "0";
-        const previousPrice = Number(option.dataset.price || 0);
+        const previousPrice = Number(option.dataset.lastPrice || option.dataset.price || 0);
+        selectedMarkup = Number(option.dataset.markup || 0);
+        selectedRetail = Number(option.dataset.retail || 0);
 
         itemIdInput.value = option.dataset.id || "";
         searchInput.value = name;
@@ -117,6 +150,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         closeDropdown();
         updateSummary();
+        updateRetailHint();
         setTimeout(() => quantityInput?.focus(), 50);
     }
 
@@ -135,6 +169,9 @@ document.addEventListener("DOMContentLoaded", function () {
             ? ""
             : item.item_image || item.image || "";
         option.dataset.price = item.purchase_price ?? 0;
+        option.dataset.lastPrice = item.last_purchase_price ?? item.purchase_price ?? 0;
+        option.dataset.retail = item.retail_price ?? 0;
+        option.dataset.markup = item.category_markup ?? 0;
 
         const avatar = document.createElement("span");
         avatar.className = "product-option-avatar";
@@ -343,7 +380,11 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     quantityInput?.addEventListener("input", updateSummary);
-    priceInput?.addEventListener("input", updateSummary);
+    priceInput?.addEventListener("input", () => {
+        updateSummary();
+        updateRetailHint();
+    });
+    updateRetailInput?.addEventListener("change", updateRetailHint);
 
     document.getElementById("incomeReset")?.addEventListener("click", () => {
         form?.reset();
