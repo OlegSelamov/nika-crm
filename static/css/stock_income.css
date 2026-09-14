@@ -1036,7 +1036,6 @@
     line-height:1.4;
 }
 
-.income-retail-toggle:has(input:disabled){
-    opacity:.65;
-    cursor:default;
+.income-retail-toggle input:disabled{
+    opacity:.55;
 }
