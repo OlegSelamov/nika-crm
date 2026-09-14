@@ -180,15 +180,24 @@
 
 			<div class="payment-methods">
 
-				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" autocomplete="off" onclick="fillPayment('cash')">
-				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" autocomplete="off" onclick="fillPayment('card')">
-				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" autocomplete="off" onclick="fillPayment('kaspi')">
+				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cardInput').value=''; document.getElementById('kaspiInput').value=''; fillPayment('cash')">
+				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cashInput').value=''; document.getElementById('kaspiInput').value=''; fillPayment('card')">
+				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cashInput').value=''; document.getElementById('cardInput').value=''; fillPayment('kaspi')">
 
 			</div>
 
 			<div class="payment-actions">
 
-				<button class="pay-btn" onclick="pay()">
+				<button class="pay-btn" onclick="
+                    const cardAmount = Number(String(document.getElementById('cardInput').value || '').replace(',', '.')) || 0;
+                    const kaspiAmount = Number(String(document.getElementById('kaspiInput').value || '').replace(',', '.')) || 0;
+                    if (cardAmount > 0 || kaspiAmount > 0) {
+                        pay();
+                    } else {
+                        openCashChangeModal();
+                    }
+                    return false;
+                ">
 					ОПЛАТА
 				</button>
 
