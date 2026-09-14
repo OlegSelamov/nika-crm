@@ -1251,10 +1251,18 @@ async function downloadCatalogExport(event, link) {
             credentials: 'same-origin'
         });
         if (!response.ok) {
-            const message = (await response.text()).trim();
+            const raw = (await response.text()).trim();
+            let message = raw;
+            try {
+                const payload = raw ? JSON.parse(raw) : {};
+                message = payload.message || payload.error || raw;
+            } catch (_) {}
             throw new Error(message || 'Не удалось подготовить Excel-файл');
         }
 
+        const photoWarnings = Number(
+            response.headers.get('X-Nika-Photo-Warnings') || 0
+        );
         const blob = await response.blob();
         const disposition = response.headers.get('Content-Disposition') || '';
         const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i);
@@ -1277,10 +1285,13 @@ async function downloadCatalogExport(event, link) {
         window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
 
         if (status) status.textContent = 'Excel скачан';
+        const successMessage = photoWarnings > 0
+            ? `Excel скачан. Перенесены все доступные фотографии. Пропущено проблемных файлов: <b>${photoWarnings}</b>.`
+            : 'Каталог подготовлен. Фотографии перенесены в R2, Excel скачан.';
         showNikaDataResult(
             'catalogDataImportResult',
             'success',
-            'Каталог подготовлен. Фотографии перенесены в R2, Excel скачан.'
+            successMessage
         );
     } catch (error) {
         if (status) status.textContent = originalStatus;
