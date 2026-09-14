@@ -319,10 +319,7 @@ class _MainLayoutState extends State<MainLayout> {
     quickScanBusy = true;
     try {
       await ScannerFeedbackService.play();
-      await salesKey.currentState?.addBarcodeToCart(
-        code,
-        quickScan: true,
-      );
+      await salesKey.currentState?.addBarcodeToCart(code);
     } finally {
       quickScanBusy = false;
     }

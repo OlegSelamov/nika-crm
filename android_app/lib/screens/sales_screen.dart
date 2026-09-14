@@ -46,9 +46,41 @@ class SalesScreenState extends State<SalesScreen> {
   List<Map<String, dynamic>> voiceCatalogCache = [];
   DateTime? voiceCatalogLoadedAt;
 
+  String _normalizedUnit(Map<String, dynamic> item) =>
+      '${item['unit'] ?? 'шт'}'.trim().toLowerCase();
+
+  bool _isMeasuredUnit(String unit) => <String>{
+        'кг', 'килограмм', 'килограммы',
+        'г', 'гр', 'грамм', 'граммы',
+        'л', 'литр', 'литры',
+        'мл', 'миллилитр', 'миллилитры',
+        'час', 'ч', 'часа', 'часов',
+      }.contains(unit);
+
+  bool _isExactAmountUnit(String unit) => <String>{
+        'кг', 'килограмм', 'килограммы',
+        'г', 'гр', 'грамм', 'граммы',
+        'л', 'литр', 'литры',
+        'мл', 'миллилитр', 'миллилитры',
+      }.contains(unit);
+
+  bool _isWholeQuantityUnit(String unit) => <String>{
+        'г', 'гр', 'грамм', 'граммы',
+        'мл', 'миллилитр', 'миллилитры',
+      }.contains(unit);
+
+  bool _isHourUnit(String unit) =>
+      <String>{'час', 'ч', 'часа', 'часов'}.contains(unit);
+
+  double _cartItemTotal(Map<String, dynamic> item) {
+    if (item['line_total'] != null) return asDouble(item['line_total']);
+    final raw = asDouble(item['price']) * asDouble(item['qty']);
+    return _isMeasuredUnit(_normalizedUnit(item)) ? raw.roundToDouble() : raw;
+  }
+
   double get total => cart.fold<double>(
         0,
-        (sum, item) => sum + asDouble(item['price']) * asDouble(item['qty']),
+        (sum, item) => sum + _cartItemTotal(item),
       );
 
   @override
@@ -127,10 +159,7 @@ class SalesScreenState extends State<SalesScreen> {
     await addBarcodeToCart(code);
   }
 
-  Future<bool> addBarcodeToCart(
-    String rawCode, {
-    bool quickScan = false,
-  }) async {
+  Future<bool> addBarcodeToCart(String rawCode) async {
     final scannedCode = ScannedProductCode.parse(rawCode);
     if (scannedCode.isEmpty) return false;
     try {
@@ -156,7 +185,7 @@ class SalesScreenState extends State<SalesScreen> {
             result['gtin'] = scannedCode.gtin;
           }
         }
-        await addToCart(result, requestMeasuredQuantity: !quickScan);
+        await addToCart(result);
         return true;
       } else if (mounted) {
         await showAddNewItemDialog(
@@ -178,25 +207,24 @@ class SalesScreenState extends State<SalesScreen> {
     final item = Map<String, dynamic>.from(source);
     item['price'] = asDouble(item['price'] ?? item['retail_price']);
     item['qty'] = asDouble(item['qty'] ?? 1);
-    final unit = '${item['unit'] ?? ''}'.toLowerCase();
-    final measuredUnit = <String>{
-      'кг', 'килограмм', 'килограммы', 'г', 'гр', 'грамм', 'граммы',
-      'л', 'литр', 'литры', 'мл', 'миллилитр', 'миллилитры',
-      'час', 'ч', 'часа', 'часов',
-    }.contains(unit);
+    final unit = _normalizedUnit(item);
+    final measuredUnit = _isMeasuredUnit(unit);
     if (requestMeasuredQuantity &&
         (measuredUnit || item['type'] == 'weight' || item['type'] == 'liter')) {
-      final isHour = <String>{'час', 'ч', 'часа', 'часов'}.contains(unit);
-      final quantity = await _quantityDialog(
-        item,
-        isHour ? 'Время (часы, например 1,5)' : 'Количество (${item['unit'] ?? unit})',
-        isHour: isHour,
-      );
-      if (quantity == null) return;
-      item['qty'] = quantity;
+      final measuredInput = await _quantityDialog(item);
+      if (measuredInput == null) return;
+      item['qty'] = measuredInput['qty'];
+      if (measuredInput['line_total'] != null) {
+        item['line_total'] = measuredInput['line_total'];
+      }
     }
 
-    final index = cart.indexWhere((value) => value['id'] == item['id']);
+    final index = item['excise_stamp'] == null && item['line_total'] == null
+        ? cart.indexWhere((value) =>
+            value['id'] == item['id'] &&
+            value['excise_stamp'] == null &&
+            value['line_total'] == null)
+        : -1;
     setState(() {
       _clearPendingVoicePayment();
       if (index >= 0 && item['excise_stamp'] == null) {
@@ -213,19 +241,24 @@ class SalesScreenState extends State<SalesScreen> {
           'ntin': item['ntin'],
           'excise_stamp': item['excise_stamp'],
           'image': item['image'] ?? item['image_url'] ?? '',
+          if (item['line_total'] != null)
+            'line_total': asDouble(item['line_total']),
         });
       }
     });
   }
 
-  Future<double?> _quantityDialog(
+  Future<Map<String, double>?> _quantityDialog(
     Map<String, dynamic> item,
-    String label, {
-    bool isHour = false,
-  }) async {
-    final controller = TextEditingController(text: '1');
+  ) async {
+    final unit = _normalizedUnit(item);
+    final isHour = _isHourUnit(unit);
+    final wholeOnly = _isWholeQuantityUnit(unit);
+    final exactAmount = _isExactAmountUnit(unit);
+    final controller = TextEditingController(text: wholeOnly ? '100' : '1');
+    var mode = 'quantity';
     NikaAssistantController.instance.setOverlaySuppressed(true);
-    final result = await showModalBottomSheet<double>(
+    final result = await showModalBottomSheet<Map<String, double>>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -241,71 +274,143 @@ class SalesScreenState extends State<SalesScreen> {
             if (h > 0) return '$h ч';
             return '$m мин';
           }
-          final unit = '${item['unit'] ?? ''}'.trim();
+          String quantityLabel(double quantity) {
+            if (isHour) return hourLabel(quantity);
+            final value = quantity % 1 == 0
+                ? quantity.toInt().toString()
+                : quantity.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+            return '$value ${item['unit'] ?? unit}';
+          }
+          void setMode(String nextMode) {
+            mode = nextMode;
+            controller.text = mode == 'amount' ? '1000' : (wholeOnly ? '100' : '1');
+            controller.selection = TextSelection.collapsed(offset: controller.text.length);
+            setSheetState(() {});
+          }
+          void setValue(num value) {
+            controller.text = value.toString();
+            controller.selection = TextSelection.collapsed(offset: controller.text.length);
+            setSheetState(() {});
+          }
           final price = asDouble(item['price']);
+          final entered = current();
+          final amount = mode == 'amount'
+              ? entered.roundToDouble()
+              : (price * entered).roundToDouble();
+          final rawQuantity = mode == 'amount' && price > 0 ? amount / price : entered;
+          final calculatedQuantity = wholeOnly
+              ? rawQuantity.roundToDouble()
+              : double.tryParse(rawQuantity.toStringAsFixed(3)) ?? 0;
+          final quickValues = mode == 'amount'
+              ? <num>[500, 1000, 2000, 3000, 5000]
+              : wholeOnly
+                  ? <num>[50, 100, 250, 500, 1000]
+                  : isHour
+                      ? <num>[0.25, 0.5, 1, 1.5, 2]
+                      : <num>[0.1, 0.25, 0.5, 1, 2];
           return Padding(
             padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
             child: Container(
+              constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .9),
               decoration: const BoxDecoration(
                 color: AppColors.background,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
               ),
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 44, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
-                const SizedBox(height: 16),
-                Row(children: [
-                  itemThumb(item, size: 56),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${item['name']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 4),
-                    Text('${money(price)} / $unit', style: const TextStyle(color: AppColors.muted)),
-                  ])),
-                  IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
-                ]),
-                const SizedBox(height: 18),
-                TextField(
-                  controller: controller,
-                  autofocus: false,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: label,
-                    helperText: isHour && current() > 0 ? hourLabel(current()) : null,
-                    helperStyle: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 44, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
+                  const SizedBox(height: 16),
+                  Row(children: [
+                    itemThumb(item, size: 56),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${item['name']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 4),
+                      Text('${money(price)} / ${item['unit'] ?? unit}', style: const TextStyle(color: AppColors.muted)),
+                    ])),
+                    IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+                  ]),
+                  if (exactAmount) ...[
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'quantity', label: Text('Количество')),
+                          ButtonSegment(value: 'amount', label: Text('На сумму')),
+                        ],
+                        selected: {mode},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (value) => setMode(value.first),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: controller,
+                    autofocus: false,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                    keyboardType: TextInputType.numberWithOptions(decimal: mode == 'quantity' && !wholeOnly),
+                    decoration: InputDecoration(
+                      labelText: mode == 'amount' ? 'Введите сумму' : 'Введите количество',
+                      suffixText: mode == 'amount' ? '₸' : '${item['unit'] ?? unit}',
+                    ),
+                    onChanged: (_) => setSheetState(() {}),
                   ),
-                  onChanged: (_) => setSheetState(() {}),
-                ),
-                if (isHour) ...[
                   const SizedBox(height: 12),
                   Wrap(
-                    spacing: 7, runSpacing: 7,
+                    spacing: 7,
+                    runSpacing: 7,
                     alignment: WrapAlignment.center,
-                    children: [0.25, 0.5, 1.0, 1.5, 2.0].map((hours) => ChoiceChip(
-                      label: Text(hourLabel(hours)),
-                      selected: (current() - hours).abs() < .001,
-                      onSelected: (_) { controller.text = hours.toString(); setSheetState(() {}); },
+                    children: quickValues.map((value) => ActionChip(
+                      label: Text(mode == 'amount'
+                          ? '${value.toInt()} ₸'
+                          : isHour
+                              ? hourLabel(value.toDouble())
+                              : '${value.toString().replaceAll('.', ',')} ${item['unit'] ?? unit}'),
+                      onPressed: () => setValue(value),
                     )).toList(),
                   ),
-                ],
-                const SizedBox(height: 18),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Сумма', style: TextStyle(fontWeight: FontWeight.w700)),
-                    Text(money(price * current()), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.primary)),
-                  ]),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(width: double.infinity, height: 52, child: FilledButton(
-                  onPressed: current() > 0 ? () => Navigator.pop(sheetContext, current()) : null,
-                  child: const Text('Добавить в корзину'),
-                )),
-              ]),
+                  const SizedBox(height: 18),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
+                    child: Column(children: [
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        const Text('Сумма', style: TextStyle(fontWeight: FontWeight.w700)),
+                        Text(money(amount), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.primary)),
+                      ]),
+                      const SizedBox(height: 5),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          mode == 'amount'
+                              ? calculatedQuantity > 0
+                                  ? 'Расчётное количество: ${quantityLabel(calculatedQuantity)}'
+                                  : 'Укажите сумму больше нуля'
+                              : isHour
+                                  ? hourLabel(entered)
+                                  : 'Сумма округлена до целого тенге',
+                          style: const TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(width: double.infinity, height: 52, child: FilledButton(
+                    onPressed: entered > 0 && price > 0 && calculatedQuantity > 0
+                        ? () => Navigator.pop(sheetContext, {
+                              'qty': calculatedQuantity,
+                              if (mode == 'amount') 'line_total': amount,
+                            })
+                        : null,
+                    child: const Text('Добавить в корзину'),
+                  )),
+                ]),
+              ),
             ),
           );
         },
@@ -1001,6 +1106,7 @@ class SalesScreenState extends State<SalesScreen> {
         cart.removeAt(index);
       } else {
         cart[index]['qty'] = double.parse(next.toStringAsFixed(3));
+        cart[index].remove('line_total');
       }
     });
   }
@@ -1094,7 +1200,7 @@ class SalesScreenState extends State<SalesScreen> {
                           ])),
                           const SizedBox(width: 8),
                           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text(money(asDouble(item['price']) * quantity), style: const TextStyle(fontWeight: FontWeight.w900)),
+                            Text(money(_cartItemTotal(item)), style: const TextStyle(fontWeight: FontWeight.w900)),
                             IconButton(onPressed: () => setState(() { cart.removeAt(index); _clearPendingVoicePayment(); }), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger), tooltip: 'Удалить'),
                           ]),
                         ]),
