@@ -141,11 +141,13 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         if (selectedBox) selectedBox.hidden = false;
 
-        if (previousPrice > 0 && priceInput) {
-            priceInput.value = String(previousPrice);
-            if (previousPriceHint) {
-                previousPriceHint.textContent = `Подставлена предыдущая закупочная цена: ${formatMoney(previousPrice)}`;
-            }
+        if (priceInput) {
+            priceInput.value = previousPrice > 0 ? String(previousPrice) : "";
+        }
+        if (previousPriceHint) {
+            previousPriceHint.textContent = previousPrice > 0
+                ? `Подставлена последняя закупочная цена: ${formatMoney(previousPrice)}`
+                : "У товара ещё нет закупочной цены";
         }
 
         closeDropdown();
