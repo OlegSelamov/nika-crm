@@ -505,6 +505,24 @@ function removeItem(i) {
     renderCart();
 }
 
+let salePaymentBusy = false;
+
+function paymentNumber(value) {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    return Number(String(value || "").replace(/\s/g, "").replace(",", ".")) || 0;
+}
+
+function saleCartTotal() {
+    return cart.reduce((sum, item) => sum + cartItemTotal(item), 0);
+}
+
+function saleMoney(value) {
+    return Number(value || 0).toLocaleString("ru-RU", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    }) + " ₸";
+}
+
 function resetSaleAmounts() {
     document.getElementById("cashInput").value = "";
     document.getElementById("cardInput").value = "";
@@ -515,64 +533,227 @@ function resetSaleAmounts() {
     window.lastKaspiMethod = "";
 }
 
-// оплата
-function pay() {
+function cashAmountSuggestions(total) {
+    const values = [total];
+    [500, 1000, 2000, 5000, 10000, 20000].forEach(step => {
+        values.push(Math.ceil(total / step) * step);
+    });
+    return values
+        .filter(value => value > 0)
+        .sort((a, b) => a - b)
+        .filter((value, index, all) => index === 0 || Math.abs(value - all[index - 1]) > 0.009)
+        .slice(0, 5);
+}
 
+function openCashChangeModal() {
     if (!selectedClient) {
         alert("Сначала выбери клиента");
         return;
     }
+    if (!cart.length) {
+        alert("Корзина пустая");
+        return;
+    }
 
-    let cash = document.getElementById("cashInput").value || 0;
-    let card = document.getElementById("cardInput").value || 0;
-    let kaspi = document.getElementById("kaspiInput").value || 0;
-	
-	let paymentMethod = "cash";
+    const total = saleCartTotal();
+    const modal = document.getElementById("cashChangeModal");
+    const input = document.getElementById("cashReceivedInput");
+    const currentCash = paymentNumber(document.getElementById("cashInput").value);
+    input.value = currentCash > 0
+        ? currentCash
+        : (Number.isInteger(total) ? total.toFixed(0) : total.toFixed(2));
 
-	if (parseFloat(card) > 0) {
-		paymentMethod = "card";
-	}
+    document.getElementById("cashChangeTotal").textContent = saleMoney(total);
+    const quick = document.getElementById("cashQuickAmounts");
+    quick.innerHTML = "";
+    cashAmountSuggestions(total).forEach(value => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = Math.abs(value - total) < 0.009
+            ? "Без сдачи"
+            : saleMoney(value);
+        button.addEventListener("click", () => {
+            input.value = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2);
+            renderCashChange();
+        });
+        quick.appendChild(button);
+    });
 
-	if (parseFloat(kaspi) > 0) {
-		paymentMethod = "kaspi";
-	}
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("cash-change-open");
+    renderCashChange();
+    window.setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 80);
+}
 
-    fetch("/sales/pay", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-		body: JSON.stringify({
-			client_id: selectedClient,
-			cart: cart,
+function closeCashChangeModal(force = false) {
+    if (salePaymentBusy && !force) return;
+    const modal = document.getElementById("cashChangeModal");
+    if (!modal) return;
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("cash-change-open");
+}
 
-			payment_method: paymentMethod,
+function renderCashChange() {
+    const total = saleCartTotal();
+    const received = paymentNumber(document.getElementById("cashReceivedInput").value);
+    const difference = received - total;
+    const enough = total > 0 && difference >= -0.009;
+    const result = document.getElementById("cashChangeResult");
+    const label = document.getElementById("cashChangeResultLabel");
+    const amount = document.getElementById("cashChangeAmount");
+    const hint = document.getElementById("cashChangeHint");
+    const confirm = document.getElementById("cashChangeConfirm");
 
-			cash: cash,
-			card: card,
-			kaspi: kaspi,
+    result.classList.toggle("is-short", !enough);
+    label.textContent = enough ? "Сдача" : "Не хватает";
+    amount.textContent = saleMoney(Math.abs(difference));
+    hint.textContent = enough
+        ? (difference > 0.009 ? "Верните покупателю эту сумму" : "Оплата без сдачи")
+        : "Введите сумму не меньше итога";
+    confirm.disabled = !enough || salePaymentBusy;
+    confirm.textContent = enough && difference > 0.009
+        ? "Провести · сдача " + saleMoney(difference)
+        : "Провести оплату";
+}
 
-			kaspi_transaction_id:
-				window.lastKaspiTransactionId || "",
+function handleCashChangeKey(event) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        confirmCashPayment();
+    }
+    if (event.key === "Escape") {
+        event.preventDefault();
+        closeCashChangeModal();
+    }
+}
 
-			kaspi_method:
-				window.lastKaspiMethod || "",
+function showCashChangeNotice(value) {
+    if (value <= 0.009) return;
+    document.getElementById("cashChangeNotice")?.remove();
 
-			company_id: null
-		})
-    })
-    .then(res => res.json().catch(() => null))
-    .then(data => {
+    const notice = document.createElement("button");
+    notice.type = "button";
+    notice.id = "cashChangeNotice";
+    notice.className = "cash-change-notice";
 
-        if (!data) {
-            alert("Ошибка ответа сервера");
-            return;
+    const label = document.createElement("span");
+    label.textContent = "СДАЧА ПОКУПАТЕЛЮ";
+    const amount = document.createElement("strong");
+    amount.textContent = saleMoney(value);
+    const hint = document.createElement("small");
+    hint.textContent = "Нажмите, чтобы закрыть";
+
+    notice.append(label, amount, hint);
+    notice.addEventListener("click", () => notice.remove());
+    document.body.appendChild(notice);
+    window.setTimeout(() => notice.remove(), 12000);
+}
+
+function pay() {
+    if (!selectedClient) {
+        alert("Сначала выбери клиента");
+        return;
+    }
+    if (!cart.length) {
+        alert("Корзина пустая");
+        return;
+    }
+    if (salePaymentBusy) return;
+
+    const cash = paymentNumber(document.getElementById("cashInput").value);
+    const card = paymentNumber(document.getElementById("cardInput").value);
+    const kaspi = paymentNumber(document.getElementById("kaspiInput").value);
+
+    if (kaspi > 0) {
+        submitSalePayment({
+            paymentMethod: "kaspi",
+            cash,
+            card,
+            kaspi,
+            cashChange: 0
+        });
+        return;
+    }
+    if (card > 0) {
+        submitSalePayment({
+            paymentMethod: "card",
+            cash,
+            card,
+            kaspi,
+            cashChange: 0
+        });
+        return;
+    }
+
+    openCashChangeModal();
+}
+
+function confirmCashPayment() {
+    if (salePaymentBusy) return;
+    const total = saleCartTotal();
+    const received = paymentNumber(document.getElementById("cashReceivedInput").value);
+    if (received + 0.009 < total) {
+        renderCashChange();
+        return;
+    }
+
+    document.getElementById("cashInput").value = received;
+    submitSalePayment({
+        paymentMethod: "cash",
+        cash: received,
+        card: 0,
+        kaspi: 0,
+        cashChange: Math.max(0, received - total)
+    });
+}
+
+async function submitSalePayment({
+    paymentMethod,
+    cash,
+    card,
+    kaspi,
+    cashChange
+}) {
+    if (salePaymentBusy) return;
+    salePaymentBusy = true;
+    renderCashChange();
+
+    try {
+        const response = await fetch("/sales/pay", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                client_id: selectedClient,
+                cart: cart,
+                payment_method: paymentMethod,
+                cash,
+                card,
+                kaspi,
+                cash_received: paymentMethod === "cash" ? cash : null,
+                change_amount: paymentMethod === "cash" ? cashChange : 0,
+                kaspi_transaction_id: window.lastKaspiTransactionId || "",
+                kaspi_method: window.lastKaspiMethod || "",
+                company_id: null
+            })
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data || data.success === false) {
+            throw new Error(data?.error || data?.message || "Ошибка ответа сервера");
         }
 
         cart = [];
         renderCart();
         resetSaleAmounts();
+        closeCashChangeModal(true);
         window.dispatchEvent(new CustomEvent("nika:sale-completed"));
+        showCashChangeNotice(cashChange);
 
         if (data.fiscalized !== true) {
             const reason = data.rekassa?.message || "reKassa отклонила чек";
@@ -585,11 +766,13 @@ function pay() {
         }
 
         openSaleModal(data.sale_id, { autoPrint: true });
-
-    })
-    .catch(err => {
-        console.error("PAY ERROR:", err);
-    });
+    } catch (error) {
+        console.error("PAY ERROR:", error);
+        alert(error.message || "Не удалось провести оплату");
+    } finally {
+        salePaymentBusy = false;
+        renderCashChange();
+    }
 }
 
 let itemSearchController = null;
