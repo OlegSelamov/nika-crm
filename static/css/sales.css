@@ -4438,3 +4438,50 @@ body.sales-document-center-open { overflow: hidden !important; }
         white-space: nowrap;
     }
 }
+
+
+/* Cash change calculator */
+body.cash-change-open{overflow:hidden}
+.cash-change-modal{position:fixed;inset:0;z-index:12050;display:none;align-items:center;justify-content:center;padding:18px}
+.cash-change-modal.open{display:flex}
+.cash-change-modal__backdrop{position:absolute;inset:0;background:rgba(10,15,35,.68);backdrop-filter:blur(5px)}
+.cash-change-modal__dialog{position:relative;width:min(480px,100%);border:1px solid rgba(124,77,255,.18);border-radius:28px;background:#fff;box-shadow:0 30px 80px rgba(14,20,45,.35);padding:24px}
+.cash-change-modal__head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+.cash-change-modal__head span{color:#7351e8;font-size:12px;font-weight:800;letter-spacing:.12em}
+.cash-change-modal__head h2{margin:5px 0 0;color:#171a2d;font-size:27px;line-height:1.15}
+.cash-change-modal__head>button{width:42px;height:42px;flex:0 0 42px;border:0;border-radius:14px;background:#f0edff;color:#5d42ce;font-size:28px;line-height:1;cursor:pointer}
+.cash-change-total{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:22px 0 16px;padding:16px 18px;border-radius:18px;background:#f5f3ff;color:#555b70;font-weight:700}
+.cash-change-total strong{color:#171a2d;font-size:24px}
+.cash-change-field{display:block;color:#50556b;font-size:14px;font-weight:800}
+.cash-change-field>div{display:flex;align-items:center;margin-top:8px;border:2px solid #8b5cf6;border-radius:18px;background:#fff;overflow:hidden}
+.cash-change-field input{min-width:0;width:100%;border:0;outline:0;padding:15px 6px 15px 17px;color:#171a2d;background:transparent;font-size:28px;font-weight:850}
+.cash-change-field b{padding:0 17px 0 8px;color:#6e49de;font-size:23px}
+.cash-change-quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.cash-change-quick button{border:1px solid #ddd7fb;border-radius:999px;padding:9px 13px;background:#faf9ff;color:#4e3ca0;font-size:13px;font-weight:800;cursor:pointer}
+.cash-change-quick button:hover{border-color:#8b5cf6;background:#f0edff}
+.cash-change-result{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 16px;margin-top:18px;padding:17px 18px;border:1px solid #b8ead7;border-radius:20px;background:#ecfbf5;color:#157456}
+.cash-change-result span{font-size:14px;font-weight:800}
+.cash-change-result strong{grid-row:span 2;font-size:29px;line-height:1}
+.cash-change-result small{color:#438472;font-size:12px}
+.cash-change-result.is-short{border-color:#f1c1c9;background:#fff1f3;color:#b4233d}
+.cash-change-result.is-short small{color:#b85d6c}
+.cash-change-actions{display:grid;grid-template-columns:.75fr 1.25fr;gap:10px;margin-top:18px}
+.cash-change-actions button{min-height:52px;border-radius:16px;font-size:15px;font-weight:850;cursor:pointer}
+.cash-change-cancel{border:1px solid #dedbea;background:#fff;color:#64697c}
+.cash-change-confirm{border:0;background:linear-gradient(135deg,#6845f5,#a33df1);box-shadow:0 10px 24px rgba(116,70,236,.25);color:#fff}
+.cash-change-confirm:disabled{box-shadow:none;cursor:not-allowed;opacity:.45}
+.cash-change-notice{position:fixed;z-index:13000;top:22px;left:50%;display:flex;min-width:min(420px,calc(100vw - 28px));flex-direction:column;align-items:center;transform:translateX(-50%);border:1px solid rgba(255,255,255,.4);border-radius:24px;padding:15px 28px;background:linear-gradient(135deg,#16966d,#0c7456);box-shadow:0 18px 45px rgba(6,86,63,.32);color:#fff;cursor:pointer}
+.cash-change-notice span{font-size:11px;font-weight:850;letter-spacing:.11em}
+.cash-change-notice strong{margin-top:3px;font-size:32px;line-height:1.05}
+.cash-change-notice small{margin-top:3px;color:rgba(255,255,255,.76)}
+@media(max-width:600px){
+ .cash-change-modal{align-items:flex-end;padding:0}
+ .cash-change-modal__dialog{max-height:calc(100dvh - 20px);overflow-y:auto;border-radius:28px 28px 0 0;padding:22px 18px calc(18px + env(safe-area-inset-bottom))}
+ .cash-change-modal__head h2{font-size:24px}
+ .cash-change-total{margin-top:18px}
+ .cash-change-field input{font-size:26px}
+ .cash-change-result strong{font-size:26px}
+ .cash-change-actions{grid-template-columns:1fr}
+ .cash-change-cancel{order:2}
+ .cash-change-notice{top:12px;border-radius:19px;padding:13px 20px}
+}
