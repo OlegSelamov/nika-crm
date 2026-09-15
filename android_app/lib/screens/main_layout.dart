@@ -346,6 +346,9 @@ class _MainLayoutState extends State<MainLayout> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final dark = theme.brightness == Brightness.dark;
         final tablet = constraints.maxWidth >= AppBreakpoints.tablet;
         final extendedRail = constraints.maxWidth >= AppBreakpoints.desktop;
         final content = AdaptiveContent(
@@ -368,10 +371,8 @@ class _MainLayoutState extends State<MainLayout> {
                 ),
           appBar: AppBar(
             titleSpacing: tablet ? 16 : 0,
-            backgroundColor: selectedIndex == 1
-                ? const Color(0xFFF4F1FF)
-                : AppColors.surface,
-            flexibleSpace: selectedIndex == 1
+            backgroundColor: scheme.surface,
+            flexibleSpace: selectedIndex == 1 && !dark
                 ? Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -490,9 +491,9 @@ class _MainLayoutState extends State<MainLayout> {
                       margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                       padding: const EdgeInsets.fromLTRB(4, 7, 4, 5),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: scheme.surface,
                         borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(color: scheme.outlineVariant),
                         boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 22, offset: const Offset(0, 7))],
                       ),
                       child: Row(children: [
@@ -544,9 +545,9 @@ class _SalesNavButton extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 23, color: AppColors.navy),
+        Icon(icon, size: 23, color: Theme.of(context).colorScheme.onSurface),
         const SizedBox(height: 4),
-        Text(label, maxLines: 1, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.navy)),
+        Text(label, maxLines: 1, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.onSurface)),
       ]),
     ),
   );

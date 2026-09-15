@@ -381,9 +381,9 @@ class SalesScreenState extends State<SalesScreen> {
             ),
             child: SingleChildScrollView(
               child: Container(
-                decoration: const BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
                 ),
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
                 child: Column(
@@ -1110,10 +1110,10 @@ class SalesScreenState extends State<SalesScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
                     decoration: BoxDecoration(
-                      color: selected ? color.withOpacity(.10) : AppColors.surface,
+                      color: selected ? color.withOpacity(.14) : Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: selected ? color : AppColors.border,
+                        color: selected ? color : Theme.of(context).colorScheme.outlineVariant,
                         width: selected ? 1.8 : 1,
                       ),
                     ),
@@ -1138,9 +1138,9 @@ class SalesScreenState extends State<SalesScreen> {
               duration: const Duration(milliseconds: 180),
               padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
               child: Container(
-                decoration: const BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
                 ),
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
                 child: SingleChildScrollView(
@@ -1549,6 +1549,10 @@ class SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+
     final actions = Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
       child: Row(children: [
@@ -1560,9 +1564,9 @@ class SalesScreenState extends State<SalesScreen> {
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: scheme.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: scheme.outlineVariant),
               ),
               child: const Row(children: [
                 Icon(Icons.search_rounded, color: AppColors.muted),
@@ -1593,7 +1597,7 @@ class SalesScreenState extends State<SalesScreen> {
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Row(children: [
-                const CircleAvatar(backgroundColor: AppColors.primarySoft, child: Icon(Icons.person_outline_rounded, color: AppColors.primary)),
+                CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer, child: Icon(Icons.person_outline_rounded, color: AppColors.primary)),
                 const SizedBox(width: 12),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Клиент', style: TextStyle(color: AppColors.muted, fontSize: 12)),
@@ -1649,13 +1653,14 @@ class SalesScreenState extends State<SalesScreen> {
       color: Colors.transparent,
       elevation: 10,
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
+        decoration: BoxDecoration(
+          color: dark ? scheme.surface : null,
+          gradient: dark ? null : const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [Color(0xFFFFFFFF), Color(0xFFF4F0FF), Color(0xFFF0F7FF)],
           ),
-          border: Border(top: BorderSide(color: Color(0xFFE8E4F3))),
+          border: Border(top: BorderSide(color: scheme.outlineVariant)),
         ),
         child: SafeArea(
           top: false,
@@ -1668,8 +1673,10 @@ class SalesScreenState extends State<SalesScreen> {
                 const SizedBox(height: 3),
                 ShaderMask(
                   blendMode: BlendMode.srcIn,
-                  shaderCallback: (bounds) => const LinearGradient(
-                    colors: [Color(0xFF17213A), Color(0xFF7257FF), Color(0xFF8D62FF)],
+                  shaderCallback: (bounds) => LinearGradient(
+                    colors: dark
+                        ? [scheme.onSurface, scheme.primary, const Color(0xFF9A89FF)]
+                        : const [Color(0xFF17213A), Color(0xFF7257FF), Color(0xFF8D62FF)],
                   ).createShader(bounds),
                   child: Text(
                     money(total),
@@ -1704,8 +1711,9 @@ class SalesScreenState extends State<SalesScreen> {
     );
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
+      decoration: BoxDecoration(
+        color: dark ? theme.scaffoldBackgroundColor : null,
+        gradient: dark ? null : const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
@@ -1725,7 +1733,7 @@ class SalesScreenState extends State<SalesScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [Color(0x337257FF), Color(0x007257FF)],
+                  colors: dark ? [Colors.transparent, Colors.transparent] : [const Color(0x337257FF), const Color(0x007257FF)],
                 ),
               ),
               child: SizedBox(width: 250, height: 250),
@@ -1740,7 +1748,7 @@ class SalesScreenState extends State<SalesScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [Color(0x2525B9E8), Color(0x0025B9E8)],
+                  colors: dark ? [Colors.transparent, Colors.transparent] : [const Color(0x2525B9E8), const Color(0x0025B9E8)],
                 ),
               ),
               child: SizedBox(width: 280, height: 280),
@@ -1959,7 +1967,7 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                               final name = '${client['company_name'] ?? ''}'.trim().isNotEmpty ? '${client['company_name']}' : '${client['full_name'] ?? 'Частное лицо'}';
                               final detail = ['${client['full_name'] ?? ''}', '${client['phone'] ?? ''}'].where((value) => value.trim().isNotEmpty && value != name).join(' · ');
                               return ListTile(
-                                leading: CircleAvatar(backgroundColor: AppColors.primarySoft, child: Icon(client['id'] == null ? Icons.person_outline_rounded : Icons.person_rounded, color: AppColors.primary)),
+                                leading: CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer, child: Icon(client['id'] == null ? Icons.person_outline_rounded : Icons.person_rounded, color: AppColors.primary)),
                                 title: Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
                                 subtitle: detail.isEmpty ? null : Text(detail),
                                 trailing: const Icon(Icons.chevron_right_rounded),
@@ -1989,9 +1997,9 @@ class _PickerActionButton extends StatelessWidget {
       child: Container(
         width: 50, height: 50,
         decoration: BoxDecoration(
-          color: primary ? AppColors.primary : AppColors.surface,
+          color: primary ? AppColors.primary : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: primary ? AppColors.primary : AppColors.border),
+          border: Border.all(color: primary ? AppColors.primary : Theme.of(context).colorScheme.outlineVariant),
           boxShadow: primary ? [BoxShadow(color: AppColors.primary.withOpacity(.18), blurRadius: 14, offset: const Offset(0, 5))] : null,
         ),
         child: Icon(icon, color: primary ? Colors.white : AppColors.primary),
@@ -2043,7 +2051,7 @@ class _SalesDocumentSheetState extends State<_SalesDocumentSheet> {
   @override
   Widget build(BuildContext context) => Container(
     height: MediaQuery.sizeOf(context).height * .94,
-    decoration: const BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+    decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
     child: Column(children: [
       const SizedBox(height: 10),
       Container(width: 42, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
@@ -2271,7 +2279,7 @@ class _SheetFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     height: MediaQuery.sizeOf(context).height * .88,
-    decoration: const BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+    decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
     child: Column(children: [
       const SizedBox(height: 10),
       Container(width: 42, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),

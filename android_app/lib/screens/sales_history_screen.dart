@@ -422,8 +422,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     }
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).scaffoldBackgroundColor : null,
+        gradient: Theme.of(context).brightness == Brightness.dark ? null : const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Color(0xFFF8F6FF), Color(0xFFF1F7FF), Color(0xFFF9FBFF)],
@@ -505,7 +506,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         child: Container(
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(.9),
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppColors.border),
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 18, offset: const Offset(0, 7))],
@@ -532,7 +533,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, size: 18, color: selected ? Colors.white : AppColors.muted),
           const SizedBox(width: 7),
-          Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: selected ? Colors.white : AppColors.navy)),
+          Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: selected ? Colors.white : Theme.of(context).colorScheme.onSurface)),
         ]),
       ),
     );
@@ -627,7 +628,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                         icon: const Icon(Icons.close_rounded),
                       ),
                 filled: true,
-                fillColor: const Color(0xFFF7F7FC),
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide.none,
@@ -663,7 +664,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }) => Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.96),
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: AppColors.border),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 18, offset: const Offset(0, 7))],
@@ -708,7 +709,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 11),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : const Color(0xFFF7F7FC),
+          color: selected ? AppColors.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: selected ? AppColors.primary : AppColors.border),
         ),
@@ -719,7 +720,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: selected ? Colors.white : AppColors.navy),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: selected ? Colors.white : Theme.of(context).colorScheme.onSurface),
             ),
           ),
         ]),
@@ -911,7 +912,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
 
     return Card(
       elevation: 0,
-      color: Colors.white.withOpacity(.96),
+      color: Theme.of(context).colorScheme.surface,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
@@ -1425,9 +1426,9 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
     return SafeArea(
       child: Container(
         constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .88),
-        decoration: const BoxDecoration(
-          color: Color(0xFFF8F8FD),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 10),
