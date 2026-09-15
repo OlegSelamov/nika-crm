@@ -61,7 +61,7 @@ class StockBalanceTests(unittest.TestCase):
         self.assertEqual(cur.params, ())
         self.assertIn("NOT EXISTS", cur.query)
         self.assertIn("ABS(i.quantity)", cur.query)
-        self.assertIn("'writeoff' ELSE 'income'", cur.query)
+        self.assertIn("'writeoff' ELSE 'refund'", cur.query)
 
 
 if __name__ == "__main__":
