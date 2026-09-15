@@ -85,6 +85,17 @@ def sync_item_quantities(cur, *, company_id=None, item_id=None):
         filters.append("i.id = %s")
         params.append(item_id)
 
+        lock_filters = ["id = %s"]
+        lock_params = [item_id]
+        if company_id is not None:
+            lock_filters.append("company_id = %s")
+            lock_params.append(company_id)
+        cur.execute(
+            f"SELECT id FROM items WHERE {' AND '.join(lock_filters)} FOR UPDATE",
+            tuple(lock_params),
+        )
+        cur.fetchone()
+
     where_sql = f"WHERE {' AND '.join(filters)}" if filters else ""
     balance_sql = stock_balance_sql("i")
     cur.execute(
