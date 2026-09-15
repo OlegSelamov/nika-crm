@@ -1,0 +1,149 @@
+name: Full dark theme patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/dark-theme-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch Flutter dark theme gaps
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def rep(text, old, new, name, required=True):
+              n = text.count(old)
+              if required and n == 0:
+                  raise SystemExit(f'missing anchor: {name}')
+              if n:
+                  print(name, n)
+                  text = text.replace(old, new)
+              return text
+
+          # SALES + all sales bottom sheets/pickers
+          p = Path('android_app/lib/screens/sales_screen.dart')
+          s = p.read_text(encoding='utf-8')
+
+          s = rep(s,
+          """                decoration: const BoxDecoration(\n                  color: AppColors.background,\n                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),\n                ),""",
+          """                decoration: BoxDecoration(\n                  color: Theme.of(context).scaffoldBackgroundColor,\n                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),\n                ),""", 'quantity modal')
+
+          s = rep(s,
+          """                decoration: const BoxDecoration(\n                  color: AppColors.background,\n                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),\n                ),""",
+          """                decoration: BoxDecoration(\n                  color: Theme.of(context).scaffoldBackgroundColor,\n                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),\n                ),""", 'payment modal')
+
+          s = rep(s,
+          "decoration: const BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),",
+          "decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),",
+          'sheet frames')
+
+          s = rep(s,
+          "selected ? color.withOpacity(.10) : AppColors.surface",
+          "selected ? color.withOpacity(.14) : Theme.of(context).colorScheme.surface",
+          'payment tiles')
+          s = rep(s,
+          "color: selected ? color : AppColors.border,",
+          "color: selected ? color : Theme.of(context).colorScheme.outlineVariant,",
+          'payment tile borders')
+
+          s = rep(s,
+          "color: primary ? AppColors.primary : AppColors.surface,",
+          "color: primary ? AppColors.primary : Theme.of(context).colorScheme.surface,",
+          'picker action surface')
+          s = rep(s,
+          "border: Border.all(color: primary ? AppColors.primary : AppColors.border),",
+          "border: Border.all(color: primary ? AppColors.primary : Theme.of(context).colorScheme.outlineVariant),",
+          'picker action border')
+
+          s = rep(s,
+          "const CircleAvatar(backgroundColor: AppColors.primarySoft",
+          "CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer",
+          'const sales avatars', required=False)
+          s = rep(s,
+          "CircleAvatar(backgroundColor: AppColors.primarySoft",
+          "CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer",
+          'sales avatars', required=False)
+
+          # Main sales page variables.
+          s = rep(s,
+          """  @override\n  Widget build(BuildContext context) {\n    final actions = Padding(""",
+          """  @override\n  Widget build(BuildContext context) {\n    final theme = Theme.of(context);\n    final scheme = theme.colorScheme;\n    final dark = theme.brightness == Brightness.dark;\n\n    final actions = Padding(""", 'sales theme vars')
+
+          s = rep(s,
+          """                color: AppColors.surface,\n                borderRadius: BorderRadius.circular(16),\n                border: Border.all(color: AppColors.border),""",
+          """                color: scheme.surface,\n                borderRadius: BorderRadius.circular(16),\n                border: Border.all(color: scheme.outlineVariant),""", 'sales search box')
+
+          s = rep(s,
+          """    final checkout = Material(\n      color: Colors.transparent,\n      elevation: 10,\n      child: Container(\n        decoration: const BoxDecoration(\n          gradient: LinearGradient(\n            begin: Alignment.topLeft,\n            end: Alignment.bottomRight,\n            colors: [Color(0xFFFFFFFF), Color(0xFFF4F0FF), Color(0xFFF0F7FF)],\n          ),\n          border: Border(top: BorderSide(color: Color(0xFFE8E4F3))),\n        ),""",
+          """    final checkout = Material(\n      color: Colors.transparent,\n      elevation: 10,\n      child: Container(\n        decoration: BoxDecoration(\n          color: dark ? scheme.surface : null,\n          gradient: dark ? null : const LinearGradient(\n            begin: Alignment.topLeft,\n            end: Alignment.bottomRight,\n            colors: [Color(0xFFFFFFFF), Color(0xFFF4F0FF), Color(0xFFF0F7FF)],\n          ),\n          border: Border(top: BorderSide(color: scheme.outlineVariant)),\n        ),""", 'checkout')
+
+          s = rep(s,
+          """                  shaderCallback: (bounds) => const LinearGradient(\n                    colors: [Color(0xFF17213A), Color(0xFF7257FF), Color(0xFF8D62FF)],\n                  ).createShader(bounds),""",
+          """                  shaderCallback: (bounds) => LinearGradient(\n                    colors: dark\n                        ? [scheme.onSurface, scheme.primary, const Color(0xFF9A89FF)]\n                        : const [Color(0xFF17213A), Color(0xFF7257FF), Color(0xFF8D62FF)],\n                  ).createShader(bounds),""", 'checkout total')
+
+          s = rep(s,
+          """    return Container(\n      decoration: const BoxDecoration(\n        gradient: LinearGradient(\n          begin: Alignment.topLeft,\n          end: Alignment.bottomRight,\n          colors: [\n            Color(0xFFF8F7FF),\n            Color(0xFFF1F7FF),\n            Color(0xFFF8FBFF),\n          ],\n          stops: [0.0, 0.48, 1.0],\n        ),\n      ),""",
+          """    return Container(\n      decoration: BoxDecoration(\n        color: dark ? theme.scaffoldBackgroundColor : null,\n        gradient: dark ? null : const LinearGradient(\n          begin: Alignment.topLeft,\n          end: Alignment.bottomRight,\n          colors: [\n            Color(0xFFF8F7FF),\n            Color(0xFFF1F7FF),\n            Color(0xFFF8FBFF),\n          ],\n          stops: [0.0, 0.48, 1.0],\n        ),\n      ),""", 'sales background')
+
+          # Disable decorative light glows in dark mode by making them transparent.
+          s = rep(s, "colors: [Color(0x337257FF), Color(0x007257FF)]", "colors: dark ? [Colors.transparent, Colors.transparent] : [const Color(0x337257FF), const Color(0x007257FF)]", 'sales purple glow')
+          s = rep(s, "colors: [Color(0x2525B9E8), Color(0x0025B9E8)]", "colors: dark ? [Colors.transparent, Colors.transparent] : [const Color(0x2525B9E8), const Color(0x0025B9E8)]", 'sales cyan glow')
+
+          p.write_text(s, encoding='utf-8')
+
+          # HISTORY
+          p = Path('android_app/lib/screens/sales_history_screen.dart')
+          s = p.read_text(encoding='utf-8')
+          s = rep(s,
+          """    return Container(\n      decoration: const BoxDecoration(\n        gradient: LinearGradient(\n          begin: Alignment.topLeft,\n          end: Alignment.bottomRight,\n          colors: [Color(0xFFF8F6FF), Color(0xFFF1F7FF), Color(0xFFF9FBFF)],\n        ),\n      ),""",
+          """    return Container(\n      decoration: BoxDecoration(\n        color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).scaffoldBackgroundColor : null,\n        gradient: Theme.of(context).brightness == Brightness.dark ? null : const LinearGradient(\n          begin: Alignment.topLeft,\n          end: Alignment.bottomRight,\n          colors: [Color(0xFFF8F6FF), Color(0xFFF1F7FF), Color(0xFFF9FBFF)],\n        ),\n      ),""", 'history background')
+          s = rep(s, 'Colors.white.withOpacity(.9)', 'Theme.of(context).colorScheme.surface', 'history tabs')
+          s = rep(s, 'Colors.white.withOpacity(.96)', 'Theme.of(context).colorScheme.surface', 'history cards')
+          s = rep(s, 'fillColor: const Color(0xFFF7F7FC)', 'fillColor: Theme.of(context).colorScheme.surfaceContainerHighest', 'history search fill')
+          s = rep(s, 'selected ? AppColors.primary : const Color(0xFFF7F7FC)', 'selected ? AppColors.primary : Theme.of(context).colorScheme.surfaceContainerHighest', 'history filter buttons')
+          s = rep(s, 'selected ? Colors.white : AppColors.navy', 'selected ? Colors.white : Theme.of(context).colorScheme.onSurface', 'history tab text')
+          s = rep(s,
+          """        decoration: const BoxDecoration(\n          color: Color(0xFFF8F8FD),\n          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),\n        ),""",
+          """        decoration: BoxDecoration(\n          color: Theme.of(context).scaffoldBackgroundColor,\n          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),\n        ),""", 'history docs modal', required=False)
+          p.write_text(s, encoding='utf-8')
+
+          # MAIN LAYOUT / SALES APP BAR + BOTTOM NAV
+          p = Path('android_app/lib/screens/main_layout.dart')
+          s = p.read_text(encoding='utf-8')
+          s = rep(s,
+          """      builder: (context, constraints) {\n        final tablet = constraints.maxWidth >= AppBreakpoints.tablet;""",
+          """      builder: (context, constraints) {\n        final theme = Theme.of(context);\n        final scheme = theme.colorScheme;\n        final dark = theme.brightness == Brightness.dark;\n        final tablet = constraints.maxWidth >= AppBreakpoints.tablet;""", 'main theme vars')
+          s = rep(s,
+          """            backgroundColor: selectedIndex == 1\n                ? const Color(0xFFF4F1FF)\n                : AppColors.surface,\n            flexibleSpace: selectedIndex == 1\n                ? Container(""",
+          """            backgroundColor: scheme.surface,\n            flexibleSpace: selectedIndex == 1 && !dark\n                ? Container(""", 'sales appbar')
+          s = rep(s,
+          """                        color: AppColors.surface,\n                        borderRadius: BorderRadius.circular(24),\n                        border: Border.all(color: AppColors.border),""",
+          """                        color: scheme.surface,\n                        borderRadius: BorderRadius.circular(24),\n                        border: Border.all(color: scheme.outlineVariant),""", 'sales bottom nav')
+          s = rep(s,
+          "Icon(icon, size: 23, color: AppColors.navy)",
+          "Icon(icon, size: 23, color: Theme.of(context).colorScheme.onSurface)", 'sales nav icon')
+          s = rep(s,
+          "style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.navy)",
+          "style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.onSurface)", 'sales nav label')
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name "Nika Business Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add android_app/lib/screens/sales_screen.dart android_app/lib/screens/sales_history_screen.dart android_app/lib/screens/main_layout.dart
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Apply dark theme throughout sales UI"
+          git push origin main
