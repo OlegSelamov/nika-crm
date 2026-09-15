@@ -17,9 +17,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool loading = true;
   String? error;
   Map<String, dynamic> dashboard = {};
-  Map<String, dynamic> analytics = {};
   Map<String, dynamic> shift = {};
-  int unread = 0;
 
   @override
   void initState() {
@@ -32,16 +30,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final results = await Future.wait<dynamic>([
         ApiService.dashboard(),
-        ApiService.analytics().catchError((_) => <String, dynamic>{}),
         ApiService.shiftStatus().catchError((_) => <String, dynamic>{}),
-        ApiService.notifications().catchError((_) => <String, dynamic>{}),
       ]);
       if (!mounted) return;
       setState(() {
         dashboard = Map<String, dynamic>.from(results[0]);
-        analytics = Map<String, dynamic>.from(results[1]);
-        shift = Map<String, dynamic>.from(results[2]);
-        unread = int.tryParse('${results[3]['unread_count'] ?? 0}') ?? 0;
+        shift = Map<String, dynamic>.from(results[1]);
         loading = false;
       });
     } catch (e) {
@@ -66,8 +60,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final shiftOpen = shift['shift_open'] == true;
-    final today = dashboard['today'] ?? analytics['revenue'] ?? 0;
-    final salesToday = dashboard['sales_today'] ?? 0;
+    final revenueToday = dashboard['revenue'] ?? dashboard['today'] ?? 0;
+    final salesToday = dashboard['sales_count'] ?? dashboard['sales_today'] ?? 0;
+    final returnsCount = dashboard['returns_count'] ?? 0;
 
     return RefreshIndicator(
       onRefresh: loadData,
@@ -113,12 +108,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 18),
                 const Text(
-                  'Чистая выручка',
+                  'Выручка',
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  money(today),
+                  money(revenueToday),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 34,
@@ -133,8 +128,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 22),
                     _heroFact(
                       Icons.trending_up_rounded,
-                      money(analytics['profit'] ?? 0),
-                      'прибыль',
+                      money(dashboard['net_profit'] ?? 0),
+                      'чистая прибыль',
                     ),
                   ],
                 ),
@@ -142,7 +137,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const SectionTitle('Ключевые показатели', subtitle: 'Данные обновляются с сайта'),
+          const SectionTitle('Сегодня', subtitle: 'С 00:00 до текущего момента'),
           const SizedBox(height: 12),
           ResponsiveGrid(
             minItemWidth: 190,
@@ -152,28 +147,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               MetricCard(
                 title: 'Средний чек',
-                value: money(analytics['average_check'] ?? 0),
-                icon: Icons.shopping_bag_outlined,
+                value: money(dashboard['average_check'] ?? 0),
+                icon: Icons.receipt_long_outlined,
                 color: AppColors.primary,
               ),
               MetricCard(
-                title: 'Клиентов',
-                value: '${dashboard['clients'] ?? 0}',
-                icon: Icons.people_alt_outlined,
+                title: 'Закупки',
+                value: money(dashboard['purchase_total'] ?? 0),
+                icon: Icons.shopping_cart_outlined,
                 color: AppColors.cyan,
+                note: 'приход товара',
               ),
               MetricCard(
-                title: 'Товаров и услуг',
-                value: '${dashboard['items'] ?? 0}',
-                icon: Icons.inventory_2_outlined,
+                title: 'Прочие расходы',
+                value: money(dashboard['operating_expenses'] ?? 0),
+                icon: Icons.account_balance_wallet_outlined,
                 color: AppColors.warning,
+                note: 'без закупок',
               ),
               MetricCard(
-                title: 'Уведомления',
-                value: '$unread',
-                icon: Icons.notifications_none_rounded,
-                color: unread > 0 ? AppColors.danger : AppColors.success,
-                note: unread > 0 ? 'требуют внимания' : 'всё прочитано',
+                title: 'Возвраты',
+                value: money(dashboard['returns_total'] ?? 0),
+                icon: Icons.undo_rounded,
+                color: AppColors.danger,
+                note: '$returnsCount операций',
               ),
             ],
           ),
