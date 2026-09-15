@@ -95,7 +95,7 @@ def _get_summary(cur, company_id, date_from, date_to):
             SELECT COALESCE(SUM(amount), 0) AS expenses
             FROM expenses
             WHERE company_id = %s
-              AND date BETWEEN %s AND %s
+              AND expense_date BETWEEN %s AND %s
         """, (company_id, date_from, date_to))
         expenses = cur.fetchone()["expenses"] or 0
     except Exception:
