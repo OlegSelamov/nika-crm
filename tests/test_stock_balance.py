@@ -12,10 +12,12 @@ class FakeCursor:
         self.updated_count = updated_count
         self.query = ""
         self.params = None
+        self.executions = []
 
     def execute(self, query, params):
         self.query = query
         self.params = params
+        self.executions.append((query, params))
 
     def fetchone(self):
         return {
