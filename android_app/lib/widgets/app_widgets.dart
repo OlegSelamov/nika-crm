@@ -109,6 +109,7 @@ class ScreenStateView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(28),
@@ -119,17 +120,17 @@ class ScreenStateView extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: AppColors.primarySoft,
+                color: scheme.primaryContainer,
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: Icon(icon, color: AppColors.primary, size: 34),
+              child: Icon(icon, color: scheme.primary, size: 34),
             ),
             const SizedBox(height: 18),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.text,
+              style: TextStyle(
+                color: scheme.onSurface,
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
               ),
@@ -138,7 +139,7 @@ class ScreenStateView extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.muted, height: 1.45),
+              style: TextStyle(color: scheme.onSurfaceVariant, height: 1.45),
             ),
             if (onAction != null) ...[
               const SizedBox(height: 20),
@@ -164,6 +165,7 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -173,15 +175,15 @@ class SectionTitle extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  color: AppColors.text,
+                style: TextStyle(
+                  color: scheme.onSurface,
                   fontSize: 19,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 3),
-                Text(subtitle!, style: const TextStyle(color: AppColors.muted)),
+                Text(subtitle!, style: TextStyle(color: scheme.onSurfaceVariant)),
               ],
             ],
           ),
@@ -210,6 +212,7 @@ class MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -230,8 +233,8 @@ class MetricCard extends StatelessWidget {
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.text,
+              style: TextStyle(
+                color: scheme.onSurface,
                 fontSize: 21,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -.4,
@@ -242,7 +245,7 @@ class MetricCard extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.muted, fontSize: 13),
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
             ),
             if (note != null) ...[
               const SizedBox(height: 3),
