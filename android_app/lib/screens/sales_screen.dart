@@ -1168,9 +1168,9 @@ class SalesScreenState extends State<SalesScreen> {
                     ]),
                     Card(
                       child: ListTile(
-                        leading: const CircleAvatar(
-                          backgroundColor: AppColors.primarySoft,
-                          child: Icon(Icons.person_outline_rounded, color: AppColors.primary),
+                        leading: CircleAvatar(
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                          child: const Icon(Icons.person_outline_rounded, color: AppColors.primary),
                         ),
                         title: Text(
                           clientName(selectedClient),
