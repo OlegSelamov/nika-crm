@@ -22,7 +22,7 @@ def stock_balance_sql(item_alias="i"):
                 FROM stock_movements sm
                 WHERE sm.company_id = {item_alias}.company_id
                   AND sm.item_id = {item_alias}.id
-            ), ${item_alias}.quantity, 0)
+            ), {item_alias}.quantity, 0)
         END
     """
 
