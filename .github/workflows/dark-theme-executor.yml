@@ -18,19 +18,168 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Execute embedded patch
+      - name: Apply dark theme everywhere in sales UI
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
-          import zlib
 
-          workflow = Path('.github/workflows/dark-theme-run.yml').read_text(encoding='utf-8')
-          match = re.search(r"fromhex\('([0-9a-f]+)'\)", workflow)
-          if not match:
-              raise SystemExit('Embedded dark-theme patch payload was not found')
-          script = zlib.decompress(bytes.fromhex(match.group(1))).decode('utf-8')
-          exec(compile(script, '<dark-theme-patch>', 'exec'))
+          def save(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          def sub(text, pattern, replacement, label, flags=0, required=True):
+              new, count = re.subn(pattern, replacement, text, flags=flags)
+              print(f'{label}: {count}')
+              if required and count == 0:
+                  raise SystemExit(f'Anchor not found: {label}')
+              return new
+
+          # ---------------- SALES: page + every bottom sheet / picker ----------------
+          path = 'android_app/lib/screens/sales_screen.dart'
+          s = Path(path).read_text(encoding='utf-8')
+
+          # All Sales bottom sheets that still force the light page background.
+          s = sub(
+              s,
+              r'decoration:\s*const BoxDecoration\(\s*color:\s*AppColors\.background,\s*borderRadius:\s*BorderRadius\.vertical\(top:\s*Radius\.circular\((28|30)\)\),\s*\),',
+              lambda m: 'decoration: BoxDecoration(\n                  color: Theme.of(context).scaffoldBackgroundColor,\n                  borderRadius: const BorderRadius.vertical(top: Radius.circular(' + m.group(1) + ')),\n                ),',
+              'sales modal backgrounds',
+          )
+          s = sub(
+              s,
+              r'decoration:\s*const BoxDecoration\(color:\s*AppColors\.background,\s*borderRadius:\s*BorderRadius\.vertical\(top:\s*Radius\.circular\((28|30)\)\)\),',
+              lambda m: 'decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(' + m.group(1) + '))),',
+              'sales compact sheet backgrounds',
+              required=False,
+          )
+
+          # Payment method cards and action buttons inside pickers.
+          s = s.replace(
+              'selected ? color.withOpacity(.10) : AppColors.surface',
+              'selected ? color.withOpacity(.14) : Theme.of(context).colorScheme.surface',
+          )
+          s = s.replace(
+              'selected ? color : AppColors.border',
+              'selected ? color : Theme.of(context).colorScheme.outlineVariant',
+          )
+          s = s.replace(
+              'color: primary ? AppColors.primary : AppColors.surface,',
+              'color: primary ? AppColors.primary : Theme.of(context).colorScheme.surface,',
+          )
+          s = s.replace(
+              'border: Border.all(color: primary ? AppColors.primary : AppColors.border),',
+              'border: Border.all(color: primary ? AppColors.primary : Theme.of(context).colorScheme.outlineVariant),',
+          )
+
+          # Add theme locals to the main Sales build method only.
+          s = sub(
+              s,
+              r'(@override\s+Widget build\(BuildContext context\) \{\s+)(final actions = Padding\()',
+              r'\1final theme = Theme.of(context);\n    final scheme = theme.colorScheme;\n    final dark = theme.brightness == Brightness.dark;\n\n    \2',
+              'sales theme locals',
+          )
+
+          # Sales search field / catalog entry point.
+          s = sub(
+              s,
+              r'color:\s*AppColors\.surface,\s*borderRadius:\s*BorderRadius\.circular\(16\),\s*border:\s*Border\.all\(color:\s*AppColors\.border\),',
+              'color: scheme.surface,\n                borderRadius: BorderRadius.circular(16),\n                border: Border.all(color: scheme.outlineVariant),',
+              'sales main search',
+          )
+
+          # Checkout footer: dark surface in dark mode, original gradient in light mode.
+          s = sub(
+              s,
+              r'decoration:\s*const BoxDecoration\(\s*gradient:\s*LinearGradient\(\s*begin:\s*Alignment\.topLeft,\s*end:\s*Alignment\.bottomRight,\s*colors:\s*\[Color\(0xFFFFFFFF\),\s*Color\(0xFFF4F0FF\),\s*Color\(0xFFF0F7FF\)\],\s*\),\s*border:\s*Border\(top:\s*BorderSide\(color:\s*Color\(0xFFE8E4F3\)\)\),\s*\),',
+              'decoration: BoxDecoration(\n          color: dark ? scheme.surface : null,\n          gradient: dark ? null : const LinearGradient(\n            begin: Alignment.topLeft,\n            end: Alignment.bottomRight,\n            colors: [Color(0xFFFFFFFF), Color(0xFFF4F0FF), Color(0xFFF0F7FF)],\n          ),\n          border: Border(top: BorderSide(color: scheme.outlineVariant)),\n        ),',
+              'sales checkout footer',
+          )
+
+          # Total text remains purple-accented but is readable in dark mode.
+          s = sub(
+              s,
+              r'shaderCallback:\s*\(bounds\) => const LinearGradient\(\s*colors:\s*\[Color\(0xFF17213A\),\s*Color\(0xFF7257FF\),\s*Color\(0xFF8D62FF\)\],\s*\)\.createShader\(bounds\),',
+              'shaderCallback: (bounds) => LinearGradient(\n                    colors: dark\n                        ? [scheme.onSurface, scheme.primary, const Color(0xFF9A89FF)]\n                        : const [Color(0xFF17213A), Color(0xFF7257FF), Color(0xFF8D62FF)],\n                  ).createShader(bounds),',
+              'sales total gradient',
+          )
+
+          # Main Sales page background.
+          s = sub(
+              s,
+              r'decoration:\s*const BoxDecoration\(\s*gradient:\s*LinearGradient\(\s*begin:\s*Alignment\.topLeft,\s*end:\s*Alignment\.bottomRight,\s*colors:\s*\[\s*Color\(0xFFF8F7FF\),\s*Color\(0xFFF1F7FF\),\s*Color\(0xFFF8FBFF\),\s*\],\s*stops:\s*\[0\.0,\s*0\.48,\s*1\.0\],\s*\),\s*\),',
+              'decoration: BoxDecoration(\n        color: dark ? theme.scaffoldBackgroundColor : null,\n        gradient: dark ? null : const LinearGradient(\n          begin: Alignment.topLeft,\n          end: Alignment.bottomRight,\n          colors: [\n            Color(0xFFF8F7FF),\n            Color(0xFFF1F7FF),\n            Color(0xFFF8FBFF),\n          ],\n          stops: [0.0, 0.48, 1.0],\n        ),\n      ),',
+              'sales main background',
+          )
+
+          # The catalog/client picker frames now use dark surfaces; theme their
+          # pale-purple accents as primary containers too.
+          s = s.replace(
+              'color: AppColors.primarySoft,',
+              'color: Theme.of(context).colorScheme.primaryContainer,',
+          )
+          s = s.replace(
+              'backgroundColor: AppColors.primarySoft,',
+              'backgroundColor: Theme.of(context).colorScheme.primaryContainer,',
+          )
+          # Remove const only where Theme.of(context) was introduced into CircleAvatar.
+          s = s.replace(
+              'const CircleAvatar(\n                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,',
+              'CircleAvatar(\n                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,',
+          )
+          s = s.replace(
+              'const CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer,',
+              'CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer,',
+          )
+
+          save(path, s)
+
+          # ---------------- HISTORY ----------------
+          path = 'android_app/lib/screens/sales_history_screen.dart'
+          s = Path(path).read_text(encoding='utf-8')
+          s = sub(
+              s,
+              r'decoration:\s*const BoxDecoration\(\s*gradient:\s*LinearGradient\(\s*begin:\s*Alignment\.topLeft,\s*end:\s*Alignment\.bottomRight,\s*colors:\s*\[Color\(0xFFF8F6FF\),\s*Color\(0xFFF1F7FF\),\s*Color\(0xFFF9FBFF\)\],\s*\),\s*\),',
+              'decoration: BoxDecoration(\n        color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).scaffoldBackgroundColor : null,\n        gradient: Theme.of(context).brightness == Brightness.dark ? null : const LinearGradient(\n          begin: Alignment.topLeft,\n          end: Alignment.bottomRight,\n          colors: [Color(0xFFF8F6FF), Color(0xFFF1F7FF), Color(0xFFF9FBFF)],\n        ),\n      ),',
+              'history background',
+          )
+          s = s.replace('Colors.white.withOpacity(.9)', 'Theme.of(context).colorScheme.surface')
+          s = s.replace('Colors.white.withOpacity(.96)', 'Theme.of(context).colorScheme.surface')
+          s = s.replace('fillColor: const Color(0xFFF7F7FC)', 'fillColor: Theme.of(context).colorScheme.surfaceContainerHighest')
+          s = s.replace('selected ? AppColors.primary : const Color(0xFFF7F7FC)', 'selected ? AppColors.primary : Theme.of(context).colorScheme.surfaceContainerHighest')
+          s = s.replace('selected ? Colors.white : AppColors.navy', 'selected ? Colors.white : Theme.of(context).colorScheme.onSurface')
+          s = sub(
+              s,
+              r'decoration:\s*const BoxDecoration\(\s*color:\s*Color\(0xFFF8F8FD\),\s*borderRadius:\s*BorderRadius\.vertical\(top:\s*Radius\.circular\(30\)\),\s*\),',
+              'decoration: BoxDecoration(\n          color: Theme.of(context).scaffoldBackgroundColor,\n          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),\n        ),',
+              'history document modal',
+              required=False,
+          )
+          save(path, s)
+
+          # ---------------- MAIN LAYOUT / SALES APP BAR + NAV ----------------
+          path = 'android_app/lib/screens/main_layout.dart'
+          s = Path(path).read_text(encoding='utf-8')
+          s = sub(
+              s,
+              r'(builder:\s*\(context, constraints\) \{\s+)(final tablet = constraints\.maxWidth >= AppBreakpoints\.tablet;)',
+              r'\1final theme = Theme.of(context);\n        final scheme = theme.colorScheme;\n        final dark = theme.brightness == Brightness.dark;\n        \2',
+              'main layout theme locals',
+          )
+          s = sub(
+              s,
+              r'backgroundColor:\s*selectedIndex == 1\s*\? const Color\(0xFFF4F1FF\)\s*:\s*AppColors\.surface,\s*flexibleSpace:\s*selectedIndex == 1\s*\? Container\(',
+              'backgroundColor: scheme.surface,\n            flexibleSpace: selectedIndex == 1 && !dark\n                ? Container(',
+              'sales appbar',
+          )
+          s = sub(
+              s,
+              r'color:\s*AppColors\.surface,\s*borderRadius:\s*BorderRadius\.circular\(24\),\s*border:\s*Border\.all\(color:\s*AppColors\.border\),',
+              'color: scheme.surface,\n                        borderRadius: BorderRadius.circular(24),\n                        border: Border.all(color: scheme.outlineVariant),',
+              'sales bottom nav',
+          )
+          s = s.replace('Icon(icon, size: 23, color: AppColors.navy)', 'Icon(icon, size: 23, color: Theme.of(context).colorScheme.onSurface)')
+          s = s.replace('style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.navy)', 'style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.onSurface)')
+          save(path, s)
           PY
 
       - name: Commit patch
