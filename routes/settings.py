@@ -1,6 +1,10 @@
 from flask import Blueprint, render_template, session, redirect
 from models import get_db, pool
 
+# Imported for startup side effects: installs stock quantity sync, duplicate
+# identifier protection and stock consistency diagnostic endpoints.
+import routes.stock_consistency  # noqa: F401
+
 settings_bp = Blueprint("settings", __name__)
 
 @settings_bp.route("/settings")
