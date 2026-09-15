@@ -347,10 +347,11 @@ ${html}
 </html>`;
 }
 
-function documentPage(html, title = "Документ") {
+function documentPage(html, title = "Документ", landscape = false) {
+    const pageSize = landscape ? "A4 landscape" : "A4";
     const printStyle = `
         <style>
-            @page { size: A4; margin: 10mm; }
+            @page { size: ${pageSize}; margin: 10mm; }
             html, body { margin: 0; padding: 0; background: #fff; }
         </style>`;
 
@@ -382,7 +383,7 @@ function waitForPrint(printWindow, options) {
     });
 }
 
-async function printHtml({ html, title, kind }) {
+async function printHtml({ html, title, kind, landscape }) {
     if (typeof html !== "string" || !html.trim()) {
         throw new Error("Нет содержимого для печати");
     }
@@ -413,7 +414,13 @@ async function printHtml({ html, title, kind }) {
     try {
         const page = receipt
             ? receiptPage(html, title)
-            : documentPage(html, title);
+            : documentPage(
+                html,
+                title,
+                typeof landscape === "boolean"
+                    ? landscape
+                    : settings.document_landscape
+            );
         const dataUrl = `data:text/html;base64,${Buffer.from(page, "utf8").toString("base64")}`;
 
         await printWindow.loadURL(dataUrl);
@@ -440,7 +447,9 @@ async function printHtml({ html, title, kind }) {
 
         if (!receipt) {
             options.pageSize = "A4";
-            options.landscape = settings.document_landscape;
+            options.landscape = typeof landscape === "boolean"
+                ? landscape
+                : settings.document_landscape;
         }
 
         return await waitForPrint(printWindow, options);
@@ -531,7 +540,10 @@ function registerPrinterIpc() {
         return printHtml({
             html: payload.html,
             title: payload.title || "Документ",
-            kind: "document"
+            kind: "document",
+            landscape: typeof payload.landscape === "boolean"
+                ? payload.landscape
+                : undefined
         });
     });
 
