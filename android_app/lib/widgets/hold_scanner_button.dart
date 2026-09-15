@@ -94,76 +94,80 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
   }
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-        message: widget.tooltip,
-        child: SizedBox(
-          width: widget.size + 16,
-          height: widget.size + 16,
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: .01,
-                    child: MobileScanner(
-                      controller: scannerController,
-                      onDetect: _onDetect,
-                    ),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Tooltip(
+      message: widget.tooltip,
+      child: SizedBox(
+        width: widget.size + 16,
+        height: widget.size + 16,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: .01,
+                  child: MobileScanner(
+                    controller: scannerController,
+                    onDetect: _onDetect,
                   ),
                 ),
               ),
-              Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: widget.enabled ? (_) => _start() : null,
-                onPointerUp: widget.enabled ? (_) => _finish() : null,
-                onPointerCancel: widget.enabled
-                    ? (_) => _finish(showQuickTapHint: false)
-                    : null,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
-                  width: widget.size,
-                  height: widget.size,
-                  decoration: BoxDecoration(
-                    color: !widget.enabled
-                        ? AppColors.border
-                        : pressed
-                            ? const Color(0xFF1677FF)
-                            : AppColors.primarySoft,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: pressed
-                          ? const Color(0xFFD8F0FF)
-                          : AppColors.primary.withOpacity(.22),
-                      width: pressed ? 3 : 1,
-                    ),
-                    boxShadow: pressed
-                        ? [
-                            BoxShadow(
-                              color: const Color(0xFF52B9FF).withOpacity(.82),
-                              blurRadius: 26,
-                              spreadRadius: 6,
-                            ),
-                            BoxShadow(
-                              color: const Color(0xFF1677FF).withOpacity(.34),
-                              blurRadius: 38,
-                              spreadRadius: 9,
-                            ),
-                          ]
-                        : const [],
+            ),
+            Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: widget.enabled ? (_) => _start() : null,
+              onPointerUp: widget.enabled ? (_) => _finish() : null,
+              onPointerCancel: widget.enabled
+                  ? (_) => _finish(showQuickTapHint: false)
+                  : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: widget.size,
+                height: widget.size,
+                decoration: BoxDecoration(
+                  color: !widget.enabled
+                      ? scheme.outlineVariant
+                      : pressed
+                          ? const Color(0xFF1677FF)
+                          : (dark ? scheme.primaryContainer : AppColors.primarySoft),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: pressed
+                        ? const Color(0xFFD8F0FF)
+                        : scheme.primary.withOpacity(.30),
+                    width: pressed ? 3 : 1,
                   ),
-                  child: Icon(
-                    Icons.qr_code_scanner_rounded,
-                    color: pressed ? Colors.white : AppColors.primary,
-                    size: widget.size * .5,
-                  ),
+                  boxShadow: pressed
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF52B9FF).withOpacity(.82),
+                            blurRadius: 26,
+                            spreadRadius: 6,
+                          ),
+                          BoxShadow(
+                            color: const Color(0xFF1677FF).withOpacity(.34),
+                            blurRadius: 38,
+                            spreadRadius: 9,
+                          ),
+                        ]
+                      : const [],
+                ),
+                child: Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: pressed ? Colors.white : scheme.primary,
+                  size: widget.size * .5,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class QuickScannerBottomBar extends StatelessWidget {
@@ -177,30 +181,36 @@ class QuickScannerBottomBar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-        child: Container(
-          height: 72,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(.08),
-                blurRadius: 22,
-                offset: const Offset(0, 7),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      child: Container(
+        height: 72,
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: scheme.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(
+                theme.brightness == Brightness.dark ? .22 : .08,
               ),
-            ],
-          ),
-          child: Center(
-            child: HoldScannerButton(
-              enabled: enabled,
-              size: 56,
-              onScan: onScan,
+              blurRadius: 22,
+              offset: const Offset(0, 7),
             ),
+          ],
+        ),
+        child: Center(
+          child: HoldScannerButton(
+            enabled: enabled,
+            size: 56,
+            onScan: onScan,
           ),
         ),
-      );
+      ),
+    );
+  }
 }
