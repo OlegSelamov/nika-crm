@@ -103,6 +103,46 @@ body{
     vertical-align:middle;
 }
 
+.document-heading{
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) 170px;
+    grid-template-rows:auto auto;
+    column-gap:14px;
+    align-items:start;
+    margin-top:10px;
+    width:100%;
+}
+
+.contract-row{
+    grid-column:1;
+    grid-row:1;
+    display:flex;
+    align-items:flex-end;
+    min-width:0;
+}
+
+.contract-row .line{
+    flex:1 1 auto;
+    width:auto;
+    min-width:0;
+    margin-right:0;
+}
+
+.document-heading .doc-table{
+    grid-column:2;
+    grid-row:1 / span 2;
+    justify-self:end;
+    align-self:start;
+    width:150px;
+}
+
+.document-heading .title{
+    grid-column:1;
+    grid-row:2;
+    margin:10px 0 4px;
+    padding:0;
+}
+
 /* title */
 .title{
     text-align:center;
@@ -264,81 +304,37 @@ body{
 
     </div>
 
-    <!-- договор -->
-	<div style="
-		display:flex;
-		align-items:flex-start;
-		margin-top:10px;
-	">
+    <!-- договор, заголовок и реквизиты документа -->
+    <div class="document-heading">
 
-		<!-- ДОГОВОР -->
-		<div style="
-			display:flex;
-			align-items:flex-end;
-			width:72%;
-		">
+        <div class="contract-row">
+            <div style="width:100px; flex:0 0 100px; font-size:11px;">
+                Договор (контракт)
+            </div>
 
-			<div style="
-				width:100px;
-				font-size:11px;
-			">
-				Договор (контракт)
-			</div>
+            <div class="line">
+                <div class="line-text" style="text-align:left; padding-left:5px;">
+                    {{ contract_text }}
+                </div>
+            </div>
+        </div>
 
-			<div class="line" style="width:460px;">
-				<div class="line-text" style="
-					text-align:left;
-					padding-left:5px;
-				">
-					{{ contract_text }}
-				</div>
-			</div>
+        <div class="title">
+            АКТ ВЫПОЛНЕННЫХ РАБОТ (ОКАЗАННЫХ УСЛУГ)
+        </div>
 
-		</div>
-		
-		<div style="
-			position:relative;
-			height:55px;
-			margin-top:0px;
-		">
+        <table class="doc-table">
+            <tr>
+                <td>Номер<br>документа</td>
+                <td>Дата<br>составления</td>
+            </tr>
+            <tr>
+                <td>{{ sale.document_number or sale.sale_number }}</td>
+                <td>{{ date }}</td>
+            </tr>
+        </table>
 
-			<!-- TITLE -->
-			<div style="
-				position:absolute;
-				left:-600px;
-				top:26px;
-				width:520px;
-
-				text-align:center;
-				font-size:16px;
-				font-weight:bold;
-				line-height:1.2;
-			">
-				АКТ ВЫПОЛНЕННЫХ РАБОТ (ОКАЗАННЫХ УСЛУГ)
-			</div>
-
-			<!-- DOC TABLE -->
-			<table class="doc-table" style="
-				position:absolute;
-				right:15;
-				top:0;
-			">
-
-				<tr>
-					<td>Номер<br>документа</td>
-					<td>Дата<br>составления</td>
-				</tr>
-
-				<tr>
-					<td>{{ sale.document_number or sale.sale_number }}</td>
-					<td>{{ date }}</td>
-				</tr>
-
-			</table>
-
-		</div>
-
-	</div>
+    </div>
 
     <!-- table -->
 	<table class="main-table">
