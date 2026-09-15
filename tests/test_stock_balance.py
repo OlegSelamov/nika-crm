@@ -55,6 +55,8 @@ class StockBalanceTests(unittest.TestCase):
         self.assertIn("i.company_id = %s", cur.query)
         self.assertIn("i.id = %s", cur.query)
         self.assertIn("IS DISTINCT FROM", cur.query)
+        self.assertIn("FOR UPDATE", cur.executions[0][0])
+        self.assertEqual(cur.executions[0][1], (15, 7))
 
     def test_legacy_quantity_is_preserved_as_a_stock_movement(self):
         cur = FakeCursor(updated_count=3)
