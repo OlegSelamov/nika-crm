@@ -5,6 +5,7 @@ from flask import jsonify
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from utils.stock_pricing import apply_income_pricing, as_bool
+from utils.stock_balance import sync_item_quantities
 from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting
 
 stock_bp = Blueprint("stock", __name__)
@@ -91,6 +92,7 @@ def stock_income():
         ))
 
         movement_id = cur.fetchone()["id"]
+        sync_item_quantities(cur, company_id=company_id, item_id=item_id)
 
         expense_id = upsert_expense_from_source(
             cur,
@@ -372,6 +374,7 @@ def stock_writeoff():
         ))
 
         movement_id = cur.fetchone()["id"]
+        sync_item_quantities(cur, company_id=company_id, item_id=item_id)
 
         conn.commit()
         pool.putconn(conn)
@@ -597,6 +600,7 @@ def api_stock_income():
     ))
 
     movement_id = cur.fetchone()["id"]
+        sync_item_quantities(cur, company_id=company_id, item_id=data["item_id"])
 
     expense_id = upsert_expense_from_source(
         cur,
@@ -700,6 +704,7 @@ def api_stock_writeoff():
     ))
 
     movement_id = cur.fetchone()["id"]
+        sync_item_quantities(cur, company_id=company_id, item_id=data["item_id"])
 
     conn.commit()
     pool.putconn(conn)
