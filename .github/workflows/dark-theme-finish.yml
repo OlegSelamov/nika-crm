@@ -1,0 +1,115 @@
+name: Final dark theme cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/dark-theme-finish-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Finish Sales dark theme
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('android_app/lib/screens/sales_screen.dart')
+          s = p.read_text(encoding='utf-8')
+
+          # Quantity / measured-item modal: remove the last light palette colors.
+          s = s.replace(
+              'color: AppColors.primarySoft,',
+              'color: Theme.of(context).colorScheme.primaryContainer,',
+          )
+          s = s.replace(
+              '? AppColors.text\n',
+              '? Theme.of(context).colorScheme.onSurface\n',
+          )
+          s = s.replace(
+              ': AppColors.text,',
+              ': Theme.of(context).colorScheme.onSurface,',
+          )
+
+          # Sheet drag handles and dividers should not stay almost-white in dark mode.
+          s = s.replace(
+              'color: AppColors.border,\n                        borderRadius:',
+              'color: Theme.of(context).colorScheme.outlineVariant,\n                        borderRadius:',
+          )
+          s = s.replace(
+              'color: AppColors.border, borderRadius:',
+              'color: Theme.of(context).colorScheme.outlineVariant, borderRadius:',
+          )
+
+          # Payment modal avatar used a constant light lavender background.
+          s = s.replace(
+              '''leading: const CircleAvatar(
+                          backgroundColor: AppColors.primarySoft,
+                          child: Icon(Icons.person_outline_rounded, color: AppColors.primary),
+                        ),''',
+              '''leading: CircleAvatar(
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                          child: const Icon(Icons.person_outline_rounded, color: AppColors.primary),
+                        ),''',
+          )
+
+          # Main sales search hint follows active theme instead of fixed light-mode muted color.
+          s = s.replace(
+              '''child: const Row(children: [
+                Icon(Icons.search_rounded, color: AppColors.muted),
+                SizedBox(width: 10),
+                Expanded(child: Text('Поиск товара, услуги, штрихкоду...', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.muted))),
+              ]),''',
+              '''child: Row(children: [
+                Icon(Icons.search_rounded, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Поиск товара, услуги, штрихкоду...', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: scheme.onSurfaceVariant))),
+              ]),''',
+          )
+
+          # +/- controls are visible on both themes.
+          s = s.replace(
+              'decoration: BoxDecoration(color: primary ? AppColors.primarySoft : AppColors.danger.withOpacity(.08), borderRadius: BorderRadius.circular(9)),',
+              'decoration: BoxDecoration(color: primary ? Theme.of(context).colorScheme.primaryContainer : AppColors.danger.withOpacity(.12), borderRadius: BorderRadius.circular(9)),',
+          )
+
+          p.write_text(s, encoding='utf-8')
+
+          # History: finish borders and icon surfaces so no light leftovers remain.
+          p = Path('android_app/lib/screens/sales_history_screen.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace(
+              'Border.all(color: AppColors.border)',
+              'Border.all(color: Theme.of(context).colorScheme.outlineVariant)',
+          )
+          s = s.replace(
+              'selected ? AppColors.primary : AppColors.border',
+              'selected ? AppColors.primary : Theme.of(context).colorScheme.outlineVariant',
+          )
+          s = s.replace(
+              'side: const BorderSide(color: AppColors.border),',
+              'side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),',
+          )
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit cleanup
+        run: |
+          git config user.name "Nika Business Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add android_app/lib/screens/sales_screen.dart android_app/lib/screens/sales_history_screen.dart
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "Finish dark theme for sales modals and search"
+          git push origin main
