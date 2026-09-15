@@ -22,9 +22,49 @@ def stock_balance_sql(item_alias="i"):
                 FROM stock_movements sm
                 WHERE sm.company_id = {item_alias}.company_id
                   AND sm.item_id = {item_alias}.id
-            ), 0)
+            ), ${item_alias}.quantity, 0)
         END
     """
+
+
+def backfill_legacy_stock_movements(cur):
+    """Preserve stock that predates the movement journal as an auditable movement."""
+    cur.execute(
+        """
+        WITH inserted AS (
+            INSERT INTO stock_movements (
+                company_id, item_id, movement_type, quantity,
+                price, total, comment, created_at
+            )
+            SELECT
+                i.company_id,
+                i.id,
+                CASE WHEN i.quantity < 0 THEN 'writeoff' ELSE 'income' END,
+                ABS(i.quantity),
+                COALESCE(i.purchase_price, 0),
+                ABS(i.quantity) * COALESCE(i.purchase_price, 0),
+                'Автоматический перенос старого остатка в журнал движений',
+                NOW()
+            FROM items i
+            WHERE COALESCE(i.item_type, 'product') = 'product'
+              AND COALESCE(i.quantity, 0) <> 0
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM stock_movements sm
+                  WHERE sm.company_id = i.company_id
+                    AND sm.item_id = i.id
+              )
+            RETURNING id
+        )
+        SELECT COUNT(*) AS inserted_count
+        FROM inserted
+        """,
+        (),
+    )
+    row = cur.fetchone() or {}
+    if hasattr(row, "get"):
+        return int(row.get("inserted_count") or 0)
+    return int(row[0] or 0)
 
 
 def sync_item_quantities(cur, *, company_id=None, item_id=None):
