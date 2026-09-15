@@ -17,6 +17,7 @@ from flask import session
 
 from models import get_db, pool
 from utils.stock_pricing import apply_income_pricing, as_bool
+from utils.stock_balance import sync_item_quantities
 from utils.timezone import now_kz
 
 
@@ -1094,6 +1095,7 @@ def _execute(cur, action: str, data: dict[str, Any]) -> dict[str, Any]:
             (company_id, item_id, movement_type, quantity, price, total, _text(data, "comment", limit=500), now_kz()),
         )
         after = dict(cur.fetchone())
+        sync_item_quantities(cur, company_id=company_id, item_id=item_id)
         target_id = after["id"]
         target_type = "stock_movement"
         if action == "stock_income":
