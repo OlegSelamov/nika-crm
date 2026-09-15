@@ -600,7 +600,7 @@ def api_stock_income():
     ))
 
     movement_id = cur.fetchone()["id"]
-        sync_item_quantities(cur, company_id=company_id, item_id=data["item_id"])
+    sync_item_quantities(cur, company_id=company_id, item_id=data["item_id"])
 
     expense_id = upsert_expense_from_source(
         cur,
@@ -704,7 +704,7 @@ def api_stock_writeoff():
     ))
 
     movement_id = cur.fetchone()["id"]
-        sync_item_quantities(cur, company_id=company_id, item_id=data["item_id"])
+    sync_item_quantities(cur, company_id=company_id, item_id=data["item_id"])
 
     conn.commit()
     pool.putconn(conn)
