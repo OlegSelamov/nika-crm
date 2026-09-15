@@ -1,0 +1,48 @@
+name: Execute dark theme patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/dark-theme-executor-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Execute embedded patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import zlib
+
+          workflow = Path('.github/workflows/dark-theme-run.yml').read_text(encoding='utf-8')
+          match = re.search(r"fromhex\('([0-9a-f]+)'\)", workflow)
+          if not match:
+              raise SystemExit('Embedded dark-theme patch payload was not found')
+          script = zlib.decompress(bytes.fromhex(match.group(1))).decode('utf-8')
+          exec(compile(script, '<dark-theme-patch>', 'exec'))
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name "Nika Business Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add android_app/lib/screens/sales_screen.dart \
+                  android_app/lib/screens/sales_history_screen.dart \
+                  android_app/lib/screens/main_layout.dart
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "Apply dark theme throughout sales UI"
+          git push origin main
