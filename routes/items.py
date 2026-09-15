@@ -23,6 +23,7 @@ from services.media import (
 )
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
+from utils.stock_balance import stock_balance_sql, sync_item_quantities
 from routes.expenses import (
     _ensure_expenses_table,
     _sync_expense_to_accounting,
@@ -129,6 +130,7 @@ def _record_opening_balance(
     ))
 
     movement_id = cur.fetchone()["id"]
+    sync_item_quantities(cur, company_id=company_id, item_id=item_id)
     if purchase_price <= 0:
         return
 
@@ -156,10 +158,11 @@ def items():
     cur = conn.cursor()
     _ensure_item_images_main(cur)
     
-    cur.execute("""
-    SELECT 
+    cur.execute(f"""
+    SELECT
         items.*,
-        (SELECT image FROM item_images 
+        {stock_balance_sql("items")} AS stock_quantity,
+        (SELECT image FROM item_images
          WHERE item_id = items.id
          ORDER BY COALESCE(is_main, FALSE) DESC, id
          LIMIT 1) as image
@@ -198,6 +201,8 @@ def items():
 def _catalog_item_payload(item):
     """Convert a database row into a compact JSON-safe catalog item."""
     data = dict(item)
+    if "stock_quantity" in data:
+        data["quantity"] = data.pop("stock_quantity")
     for field in (
         "retail_price", "purchase_price", "wholesale_price", "quantity",
         "discount_percent", "markup_percent",
@@ -264,6 +269,7 @@ def api_catalog_items():
         cur.execute(f"""
             SELECT
                 items.*,
+                {stock_balance_sql("items")} AS stock_quantity,
                 (SELECT image FROM item_images
                  WHERE item_id = items.id
                  ORDER BY COALESCE(is_main, FALSE) DESC, id
@@ -743,9 +749,10 @@ def api_items():
         params.append(category)
 
     cur.execute(f"""
-    SELECT 
+    SELECT
         items.*,
-        (SELECT image FROM item_images 
+        {stock_balance_sql("items")} AS stock_quantity,
+        (SELECT image FROM item_images
          WHERE item_id = items.id 
          LIMIT 1) as image
     FROM items
@@ -1361,11 +1368,12 @@ def export_items_xlsx():
                 )
         conn.commit()
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 i.name, i.item_type, i.category, i.unit, i.barcode, i.gtin, i.ntin,
                 i.purchase_price, i.wholesale_price, i.retail_price,
-                i.discount_percent, i.description, i.quantity,
+                i.discount_percent, i.description,
+                {stock_balance_sql("i")} AS quantity,
                 (
                     SELECT ii.image
                     FROM item_images ii
