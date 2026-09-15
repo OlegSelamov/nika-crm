@@ -125,12 +125,14 @@ def stock_income():
         SELECT
             COUNT(*) AS total_count,
             COALESCE(SUM(sm.quantity), 0) AS total_quantity,
-            COALESCE(SUM(
-                COALESCE(NULLIF(sm.total, 0), sm.quantity * sm.price, 0)
-            ), 0) AS total_sum
+            COALESCE(SUM(sm.total), 0) AS total_sum
         FROM stock_movements sm
+        JOIN items i
+          ON i.id = sm.item_id
+         AND i.company_id = sm.company_id
         WHERE sm.company_id = %s
           AND sm.movement_type = 'income'
+          AND COALESCE(i.item_type, 'product') = 'product'
     """, (session.get("company_id"),))
     income_stats = cur.fetchone() or {
         "total_count": 0,
@@ -153,6 +155,7 @@ def stock_income():
         WHERE
             stock_movements.company_id = %s
             AND stock_movements.movement_type = 'income'
+            AND COALESCE(items.item_type, 'product') = 'product'
 
         ORDER BY stock_movements.id DESC
 
