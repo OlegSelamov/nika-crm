@@ -1266,7 +1266,8 @@ async function printCurrentDocument(event) {
                 try {
                     await printerApi.printDocument({
                         html: frame.contentDocument.documentElement.outerHTML,
-                        title: documentConfig[currentDocumentType]?.title || "Документ"
+                        title: documentConfig[currentDocumentType]?.title || "Документ",
+                        landscape: currentDocumentType === "act"
                     });
                     return;
                 } catch (error) {
