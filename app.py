@@ -37,7 +37,7 @@ from routes.sales import sales_bp
 from routes.rekassa_comrun import pay_sale_comrun, fiscalize_sale_comrun
 from routes.kaspi_pos import kaspi_pos_bp
 from models import init_db, get_db, pool
-from utils.stock_balance import sync_item_quantities
+from utils.stock_balance import backfill_legacy_stock_movements, sync_item_quantities
 from routes.sales import sales_api
 from routes.companies import companies_bp
 from routes.agent import agent_bp
@@ -127,6 +127,13 @@ try:
         ), i.purchase_price)
         WHERE i.last_purchase_price IS NULL
     """)
+    migrated_legacy_stock_items = backfill_legacy_stock_movements(_media_schema_cur)
+    if migrated_legacy_stock_items:
+        print(
+            "STOCK MOVEMENT BACKFILL:",
+            f"{migrated_legacy_stock_items} legacy item(s) preserved",
+        )
+
     corrected_stock_items = sync_item_quantities(_media_schema_cur)
     if corrected_stock_items:
         print(
