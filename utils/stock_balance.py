@@ -39,7 +39,9 @@ def backfill_legacy_stock_movements(cur):
             SELECT
                 i.company_id,
                 i.id,
-                CASE WHEN i.quantity < 0 THEN 'writeoff' ELSE 'income' END,
+                -- Use refund for a positive compatibility balance so it does
+                -- not appear as a new purchase in purchasing reports.
+                CASE WHEN i.quantity < 0 THEN 'writeoff' ELSE 'refund' END,
                 ABS(i.quantity),
                 COALESCE(i.purchase_price, 0),
                 ABS(i.quantity) * COALESCE(i.purchase_price, 0),
