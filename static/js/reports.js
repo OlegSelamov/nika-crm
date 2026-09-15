@@ -21,6 +21,27 @@ function selectReport(type, button) {
     loadCurrentReport();
 }
 
+function formatMoney(value) {
+    return new Intl.NumberFormat('ru-RU', {
+        maximumFractionDigits: 0
+    }).format(Number(value || 0)) + ' ₸';
+}
+
+function setReportText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+}
+
+function renderSummary(summary) {
+    if (!summary) return;
+    setReportText('reportRevenue', formatMoney(summary.revenue));
+    setReportText('reportSalesCount', `${Number(summary.sales_count || 0)} продаж`);
+    setReportText('reportPurchaseTotal', formatMoney(summary.purchase_total));
+    setReportText('reportPurchaseCount', `${Number(summary.purchase_count || 0)} операций прихода`);
+    setReportText('reportNetProfit', formatMoney(summary.net_profit));
+    setReportText('reportAverageCheck', formatMoney(summary.average_check));
+}
+
 function formatCell(key, value) {
     if (value === null || value === undefined || value === '') return '—';
 
@@ -30,9 +51,7 @@ function formatCell(key, value) {
     ];
 
     if (moneyKeys.includes(key)) {
-        return new Intl.NumberFormat('ru-RU', {
-            maximumFractionDigits: 0
-        }).format(Number(value || 0)) + ' ₸';
+        return formatMoney(value);
     }
 
     return String(value);
@@ -50,6 +69,7 @@ async function loadCurrentReport() {
         if (!data.success) throw new Error(data.error || 'Ошибка загрузки');
 
         document.getElementById('reportResultTitle').textContent = data.title;
+        renderSummary(data.summary);
 
         document.getElementById('reportsTableHead').innerHTML =
             '<tr>' + data.columns.map(c => `<th>${c.label}</th>`).join('') + '</tr>';

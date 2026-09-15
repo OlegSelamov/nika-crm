@@ -6,7 +6,7 @@
 
 <div class="reports-page{% if print_mode %} reports-page--print{% endif %}"
      data-active-report="{{ active_report }}"
-     data-reports-build="{{ reports_build|default('2026.08.17.1') }}"
+     data-reports-build="{{ reports_build|default('2026.09.15.1') }}"
      data-date-from="{{ date_from }}"
      data-date-to="{{ date_to }}"
      data-print-mode="{{ '1' if print_mode else '0' }}">
@@ -17,7 +17,7 @@
                 {% if print_mode %}
                     Период: {{ date_from }} — {{ date_to }}
                 {% else %}
-                    Продажи товаров и услуг, прибыль, склад и клиенты · версия {{ reports_build|default('2026.08.17.1') }}
+                    Продажи, закупки, прибыль, склад и клиенты · версия {{ reports_build|default('2026.09.15.1') }}
                 {% endif %}
             </div>
         </div>
@@ -52,22 +52,22 @@
     <div class="reports-stats">
         <article>
             <span>Выручка</span>
-            <strong>{{ "{:,.0f}".format(summary.get("revenue", 0)).replace(",", " ") }} ₸</strong>
-            <small>{{ summary.get("sales_count", 0) }} продаж</small>
+            <strong id="reportRevenue">{{ "{:,.0f}".format(summary.get("revenue", 0)).replace(",", " ") }} ₸</strong>
+            <small id="reportSalesCount">{{ summary.get("sales_count", 0) }} продаж</small>
         </article>
         <article>
-            <span>Валовая прибыль</span>
-            <strong>{{ "{:,.0f}".format(summary.get("gross_profit", 0)).replace(",", " ") }} ₸</strong>
-            <small>По товарам и услугам</small>
+            <span>Сумма закупа</span>
+            <strong id="reportPurchaseTotal">{{ "{:,.0f}".format(summary.get("purchase_total", 0)).replace(",", " ") }} ₸</strong>
+            <small id="reportPurchaseCount">{{ summary.get("purchase_count", 0) }} операций прихода</small>
         </article>
         <article>
             <span>Чистая прибыль</span>
-            <strong>{{ "{:,.0f}".format(summary.get("net_profit", 0)).replace(",", " ") }} ₸</strong>
+            <strong id="reportNetProfit">{{ "{:,.0f}".format(summary.get("net_profit", 0)).replace(",", " ") }} ₸</strong>
             <small>С учётом расходов</small>
         </article>
         <article>
             <span>Средний чек</span>
-            <strong>{{ "{:,.0f}".format(summary.get("average_check", 0)).replace(",", " ") }} ₸</strong>
+            <strong id="reportAverageCheck">{{ "{:,.0f}".format(summary.get("average_check", 0)).replace(",", " ") }} ₸</strong>
             <small>За выбранный период</small>
         </article>
     </div>
@@ -83,6 +83,9 @@
         <div class="reports-tools">
             <button class="report-tool is-active" data-report="sales" onclick="selectReport('sales', this)">
                 <span>📊</span><div><strong>Продажи</strong><small>Чеки, оплаты и клиенты</small></div>
+            </button>
+            <button class="report-tool" data-report="purchases" onclick="selectReport('purchases', this)">
+                <span>🛒</span><div><strong>Закупки</strong><small>Приходы, суммы и поставщики</small></div>
             </button>
             <button class="report-tool" data-report="products" onclick="selectReport('products', this)">
                 <span>📦</span><div><strong>Товары</strong><small>Продажи, количество и прибыль</small></div>
@@ -153,7 +156,7 @@
     </section>
 </div>
 
-{% block page_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/reports.css') }}">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/reports.css', v='20260915-purchases-1') }}">{% endblock %}
 
-{% block page_js %}<script src="{{ url_for('static', filename='js/reports.js') }}"></script>{% endblock %}
+{% block page_js %}<script src="{{ url_for('static', filename='js/reports.js', v='20260915-purchases-1') }}"></script>{% endblock %}
 {% endblock %}

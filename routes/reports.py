@@ -21,10 +21,11 @@ reports_bp = Blueprint("reports", __name__)
 
 # Keep this value visible in both the web page and mobile API response.  It also
 # makes it easy to verify that the updated reports module reached the server.
-REPORTS_BUILD = "2026.08.17.1"
+REPORTS_BUILD = "2026.09.15.1"
 
 REPORT_TITLES = {
     "sales": "Отчёт по продажам",
+    "purchases": "Отчёт по закупкам",
     "products": "Отчёт по товарам",
     "services": "Отчёт по услугам",
     "profit": "Отчёт по прибыли",
@@ -100,8 +101,23 @@ def _get_summary(cur, company_id, date_from, date_to):
     except Exception:
         cur.connection.rollback()
 
+    cur.execute("""
+        SELECT
+            COUNT(*) AS purchase_count,
+            COALESCE(SUM(
+                COALESCE(NULLIF(total, 0), quantity * price, 0)
+            ), 0) AS purchase_total
+        FROM stock_movements
+        WHERE company_id = %s
+          AND movement_type = 'income'
+          AND DATE(created_at) BETWEEN %s AND %s
+    """, (company_id, date_from, date_to))
+    purchases = cur.fetchone()
+
     return {
         "sales_count": sales["sales_count"] or 0,
+        "purchase_count": purchases["purchase_count"] or 0,
+        "purchase_total": purchases["purchase_total"] or 0,
         "revenue": sales["revenue"] or 0,
         "cash": sales["cash"] or 0,
         "card": sales["card"] or 0,
@@ -160,6 +176,73 @@ def _sales_report(cur, company_id, date_from, date_to):
             ("payment", "Оплата"),
             ("amount", "Сумма"),
             ("status", "Статус"),
+        ],
+        "rows": rows,
+    }
+
+
+def _purchases_report(cur, company_id, date_from, date_to):
+    cur.execute("""
+        SELECT
+            EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'stock_movements'
+                  AND column_name = 'supplier_id'
+            ) AS has_supplier_column,
+            to_regclass('public.suppliers') IS NOT NULL AS has_suppliers_table
+    """)
+    supplier_schema = cur.fetchone() or {}
+    has_suppliers = bool(
+        supplier_schema.get("has_supplier_column")
+        and supplier_schema.get("has_suppliers_table")
+    )
+
+    supplier_select = (
+        "COALESCE(NULLIF(s.name, ''), 'Не указан') AS supplier"
+        if has_suppliers else
+        "'Не указан' AS supplier"
+    )
+    supplier_join = (
+        """
+        LEFT JOIN suppliers s
+          ON s.id = sm.supplier_id
+         AND s.company_id = sm.company_id
+        """
+        if has_suppliers else ""
+    )
+
+    cur.execute(f"""
+        SELECT
+            sm.created_at,
+            COALESCE(NULLIF(sm.total, 0), sm.quantity * sm.price, 0) AS amount,
+            {supplier_select}
+        FROM stock_movements sm
+        {supplier_join}
+        WHERE sm.company_id = %s
+          AND sm.movement_type = 'income'
+          AND DATE(sm.created_at) BETWEEN %s AND %s
+        ORDER BY sm.created_at DESC, sm.id DESC
+        LIMIT 2000
+    """, (company_id, date_from, date_to))
+
+    rows = []
+    for row in cur.fetchall():
+        rows.append({
+            "date": (
+                row["created_at"].strftime("%d.%m.%Y %H:%M")
+                if row["created_at"] else "—"
+            ),
+            "amount": row["amount"] or 0,
+            "supplier": row["supplier"] or "Не указан",
+        })
+
+    return {
+        "columns": [
+            ("date", "Дата и время закупа"),
+            ("amount", "Общая сумма закупа"),
+            ("supplier", "Поставщик"),
         ],
         "rows": rows,
     }
@@ -379,6 +462,7 @@ def _clients_report(cur, company_id, date_from, date_to):
 def _build_report(cur, report_type, company_id, date_from, date_to):
     builders = {
         "sales": _sales_report,
+        "purchases": _purchases_report,
         "products": _products_report,
         "services": _services_report,
         "profit": _profit_report,
@@ -437,9 +521,18 @@ def reports_data():
         report = _build_report(
             cur, report_type, company_id, date_from, date_to
         )
+        summary = _get_summary(cur, company_id, date_from, date_to)
         return jsonify({
             "success": True,
             "reports_build": REPORTS_BUILD,
+            "summary": {
+                "sales_count": int(summary["sales_count"] or 0),
+                "purchase_count": int(summary["purchase_count"] or 0),
+                "revenue": _money(summary["revenue"]),
+                "purchase_total": _money(summary["purchase_total"]),
+                "net_profit": _money(summary["net_profit"]),
+                "average_check": _money(summary["average_check"]),
+            },
             "title": REPORT_TITLES.get(report_type, "Отчёт"),
             "columns": [
                 {"key": key, "label": label}

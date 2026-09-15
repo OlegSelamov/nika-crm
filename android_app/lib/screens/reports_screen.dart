@@ -13,10 +13,11 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
-  static const String reportBuild = '2026.08.17.2';
+  static const String reportBuild = '2026.09.15.1';
 
   static const types = <String, String>{
     'sales': 'Продажи',
+    'purchases': 'Закупки',
     'products': 'Товары',
     'services': 'Услуги',
     'profit': 'Прибыль',
