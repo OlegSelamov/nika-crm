@@ -1,6 +1,10 @@
 import unittest
 
-from utils.stock_balance import stock_balance_sql, sync_item_quantities
+from utils.stock_balance import (
+    backfill_legacy_stock_movements,
+    stock_balance_sql,
+    sync_item_quantities,
+)
 
 
 class FakeCursor:
@@ -14,7 +18,10 @@ class FakeCursor:
         self.params = params
 
     def fetchone(self):
-        return {"updated_count": self.updated_count}
+        return {
+            "updated_count": self.updated_count,
+            "inserted_count": self.updated_count,
+        }
 
 
 class StockBalanceTests(unittest.TestCase):
@@ -30,6 +37,10 @@ class StockBalanceTests(unittest.TestCase):
         self.assertIn("item.item_type", sql)
         self.assertIn("= 'service' THEN 0", sql)
 
+    def test_items_without_movements_keep_their_legacy_quantity(self):
+        sql = stock_balance_sql("item")
+        self.assertIn("item.quantity, 0", sql)
+
     def test_invalid_alias_is_rejected(self):
         with self.assertRaises(ValueError):
             stock_balance_sql("items; DROP TABLE items")
@@ -42,6 +53,15 @@ class StockBalanceTests(unittest.TestCase):
         self.assertIn("i.company_id = %s", cur.query)
         self.assertIn("i.id = %s", cur.query)
         self.assertIn("IS DISTINCT FROM", cur.query)
+
+    def test_legacy_quantity_is_preserved_as_a_stock_movement(self):
+        cur = FakeCursor(updated_count=3)
+        inserted = backfill_legacy_stock_movements(cur)
+        self.assertEqual(inserted, 3)
+        self.assertEqual(cur.params, ())
+        self.assertIn("NOT EXISTS", cur.query)
+        self.assertIn("ABS(i.quantity)", cur.query)
+        self.assertIn("'writeoff' ELSE 'income'", cur.query)
 
 
 if __name__ == "__main__":
