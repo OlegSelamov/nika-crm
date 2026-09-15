@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from utils.sale_amounts import normalize_sale_line
+from utils.stock_balance import sync_item_quantities
 from flask import render_template
 from num2words import num2words
 from flask import session
@@ -1057,15 +1058,6 @@ def process_sale(conn, sale_id):
         if item_type == "product":
 
             cur.execute("""
-                UPDATE items
-                SET quantity = COALESCE(quantity, 0) - %s
-                WHERE id = %s
-            """, (
-                item["quantity"],
-                item["item_id"]
-            ))
-
-            cur.execute("""
                 INSERT INTO stock_movements (
                     company_id,
                     item_id,
@@ -1085,6 +1077,11 @@ def process_sale(conn, sale_id):
                 item["total"],
                 now_kz().isoformat()
             ))
+            sync_item_quantities(
+                cur,
+                company_id=sale["company_id"],
+                item_id=item["item_id"],
+            )
 
     cur.execute("""
         UPDATE sales
@@ -3202,15 +3199,6 @@ def refund_sale(sale_id):
             if item_type == "product":
 
                 cur.execute("""
-                    UPDATE items
-                    SET quantity = COALESCE(quantity, 0) + %s
-                    WHERE id = %s
-                """, (
-                    item["quantity"],
-                    item["item_id"]
-                ))
-
-                cur.execute("""
                     INSERT INTO stock_movements (
                         company_id,
                         item_id,
@@ -3230,6 +3218,11 @@ def refund_sale(sale_id):
                     item["total"],
                     now_kz().isoformat()
                 ))
+                sync_item_quantities(
+                    cur,
+                    company_id=sale["company_id"],
+                    item_id=item["item_id"],
+                )
 
         # обновляем продажу
 
