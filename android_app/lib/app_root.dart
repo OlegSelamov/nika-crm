@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'main.dart' show appNavigatorKey;
 import 'screens/splash_screen.dart';
+import 'services/app_navigation.dart';
 import 'services/app_theme_preferences.dart';
 import 'services/nika_assistant_controller.dart';
 import 'theme/app_theme.dart';
