@@ -21,7 +21,7 @@ reports_bp = Blueprint("reports", __name__)
 
 # Keep this value visible in both the web page and mobile API response.  It also
 # makes it easy to verify that the updated reports module reached the server.
-REPORTS_BUILD = "2026.09.15.2"
+REPORTS_BUILD = "2026.09.15.3"
 
 REPORT_TITLES = {
     "sales": "Отчёт по продажам",
@@ -103,14 +103,16 @@ def _get_summary(cur, company_id, date_from, date_to):
 
     cur.execute("""
         SELECT
-            COUNT(DISTINCT DATE(created_at)) AS purchase_count,
-            COALESCE(SUM(
-                COALESCE(NULLIF(total, 0), quantity * price, 0)
-            ), 0) AS purchase_total
-        FROM stock_movements
-        WHERE company_id = %s
-          AND movement_type = 'income'
-          AND DATE(created_at) BETWEEN %s AND %s
+            COUNT(DISTINCT DATE(sm.created_at)) AS purchase_count,
+            COALESCE(SUM(sm.total), 0) AS purchase_total
+        FROM stock_movements sm
+        JOIN items i
+          ON i.id = sm.item_id
+         AND i.company_id = sm.company_id
+        WHERE sm.company_id = %s
+          AND sm.movement_type = 'income'
+          AND COALESCE(i.item_type, 'product') = 'product'
+          AND DATE(sm.created_at) BETWEEN %s AND %s
     """, (company_id, date_from, date_to))
     purchases = cur.fetchone()
 
@@ -221,14 +223,16 @@ def _purchases_report(cur, company_id, date_from, date_to):
     cur.execute(f"""
         SELECT
             DATE(sm.created_at) AS purchase_date,
-            COALESCE(SUM(
-                COALESCE(NULLIF(sm.total, 0), sm.quantity * sm.price, 0)
-            ), 0) AS amount,
+            COALESCE(SUM(sm.total), 0) AS amount,
             {supplier_select}
         FROM stock_movements sm
+        JOIN items i
+          ON i.id = sm.item_id
+         AND i.company_id = sm.company_id
         {supplier_join}
         WHERE sm.company_id = %s
           AND sm.movement_type = 'income'
+          AND COALESCE(i.item_type, 'product') = 'product'
           AND DATE(sm.created_at) BETWEEN %s AND %s
         GROUP BY DATE(sm.created_at)
         ORDER BY purchase_date DESC
