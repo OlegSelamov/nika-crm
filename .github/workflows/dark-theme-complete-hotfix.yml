@@ -1,0 +1,328 @@
+name: Complete dark theme hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/dark-theme-complete-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply dark theme to sales, modals and history
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'Anchor not found: {label}')
+              return text.replace(old, new, 1)
+
+          # ------------------------- SALES -------------------------
+          path = Path('android_app/lib/screens/sales_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          text = replace_once(text, '''              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                ),''', '''              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+                ),''', 'sales quantity sheet background')
+
+          text = replace_once(text, '''              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),''', '''              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),''', 'sales payment sheet background')
+
+          old_inline_sheet = "decoration: const BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),"
+          new_inline_sheet = "decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),"
+          inline_count = text.count(old_inline_sheet)
+          if inline_count != 2:
+              raise SystemExit(f'Expected 2 sales sheet frames, found {inline_count}')
+          text = text.replace(old_inline_sheet, new_inline_sheet)
+
+          # Theme-aware shared colors inside every sales modal/search sheet.
+          text = text.replace('AppColors.surface', 'Theme.of(context).colorScheme.surface')
+          text = text.replace('AppColors.border', 'Theme.of(context).colorScheme.outlineVariant')
+          text = text.replace('AppColors.primarySoft', 'Theme.of(context).colorScheme.primaryContainer')
+          text = text.replace('AppColors.text', 'Theme.of(context).colorScheme.onSurface')
+          text = text.replace('const CircleAvatar(', 'CircleAvatar(')
+
+          # Main sales screen: keep the light gradient in light mode, use the real
+          # dark-blue theme in dark mode instead of painting a white screen on top.
+          text = replace_once(text, '''  @override
+  Widget build(BuildContext context) {
+    final actions = Padding(''', '''  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+
+    final actions = Padding(''', 'sales build theme variables')
+
+          text = replace_once(text, '''    final checkout = Material(
+      color: Colors.transparent,
+      elevation: 10,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFFFFF), Color(0xFFF4F0FF), Color(0xFFF0F7FF)],
+          ),
+          border: Border(top: BorderSide(color: Color(0xFFE8E4F3))),
+        ),''', '''    final checkout = Material(
+      color: Colors.transparent,
+      elevation: 10,
+      child: Container(
+        decoration: BoxDecoration(
+          color: dark ? scheme.surface : null,
+          gradient: dark
+              ? null
+              : const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFFFFFFF), Color(0xFFF4F0FF), Color(0xFFF0F7FF)],
+                ),
+          border: Border(top: BorderSide(color: scheme.outlineVariant)),
+        ),''', 'sales checkout background')
+
+          text = replace_once(text, '''                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [Color(0xFF17213A), Color(0xFF7257FF), Color(0xFF8D62FF)],
+                  ).createShader(bounds),''', '''                  shaderCallback: (bounds) => LinearGradient(
+                    colors: dark
+                        ? [scheme.onSurface, scheme.primary, const Color(0xFF9A89FF)]
+                        : const [Color(0xFF17213A), Color(0xFF7257FF), Color(0xFF8D62FF)],
+                  ).createShader(bounds),''', 'sales total gradient')
+
+          text = replace_once(text, '''    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFF8F7FF),
+            Color(0xFFF1F7FF),
+            Color(0xFFF8FBFF),
+          ],
+          stops: [0.0, 0.48, 1.0],
+        ),
+      ),''', '''    return Container(
+      decoration: BoxDecoration(
+        color: dark ? theme.scaffoldBackgroundColor : null,
+        gradient: dark
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFF8F7FF),
+                  Color(0xFFF1F7FF),
+                  Color(0xFFF8FBFF),
+                ],
+                stops: [0.0, 0.48, 1.0],
+              ),
+      ),''', 'sales page background')
+
+          # Search field on the sales screen itself must use the active theme too.
+          text = replace_once(text, '''              child: const Row(children: [
+                Icon(Icons.search_rounded, color: AppColors.muted),
+                SizedBox(width: 10),
+                Expanded(child: Text('Поиск товара, услуги, штрихкоду...', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.muted))),
+              ]),''', '''              child: Row(children: [
+                Icon(Icons.search_rounded, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Поиск товара, услуги, штрихкоду...', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: scheme.onSurfaceVariant))),
+              ]),''', 'sales search row')
+
+          # Dynamic primaryContainer makes former pale-purple blocks dark-blue/purple
+          # in dark mode. Remove const from the two client avatars where needed.
+          text = text.replace('const CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer', 'CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer')
+
+          path.write_text(text, encoding='utf-8')
+
+          # ------------------------- HISTORY -------------------------
+          path = Path('android_app/lib/screens/sales_history_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          text = replace_once(text, '''    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF8F6FF), Color(0xFFF1F7FF), Color(0xFFF9FBFF)],
+        ),
+      ),''', '''    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).scaffoldBackgroundColor
+            : null,
+        gradient: Theme.of(context).brightness == Brightness.dark
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF8F6FF), Color(0xFFF1F7FF), Color(0xFFF9FBFF)],
+              ),
+      ),''', 'history page background')
+
+          text = text.replace('Colors.white.withOpacity(.9)', 'Theme.of(context).colorScheme.surface')
+          text = text.replace('Colors.white.withOpacity(.96)', 'Theme.of(context).colorScheme.surface')
+          text = text.replace('fillColor: const Color(0xFFF7F7FC)', 'fillColor: Theme.of(context).colorScheme.surfaceContainerHighest')
+          text = text.replace('selected ? AppColors.primary : const Color(0xFFF7F7FC)', 'selected ? AppColors.primary : Theme.of(context).colorScheme.surfaceContainerHighest')
+          text = text.replace('selected ? Colors.white : AppColors.navy', 'selected ? Colors.white : Theme.of(context).colorScheme.onSurface')
+          text = text.replace('AppColors.primarySoft', 'Theme.of(context).colorScheme.primaryContainer')
+
+          text = replace_once(text, '''        side: const BorderSide(color: AppColors.border),''', '''        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),''', 'history document card border')
+          text = text.replace('Border.all(color: AppColors.border)', 'Border.all(color: Theme.of(context).colorScheme.outlineVariant)')
+          text = text.replace('color: AppColors.border, borderRadius:', 'color: Theme.of(context).colorScheme.outlineVariant, borderRadius:')
+
+          text = replace_once(text, '''                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFFECE7FF), Color(0xFFF1F6FF)]),
+                  borderRadius: BorderRadius.circular(14),
+                ),''', '''                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),''', 'history document icon background')
+
+          text = replace_once(text, '''        decoration: const BoxDecoration(
+          color: Color(0xFFF8F8FD),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),''', '''        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        ),''', 'history documents sheet background')
+
+          # White sheet cards should follow the active surface color. This exact
+          # form only targets background properties, not white text/icons.
+          text = text.replace('color: Colors.white,\n                    borderRadius:', 'color: Theme.of(context).colorScheme.surface,\n                    borderRadius:')
+          text = text.replace('decoration: BoxDecoration(color: Colors.white, borderRadius:', 'decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius:')
+          text = text.replace('Material(\n                      color: Colors.white,', 'Material(\n                      color: Theme.of(context).colorScheme.surface,')
+
+          path.write_text(text, encoding='utf-8')
+
+          # ------------------------- MAIN LAYOUT -------------------------
+          path = Path('android_app/lib/screens/main_layout.dart')
+          text = path.read_text(encoding='utf-8')
+
+          text = replace_once(text, '''      builder: (context, constraints) {
+        final tablet = constraints.maxWidth >= AppBreakpoints.tablet;
+        final extendedRail = constraints.maxWidth >= AppBreakpoints.desktop;''', '''      builder: (context, constraints) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final dark = theme.brightness == Brightness.dark;
+        final tablet = constraints.maxWidth >= AppBreakpoints.tablet;
+        final extendedRail = constraints.maxWidth >= AppBreakpoints.desktop;''', 'main layout theme variables')
+
+          text = replace_once(text, '''            backgroundColor: selectedIndex == 1
+                ? const Color(0xFFF4F1FF)
+                : AppColors.surface,
+            flexibleSpace: selectedIndex == 1
+                ? Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Color(0xFFF1F7FF),
+                          Color(0xFFF4F0FF),
+                          Color(0xFFEEE9FF),
+                        ],
+                      ),
+                    ),
+                  )
+                : null,''', '''            backgroundColor: scheme.surface,
+            flexibleSpace: selectedIndex == 1 && !dark
+                ? Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Color(0xFFF1F7FF),
+                          Color(0xFFF4F0FF),
+                          Color(0xFFEEE9FF),
+                        ],
+                      ),
+                    ),
+                  )
+                : null,''', 'sales appbar dark mode')
+
+          text = replace_once(text, '''                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(11),''', '''                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(11),''', 'main logo background')
+          text = text.replace('backgroundColor: AppColors.surface,', 'backgroundColor: scheme.surface,')
+
+          text = replace_once(text, '''                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 22, offset: const Offset(0, 7))],
+                      ),''', '''                      decoration: BoxDecoration(
+                        color: scheme.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: scheme.outlineVariant),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(dark ? .22 : .08),
+                            blurRadius: 22,
+                            offset: const Offset(0, 7),
+                          ),
+                        ],
+                      ),''', 'sales bottom navigation surface')
+
+          text = replace_once(text, '''        Icon(icon, size: 23, color: AppColors.navy),
+        const SizedBox(height: 4),
+        Text(label, maxLines: 1, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.navy)),''', '''        Icon(icon, size: 23, color: Theme.of(context).colorScheme.onSurface),
+        const SizedBox(height: 4),
+        Text(label, maxLines: 1, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.onSurface)),''', 'sales nav item colors')
+
+          path.write_text(text, encoding='utf-8')
+
+          # Self-remove this one-off workflow after a successful patch.
+          Path('.github/workflows/dark-theme-complete-hotfix.yml').unlink(missing_ok=True)
+          PY
+
+      - name: Validate Dart formatting
+        run: |
+          dart format --output=none --set-exit-if-changed \
+            android_app/lib/screens/sales_screen.dart \
+            android_app/lib/screens/sales_history_screen.dart \
+            android_app/lib/screens/main_layout.dart || \
+          dart format \
+            android_app/lib/screens/sales_screen.dart \
+            android_app/lib/screens/sales_history_screen.dart \
+            android_app/lib/screens/main_layout.dart
+
+      - name: Commit dark theme completion
+        run: |
+          git config user.name "Nika Business Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add android_app/lib/screens/sales_screen.dart \
+                  android_app/lib/screens/sales_history_screen.dart \
+                  android_app/lib/screens/main_layout.dart \
+                  .github/workflows/dark-theme-complete-hotfix.yml
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "Complete dark theme across sales and history"
+          git push origin main
