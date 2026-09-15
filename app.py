@@ -37,6 +37,7 @@ from routes.sales import sales_bp
 from routes.rekassa_comrun import pay_sale_comrun, fiscalize_sale_comrun
 from routes.kaspi_pos import kaspi_pos_bp
 from models import init_db, get_db, pool
+from utils.stock_balance import sync_item_quantities
 from routes.sales import sales_api
 from routes.companies import companies_bp
 from routes.agent import agent_bp
@@ -126,6 +127,13 @@ try:
         ), i.purchase_price)
         WHERE i.last_purchase_price IS NULL
     """)
+    corrected_stock_items = sync_item_quantities(_media_schema_cur)
+    if corrected_stock_items:
+        print(
+            "STOCK QUANTITY RECONCILIATION:",
+            f"{corrected_stock_items} item(s) synchronized from stock movements",
+        )
+
     _media_schema_cur.execute("""
         ALTER TABLE companies
         ADD COLUMN IF NOT EXISTS is_vat_payer BOOLEAN NOT NULL DEFAULT FALSE
