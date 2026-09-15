@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 from models import get_db, pool
 from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting
 from routes.stock import is_product
+from utils.stock_balance import sync_item_quantities
 
 
 suppliers_bp = Blueprint("suppliers", __name__)
@@ -451,6 +452,7 @@ def stock_income_with_supplier():
             total, comment, supplier["id"], movement_datetime
         ))
         movement_id = cur.fetchone()["id"]
+        sync_item_quantities(cur, company_id=company_id, item_id=item_id)
 
         expense_id = upsert_expense_from_source(
             cur,
