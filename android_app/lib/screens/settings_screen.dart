@@ -4,6 +4,7 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/api_service.dart';
+import '../services/app_theme_preferences.dart';
 import '../services/app_update_service.dart';
 import '../services/printer_service.dart';
 import '../theme/app_theme.dart';
@@ -55,8 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       printerMac = prefs.getString('printer_mac') ?? '';
       autoPrint = prefs.getBool('auto_print') ?? false;
       printerPaperWidth = prefs.getInt('printer_paper_width') ?? 58;
-      final savedEncoding =
-          prefs.getString(PrinterService.printerEncodingPreference);
+      final savedEncoding = prefs.getString(PrinterService.printerEncodingPreference);
       printerEncoding = savedEncoding == PrinterService.cp866Encoding
           ? PrinterService.cp866Encoding
           : PrinterService.gbkEncoding;
@@ -168,6 +168,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => printerEncoding = value);
   }
 
+  Future<void> _setTheme(bool darkBlue) async {
+    await AppThemePreferences.setDarkMode(darkBlue);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
@@ -176,6 +180,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 30),
       children: [
+        const SectionTitle('Интерфейс', subtitle: 'Внешний вид приложения'),
+        const SizedBox(height: 12),
+        ValueListenableBuilder<bool>(
+          valueListenable: AppThemePreferences.darkMode,
+          builder: (context, darkBlue, _) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Тема приложения', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(
+                    darkBlue ? 'Тёмно-синяя тема включена' : 'Светлая тема включена',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(
+                          value: false,
+                          icon: Icon(Icons.light_mode_outlined),
+                          label: Text('Светлая'),
+                        ),
+                        ButtonSegment(
+                          value: true,
+                          icon: Icon(Icons.dark_mode_outlined),
+                          label: Text('Тёмно-синяя'),
+                        ),
+                      ],
+                      selected: {darkBlue},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (values) => _setTheme(values.first),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
         const SectionTitle('Интеграции', subtitle: 'Статусы синхронизируются с сайтом'),
         const SizedBox(height: 12),
         _statusCard(
@@ -236,10 +283,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const CircleAvatar(
-                    backgroundColor: AppColors.primarySoft,
-                    foregroundColor: AppColors.primary,
-                    child: Icon(Icons.print_outlined),
+                  leading: CircleAvatar(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.primary,
+                    child: const Icon(Icons.print_outlined),
                   ),
                   title: Text(printerName, style: const TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text(printerMac.isEmpty ? 'Принтер не выбран' : printerMac),
@@ -260,9 +307,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     const Text('Ширина ленты', style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 3),
-                    const Text(
+                    Text(
                       'Форматирование строк чека',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -274,8 +321,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                         selected: {printerPaperWidth},
                         showSelectedIcon: false,
-                        onSelectionChanged: (values) =>
-                            _setPrinterPaperWidth(values.first),
+                        onSelectionChanged: (values) => _setPrinterPaperWidth(values.first),
                       ),
                     ),
                   ],
@@ -286,9 +332,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     const Text('Кодировка принтера', style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 3),
-                    const Text(
+                    Text(
                       'GBK — текущий режим, CP866 — для русской печати на Xprinter',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -300,8 +346,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                         selected: {printerEncoding},
                         showSelectedIcon: false,
-                        onSelectionChanged: (values) =>
-                            _setPrinterEncoding(values.first),
+                        onSelectionChanged: (values) => _setPrinterEncoding(values.first),
                       ),
                     ),
                   ],
@@ -322,10 +367,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(.12),
+                color: Theme.of(context).colorScheme.primary.withOpacity(.12),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.system_update_rounded, color: AppColors.primary),
+              child: Icon(Icons.system_update_rounded, color: Theme.of(context).colorScheme.primary),
             ),
             title: Text('Nika Business $appVersion', style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: const Text('Автоматическая проверка обновлений'),
