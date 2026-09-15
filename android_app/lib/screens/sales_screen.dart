@@ -393,7 +393,7 @@ class SalesScreenState extends State<SalesScreen> {
                       width: 44,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: AppColors.border,
+                        color: Theme.of(context).colorScheme.outlineVariant,
                         borderRadius: BorderRadius.circular(99),
                       ),
                     ),
@@ -434,7 +434,7 @@ class SalesScreenState extends State<SalesScreen> {
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
@@ -457,7 +457,7 @@ class SalesScreenState extends State<SalesScreen> {
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: amountMode
-                                          ? AppColors.text
+                                          ? Theme.of(context).colorScheme.onSurface
                                           : Colors.white,
                                       fontWeight: FontWeight.w800,
                                     ),
@@ -484,7 +484,7 @@ class SalesScreenState extends State<SalesScreen> {
                                     style: TextStyle(
                                       color: amountMode
                                           ? Colors.white
-                                          : AppColors.text,
+                                          : Theme.of(context).colorScheme.onSurface,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -539,7 +539,7 @@ class SalesScreenState extends State<SalesScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
+                        color: Theme.of(context).colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
@@ -1149,7 +1149,7 @@ class SalesScreenState extends State<SalesScreen> {
                       width: 42,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: AppColors.border,
+                        color: Theme.of(context).colorScheme.outlineVariant,
                         borderRadius: BorderRadius.circular(99),
                       ),
                     ),
@@ -1814,7 +1814,7 @@ class _QtyButton extends StatelessWidget {
         child: Container(
           width: 30,
           height: 30,
-          decoration: BoxDecoration(color: primary ? AppColors.primarySoft : AppColors.danger.withOpacity(.08), borderRadius: BorderRadius.circular(9)),
+          decoration: BoxDecoration(color: primary ? Theme.of(context).colorScheme.primaryContainer : AppColors.danger.withOpacity(.12), borderRadius: BorderRadius.circular(9)),
           child: Icon(icon, size: 18, color: primary ? AppColors.primary : AppColors.danger),
         ),
       );
@@ -2054,7 +2054,7 @@ class _SalesDocumentSheetState extends State<_SalesDocumentSheet> {
     decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
     child: Column(children: [
       const SizedBox(height: 10),
-      Container(width: 42, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
+      Container(width: 42, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(99))),
       Padding(
         padding: const EdgeInsets.fromLTRB(18, 10, 8, 6),
         child: Row(children: [
@@ -2282,7 +2282,7 @@ class _SheetFrame extends StatelessWidget {
     decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
     child: Column(children: [
       const SizedBox(height: 10),
-      Container(width: 42, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(99))),
+      Container(width: 42, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(99))),
       Padding(
         padding: const EdgeInsets.fromLTRB(18, 12, 8, 10),
         child: Row(children: [

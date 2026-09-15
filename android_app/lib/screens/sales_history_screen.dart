@@ -508,7 +508,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 18, offset: const Offset(0, 7))],
           ),
           child: Row(children: [
@@ -666,7 +666,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 18, offset: const Offset(0, 7))],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -711,7 +711,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         decoration: BoxDecoration(
           color: selected ? AppColors.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: selected ? AppColors.primary : AppColors.border),
+          border: Border.all(color: selected ? AppColors.primary : Theme.of(context).colorScheme.outlineVariant),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, size: 17, color: selected ? Colors.white : AppColors.muted),
@@ -916,7 +916,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: InkWell(
         onTap: () => _openSaleDocuments(sale),
@@ -1464,7 +1464,7 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                   ),
                   child: Column(children: [
                     _sheetFact('Статус', statusText),
@@ -1497,7 +1497,7 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.border),
+                            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                           ),
                           child: Row(children: [
                             Container(
