@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
 import 'app_widgets.dart';
 
 /// A native route shell for legacy body-only screens.
@@ -16,7 +15,7 @@ class ModulePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: Material(
-        color: AppColors.background,
+        color: Theme.of(context).scaffoldBackgroundColor,
         child: SafeArea(
           top: false,
           child: AdaptiveContent(child: child),
