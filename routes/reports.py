@@ -21,7 +21,7 @@ reports_bp = Blueprint("reports", __name__)
 
 # Keep this value visible in both the web page and mobile API response.  It also
 # makes it easy to verify that the updated reports module reached the server.
-REPORTS_BUILD = "2026.09.15.3"
+REPORTS_BUILD = "2026.09.15.4"
 
 REPORT_TITLES = {
     "sales": "Отчёт по продажам",
@@ -95,7 +95,9 @@ def _get_summary(cur, company_id, date_from, date_to):
             SELECT COALESCE(SUM(amount), 0) AS expenses
             FROM expenses
             WHERE company_id = %s
-              AND expense_date BETWEEN %s AND %s
+              AND date BETWEEN %s AND %s
+              AND LOWER(COALESCE(category, '')) NOT LIKE '%%закуп%%'
+              AND LOWER(COALESCE(category, '')) NOT LIKE '%%товар%%'
         """, (company_id, date_from, date_to))
         expenses = cur.fetchone()["expenses"] or 0
     except Exception:
@@ -127,6 +129,7 @@ def _get_summary(cur, company_id, date_from, date_to):
         "average_check": sales["average_check"] or 0,
         "gross_profit": profit,
         "expenses": expenses,
+        "operating_expenses": expenses,
         "net_profit": (profit or 0) - (expenses or 0),
     }
 
