@@ -21,7 +21,7 @@ reports_bp = Blueprint("reports", __name__)
 
 # Keep this value visible in both the web page and mobile API response.  It also
 # makes it easy to verify that the updated reports module reached the server.
-REPORTS_BUILD = "2026.09.15.1"
+REPORTS_BUILD = "2026.09.15.2"
 
 REPORT_TITLES = {
     "sales": "Отчёт по продажам",
@@ -103,7 +103,7 @@ def _get_summary(cur, company_id, date_from, date_to):
 
     cur.execute("""
         SELECT
-            COUNT(*) AS purchase_count,
+            COUNT(DISTINCT DATE(created_at)) AS purchase_count,
             COALESCE(SUM(
                 COALESCE(NULLIF(total, 0), quantity * price, 0)
             ), 0) AS purchase_total
@@ -200,7 +200,12 @@ def _purchases_report(cur, company_id, date_from, date_to):
     )
 
     supplier_select = (
-        "COALESCE(NULLIF(s.name, ''), 'Не указан') AS supplier"
+        """
+        STRING_AGG(
+            DISTINCT COALESCE(NULLIF(s.name, ''), 'Не указан'),
+            ', '
+        ) AS supplier
+        """
         if has_suppliers else
         "'Не указан' AS supplier"
     )
@@ -215,15 +220,18 @@ def _purchases_report(cur, company_id, date_from, date_to):
 
     cur.execute(f"""
         SELECT
-            sm.created_at,
-            COALESCE(NULLIF(sm.total, 0), sm.quantity * sm.price, 0) AS amount,
+            DATE(sm.created_at) AS purchase_date,
+            COALESCE(SUM(
+                COALESCE(NULLIF(sm.total, 0), sm.quantity * sm.price, 0)
+            ), 0) AS amount,
             {supplier_select}
         FROM stock_movements sm
         {supplier_join}
         WHERE sm.company_id = %s
           AND sm.movement_type = 'income'
           AND DATE(sm.created_at) BETWEEN %s AND %s
-        ORDER BY sm.created_at DESC, sm.id DESC
+        GROUP BY DATE(sm.created_at)
+        ORDER BY purchase_date DESC
         LIMIT 2000
     """, (company_id, date_from, date_to))
 
@@ -231,8 +239,8 @@ def _purchases_report(cur, company_id, date_from, date_to):
     for row in cur.fetchall():
         rows.append({
             "date": (
-                row["created_at"].strftime("%d.%m.%Y %H:%M")
-                if row["created_at"] else "—"
+                row["purchase_date"].strftime("%d.%m.%Y")
+                if row["purchase_date"] else "—"
             ),
             "amount": row["amount"] or 0,
             "supplier": row["supplier"] or "Не указан",
@@ -240,9 +248,9 @@ def _purchases_report(cur, company_id, date_from, date_to):
 
     return {
         "columns": [
-            ("date", "Дата и время закупа"),
+            ("date", "Дата закупа"),
             ("amount", "Общая сумма закупа"),
-            ("supplier", "Поставщик"),
+            ("supplier", "Поставщики"),
         ],
         "rows": rows,
     }

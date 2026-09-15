@@ -37,7 +37,7 @@ function renderSummary(summary) {
     setReportText('reportRevenue', formatMoney(summary.revenue));
     setReportText('reportSalesCount', `${Number(summary.sales_count || 0)} продаж`);
     setReportText('reportPurchaseTotal', formatMoney(summary.purchase_total));
-    setReportText('reportPurchaseCount', `${Number(summary.purchase_count || 0)} операций прихода`);
+    setReportText('reportPurchaseCount', `${Number(summary.purchase_count || 0)} дней с закупками`);
     setReportText('reportNetProfit', formatMoney(summary.net_profit));
     setReportText('reportAverageCheck', formatMoney(summary.average_check));
 }
