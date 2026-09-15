@@ -178,7 +178,7 @@
                     <div><span class="analytics-label-icon"><img src="/static/icons/purchases.png" alt="">Закупки</span><b>{{ "{:,.0f}".format(purchase_total).replace(",", " ") }} ₸</b></div>
                     <div><span class="analytics-label-icon"><img src="/static/icons/salary.png" alt="">Зарплата</span><b>{{ "{:,.0f}".format(salary_total).replace(",", " ") }} ₸</b></div>
                     <div><span class="analytics-label-icon"><img src="/static/icons/taxes.png" alt="">Налоги</span><b>{{ "{:,.0f}".format(taxes_total).replace(",", " ") }} ₸</b></div>
-                    {% for row in (other_expense_categories|default([]))[:4] %}
+                    {% for row in (expense_categories|default([]))[:4] %}
                     <div><span>{{ row.category }}</span><b>{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸</b></div>
                     {% endfor %}
                 </div>
