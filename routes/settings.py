@@ -1,11 +1,82 @@
-from flask import Blueprint, render_template, session, redirect
+import secrets
+
+from flask import Blueprint, jsonify, render_template, request, session, redirect
 from models import get_db, pool
+from services.alatau_client import AlatauClient, AlatauError, AlatauSecretCipher
 
 # Imported for startup side effects: installs stock quantity sync, duplicate
 # identifier protection and stock consistency diagnostic endpoints.
 import routes.stock_consistency  # noqa: F401
 
 settings_bp = Blueprint("settings", __name__)
+
+
+def _alatau_current_company():
+    if not session.get("user_id"):
+        return None, (jsonify({"success": False, "error": "Требуется войти"}), 401)
+    company_id = session.get("company_id")
+    if not company_id:
+        return None, (jsonify({"success": False, "error": "Организация не выбрана"}), 403)
+    if not (
+        session.get("is_super_admin")
+        or session.get("role") in ("owner", "admin", "creator")
+    ):
+        return None, (jsonify({"success": False, "error": "Доступ разрешён владельцу"}), 403)
+    return company_id, None
+
+
+def _alatau_csrf_token():
+    token = session.get("alatau_csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["alatau_csrf_token"] = token
+    return token
+
+
+def _alatau_valid_csrf():
+    supplied = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    expected = session.get("alatau_csrf_token")
+    return bool(supplied and expected and secrets.compare_digest(supplied, expected))
+
+
+def _ensure_alatau_table(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS alatau_integrations (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL UNIQUE,
+            environment TEXT NOT NULL DEFAULT 'sandbox',
+            client_id TEXT,
+            client_secret_encrypted TEXT,
+            bank_company_id TEXT,
+            status TEXT NOT NULL DEFAULT 'disconnected',
+            connected_at TIMESTAMPTZ,
+            last_checked_at TIMESTAMPTZ,
+            last_error TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_alatau_integrations_company
+        ON alatau_integrations(company_id)
+    """)
+
+
+def _alatau_row(company_id):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_alatau_table(cur)
+        conn.commit()
+        cur.execute(
+            "SELECT * FROM alatau_integrations WHERE company_id = %s LIMIT 1",
+            (company_id,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        pool.putconn(conn)
+
 
 @settings_bp.route("/settings")
 def settings():
@@ -18,6 +89,191 @@ def settings():
 @settings_bp.route("/settings/integrations")
 def integrations():
     return render_template("settings/integrations.html")
+
+
+@settings_bp.route("/settings/integrations/alatau")
+def alatau_settings():
+    company_id, error = _alatau_current_company()
+    if error:
+        if error[1] == 401:
+            return redirect("/login")
+        return redirect("/settings/integrations")
+
+    integration = _alatau_row(company_id)
+    safe_integration = None
+    if integration:
+        safe_integration = {
+            "environment": integration.get("environment") or "sandbox",
+            "client_id": integration.get("client_id"),
+            "bank_company_id": integration.get("bank_company_id"),
+            "status": integration.get("status"),
+            "connected_at": integration.get("connected_at"),
+            "last_checked_at": integration.get("last_checked_at"),
+            "last_error": integration.get("last_error"),
+            "has_secret": bool(integration.get("client_secret_encrypted")),
+        }
+
+    return render_template(
+        "settings/alatau.html",
+        alatau=safe_integration,
+        alatau_config=AlatauClient.configuration_status(),
+        csrf_token=_alatau_csrf_token(),
+    )
+
+
+@settings_bp.route("/api/integrations/alatau/test", methods=["POST"])
+def alatau_test_connection():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+    if not _alatau_valid_csrf():
+        return jsonify({"success": False, "error": "Страница устарела. Обновите её"}), 403
+
+    environment = (request.form.get("environment") or "sandbox").strip().lower()
+    if environment not in ("sandbox", "production"):
+        return jsonify({"success": False, "error": "Неверный режим подключения"}), 400
+
+    existing = _alatau_row(company_id) or {}
+    client = AlatauClient()
+
+    if environment == "sandbox":
+        client_id = AlatauClient.SANDBOX_CLIENT_ID
+        client_secret = AlatauClient.SANDBOX_CLIENT_SECRET
+    else:
+        client_id = (request.form.get("client_id") or existing.get("client_id") or "").strip()
+        client_secret = (request.form.get("client_secret") or "").strip()
+        if not client_secret and existing.get("client_secret_encrypted"):
+            try:
+                client_secret = AlatauSecretCipher().decrypt(
+                    existing.get("client_secret_encrypted")
+                )
+            except AlatauError as exc:
+                return jsonify({"success": False, "error": str(exc)}), exc.status_code
+        if not client_id or not client_secret:
+            return jsonify({"success": False, "error": "Укажите Client ID и Client Secret"}), 400
+
+    try:
+        auth = client.authenticate(client_id, client_secret)
+        bank_company_id = auth.get("companyId")
+        access_token = auth.get("accessToken")
+        accounts = client.get_accounts(access_token, bank_company_id)
+
+        encrypted_secret = None
+        if environment == "production":
+            encrypted_secret = AlatauSecretCipher().encrypt(client_secret)
+
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            _ensure_alatau_table(cur)
+            cur.execute("""
+                INSERT INTO alatau_integrations (
+                    company_id, environment, client_id, client_secret_encrypted,
+                    bank_company_id, status, connected_at, last_checked_at,
+                    last_error, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, 'connected', NOW(), NOW(), NULL, NOW()
+                )
+                ON CONFLICT (company_id) DO UPDATE SET
+                    environment = EXCLUDED.environment,
+                    client_id = EXCLUDED.client_id,
+                    client_secret_encrypted = CASE
+                        WHEN EXCLUDED.environment = 'sandbox' THEN NULL
+                        ELSE COALESCE(EXCLUDED.client_secret_encrypted, alatau_integrations.client_secret_encrypted)
+                    END,
+                    bank_company_id = EXCLUDED.bank_company_id,
+                    status = 'connected',
+                    connected_at = COALESCE(alatau_integrations.connected_at, NOW()),
+                    last_checked_at = NOW(),
+                    last_error = NULL,
+                    updated_at = NOW()
+            """, (
+                company_id,
+                environment,
+                client_id if environment == "production" else None,
+                encrypted_secret,
+                bank_company_id,
+            ))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            pool.putconn(conn)
+
+        if isinstance(accounts, list):
+            account_count = len(accounts)
+        elif isinstance(accounts, dict):
+            account_count = len(accounts.get("accounts") or accounts.get("data") or [])
+        else:
+            account_count = 0
+
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "company_id": bank_company_id,
+            "accounts": account_count,
+            "message": "Соединение с Alatau City Bank успешно",
+        })
+    except AlatauError as exc:
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            _ensure_alatau_table(cur)
+            cur.execute("""
+                INSERT INTO alatau_integrations (
+                    company_id, environment, client_id, status,
+                    last_checked_at, last_error, updated_at
+                ) VALUES (%s, %s, %s, 'error', NOW(), %s, NOW())
+                ON CONFLICT (company_id) DO UPDATE SET
+                    environment = EXCLUDED.environment,
+                    client_id = COALESCE(EXCLUDED.client_id, alatau_integrations.client_id),
+                    status = 'error',
+                    last_checked_at = NOW(),
+                    last_error = EXCLUDED.last_error,
+                    updated_at = NOW()
+            """, (
+                company_id,
+                environment,
+                client_id if environment == "production" else None,
+                str(exc)[:500],
+            ))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        finally:
+            pool.putconn(conn)
+        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
+@settings_bp.route("/api/integrations/alatau/disconnect", methods=["POST"])
+def alatau_disconnect():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+    if not _alatau_valid_csrf():
+        return jsonify({"success": False, "error": "Страница устарела. Обновите её"}), 403
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_alatau_table(cur)
+        cur.execute("""
+            UPDATE alatau_integrations
+            SET status = 'disconnected',
+                client_secret_encrypted = NULL,
+                bank_company_id = NULL,
+                last_error = NULL,
+                updated_at = NOW()
+            WHERE company_id = %s
+        """, (company_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+    return redirect("/settings/integrations/alatau?disconnected=1")
 
 
 @settings_bp.route("/settings/kkm")
