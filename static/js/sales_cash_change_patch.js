@@ -1,24 +1,26 @@
 (() => {
-    let selectedMethod = 'cash';
-    let fallbackBusy = false;
-    const originalFillPayment = window.fillPayment;
     const originalPay = window.pay;
+    const originalConfirmCashPayment = window.confirmCashPayment;
+    const originalSubmitSalePayment = window.submitSalePayment;
+    let approvedSignature = null;
+    let guardPromise = null;
 
-    const numberValue = value =>
-        Number(String(value || '').replace(/\s/g, '').replace(',', '.')) || 0;
+    function currentCartSignature() {
+        return (Array.isArray(window.cart) ? window.cart : cart || [])
+            .map(item => `${Number(item?.id) || 0}:${Number(item?.qty) || 0}`)
+            .sort()
+            .join('|');
+    }
 
-    const cartTotal = () => cart.reduce((sum, item) => {
-        if (typeof cartItemTotal === 'function') return sum + cartItemTotal(item);
-        return sum + (Number(item.price) || 0) * (Number(item.qty) || 0);
-    }, 0);
-
-    const formatMoney = value => Number(value || 0).toLocaleString('ru-RU', {
-        maximumFractionDigits: 2
-    }) + ' ₸';
+    function currentCart() {
+        if (Array.isArray(window.cart)) return window.cart;
+        if (typeof cart !== 'undefined' && Array.isArray(cart)) return cart;
+        return [];
+    }
 
     async function loadUnavailableCartItems() {
         const requestedById = new Map();
-        (Array.isArray(cart) ? cart : []).forEach(item => {
+        currentCart().forEach(item => {
             const id = Number(item?.id);
             const qty = Number(item?.qty) || 0;
             if (!id || qty <= 0) return;
@@ -38,6 +40,7 @@
                 offset: String(offset)
             });
             const response = await fetch(`/api/stock?${params.toString()}`, {
+                cache: 'no-store',
                 headers: {'Accept': 'application/json'}
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -45,9 +48,9 @@
             const payload = await response.json();
             const rows = Array.isArray(payload) ? payload : (payload.items || []);
 
-            rows.forEach(item => {
+            for (const item of rows) {
                 const id = Number(item.id);
-                if (!remaining.has(id)) return;
+                if (!remaining.has(id)) continue;
 
                 remaining.delete(id);
                 const stock = Number(item.stock || 0);
@@ -61,13 +64,12 @@
                         projected_stock: projectedStock
                     });
                 }
-            });
+            }
 
             if (!rows.length || !payload.has_more || !remaining.size) break;
 
             const lastStock = Number(rows[rows.length - 1]?.stock || 0);
             if (lastStock >= maxRequested) break;
-
             offset += rows.length;
         }
 
@@ -152,220 +154,61 @@
         });
     }
 
-    async function allowSaleWithUnavailableStock() {
-        try {
-            const items = await loadUnavailableCartItems();
-            if (!items.length) return true;
-            return await showNegativeStockWarning(items);
-        } catch (error) {
-            console.warn('NEGATIVE STOCK CHECK ERROR:', error);
-            return true;
-        }
+    async function confirmStockForCurrentCart() {
+        const signature = currentCartSignature();
+        if (!signature) return true;
+        if (approvedSignature === signature) return true;
+        if (guardPromise) return guardPromise;
+
+        guardPromise = (async () => {
+            try {
+                const items = await loadUnavailableCartItems();
+                if (!items.length) return true;
+                const allowed = await showNegativeStockWarning(items);
+                if (allowed) approvedSignature = signature;
+                return allowed;
+            } catch (error) {
+                console.error('NEGATIVE STOCK CHECK ERROR:', error);
+                alert('Не удалось проверить остаток товара. Обновите страницу и повторите оплату.');
+                return false;
+            } finally {
+                guardPromise = null;
+            }
+        })();
+
+        return guardPromise;
     }
 
-    window.nikaConfirmNegativeStockSale = allowSaleWithUnavailableStock;
+    window.nikaConfirmNegativeStockSale = confirmStockForCurrentCart;
 
-    function modalElements() {
-        return {
-            modal: document.getElementById('cashChangeModal'),
-            input: document.getElementById('cashReceivedInput'),
-            result: document.getElementById('cashChangeResult'),
-            label: document.getElementById('cashChangeResultLabel'),
-            amount: document.getElementById('cashChangeAmount'),
-            hint: document.getElementById('cashChangeHint'),
-            confirm: document.getElementById('cashChangeConfirm')
+    if (typeof originalConfirmCashPayment === 'function') {
+        window.confirmCashPayment = async (...args) => {
+            if (!(await confirmStockForCurrentCart())) return;
+            return originalConfirmCashPayment(...args);
         };
     }
 
-    function renderFallbackChange() {
-        const nodes = modalElements();
-        if (!nodes.input || !nodes.result) return;
-        const total = cartTotal();
-        const received = numberValue(nodes.input.value);
-        const difference = received - total;
-        const enough = total > 0 && difference >= -.009;
-        nodes.result.classList.toggle('is-short', !enough);
-        nodes.label.textContent = enough ? 'Сдача' : 'Не хватает';
-        nodes.amount.textContent = formatMoney(Math.abs(difference));
-        nodes.hint.textContent = enough
-            ? (difference > .009 ? 'Верните покупателю эту сумму' : 'Оплата без сдачи')
-            : 'Введите сумму не меньше итога';
-        nodes.confirm.disabled = !enough || fallbackBusy;
-        nodes.confirm.textContent = enough && difference > .009
-            ? 'Провести · сдача ' + formatMoney(difference)
-            : 'Провести оплату';
-    }
+    if (typeof originalPay === 'function') {
+        window.pay = async (...args) => {
+            const card = Number(String(document.getElementById('cardInput')?.value || '').replace(',', '.')) || 0;
+            const kaspi = Number(String(document.getElementById('kaspiInput')?.value || '').replace(',', '.')) || 0;
+            const alreadyPaidByPos = Boolean(window.lastKaspiTransactionId);
 
-    function openFallbackChange() {
-        if (!selectedClient) {
-            alert('Сначала выбери клиента');
-            return;
-        }
-        if (!cart.length) {
-            alert('Корзина пустая');
-            return;
-        }
-        const nodes = modalElements();
-        if (!nodes.modal || !nodes.input) {
-            alert('Обновите страницу, чтобы открыть расчёт сдачи');
-            return;
-        }
-        const total = cartTotal();
-        nodes.input.value = Number.isInteger(total) ? total.toFixed(0) : total.toFixed(2);
-        document.getElementById('cashChangeTotal').textContent = formatMoney(total);
-        const quick = document.getElementById('cashQuickAmounts');
-        const values = [total];
-        [500, 1000, 2000, 5000, 10000, 20000].forEach(step => {
-            const value = Math.ceil(total / step) * step;
-            if (!values.some(existing => Math.abs(existing - value) < .009)) values.push(value);
-        });
-        quick.innerHTML = '';
-        values.sort((a, b) => a - b).slice(0, 5).forEach(value => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = Math.abs(value - total) < .009 ? 'Без сдачи' : formatMoney(value);
-            button.addEventListener('click', () => {
-                nodes.input.value = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2);
-                renderFallbackChange();
-            });
-            quick.appendChild(button);
-        });
-        nodes.modal.classList.add('open');
-        nodes.modal.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('cash-change-open');
-        renderFallbackChange();
-        setTimeout(() => {
-            nodes.input.focus();
-            nodes.input.select();
-        }, 80);
-    }
-
-    function closeFallbackChange(force = false) {
-        if (fallbackBusy && !force) return;
-        const modal = document.getElementById('cashChangeModal');
-        if (!modal) return;
-        modal.classList.remove('open');
-        modal.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('cash-change-open');
-    }
-
-    function showFallbackNotice(change) {
-        if (change <= .009) return;
-        document.getElementById('cashChangeNotice')?.remove();
-        const notice = document.createElement('button');
-        notice.type = 'button';
-        notice.id = 'cashChangeNotice';
-        notice.className = 'cash-change-notice';
-        notice.innerHTML =
-            '<span>СДАЧА ПОКУПАТЕЛЮ</span><strong>' +
-            formatMoney(change) +
-            '</strong><small>Нажмите, чтобы закрыть</small>';
-        notice.addEventListener('click', () => notice.remove());
-        document.body.appendChild(notice);
-        setTimeout(() => notice.remove(), 12000);
-    }
-
-    async function submitFallbackCash(received, change) {
-        if (!(await allowSaleWithUnavailableStock())) return;
-
-        fallbackBusy = true;
-        renderFallbackChange();
-        try {
-            const response = await fetch('/sales/pay', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    client_id: selectedClient,
-                    cart,
-                    payment_method: 'cash',
-                    cash: received,
-                    card: 0,
-                    kaspi: 0,
-                    cash_received: received,
-                    change_amount: change,
-                    company_id: null
-                })
-            });
-            const data = await response.json().catch(() => null);
-            if (!response.ok || !data || data.success === false) {
-                throw new Error(data?.error || data?.message || 'Ошибка ответа сервера');
+            if (card > 0 || kaspi > 0 || alreadyPaidByPos) {
+                if (!(await confirmStockForCurrentCart())) return;
             }
-            cart = [];
-            renderCart();
-            resetSaleAmounts();
-            closeFallbackChange(true);
-            window.dispatchEvent(new CustomEvent('nika:sale-completed'));
-            showFallbackNotice(change);
-            if (data.fiscalized !== true) {
-                const reason = data.rekassa?.message || 'reKassa отклонила чек';
-                alert(
-                    'Продажа сохранена, но чек не фискализирован.\n\n' +
-                    reason +
-                    '\n\nНе проводите оплату повторно.'
-                );
-                return;
-            }
-            openSaleModal(data.sale_id, {autoPrint: true});
-        } catch (error) {
-            console.error('CASH CHANGE PAYMENT ERROR:', error);
-            alert(error.message || 'Не удалось провести оплату');
-        } finally {
-            fallbackBusy = false;
-            renderFallbackChange();
-        }
-    }
-
-    if (typeof window.openCashChangeModal !== 'function') {
-        window.openCashChangeModal = openFallbackChange;
-        window.closeCashChangeModal = closeFallbackChange;
-        window.renderCashChange = renderFallbackChange;
-        window.handleCashChangeKey = event => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                window.confirmCashPayment();
-            } else if (event.key === 'Escape') {
-                event.preventDefault();
-                closeFallbackChange();
-            }
-        };
-        window.confirmCashPayment = () => {
-            if (fallbackBusy) return;
-            const received = numberValue(document.getElementById('cashReceivedInput')?.value);
-            const total = cartTotal();
-            if (received + .009 < total) {
-                renderFallbackChange();
-                return;
-            }
-            submitFallbackCash(received, Math.max(0, received - total));
+            return originalPay(...args);
         };
     }
 
-    window.fillPayment = type => {
-        selectedMethod = type;
-        ['cash', 'card', 'kaspi'].forEach(method => {
-            if (method !== type) {
-                const field = document.getElementById(method + 'Input');
-                if (field) field.value = '';
-            }
-        });
-        if (typeof originalFillPayment === 'function') originalFillPayment(type);
-    };
+    if (typeof originalSubmitSalePayment === 'function') {
+        window.submitSalePayment = async (...args) => {
+            if (!(await confirmStockForCurrentCart())) return;
+            return originalSubmitSalePayment(...args);
+        };
+    }
 
-    window.pay = async () => {
-        if (!selectedClient) {
-            alert('Сначала выбери клиента');
-            return;
-        }
-        if (!cart.length) {
-            alert('Корзина пустая');
-            return;
-        }
-        const kaspiConfirmed = Boolean(window.lastKaspiTransactionId);
-        if (kaspiConfirmed || selectedMethod === 'card' || selectedMethod === 'kaspi') {
-            if (!(await allowSaleWithUnavailableStock())) return;
-            originalPay();
-            return;
-        }
-        window.openCashChangeModal();
-    };
+    window.addEventListener('nika:sale-completed', () => {
+        approvedSignature = null;
+    });
 })();
