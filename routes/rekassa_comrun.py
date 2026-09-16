@@ -93,8 +93,6 @@ def fiscal_legacy_route_adapter():
     if not path.startswith("/api/rekassa/"):
         return None
 
-    # Settings, diagnostics and login are provider-specific and must remain
-    # untouched. Only Sales fiscal controls are normalized here.
     mapped = {
         "/api/rekassa/shift/status": "status",
         "/api/rekassa/reports/x": "x",
@@ -134,9 +132,6 @@ def fiscal_legacy_route_adapter():
             "error": "Фискальная касса не подключена",
         }), 409
 
-    # reKassa remains one normal adapter and can continue through its original
-    # endpoint implementation. Other providers are handled here as their
-    # adapters are connected.
     if context["provider"] == "rekassa":
         return None
 
@@ -176,6 +171,74 @@ def fiscal_legacy_route_adapter():
     }), 501
 
 
+def _sale_movement_totals(cur, company_id, item_ids):
+    if not item_ids:
+        return {}
+    cur.execute("""
+        SELECT item_id, COALESCE(SUM(quantity), 0) AS qty
+        FROM stock_movements
+        WHERE company_id = %s
+          AND movement_type = 'sale'
+          AND item_id = ANY(%s)
+        GROUP BY item_id
+    """, (company_id, list(item_ids)))
+    return {int(row["item_id"]): float(row["qty"] or 0) for row in cur.fetchall()}
+
+
+def _ensure_sale_stock_movements(conn, sale_id, company_id, normalized_cart, before_totals):
+    """Guarantee that a completed product sale always changes the stock ledger."""
+    expected = {}
+    for normalized in normalized_cart:
+        if normalized["item_type"] != "product":
+            continue
+        item_id = int(normalized["item_id"])
+        bucket = expected.setdefault(item_id, {"qty": 0.0, "total": 0.0, "price": 0.0})
+        qty = float(normalized["qty"] or 0)
+        bucket["qty"] += qty
+        bucket["total"] += float(normalized["total"] or 0)
+        if qty > 0:
+            bucket["price"] = float(normalized["price"] or 0)
+
+    if not expected:
+        return
+
+    cur = conn.cursor()
+    try:
+        after_totals = _sale_movement_totals(cur, company_id, expected.keys())
+        for item_id, values in expected.items():
+            before = float(before_totals.get(item_id, 0) or 0)
+            after = float(after_totals.get(item_id, 0) or 0)
+            moved = after - before
+            missing = values["qty"] - moved
+            if missing <= 0.000001:
+                continue
+
+            unit_price = values["price"]
+            movement_total = missing * unit_price
+            cur.execute("""
+                INSERT INTO stock_movements (
+                    company_id,
+                    item_id,
+                    movement_type,
+                    quantity,
+                    price,
+                    total,
+                    comment,
+                    created_at
+                ) VALUES (%s,%s,'sale',%s,%s,%s,%s,%s)
+            """, (
+                company_id,
+                item_id,
+                missing,
+                unit_price,
+                movement_total,
+                f"Автосинхронизация продажи #{sale_id}",
+                now_kz(),
+            ))
+    finally:
+        cur.close()
+
+
 def pay_sale_comrun():
     """Compatibility entry point: Sales is provider-neutral despite old name."""
     from routes.sales import process_sale
@@ -209,12 +272,15 @@ def pay_sale_comrun():
                     continue
                 item_id = item.get("id")
                 cur.execute(
-                    "SELECT unit, COALESCE(item_type,'product') AS item_type FROM items WHERE id=%s",
-                    (item_id,),
+                    "SELECT unit, COALESCE(item_type,'product') AS item_type FROM items WHERE id=%s AND company_id=%s",
+                    (item_id, company_id),
                 )
                 db_item = cur.fetchone()
-                unit = db_item["unit"] if db_item and db_item.get("unit") else "шт"
-                item_type = (db_item["item_type"] if db_item else "product") or "product"
+                if not db_item:
+                    continue
+                unit = db_item["unit"] if db_item.get("unit") else "шт"
+                raw_item_type = str(db_item.get("item_type") or "product").strip().lower()
+                item_type = "service" if raw_item_type == "service" else "product"
                 price, qty, line_total = normalize_sale_line(item, unit)
                 normalized_cart.append({
                     "source": item,
@@ -226,9 +292,19 @@ def pay_sale_comrun():
                     "total": line_total,
                 })
 
+            if not normalized_cart:
+                return jsonify({"success": False, "error": "В корзине нет доступных товаров"}), 400
+
             total = sum((item["total"] for item in normalized_cart), start=0)
             if total <= 0:
                 return jsonify({"success": False, "error": "Сумма продажи должна быть больше нуля"}), 400
+
+            product_ids = {
+                int(item["item_id"])
+                for item in normalized_cart
+                if item["item_type"] == "product"
+            }
+            movement_before = _sale_movement_totals(cur, company_id, product_ids)
 
             cur.execute(
                 "SELECT COALESCE(MAX(sale_number),0)+1 AS next_number FROM sales WHERE company_id=%s",
@@ -242,8 +318,8 @@ def pay_sale_comrun():
                 INSERT INTO sales (
                     client_id, company_id, user_id, sale_number, total_amount, paid_amount,
                     status, created_at, sale_type, cash_amount, card_amount, kaspi_amount,
-                    kaspi_transaction_id, kaspi_method
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    kaspi_transaction_id, kaspi_method, is_processed
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
                 RETURNING id
             """, (
                 client_id, company_id, user_id, sale_number, total, total, "Оплачено", now_kz(),
@@ -268,6 +344,8 @@ def pay_sale_comrun():
             cur.close()
 
         process_sale(conn, sale_id)
+        _ensure_sale_stock_movements(conn, sale_id, company_id, normalized_cart, movement_before)
+
         fiscal = fiscalize_sale(conn, sale_id, company_id)
         if not fiscal.get("skipped") and not fiscal.get("fiscalized"):
             _mark_fiscal_error(conn, sale_id, fiscal)
