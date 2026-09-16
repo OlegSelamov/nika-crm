@@ -19,19 +19,18 @@
         const field = document.createElement('div');
         field.className = 'income-field income-field--supplier';
         field.innerHTML = `
-            <label for="incomeSupplier">Поставщик</label>
+            <label for="incomeSupplier">Поставщик <span style="font-weight:600;color:#8b93a5">(необязательно)</span></label>
             <div class="income-supplier-row">
                 <select id="incomeSupplier" name="supplier_id" class="income-supplier-select">
                     <option value="">Загрузка поставщиков…</option>
                 </select>
                 <a href="/suppliers" class="income-supplier-link">+ Поставщик</a>
             </div>
-            <small id="incomeSupplierHint">Поставщик будет привязан к этому приходу товара</small>
+            <small id="incomeSupplierHint">Можно оставить пустым — приход сохранится без привязки к поставщику</small>
         `;
 
         const productField = grid.querySelector('.income-field--product');
         grid.insertBefore(field, productField || grid.firstChild);
-        form.action = '/stock/income/supplier';
 
         const headerActions = document.querySelector('.income-header-actions');
         if (headerActions && !headerActions.querySelector('a[href="/suppliers"]')) {
@@ -45,9 +44,6 @@
         const select = document.getElementById('incomeSupplier');
         const hint = document.getElementById('incomeSupplierHint');
         const submit = form.querySelector('.income-submit');
-        const defaultSubmitHtml = submit?.innerHTML || '';
-        let suppliersReady = false;
-        let suppliersLoadError = false;
 
         function setHint(message, isError = false) {
             if (!hint) return;
@@ -55,28 +51,14 @@
             hint.innerHTML = message;
         }
 
+        function updateFormAction() {
+            form.action = select?.value ? '/stock/income/supplier' : '/stock/income';
+        }
+
         form.addEventListener('submit', event => {
             if (event.defaultPrevented) return;
 
-            if (suppliersLoadError) {
-                event.preventDefault();
-                setHint('Не удалось загрузить поставщиков. Обновите страницу или откройте раздел «Поставщики».', true);
-                select?.scrollIntoView({block: 'center', behavior: 'smooth'});
-                return;
-            }
-
-            if (!suppliersReady || !select?.value) {
-                event.preventDefault();
-                setHint(
-                    suppliersReady
-                        ? 'Выберите поставщика перед сохранением прихода.'
-                        : 'Сначала добавьте поставщика, затем оформляйте приход.',
-                    true
-                );
-                select?.scrollIntoView({block: 'center', behavior: 'smooth'});
-                if (!select?.disabled) select?.focus();
-                return;
-            }
+            updateFormAction();
 
             if (submit) {
                 submit.disabled = true;
@@ -85,13 +67,12 @@
         });
 
         select?.addEventListener('change', () => {
-            if (select.value) {
-                setHint('Поставщик будет привязан к этому приходу товара');
-            }
-            if (submit?.disabled && suppliersReady) {
-                submit.disabled = false;
-                submit.innerHTML = defaultSubmitHtml;
-            }
+            updateFormAction();
+            setHint(
+                select.value
+                    ? 'Поставщик будет привязан к этому приходу товара'
+                    : 'Можно оставить пустым — приход сохранится без привязки к поставщику'
+            );
         });
 
         try {
@@ -102,7 +83,7 @@
 
             const placeholder = document.createElement('option');
             placeholder.value = '';
-            placeholder.textContent = suppliers.length ? 'Выберите поставщика' : 'Поставщиков пока нет';
+            placeholder.textContent = suppliers.length ? 'Без поставщика' : 'Поставщиков пока нет';
             select.appendChild(placeholder);
 
             suppliers.forEach(supplier => {
@@ -112,18 +93,18 @@
                 select.appendChild(option);
             });
 
-            suppliersReady = suppliers.length > 0;
-            select.disabled = !suppliersReady;
-
-            if (!suppliersReady) {
-                setHint('Сначала <a href="/suppliers">добавьте поставщика</a>, затем оформляйте приход.', true);
+            if (!suppliers.length) {
+                select.disabled = true;
+                setHint('Поставщиков пока нет. Приход можно сохранить без поставщика или <a href="/suppliers">добавить поставщика</a>.');
             }
+
+            updateFormAction();
         } catch (error) {
             console.error('SUPPLIERS LOAD ERROR:', error);
-            suppliersLoadError = true;
-            select.innerHTML = '<option value="">Не удалось загрузить поставщиков</option>';
+            select.innerHTML = '<option value="">Без поставщика</option>';
             select.disabled = true;
-            setHint('Не удалось загрузить поставщиков. Обновите страницу или откройте раздел «Поставщики».', true);
+            setHint('Список поставщиков сейчас недоступен, но приход можно сохранить без поставщика.');
+            updateFormAction();
         }
     });
 })();
