@@ -24,7 +24,8 @@ function formatQuantity(value) {
 
 function stockStatus(stock) {
     const value = Number(stock) || 0;
-    if (value <= 0) return {key: "out", text: "Нет в наличии"};
+    if (value < 0) return {key: "out", text: "Требует проверки"};
+    if (value === 0) return {key: "out", text: "Нет в наличии"};
     if (value <= 5) return {key: "low", text: "Заканчивается"};
     return {key: "normal", text: "В наличии"};
 }
@@ -116,6 +117,76 @@ function updateStockState(loadedCount, total, hasMore) {
     if (moreWrap) moreWrap.hidden = !hasMore;
 }
 
+async function fetchAllNegativeStock({query = "", category = ""} = {}) {
+    const negativeItems = [];
+    let offset = 0;
+
+    while (true) {
+        const params = new URLSearchParams({
+            q: query,
+            category,
+            status: "out",
+            sort: "stock-asc",
+            offset: String(offset),
+            limit: "100"
+        });
+        const response = await fetch(`/api/stock?${params.toString()}`, {
+            headers: {"Accept": "application/json"}
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        let reachedZero = false;
+
+        for (const item of items) {
+            if (Number(item.stock || 0) < 0) negativeItems.push(item);
+            else {
+                reachedZero = true;
+                break;
+            }
+        }
+
+        if (reachedZero || !items.length || !data.has_more) break;
+        offset += items.length;
+    }
+
+    return negativeItems;
+}
+
+async function refreshNegativeStockCount() {
+    const counter = document.getElementById("negativeStockCount");
+    if (!counter) return;
+    try {
+        const items = await fetchAllNegativeStock();
+        counter.textContent = String(items.length);
+        counter.closest(".stock-tab")?.classList.toggle("has-warning", items.length > 0);
+    } catch (error) {
+        console.error("Не удалось посчитать минусовые остатки:", error);
+        counter.textContent = "!";
+    }
+}
+
+function ensureNegativeStockTab() {
+    const tabs = document.querySelector(".stock-tabs");
+    if (!tabs || document.getElementById("negativeStockTab")) return;
+
+    const button = document.createElement("button");
+    button.id = "negativeStockTab";
+    button.className = "stock-tab";
+    button.type = "button";
+    button.dataset.filter = "negative";
+    button.innerHTML = `Требуют проверки <span id="negativeStockCount">…</span>`;
+    tabs.appendChild(button);
+
+    const style = document.createElement("style");
+    style.textContent = `
+        #negativeStockTab.has-warning{border-color:#fecaca;background:#fff5f5;color:#b42318}
+        #negativeStockTab.has-warning span{background:#fee2e2;color:#b42318}
+    `;
+    document.head.appendChild(style);
+}
+
 async function loadStock({append = false} = {}) {
     if (stockRequestController) stockRequestController.abort();
     stockRequestController = new AbortController();
@@ -126,29 +197,42 @@ async function loadStock({append = false} = {}) {
     const offset = append ? stockOffset : 0;
     const moreButton = document.getElementById("stockLoadMore");
 
-    const params = new URLSearchParams({
-        q: query,
-        category,
-        status: activeStockFilter,
-        sort,
-        offset: String(offset),
-        limit: String(STOCK_PAGE_SIZE)
-    });
-
     if (moreButton) {
         moreButton.disabled = true;
         moreButton.textContent = "Загрузка…";
     }
 
     try {
-        const response = await fetch(`/api/stock?${params.toString()}`, {
-            signal: stockRequestController.signal,
-            headers: {"Accept": "application/json"}
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        let items = [];
+        let total = 0;
+        let hasMore = false;
 
-        const data = await response.json();
-        const items = Array.isArray(data.items) ? data.items : [];
+        if (activeStockFilter === "negative") {
+            items = await fetchAllNegativeStock({query, category});
+            total = items.length;
+            append = false;
+        } else {
+            const params = new URLSearchParams({
+                q: query,
+                category,
+                status: activeStockFilter,
+                sort,
+                offset: String(offset),
+                limit: String(STOCK_PAGE_SIZE)
+            });
+
+            const response = await fetch(`/api/stock?${params.toString()}`, {
+                signal: stockRequestController.signal,
+                headers: {"Accept": "application/json"}
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            items = Array.isArray(data.items) ? data.items : [];
+            total = Number(data.total) || 0;
+            hasMore = Boolean(data.has_more);
+        }
+
         const tableBody = document.getElementById("stockTableBody");
         const mobileList = document.getElementById("stockMobileList");
 
@@ -161,7 +245,7 @@ async function loadStock({append = false} = {}) {
         if (mobileList) mobileList.insertAdjacentHTML("beforeend", items.map(buildMobileCard).join(""));
 
         const loadedCount = (append ? stockOffset : 0) + items.length;
-        updateStockState(loadedCount, Number(data.total) || 0, Boolean(data.has_more));
+        updateStockState(loadedCount, total, hasMore);
     } catch (error) {
         if (error.name !== "AbortError") {
             console.error("Не удалось загрузить остатки:", error);
@@ -180,6 +264,8 @@ function scheduleStockReload() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    ensureNegativeStockTab();
+
     document.querySelectorAll(".stock-tab").forEach(button => {
         button.addEventListener("click", () => {
             activeStockFilter = button.dataset.filter || "all";
@@ -196,4 +282,5 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("stockLoadMore")?.addEventListener("click", () => loadStock({append: true}));
 
     updateStockState(stockOffset, stockTotal, stockOffset < stockTotal);
+    refreshNegativeStockCount();
 });
