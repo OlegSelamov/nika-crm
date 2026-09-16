@@ -1,4 +1,5 @@
 import os
+import re
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
@@ -67,6 +68,10 @@ class AlatauClient:
             or "https://business.alataucitybank.kz/jbapi"
         ).rstrip("/")
         self.timeout = int(os.getenv("ALATAU_HTTP_TIMEOUT", "30"))
+        self.user_agent = (
+            os.getenv("ALATAU_USER_AGENT")
+            or "NikaBusiness/1.0 (+https://nikabusiness.com)"
+        ).strip()
 
     @staticmethod
     def configuration_status():
@@ -90,6 +95,18 @@ class AlatauClient:
         except ValueError:
             return {}
 
+    @staticmethod
+    def _content_type(response):
+        return (response.headers.get("Content-Type") or "").lower()
+
+    @staticmethod
+    def _incident_id(response):
+        text = response.text or ""
+        match = re.search(r"incident\s+id\s+is\s*:\s*([^<\r\n]+)", text, re.I)
+        if match:
+            return match.group(1).strip().rstrip(".")[:120]
+        return None
+
     @classmethod
     def _error_message(cls, response, fallback):
         payload = cls._json(response)
@@ -97,32 +114,67 @@ class AlatauClient:
             error = payload.get("error")
             if isinstance(error, dict):
                 description = error.get("description") or error.get("message")
+                code = error.get("code")
                 if description:
-                    return str(description)[:500]
+                    prefix = f"{code}: " if code else ""
+                    return f"HTTP {response.status_code}. {prefix}{description}"[:500]
                 details = error.get("details")
                 if isinstance(details, list) and details:
                     first = details[0]
                     if isinstance(first, dict) and first.get("message"):
-                        return str(first["message"])[:500]
+                        return f"HTTP {response.status_code}. {first['message']}"[:500]
             message = payload.get("message") or payload.get("description")
             if message:
-                return str(message)[:500]
-        return fallback
+                return f"HTTP {response.status_code}. {message}"[:500]
+
+        content_type = cls._content_type(response)
+        body = (response.text or "").lower()
+        if "text/html" in content_type or "<html" in body:
+            incident_id = cls._incident_id(response)
+            suffix = f" Incident ID: {incident_id}." if incident_id else ""
+            return (
+                f"Firewall Alatau City Bank отклонил запрос (HTTP {response.status_code})."
+                f"{suffix} Передайте этот статус/Incident ID поддержке Business API."
+            )[:500]
+
+        return f"HTTP {response.status_code}. {fallback}"[:500]
+
+    def _headers(self, *, with_json=False, access_token=None):
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": self.user_agent,
+            "Connection": "close",
+        }
+        if with_json:
+            headers["Content-Type"] = "application/json"
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+        return headers
 
     def authenticate(self, client_id, client_secret):
         if not client_id or not client_secret:
             raise AlatauError("Укажите Client ID и Client Secret", status_code=400)
+
+        url = f"{self.base_url}/v1/oauth/token"
         try:
             response = requests.post(
-                f"{self.base_url}/v1/oauth/token",
+                url,
                 json={"clientId": client_id, "clientSecret": client_secret},
-                headers={"Accept": "application/json"},
+                headers=self._headers(with_json=True),
                 timeout=self.timeout,
+                allow_redirects=False,
             )
         except requests.RequestException as exc:
             raise AlatauError(
-                "Alatau City Bank сейчас недоступен. Повторите попытку позже"
+                "Не удалось соединиться с Alatau City Bank. Проверьте доступ VPS к business.alataucitybank.kz"
             ) from exc
+
+        if 300 <= response.status_code < 400:
+            location = response.headers.get("Location") or "не указан"
+            raise AlatauError(
+                f"Alatau API неожиданно перенаправил запрос (HTTP {response.status_code}, Location: {location})",
+                status_code=502,
+            )
 
         payload = self._json(response)
         access_token = payload.get("accessToken") if isinstance(payload, dict) else None
@@ -132,7 +184,7 @@ class AlatauClient:
             raise AlatauError(
                 self._error_message(
                     response,
-                    "Банк не принял Client ID / Client Secret",
+                    "Банк не выдал accessToken/companyId для переданных Client ID / Client Secret",
                 ),
                 status_code=status_code,
             )
@@ -145,18 +197,26 @@ class AlatauClient:
             response = requests.request(
                 method,
                 f"{self.base_url}{path}",
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "Accept": "application/json",
-                },
+                headers=self._headers(
+                    with_json=json is not None,
+                    access_token=access_token,
+                ),
                 params=params,
                 json=json,
                 timeout=self.timeout,
+                allow_redirects=False,
             )
         except requests.RequestException as exc:
             raise AlatauError(
                 "Не удалось получить данные из Alatau City Bank"
             ) from exc
+
+        if 300 <= response.status_code < 400:
+            location = response.headers.get("Location") or "не указан"
+            raise AlatauError(
+                f"Alatau API перенаправил запрос (HTTP {response.status_code}, Location: {location})",
+                status_code=502,
+            )
 
         payload = self._json(response)
         if response.status_code >= 400:
