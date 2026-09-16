@@ -16,6 +16,134 @@
         maximumFractionDigits: 2
     }) + ' ₸';
 
+    async function loadUnavailableCartItems() {
+        const cartIds = [...new Set(
+            (Array.isArray(cart) ? cart : [])
+                .map(item => Number(item?.id))
+                .filter(Boolean)
+        )];
+        if (!cartIds.length) return [];
+
+        const remaining = new Set(cartIds);
+        const found = [];
+        let offset = 0;
+
+        while (remaining.size) {
+            const params = new URLSearchParams({
+                status: 'out',
+                sort: 'stock-asc',
+                limit: '100',
+                offset: String(offset)
+            });
+            const response = await fetch(`/api/stock?${params.toString()}`, {
+                headers: {'Accept': 'application/json'}
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const payload = await response.json();
+            const rows = Array.isArray(payload) ? payload : (payload.items || []);
+
+            rows.forEach(item => {
+                const id = Number(item.id);
+                if (!remaining.has(id)) return;
+                remaining.delete(id);
+                if (Number(item.stock || 0) <= 0) found.push(item);
+            });
+
+            if (!rows.length || !payload.has_more) break;
+            offset += rows.length;
+        }
+
+        return found;
+    }
+
+    function showNegativeStockWarning(items) {
+        return new Promise(resolve => {
+            document.getElementById('negativeStockSaleModal')?.remove();
+            document.getElementById('negativeStockSaleStyle')?.remove();
+
+            const escapeText = value => String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+
+            const style = document.createElement('style');
+            style.id = 'negativeStockSaleStyle';
+            style.textContent = `
+                .negative-stock-sale-modal{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(17,24,39,.52);backdrop-filter:blur(2px)}
+                .negative-stock-sale-dialog{width:min(520px,100%);max-height:min(680px,calc(100dvh - 40px));display:flex;flex-direction:column;overflow:hidden;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(17,24,39,.24)}
+                .negative-stock-sale-head{padding:22px 22px 12px}.negative-stock-sale-head span{display:inline-block;margin-bottom:7px;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#b45309}.negative-stock-sale-head h3{margin:0;font-size:22px;color:#202534}.negative-stock-sale-head p{margin:8px 0 0;color:#697184;font-size:13px;line-height:1.5}
+                .negative-stock-sale-list{min-height:0;overflow:auto;padding:4px 22px 8px;display:grid;gap:8px}.negative-stock-sale-item{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid #f0d6d6;border-radius:12px;background:#fff8f8}.negative-stock-sale-item strong{display:block;font-size:13px;color:#2d3340}.negative-stock-sale-item small{display:block;margin-top:3px;color:#858c9a}.negative-stock-sale-balance{white-space:nowrap;font-size:13px;font-weight:900;color:#b42318}
+                .negative-stock-sale-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 22px 22px}.negative-stock-sale-actions button{min-height:46px;border:0;border-radius:12px;font-weight:900;cursor:pointer}.negative-stock-sale-cancel{background:#f1f3f7;color:#454c5d}.negative-stock-sale-confirm{background:#2f3341;color:#fff}
+                @media(max-width:560px){.negative-stock-sale-modal{padding:12px}.negative-stock-sale-dialog{border-radius:18px}.negative-stock-sale-actions{grid-template-columns:1fr}.negative-stock-sale-head,.negative-stock-sale-list,.negative-stock-sale-actions{padding-left:16px;padding-right:16px}}
+            `;
+            document.head.appendChild(style);
+
+            const modal = document.createElement('div');
+            modal.id = 'negativeStockSaleModal';
+            modal.className = 'negative-stock-sale-modal';
+            modal.innerHTML = `
+                <div class="negative-stock-sale-dialog" role="dialog" aria-modal="true" aria-labelledby="negativeStockSaleTitle">
+                    <div class="negative-stock-sale-head">
+                        <span>Проверка остатка</span>
+                        <h3 id="negativeStockSaleTitle">Недостаточный остаток</h3>
+                        <p>Один или несколько товаров уже имеют нулевой или отрицательный остаток. Продажу всё равно можно провести.</p>
+                    </div>
+                    <div class="negative-stock-sale-list">
+                        ${items.map(item => `
+                            <div class="negative-stock-sale-item">
+                                <div>
+                                    <strong>${escapeText(item.name || `Товар #${item.id}`)}</strong>
+                                    <small>${escapeText(item.category || 'Без категории')}</small>
+                                </div>
+                                <div class="negative-stock-sale-balance">
+                                    Остаток: ${Number(item.stock || 0).toLocaleString('ru-RU', {maximumFractionDigits: 3})} ${escapeText(item.unit || '')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="negative-stock-sale-actions">
+                        <button type="button" class="negative-stock-sale-cancel">Не продавать</button>
+                        <button type="button" class="negative-stock-sale-confirm">Продать всё равно</button>
+                    </div>
+                </div>
+            `;
+
+            const finish = allowed => {
+                document.removeEventListener('keydown', onKeyDown);
+                modal.remove();
+                style.remove();
+                resolve(allowed);
+            };
+            const onKeyDown = event => {
+                if (event.key === 'Escape') finish(false);
+            };
+
+            modal.querySelector('.negative-stock-sale-cancel')?.addEventListener('click', () => finish(false));
+            modal.querySelector('.negative-stock-sale-confirm')?.addEventListener('click', () => finish(true));
+            modal.addEventListener('click', event => {
+                if (event.target === modal) finish(false);
+            });
+            document.addEventListener('keydown', onKeyDown);
+            document.body.appendChild(modal);
+        });
+    }
+
+    async function allowSaleWithUnavailableStock() {
+        try {
+            const items = await loadUnavailableCartItems();
+            if (!items.length) return true;
+            return await showNegativeStockWarning(items);
+        } catch (error) {
+            console.warn('NEGATIVE STOCK CHECK ERROR:', error);
+            return true;
+        }
+    }
+
+    window.nikaConfirmNegativeStockSale = allowSaleWithUnavailableStock;
+
     function modalElements() {
         return {
             modal: document.getElementById('cashChangeModal'),
@@ -117,6 +245,8 @@
     }
 
     async function submitFallbackCash(received, change) {
+        if (!(await allowSaleWithUnavailableStock())) return;
+
         fallbackBusy = true;
         renderFallbackChange();
         try {
@@ -200,7 +330,7 @@
         if (typeof originalFillPayment === 'function') originalFillPayment(type);
     };
 
-    window.pay = () => {
+    window.pay = async () => {
         if (!selectedClient) {
             alert('Сначала выбери клиента');
             return;
@@ -211,6 +341,7 @@
         }
         const kaspiConfirmed = Boolean(window.lastKaspiTransactionId);
         if (kaspiConfirmed || selectedMethod === 'card' || selectedMethod === 'kaspi') {
+            if (!(await allowSaleWithUnavailableStock())) return;
             originalPay();
             return;
         }
