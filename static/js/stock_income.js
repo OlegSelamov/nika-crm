@@ -143,7 +143,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (priceInput) {
             priceInput.value = previousPrice > 0 ? String(previousPrice) : "";
+            priceInput.setCustomValidity("");
         }
+        if (quantityInput) quantityInput.setCustomValidity("");
         if (previousPriceHint) {
             previousPriceHint.textContent = previousPrice > 0
                 ? `Подставлена последняя закупочная цена: ${formatMoney(previousPrice)}`
@@ -370,19 +372,27 @@ document.addEventListener("DOMContentLoaded", function () {
             if (!target) return;
             const next = Math.max(0.001, Number(target.value || 0) + Number(button.dataset.step || 0));
             target.value = Number(next.toFixed(3));
+            target.setCustomValidity("");
             updateSummary();
         });
     });
 
     document.querySelectorAll(".quick-values button").forEach(button => {
         button.addEventListener("click", () => {
-            if (quantityInput) quantityInput.value = button.dataset.value || "";
+            if (quantityInput) {
+                quantityInput.value = button.dataset.value || "";
+                quantityInput.setCustomValidity("");
+            }
             updateSummary();
         });
     });
 
-    quantityInput?.addEventListener("input", updateSummary);
+    quantityInput?.addEventListener("input", () => {
+        quantityInput.setCustomValidity("");
+        updateSummary();
+    });
     priceInput?.addEventListener("input", () => {
+        priceInput.setCustomValidity("");
         updateSummary();
         updateRetailHint();
     });
@@ -390,6 +400,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.getElementById("incomeReset")?.addEventListener("click", () => {
         form?.reset();
+        quantityInput?.setCustomValidity("");
+        priceInput?.setCustomValidity("");
         clearProduct();
         updateSummary();
         showMessage("Начните вводить название", "Введите не менее 2 символов или отсканируйте штрихкод");
@@ -408,13 +420,15 @@ document.addEventListener("DOMContentLoaded", function () {
         const quantity = Number(quantityInput?.value || 0);
         const price = Number(priceInput?.value || 0);
 
+        quantityInput?.setCustomValidity("");
+        priceInput?.setCustomValidity("");
+
         if (quantity <= 0) {
             event.preventDefault();
             quantityInput?.setCustomValidity("Количество должно быть больше нуля");
             quantityInput?.reportValidity();
             return;
         }
-        quantityInput?.setCustomValidity("");
 
         if (price < 0) {
             event.preventDefault();
@@ -422,7 +436,6 @@ document.addEventListener("DOMContentLoaded", function () {
             priceInput?.reportValidity();
             return;
         }
-        priceInput?.setCustomValidity("");
     });
 
     const historySearch = document.getElementById("incomeHistorySearch");
