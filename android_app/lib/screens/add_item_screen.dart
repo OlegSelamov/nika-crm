@@ -38,6 +38,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   double categoryMarkup = 0;
   String serviceSaleMode = 'order';
   String _priceCalculationSource = 'purchase';
+  String? _calculatedPriceField;
+  bool _calculatedPriceUnlocked = false;
   bool _suppressPriceCalculation = false;
   bool isMarked = false;
   bool loading = false;
@@ -120,6 +122,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   String _roundPrice(double value) => value.ceil().toString();
 
+  double _double(TextEditingController controller) =>
+      double.tryParse(controller.text.replaceAll(',', '.')) ?? 0;
+
   void _replaceControllerText(TextEditingController controller, String text) {
     if (controller.text == text) return;
     _suppressPriceCalculation = true;
@@ -130,16 +135,31 @@ class _AddItemScreenState extends State<AddItemScreen> {
     _suppressPriceCalculation = false;
   }
 
+  void _setCalculatedPriceField(String? field, {bool unlocked = false}) {
+    if (_calculatedPriceField == field && _calculatedPriceUnlocked == unlocked) return;
+    if (!mounted) {
+      _calculatedPriceField = field;
+      _calculatedPriceUnlocked = unlocked;
+      return;
+    }
+    setState(() {
+      _calculatedPriceField = field;
+      _calculatedPriceUnlocked = unlocked;
+    });
+  }
+
   void _calculatePurchasePrice() {
     if (_suppressPriceCalculation || itemType == 'service') return;
     final retail = _double(retailController);
     if (retail <= 0) {
       _replaceControllerText(purchaseController, '');
+      _setCalculatedPriceField(null);
       return;
     }
     final divisor = 1 + categoryMarkup / 100;
     final purchase = divisor > 0 ? retail / divisor : retail;
     _replaceControllerText(purchaseController, _roundPrice(purchase));
+    _setCalculatedPriceField('purchase');
   }
 
   void _calculateRetailPrice() {
@@ -147,13 +167,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
     final purchase = _double(purchaseController);
     if (purchase <= 0) {
       _replaceControllerText(retailController, '');
+      _setCalculatedPriceField(null);
       return;
     }
     final retail = purchase * (1 + categoryMarkup / 100);
     _replaceControllerText(retailController, _roundPrice(retail));
+    _setCalculatedPriceField('retail');
   }
 
   void _recalculatePricesByLastSource() {
+    if (_calculatedPriceUnlocked) return;
     if (_priceCalculationSource == 'retail') {
       _calculatePurchasePrice();
     } else {
@@ -163,14 +186,21 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   void _onPurchaseChanged() {
     if (_suppressPriceCalculation || itemType == 'service') return;
+    if (_calculatedPriceField == 'purchase' && _calculatedPriceUnlocked) return;
     _priceCalculationSource = 'purchase';
     _calculateRetailPrice();
   }
 
   void _onRetailChanged() {
     if (_suppressPriceCalculation || itemType == 'service') return;
+    if (_calculatedPriceField == 'retail' && _calculatedPriceUnlocked) return;
     _priceCalculationSource = 'retail';
     _calculatePurchasePrice();
+  }
+
+  void _toggleCalculatedPriceLock(String field) {
+    if (_calculatedPriceField != field || itemType == 'service') return;
+    setState(() => _calculatedPriceUnlocked = !_calculatedPriceUnlocked);
   }
 
   Future<void> _loadCategories({bool recalculatePrices = false}) async {
@@ -180,7 +210,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
       if (!mounted) return;
       final loaded = data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
       if (category.isNotEmpty && !loaded.any((item) => item['name'] == category)) {
-        loaded.insert(0, {'id': 0, 'name': category, 'category_type': itemType, 'markup_percent': 0});
+        loaded.insert(0, {
+          'id': 0,
+          'name': category,
+          'category_type': itemType,
+          'markup_percent': 0,
+        });
       }
       setState(() {
         categories = loaded;
@@ -199,6 +234,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
       itemType = type;
       category = '';
       categoryMarkup = 0;
+      _calculatedPriceField = null;
+      _calculatedPriceUnlocked = false;
       if (type == 'service') {
         unit = 'услуга';
         isMarked = false;
@@ -254,12 +291,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
       final info = await ApiService.getBarcodeInfo(barcode, itemType: itemType);
       if (!mounted) return;
       if (info['found'] == true) {
-        if (nameController.text.trim().isEmpty) nameController.text = '${info['name'] ?? ''}';
+        if (nameController.text.trim().isEmpty) {
+          nameController.text = '${info['name'] ?? ''}';
+        }
         if (category.isEmpty && '${info['category'] ?? ''}'.isNotEmpty) {
           category = '${info['category']}';
           categoryMarkup = itemType == 'product' ? _categoryMarkup(category, categories) : 0;
         }
-        if (retailController.text == '0' && info['price'] != null) retailController.text = _number(info['price']);
+        if (retailController.text == '0' && info['price'] != null) {
+          retailController.text = _number(info['price']);
+        }
         if (itemType == 'product') {
           gtinController.text = '${info['gtin'] ?? gtinController.text}';
           ntinController.text = '${info['ntin'] ?? ntinController.text}';
@@ -268,19 +309,28 @@ class _AddItemScreenState extends State<AddItemScreen> {
           if (units.contains(measure)) unit = measure;
         }
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Данные позиции найдены')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Данные позиции найдены')),
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(itemType == 'service' ? 'Услуга не найдена' : 'Товар не найден в НацКаталоге')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(itemType == 'service'
+                ? 'Услуга не найдена'
+                : 'Товар не найден в НацКаталоге'),
+          ),
+        );
       }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(error))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(error))),
+        );
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
-
-  double _double(TextEditingController controller) =>
-      double.tryParse(controller.text.replaceAll(',', '.')) ?? 0;
 
   Map<String, dynamic> get _payload => {
         'name': nameController.text.trim(),
@@ -327,11 +377,21 @@ class _AddItemScreenState extends State<AddItemScreen> {
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isEditing ? 'Изменения сохранены' : itemType == 'service' ? 'Услуга добавлена' : 'Товар добавлен')),
+        SnackBar(
+          content: Text(widget.isEditing
+              ? 'Изменения сохранены'
+              : itemType == 'service'
+                  ? 'Услуга добавлена'
+                  : 'Товар добавлен'),
+        ),
       );
       Navigator.pop(context, true);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(error))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(readableError(error))),
+        );
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -355,9 +415,43 @@ class _AddItemScreenState extends State<AddItemScreen> {
         decoration: InputDecoration(labelText: label, suffixIcon: suffixIcon),
       );
 
+  Widget _priceField(
+    String label,
+    TextEditingController controller,
+    String field,
+  ) {
+    final calculated = itemType == 'product' && _calculatedPriceField == field;
+    final locked = calculated && !_calculatedPriceUnlocked;
+    return TextFormField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      readOnly: locked,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: locked,
+        helperText: calculated
+            ? locked
+                ? 'Рассчитано автоматически по наценке'
+                : 'Ручная правка: вторая цена не изменится'
+            : null,
+        suffixIcon: calculated
+            ? IconButton(
+                tooltip: locked
+                    ? 'Разблокировать цену для ручной правки'
+                    : 'Зафиксировать рассчитанную цену',
+                onPressed: () => _toggleCalculatedPriceLock(field),
+                icon: Icon(locked ? Icons.lock_outline : Icons.lock_open_outlined),
+              )
+            : null,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(widget.isEditing ? 'Изменить позицию' : 'Добавить позицию')),
+        appBar: AppBar(
+          title: Text(widget.isEditing ? 'Изменить позицию' : 'Добавить позицию'),
+        ),
         body: Form(
           key: _formKey,
           child: ListView(
@@ -365,8 +459,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
             children: [
               SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: 'product', label: Text('Товар'), icon: Icon(Icons.inventory_2_outlined)),
-                  ButtonSegment(value: 'service', label: Text('Услуга'), icon: Icon(Icons.design_services_outlined)),
+                  ButtonSegment(
+                    value: 'product',
+                    label: Text('Товар'),
+                    icon: Icon(Icons.inventory_2_outlined),
+                  ),
+                  ButtonSegment(
+                    value: 'service',
+                    label: Text('Услуга'),
+                    icon: Icon(Icons.design_services_outlined),
+                  ),
                 ],
                 selected: {itemType},
                 onSelectionChanged: (value) => _setType(value.first),
@@ -381,61 +483,93 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     DropdownMenuItem(value: 'booking', child: Text('Онлайн-запись')),
                     DropdownMenuItem(value: 'request', child: Text('Оставить заявку')),
                   ],
-                  onChanged: (value) => setState(() => serviceSaleMode = value ?? 'order'),
+                  onChanged: (value) =>
+                      setState(() => serviceSaleMode = value ?? 'order'),
                 ),
               ],
               const SizedBox(height: 16),
-              Row(children: [
-                Expanded(child: _field('Штрихкод', barcodeController, type: TextInputType.number, suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: loading ? null : _lookupBarcode))),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  onPressed: loading ? null : _scanBarcode,
-                  icon: const Icon(Icons.qr_code_scanner),
-                ),
-              ]),
+              Row(
+                children: [
+                  Expanded(
+                    child: _field(
+                      'Штрихкод',
+                      barcodeController,
+                      type: TextInputType.number,
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.search),
+                        onPressed: loading ? null : _lookupBarcode,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    onPressed: loading ? null : _scanBarcode,
+                    icon: const Icon(Icons.qr_code_scanner),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
               _field(
                 itemType == 'service' ? 'Наименование услуги *' : 'Название товара *',
                 nameController,
-                validator: (value) => value == null || value.trim().isEmpty ? 'Укажите название' : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Укажите название'
+                    : null,
               ),
               const SizedBox(height: 16),
-              _field(itemType == 'service' ? 'Описание услуги' : 'Описание товара', descriptionController, maxLines: 4),
+              _field(
+                itemType == 'service' ? 'Описание услуги' : 'Описание товара',
+                descriptionController,
+                maxLines: 4,
+              ),
               const SizedBox(height: 16),
-              Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: categories.any((item) => '${item['name']}' == category) ? category : null,
-                    decoration: InputDecoration(
-                      labelText: 'Категория',
-                      helperText: categoriesLoading
-                          ? 'Загрузка…'
-                          : itemType == 'product' && category.isNotEmpty
-                              ? 'Наценка категории: ${_formatMarkup(categoryMarkup)}%'
-                              : null,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: categories.any((item) => '${item['name']}' == category)
+                          ? category
+                          : null,
+                      decoration: InputDecoration(
+                        labelText: 'Категория',
+                        helperText: categoriesLoading
+                            ? 'Загрузка…'
+                            : itemType == 'product' && category.isNotEmpty
+                                ? 'Наценка категории: ${_formatMarkup(categoryMarkup)}%'
+                                : null,
+                      ),
+                      items: categories.map((item) {
+                        final name = '${item['name']}';
+                        final markup =
+                            double.tryParse('${item['markup_percent'] ?? 0}') ?? 0;
+                        return DropdownMenuItem(
+                          value: name,
+                          child: Text(
+                            itemType == 'product'
+                                ? '$name (${_formatMarkup(markup)}%)'
+                                : name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: _selectCategory,
                     ),
-                    items: categories.map((item) {
-                      final name = '${item['name']}';
-                      final markup = double.tryParse('${item['markup_percent'] ?? 0}') ?? 0;
-                      return DropdownMenuItem(
-                        value: name,
-                        child: Text(
-                          itemType == 'product' ? '$name (${_formatMarkup(markup)}%)' : name,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: _selectCategory,
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(onPressed: _openCategories, icon: const Icon(Icons.category_outlined)),
-              ]),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    onPressed: _openCategories,
+                    icon: const Icon(Icons.category_outlined),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: unit,
                 decoration: const InputDecoration(labelText: 'Единица измерения'),
-                items: units.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+                items: units
+                    .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+                    .toList(),
                 onChanged: (value) => setState(() => unit = value ?? 'шт'),
               ),
               if (itemType == 'product') ...[
@@ -452,11 +586,27 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 ),
               ],
               const SizedBox(height: 8),
-              _field(itemType == 'service' ? 'Закупочная стоимость, ₸' : 'Закупочная цена, ₸', purchaseController, type: const TextInputType.numberWithOptions(decimal: true)),
+              itemType == 'service'
+                  ? _field(
+                      'Закупочная стоимость, ₸',
+                      purchaseController,
+                      type: const TextInputType.numberWithOptions(decimal: true),
+                    )
+                  : _priceField('Закупочная цена, ₸', purchaseController, 'purchase'),
               const SizedBox(height: 16),
-              _field('Оптовая цена, ₸', wholesaleController, type: const TextInputType.numberWithOptions(decimal: true)),
+              _field(
+                'Оптовая цена, ₸',
+                wholesaleController,
+                type: const TextInputType.numberWithOptions(decimal: true),
+              ),
               const SizedBox(height: 16),
-              _field(itemType == 'service' ? 'Цена услуги, ₸ *' : 'Розничная цена, ₸ *', retailController, type: const TextInputType.numberWithOptions(decimal: true)),
+              itemType == 'service'
+                  ? _field(
+                      'Цена услуги, ₸ *',
+                      retailController,
+                      type: const TextInputType.numberWithOptions(decimal: true),
+                    )
+                  : _priceField('Розничная цена, ₸ *', retailController, 'retail'),
               const SizedBox(height: 16),
               _field('Скидка, %', discountController, type: TextInputType.number),
               if (itemType == 'product') ...[
@@ -470,16 +620,30 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 if (widget.isEditing)
                   const Padding(
                     padding: EdgeInsets.only(top: 6),
-                    child: Text('Остаток изменяется через складские операции.', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                    child: Text(
+                      'Остаток изменяется через складские операции.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
                   ),
               ],
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: loading ? null : _save,
                 icon: loading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : const Icon(Icons.save_outlined),
-                label: Text(widget.isEditing ? 'Сохранить изменения' : itemType == 'service' ? 'Сохранить услугу' : 'Сохранить товар'),
+                label: Text(widget.isEditing
+                    ? 'Сохранить изменения'
+                    : itemType == 'service'
+                        ? 'Сохранить услугу'
+                        : 'Сохранить товар'),
               ),
             ],
           ),
