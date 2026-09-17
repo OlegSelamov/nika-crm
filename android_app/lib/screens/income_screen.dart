@@ -26,6 +26,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
   List<Map<String, dynamic>> items = [];
   List<Map<String, dynamic>> recent = [];
   List<Map<String, dynamic>> suppliers = [];
+  Map<int, int> preferredSupplierByItem = {};
   Map<String, dynamic>? selectedItem;
   int? selectedSupplierId;
   bool loading = true;
@@ -71,6 +72,13 @@ class _IncomeScreenState extends State<IncomeScreen> {
         if (selectedSupplierId != null && !supplierIds.contains(selectedSupplierId)) {
           selectedSupplierId = null;
         }
+        if (selectedItem != null) {
+          final itemId = stockNumber(selectedItem!['id']).toInt();
+          final preferredSupplierId = preferredSupplierByItem[itemId];
+          if (preferredSupplierId != null && supplierIds.contains(preferredSupplierId)) {
+            selectedSupplierId = preferredSupplierId;
+          }
+        }
         suppliersLoading = false;
       });
     } catch (e) {
@@ -92,14 +100,22 @@ class _IncomeScreenState extends State<IncomeScreen> {
       ]);
       if (!mounted) return;
       final stock = results[0].map((item) => Map<String, dynamic>.from(item as Map)).toList();
-      final movements = results[1]
+      final incomeMovements = results[1]
           .map((item) => Map<String, dynamic>.from(item as Map))
           .where((item) => item['movement_type'] == 'income')
-          .take(30)
           .toList();
+      final supplierByItem = <int, int>{};
+      for (final movement in incomeMovements) {
+        final itemId = stockNumber(movement['item_id']).toInt();
+        final supplierId = stockNumber(movement['supplier_id']).toInt();
+        if (itemId > 0 && supplierId > 0) {
+          supplierByItem.putIfAbsent(itemId, () => supplierId);
+        }
+      }
       setState(() {
         items = stock;
-        recent = movements;
+        recent = incomeMovements.take(30).toList();
+        preferredSupplierByItem = supplierByItem;
         loading = false;
       });
       await loadSuppliers();
@@ -125,9 +141,20 @@ class _IncomeScreenState extends State<IncomeScreen> {
     return null;
   }
 
+  int? _preferredSupplierForItem(Map<String, dynamic> item) {
+    final itemId = stockNumber(item['id']).toInt();
+    final supplierId = preferredSupplierByItem[itemId];
+    if (supplierId == null) return null;
+    for (final supplier in suppliers) {
+      if (stockNumber(supplier['id']).toInt() == supplierId) return supplierId;
+    }
+    return null;
+  }
+
   void _selectItem(Map<String, dynamic> item) {
     setState(() {
       selectedItem = item;
+      selectedSupplierId = _preferredSupplierForItem(item);
       updateRetail = true;
     });
     final previousPrice = stockNumber(item['last_purchase_price'] ?? item['purchase_price']);
