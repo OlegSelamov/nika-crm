@@ -9,6 +9,7 @@ import '../widgets/stock_widgets.dart';
 import 'income_screen.dart';
 import 'movements_screen.dart';
 import 'scanner_screen.dart';
+import 'suppliers_screen.dart';
 import 'writeoff_screen.dart';
 
 class StockScreen extends StatefulWidget {
@@ -231,6 +232,12 @@ class _StockScreenState extends State<StockScreen> {
                     onPressed: () => _openOperation(const IncomeScreen(), refreshAfter: true),
                     icon: const Icon(Icons.add_box_outlined),
                     label: const Text('Приход товара'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _openOperation(const SuppliersScreen()),
+                    icon: const Icon(Icons.local_shipping_outlined),
+                    label: const Text('Поставщики'),
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
