@@ -196,6 +196,30 @@
 
     window.nikaConfirmNegativeStockSale = confirmStockForCurrentCart;
 
+    // The main payment button has an inline onclick in sales.html. In some
+    // browsers that inline handler resolves the original global pay() binding
+    // before our window.pay wrapper. Capture card/Kaspi clicks first so a
+    // fiscal receipt can never be created before the stock warning.
+    const mainPaymentButton = document.querySelector(
+        '.payment-actions .pay-btn:not(.invoice-pay-btn):not(.kaspi-pay-btn)'
+    );
+
+    if (mainPaymentButton && typeof originalPay === 'function') {
+        mainPaymentButton.addEventListener('click', async event => {
+            const card = Number(String(document.getElementById('cardInput')?.value || '').replace(',', '.')) || 0;
+            const kaspi = Number(String(document.getElementById('kaspiInput')?.value || '').replace(',', '.')) || 0;
+
+            // Cash continues through openCashChangeModal(), which is guarded below.
+            if (card <= 0 && kaspi <= 0) return;
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            if (!(await confirmStockForCurrentCart())) return;
+            return originalPay();
+        }, true);
+    }
+
     if (typeof originalOpenCashChangeModal === 'function') {
         window.openCashChangeModal = async (...args) => {
             if (!(await confirmStockForCurrentCart())) return;
