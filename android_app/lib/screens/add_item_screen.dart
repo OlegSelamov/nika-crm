@@ -38,6 +38,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   double categoryMarkup = 0;
   String serviceSaleMode = 'order';
   String _priceCalculationSource = 'purchase';
+  String? _calculatedPriceField;
+  bool _manualPriceOverride = false;
   bool _suppressPriceCalculation = false;
   bool isMarked = false;
   bool loading = false;
@@ -130,6 +132,32 @@ class _AddItemScreenState extends State<AddItemScreen> {
     _suppressPriceCalculation = false;
   }
 
+  void _setCalculatedPriceField(String? field) {
+    if (_calculatedPriceField == field) return;
+    if (mounted) {
+      setState(() => _calculatedPriceField = field);
+    } else {
+      _calculatedPriceField = field;
+    }
+  }
+
+  void _unlockCalculatedPrice(String field) {
+    if (_calculatedPriceField != field) return;
+    setState(() {
+      _manualPriceOverride = true;
+      _calculatedPriceField = null;
+    });
+  }
+
+  void _resetPriceLockState() {
+    _priceCalculationSource = 'purchase';
+    _manualPriceOverride = false;
+    _calculatedPriceField = null;
+  }
+
+  bool _isPriceFieldLocked(String field) =>
+      itemType == 'product' && !_manualPriceOverride && _calculatedPriceField == field;
+
   void _calculatePurchasePrice() {
     if (_suppressPriceCalculation || itemType == 'service') return;
     final retail = _double(retailController);
@@ -154,23 +182,30 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   void _recalculatePricesByLastSource() {
+    if (_manualPriceOverride || itemType == 'service') return;
     if (_priceCalculationSource == 'retail') {
       _calculatePurchasePrice();
+      _setCalculatedPriceField(_double(retailController) > 0 ? 'purchase' : null);
     } else {
       _calculateRetailPrice();
+      _setCalculatedPriceField(_double(purchaseController) > 0 ? 'retail' : null);
     }
   }
 
   void _onPurchaseChanged() {
     if (_suppressPriceCalculation || itemType == 'service') return;
     _priceCalculationSource = 'purchase';
+    if (_manualPriceOverride) return;
     _calculateRetailPrice();
+    _setCalculatedPriceField(_double(purchaseController) > 0 ? 'retail' : null);
   }
 
   void _onRetailChanged() {
     if (_suppressPriceCalculation || itemType == 'service') return;
     _priceCalculationSource = 'retail';
+    if (_manualPriceOverride) return;
     _calculatePurchasePrice();
+    _setCalculatedPriceField(_double(retailController) > 0 ? 'purchase' : null);
   }
 
   Future<void> _loadCategories({bool recalculatePrices = false}) async {
@@ -199,6 +234,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       itemType = type;
       category = '';
       categoryMarkup = 0;
+      _resetPriceLockState();
       if (type == 'service') {
         unit = 'услуга';
         isMarked = false;
@@ -355,6 +391,23 @@ class _AddItemScreenState extends State<AddItemScreen> {
         decoration: InputDecoration(labelText: label, suffixIcon: suffixIcon),
       );
 
+  Widget _priceField(String label, TextEditingController controller, String field) {
+    final locked = _isPriceFieldLocked(field);
+    return _field(
+      label,
+      controller,
+      type: const TextInputType.numberWithOptions(decimal: true),
+      readOnly: locked,
+      suffixIcon: locked
+          ? IconButton(
+              tooltip: 'Разблокировать для ручной правки',
+              onPressed: () => _unlockCalculatedPrice(field),
+              icon: const Icon(Icons.lock_outline),
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: Text(widget.isEditing ? 'Изменить позицию' : 'Добавить позицию')),
@@ -452,11 +505,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 ),
               ],
               const SizedBox(height: 8),
-              _field(itemType == 'service' ? 'Закупочная стоимость, ₸' : 'Закупочная цена, ₸', purchaseController, type: const TextInputType.numberWithOptions(decimal: true)),
+              _priceField(itemType == 'service' ? 'Закупочная стоимость, ₸' : 'Закупочная цена, ₸', purchaseController, 'purchase'),
               const SizedBox(height: 16),
               _field('Оптовая цена, ₸', wholesaleController, type: const TextInputType.numberWithOptions(decimal: true)),
               const SizedBox(height: 16),
-              _field(itemType == 'service' ? 'Цена услуги, ₸ *' : 'Розничная цена, ₸ *', retailController, type: const TextInputType.numberWithOptions(decimal: true)),
+              _priceField(itemType == 'service' ? 'Цена услуги, ₸ *' : 'Розничная цена, ₸ *', retailController, 'retail'),
               const SizedBox(height: 16),
               _field('Скидка, %', discountController, type: TextInputType.number),
               if (itemType == 'product') ...[
