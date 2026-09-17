@@ -165,6 +165,7 @@ def save_subscription_selection():
 
 # Imported here because this module is already loaded for side effects by the
 # Suppliers bootstrap before blueprints are registered. These helpers attach
-# routes/hooks to the existing items blueprint.
+# routes/hooks to existing blueprints before Flask starts serving requests.
 from routes import item_duplicate_guard as _item_duplicate_guard  # noqa: E402,F401
 from routes import nkt_item_helper as _nkt_item_helper  # noqa: E402,F401
+from routes import supplier_mobile_income as _supplier_mobile_income  # noqa: E402,F401
