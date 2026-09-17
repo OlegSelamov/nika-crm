@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
 import '../services/product_code_parser.dart';
+import '../services/supplier_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
 import '../widgets/stock_widgets.dart';
 import 'movements_screen.dart';
 import 'scanner_screen.dart';
+import 'suppliers_screen.dart';
 
 class IncomeScreen extends StatefulWidget {
   const IncomeScreen({super.key});
@@ -23,10 +25,14 @@ class _IncomeScreenState extends State<IncomeScreen> {
   final commentController = TextEditingController();
   List<Map<String, dynamic>> items = [];
   List<Map<String, dynamic>> recent = [];
+  List<Map<String, dynamic>> suppliers = [];
   Map<String, dynamic>? selectedItem;
+  int? selectedSupplierId;
   bool loading = true;
   bool saving = false;
   bool updateRetail = true;
+  bool suppliersLoading = false;
+  String? supplierError;
   String? error;
 
   @override
@@ -49,6 +55,34 @@ class _IncomeScreenState extends State<IncomeScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> loadSuppliers() async {
+    if (mounted) {
+      setState(() {
+        suppliersLoading = true;
+        supplierError = null;
+      });
+    }
+    try {
+      final data = await SupplierService.getSuppliers();
+      if (!mounted) return;
+      final supplierIds = data.map((item) => stockNumber(item['id']).toInt()).toSet();
+      setState(() {
+        suppliers = data;
+        if (selectedSupplierId != null && !supplierIds.contains(selectedSupplierId)) {
+          selectedSupplierId = null;
+        }
+        suppliersLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        supplierError = readableError(e);
+        suppliersLoading = false;
+        selectedSupplierId = null;
+      });
+    }
+  }
+
   Future<void> loadData() async {
     if (mounted) setState(() { loading = true; error = null; });
     try {
@@ -68,10 +102,27 @@ class _IncomeScreenState extends State<IncomeScreen> {
         recent = movements;
         loading = false;
       });
+      await loadSuppliers();
     } catch (e) {
       if (!mounted) return;
       setState(() { error = readableError(e); loading = false; });
     }
+  }
+
+  Future<void> _openSuppliers() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SuppliersScreen()),
+    );
+    if (mounted) await loadSuppliers();
+  }
+
+  Map<String, dynamic>? get selectedSupplier {
+    if (selectedSupplierId == null) return null;
+    for (final supplier in suppliers) {
+      if (stockNumber(supplier['id']).toInt() == selectedSupplierId) return supplier;
+    }
+    return null;
   }
 
   void _selectItem(Map<String, dynamic> item) {
@@ -134,19 +185,36 @@ class _IncomeScreenState extends State<IncomeScreen> {
     if (!formKey.currentState!.validate() || saving) return;
     setState(() => saving = true);
     try {
-      final result = await ApiService.stockIncome(
-        itemId: stockNumber(selectedItem!['id']).toInt(),
-        quantity: quantity,
-        price: price,
-        comment: commentController.text.trim(),
-        updateRetail: updateRetail && categoryMarkup > 0,
-      );
+      final itemId = stockNumber(selectedItem!['id']).toInt();
+      final shouldUpdateRetail = updateRetail && categoryMarkup > 0;
+      String message;
+
+      if (selectedSupplierId == null) {
+        final result = await ApiService.stockIncome(
+          itemId: itemId,
+          quantity: quantity,
+          price: price,
+          comment: commentController.text.trim(),
+          updateRetail: shouldUpdateRetail,
+        );
+        final pricing = Map<String, dynamic>.from(result['pricing'] ?? const {});
+        final averageCost = money(pricing['average_cost']);
+        message = pricing['retail_updated'] == true
+            ? 'Приход проведён · средняя себестоимость $averageCost · розничная ${money(pricing['retail_price'])}'
+            : 'Приход проведён · средняя себестоимость $averageCost';
+      } else {
+        await SupplierService.stockIncomeWithSupplier(
+          itemId: itemId,
+          supplierId: selectedSupplierId!,
+          quantity: quantity,
+          price: price,
+          comment: commentController.text.trim(),
+          updateRetail: shouldUpdateRetail,
+        );
+        message = 'Приход проведён · поставщик ${selectedSupplier?['name'] ?? ''}';
+      }
+
       if (!mounted) return;
-      final pricing = Map<String, dynamic>.from(result['pricing'] ?? const {});
-      final averageCost = money(pricing['average_cost']);
-      final message = pricing['retail_updated'] == true
-          ? 'Приход проведён · средняя себестоимость $averageCost · розничная ${money(pricing['retail_price'])}'
-          : 'Приход проведён · средняя себестоимость $averageCost';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       Navigator.pop(context, true);
     } catch (e) {
@@ -188,12 +256,79 @@ class _IncomeScreenState extends State<IncomeScreen> {
     );
   }
 
+  Widget _supplierField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Поставщик (необязательно)',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _openSuppliers,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Поставщик'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<int?>(
+          value: selectedSupplierId,
+          isExpanded: true,
+          decoration: InputDecoration(
+            hintText: suppliersLoading ? 'Загрузка поставщиков…' : 'Без поставщика',
+            prefixIcon: const Icon(Icons.local_shipping_outlined),
+          ),
+          items: [
+            const DropdownMenuItem<int?>(
+              value: null,
+              child: Text('Без поставщика'),
+            ),
+            ...suppliers.map((supplier) {
+              final id = stockNumber(supplier['id']).toInt();
+              final binIin = '${supplier['bin_iin'] ?? ''}'.trim();
+              return DropdownMenuItem<int?>(
+                value: id,
+                child: Text(
+                  binIin.isEmpty ? '${supplier['name'] ?? ''}' : '${supplier['name'] ?? ''} · $binIin',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }),
+          ],
+          onChanged: suppliersLoading ? null : (value) => setState(() => selectedSupplierId = value),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          supplierError != null
+              ? 'Список поставщиков недоступен. Приход можно провести без поставщика.'
+              : selectedSupplierId == null
+                  ? 'Можно оставить пустым — приход сохранится без привязки к поставщику.'
+                  : 'Поставщик будет привязан к этому приходу товара.',
+          style: TextStyle(
+            color: supplierError != null ? AppColors.warning : AppColors.muted,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Приход товара'),
         actions: [
+          IconButton(
+            tooltip: 'Поставщики',
+            onPressed: _openSuppliers,
+            icon: const Icon(Icons.local_shipping_outlined),
+          ),
           IconButton(
             tooltip: 'Движение товара',
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MovementsScreen(initialType: 'income'))),
@@ -212,6 +347,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
                       children: [
                         const SectionTitle('Новое поступление', subtitle: 'Остаток увеличится, операция попадёт в движение товара'),
+                        const SizedBox(height: 16),
+                        _supplierField(),
                         const SizedBox(height: 16),
                         Row(
                           children: [
@@ -287,7 +424,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                         TextFormField(
                           controller: commentController,
                           maxLines: 3,
-                          decoration: const InputDecoration(labelText: 'Комментарий', hintText: 'Поставщик, накладная или примечание'),
+                          decoration: const InputDecoration(labelText: 'Комментарий', hintText: 'Накладная или примечание'),
                         ),
                         const SizedBox(height: 16),
                         Card(
