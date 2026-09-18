@@ -393,6 +393,34 @@
         };
     }
 
+    async function signJws(data) {
+        const result = await sendRequest({
+            module: "kz.gov.pki.knca.basics",
+            method: "sign",
+            args: {
+                format: "jws",
+                data: String(data),
+                signingParams: {
+                    detached: false
+                },
+                signerParams: {
+                    extKeyUsageOids: [SIGNING_OID],
+                    chain: null
+                },
+                locale: "ru"
+            }
+        });
+        const content = signedValue(result).trim();
+        if (!content || content.split(".").length !== 3) {
+            throw new Error("NCALayer не вернул подпись JWS в ожидаемом формате.");
+        }
+        return {
+            content,
+            certificateSubject: certificateSubjectValue(result),
+            raw: result
+        };
+    }
+
     async function checkNcalayer() {
         setBusy(true);
         setStatus("Подключаемся к NCALayer…", "loading");
@@ -449,6 +477,7 @@
         friendlyError,
         signXml,
         signRaw,
+        signJws,
         // Kept temporarily for pages from an older browser cache.
         signCmsDetached: signRaw
     });
