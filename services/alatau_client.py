@@ -23,19 +23,20 @@ class AlatauSecretCipher:
 
     def __init__(self):
         key = (
-            os.getenv("ALATAU_TOKEN_ENCRYPTION_KEY")
+            os.getenv("NIKA_INTEGRATION_ENCRYPTION_KEY")
+            or os.getenv("ALATAU_TOKEN_ENCRYPTION_KEY")
             or os.getenv("BCC_TOKEN_ENCRYPTION_KEY")
             or ""
         ).strip()
         if not key:
             raise AlatauConfigurationError(
-                "На сервере не задан ALATAU_TOKEN_ENCRYPTION_KEY"
+                "На сервере не задан NIKA_INTEGRATION_ENCRYPTION_KEY"
             )
         try:
             self._fernet = Fernet(key.encode("utf-8"))
         except (TypeError, ValueError) as exc:
             raise AlatauConfigurationError(
-                "ALATAU_TOKEN_ENCRYPTION_KEY имеет неверный формат"
+                "NIKA_INTEGRATION_ENCRYPTION_KEY имеет неверный формат"
             ) from exc
 
     def encrypt(self, value):
@@ -59,9 +60,6 @@ class AlatauSecretCipher:
 class AlatauClient:
     """Минимальный клиент Business API Alatau City Bank."""
 
-    SANDBOX_CLIENT_ID = "client_id_test"
-    SANDBOX_CLIENT_SECRET = "client_secret_test"
-
     def __init__(self):
         self.base_url = (
             os.getenv("ALATAU_BUSINESS_API_BASE_URL")
@@ -76,7 +74,8 @@ class AlatauClient:
     @staticmethod
     def configuration_status():
         encryption_key = (
-            os.getenv("ALATAU_TOKEN_ENCRYPTION_KEY")
+            os.getenv("NIKA_INTEGRATION_ENCRYPTION_KEY")
+            or os.getenv("ALATAU_TOKEN_ENCRYPTION_KEY")
             or os.getenv("BCC_TOKEN_ENCRYPTION_KEY")
             or ""
         ).strip()
