@@ -61,6 +61,17 @@ def _ensure_alatau_table(cur):
         DROP CONSTRAINT IF EXISTS alatau_integrations_company_id_key
     """)
     cur.execute("""
+        UPDATE alatau_integrations
+        SET environment = 'test'
+        WHERE environment = 'sandbox'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM alatau_integrations x
+              WHERE x.company_id = alatau_integrations.company_id
+                AND x.environment = 'test'
+          )
+    """)
+    cur.execute("""
         CREATE INDEX IF NOT EXISTS idx_alatau_integrations_company
         ON alatau_integrations(company_id)
     """)
