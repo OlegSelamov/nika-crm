@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/suppliers.css') }}?v=20260911-2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/suppliers.css') }}?v=20260919-1">
 {% endblock %}
 
 {% block content %}
@@ -68,7 +68,7 @@
                         <td>
                             <div class="supplier-actions">
                                 <button type="button" class="icon-btn" title="Изменить"
-                                    data-supplier='{{ {"id":s.id,"name":s.name,"bin_iin":s.bin_iin,"contact_name":s.contact_name,"phone":s.phone,"email":s.email,"address":s.address,"comment":s.comment}|tojson|forceescape }}'
+                                    data-supplier='{{ {"id":s.id,"name":s.name,"bin_iin":s.bin_iin,"contact_name":s.contact_name,"phone":s.phone,"email":s.email,"address":s.address,"bank_name":s.bank_name,"iban":s.iban,"bic":s.bic,"kbe":s.kbe,"knp":s.knp,"payment_purpose":s.payment_purpose,"comment":s.comment}|tojson|forceescape }}'
                                     onclick="editSupplierFromButton(this)">✎</button>
                                 <button type="button"
                                         class="icon-btn danger js-supplier-delete"
@@ -137,6 +137,30 @@
                     <label class="wide">Адрес
                         <input id="supplierAddress" placeholder="Город, улица, дом">
                     </label>
+
+                    <div class="supplier-bank-title wide">
+                        <strong>Банковские реквизиты</strong>
+                        <span>Используются в «Мои банки» для быстрого создания платежа поставщику</span>
+                    </div>
+                    <label>Банк
+                        <input id="supplierBankName" placeholder="Например: Alatau City Bank">
+                    </label>
+                    <label>БИК
+                        <input id="supplierBic" maxlength="11" placeholder="TSESKZKA">
+                    </label>
+                    <label class="wide">IBAN
+                        <input id="supplierIban" maxlength="20" placeholder="KZ...">
+                    </label>
+                    <label>КБЕ
+                        <input id="supplierKbe" maxlength="2" inputmode="numeric" placeholder="17">
+                    </label>
+                    <label>КНП по умолчанию
+                        <input id="supplierKnp" maxlength="3" inputmode="numeric" placeholder="710">
+                    </label>
+                    <label class="wide">Назначение платежа по умолчанию
+                        <input id="supplierPaymentPurpose" placeholder="Например: Оплата за товар согласно счёту">
+                    </label>
+
                     <label class="wide">Комментарий
                         <textarea id="supplierComment" rows="3" placeholder="Условия поставки, отсрочка, примечание"></textarea>
                     </label>
@@ -153,5 +177,5 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{{ url_for('static', filename='js/suppliers.js') }}?v=20260911-5"></script>
+<script src="{{ url_for('static', filename='js/suppliers.js') }}?v=20260919-1"></script>
 {% endblock %}
