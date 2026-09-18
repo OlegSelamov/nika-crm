@@ -25,6 +25,7 @@ class MainActivity : FlutterActivity() {
     private var pendingSigningResult: MethodChannel.Result? = null
     private var pendingSigningPayload: String? = null
     private var pendingSigningPassword: CharArray? = null
+    private var pendingSigningMethod: String? = null
     private var updateDownloadId: Long = -1
     private var receiverRegistered = false
     private var scannerTone: ToneGenerator? = null
@@ -78,47 +79,12 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, signingChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "signAlatauJwsWithP12" -> {
+                    "signAlatauJwsWithP12",
+                    "signEsfRawWithP12",
+                    "signEsfXmlWithP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
                         val password = call.argument<String>("password") ?: ""
-                        if (payload.isBlank()) {
-                            result.error("EMPTY_PAYLOAD", "Нет данных платежа для подписи", null)
-                            return@setMethodCallHandler
-                        }
-                        if (password.isEmpty()) {
-                            result.error("EMPTY_PASSWORD", "Введите пароль ЭЦП", null)
-                            return@setMethodCallHandler
-                        }
-                        if (pendingSigningResult != null) {
-                            result.error("SIGNING_BUSY", "Уже открыт выбор ЭЦП", null)
-                            return@setMethodCallHandler
-                        }
-
-                        pendingSigningResult = result
-                        pendingSigningPayload = payload
-                        pendingSigningPassword = password.toCharArray()
-
-                        try {
-                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                                addCategory(Intent.CATEGORY_OPENABLE)
-                                type = "*/*"
-                                putExtra(
-                                    Intent.EXTRA_MIME_TYPES,
-                                    arrayOf(
-                                        "application/x-pkcs12",
-                                        "application/pkcs12",
-                                        "application/octet-stream",
-                                    )
-                                )
-                            }
-                            startActivityForResult(intent, p12RequestCode)
-                        } catch (error: ActivityNotFoundException) {
-                            clearPendingSigning()
-                            result.error("FILE_PICKER_UNAVAILABLE", "На телефоне нет приложения для выбора файла ЭЦП", null)
-                        } catch (error: Exception) {
-                            clearPendingSigning()
-                            result.error("FILE_PICKER_FAILED", error.message ?: "Не удалось открыть выбор ЭЦП", null)
-                        }
+                        startP12Signing(call.method, payload, password, result)
                     }
                     else -> result.notImplemented()
                 }
@@ -154,6 +120,53 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    private fun startP12Signing(
+        method: String,
+        payload: String,
+        password: String,
+        result: MethodChannel.Result,
+    ) {
+        if (payload.isBlank()) {
+            result.error("EMPTY_PAYLOAD", "Нет данных для подписи", null)
+            return
+        }
+        if (password.isEmpty()) {
+            result.error("EMPTY_PASSWORD", "Введите пароль ЭЦП", null)
+            return
+        }
+        if (pendingSigningResult != null) {
+            result.error("SIGNING_BUSY", "Уже открыт выбор ЭЦП", null)
+            return
+        }
+
+        pendingSigningResult = result
+        pendingSigningPayload = payload
+        pendingSigningPassword = password.toCharArray()
+        pendingSigningMethod = method
+
+        try {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(
+                    Intent.EXTRA_MIME_TYPES,
+                    arrayOf(
+                        "application/x-pkcs12",
+                        "application/pkcs12",
+                        "application/octet-stream",
+                    )
+                )
+            }
+            startActivityForResult(intent, p12RequestCode)
+        } catch (error: ActivityNotFoundException) {
+            clearPendingSigning()
+            result.error("FILE_PICKER_UNAVAILABLE", "На телефоне нет приложения для выбора файла ЭЦП", null)
+        } catch (error: Exception) {
+            clearPendingSigning()
+            result.error("FILE_PICKER_FAILED", error.message ?: "Не удалось открыть выбор ЭЦП", null)
+        }
+    }
+
     private fun startUpdateDownload(url: String, version: String) {
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             setTitle("Nika Business $version")
@@ -182,8 +195,9 @@ class MainActivity : FlutterActivity() {
         val callback = pendingSigningResult
         val payload = pendingSigningPayload
         val password = pendingSigningPassword
+        val method = pendingSigningMethod
 
-        if (callback == null || payload == null || password == null) {
+        if (callback == null || payload == null || password == null || method == null) {
             clearPendingSigning()
             return
         }
@@ -196,12 +210,30 @@ class MainActivity : FlutterActivity() {
 
         val uri = data.data!!
         try {
-            val response = KalkanJwsSigner.signAlatauJws(
-                context = this,
-                keyUri = uri,
-                passwordChars = password,
-                payload = payload,
-            )
+            val response = when (method) {
+                "signAlatauJwsWithP12" -> KalkanJwsSigner.signAlatauJws(
+                    context = this,
+                    keyUri = uri,
+                    passwordChars = password,
+                    payload = payload,
+                )
+                "signEsfRawWithP12" -> KalkanJwsSigner.signEsfRaw(
+                    context = this,
+                    keyUri = uri,
+                    passwordChars = password,
+                    payload = payload,
+                )
+                "signEsfXmlWithP12" -> KalkanJwsSigner.signEsfXml(
+                    context = this,
+                    keyUri = uri,
+                    passwordChars = password,
+                    payload = payload,
+                )
+                else -> throw KalkanJwsSigner.SigningException(
+                    "UNKNOWN_SIGN_METHOD",
+                    "Неизвестный режим мобильной подписи",
+                )
+            }
             clearPendingSigning()
             callback.success(response)
         } catch (error: KalkanJwsSigner.SigningException) {
@@ -217,6 +249,7 @@ class MainActivity : FlutterActivity() {
         pendingSigningPassword?.fill('\u0000')
         pendingSigningPassword = null
         pendingSigningPayload = null
+        pendingSigningMethod = null
         pendingSigningResult = null
     }
 
