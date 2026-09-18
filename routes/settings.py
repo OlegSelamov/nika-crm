@@ -597,19 +597,43 @@ def alatau_payment_draft():
         return jsonify({"success": False, "error": "КНП должен состоять из 3 цифр"}), 400
 
     payment_type = "INTERNAL" if receiver_bic == "TSESKZKA" else "EXTERNAL"
+
+    # Alatau v2 expects a nested payment model. Top-level aliases such as
+    # paymentType/receiverIban are not part of the current Production schema.
     payload = {
-        "accountIban": account_iban,
-        "receiverName": receiver_name,
-        "receiverIinBin": receiver_iin_bin,
-        "receiverIban": receiver_iban,
-        "receiverBic": receiver_bic,
-        "amount": round(amount, 2),
-        "currency": "KZT",
-        "kbe": kbe,
-        "knp": knp,
-        "purpose": purpose,
-        "documentNumber": document_number,
-        "paymentType": payment_type,
+        "type": payment_type,
+        "category": "DOMESTIC",
+        "paymentRecipient": {
+            "iinOrBin": receiver_iin_bin,
+            "name": receiver_name,
+            "kbe": {
+                "code": kbe,
+            },
+            "recipientAccount": {
+                "iban": receiver_iban,
+                "bic": receiver_bic,
+            },
+        },
+        "details": {
+            "associatedField": {
+                "parameters": {
+                    "signatureNoCommission": False,
+                    "paymentPurpose": purpose,
+                },
+            },
+            "knp": {
+                "code": knp,
+            },
+            "description": purpose,
+            "payerIban": account_iban,
+            "paymentAmount": {
+                "amount": round(amount, 2),
+                "currency": "KZT",
+            },
+            "vat": False,
+            "urgent": False,
+            "documentId": document_number,
+        },
     }
 
     try:
