@@ -274,6 +274,14 @@ class AlatauClient:
             access_token,
         )
 
+    def create_contractor_draft(self, access_token, company_id, payload):
+        return self.request(
+            "POST",
+            f"/v2/companies/{company_id}/payments",
+            access_token,
+            json=payload,
+        )
+
     def get_statement(
         self,
         access_token,
