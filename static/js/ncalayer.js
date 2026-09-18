@@ -394,29 +394,36 @@
     }
 
     async function signJws(data) {
+        // Alatau City Bank installs its own NCALayer OSGi module. Its compact
+        // JWS method is signJsonWithJws; this is not the standard basics.sign.
         const result = await sendRequest({
-            module: "kz.gov.pki.knca.basics",
-            method: "sign",
+            module: "kz.acbank.business.api.ncalayer.module",
+            method: "signJsonWithJws",
             args: {
-                format: "jws",
-                data: String(data),
-                signingParams: {
-                    detached: false
+                settings: {
+                    locale: "ru",
+                    screen: {
+                        devicePixelRatio: window.devicePixelRatio || 1
+                    }
                 },
-                signerParams: {
-                    extKeyUsageOids: [SIGNING_OID],
-                    chain: null
-                },
-                locale: "ru"
+                signableItems: [{
+                    id: "payment",
+                    name: "payment.json",
+                    content: String(data),
+                    contentType: "application/json"
+                }],
+                signatureOperation: "INITIAL"
             }
         });
-        const content = signedValue(result).trim();
+
+        const body = result && result.signedItems ? result : (result?.body || result);
+        const item = Array.isArray(body?.signedItems) ? body.signedItems[0] : null;
+        const content = String(item?.signature || "").trim();
         if (!content || content.split(".").length !== 3) {
-            throw new Error("NCALayer не вернул подпись JWS в ожидаемом формате.");
+            throw new Error("Модуль Alatau NCALayer не вернул компактную JWS-подпись.");
         }
         return {
             content,
-            certificateSubject: certificateSubjectValue(result),
             raw: result
         };
     }
