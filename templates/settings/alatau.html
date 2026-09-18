@@ -240,11 +240,18 @@
   const statementBody = document.getElementById('statementBody');
   const statementTableWrap = document.getElementById('statementTableWrap');
 
+  const toLocalISODate = value => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const today = new Date();
   const from = new Date();
   from.setDate(today.getDate() - 30);
-  statementTo.value = today.toISOString().slice(0, 10);
-  statementFrom.value = from.toISOString().slice(0, 10);
+  statementTo.value = toLocalISODate(today);
+  statementFrom.value = toLocalISODate(from);
 
   const firstValue = (obj, keys, fallback = '') => {
     for (const key of keys) {
@@ -265,7 +272,21 @@
     document.querySelectorAll('.alatau-account').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
     selectedIban.value = String(firstValue(account, ['iban', 'account', 'accountNumber', 'number'], '')).toUpperCase();
-    statementResult.textContent = '';
+
+    const openDate = String(firstValue(account, ['openDate', 'open_date', 'openedAt'], '')).slice(0, 10);
+    if (openDate) {
+      statementFrom.min = openDate;
+      statementTo.min = openDate;
+      if (!statementFrom.value || statementFrom.value < openDate) statementFrom.value = openDate;
+      if (!statementTo.value || statementTo.value < openDate) statementTo.value = openDate;
+      statementResult.className = 'alatau-note';
+      statementResult.textContent = `Счёт открыт ${openDate.split('-').reverse().join('.')}. Начало выписки установлено не раньше даты открытия.`;
+    } else {
+      statementFrom.removeAttribute('min');
+      statementTo.removeAttribute('min');
+      statementResult.textContent = '';
+      statementResult.className = '';
+    }
     statementTableWrap.style.display = 'none';
   };
 
@@ -281,6 +302,8 @@
       const currency = firstValue(account, ['currency', 'currencyCode'], '');
       const accountType = firstValue(account, ['accountType', 'type', 'account_type'], '');
       const accountStatus = firstValue(account, ['status', 'accountStatus', 'state'], '');
+      const openDate = String(firstValue(account, ['openDate', 'open_date', 'openedAt'], '')).slice(0, 10);
+      const openDateLabel = openDate ? openDate.split('-').reverse().join('.') : '';
       const balanceRaw = firstValue(account, ['balance', 'availableBalance', 'currentBalance', 'amount'], '—');
       const balance = balanceRaw && typeof balanceRaw === 'object'
         ? firstValue(balanceRaw, ['amount', 'value', 'balance'], '—')
@@ -294,7 +317,7 @@
       div.innerHTML = `
         <div>
           <div class="alatau-account-title">${iban}</div>
-          <div class="alatau-account-sub">${name}${currency ? ' · ' + currency : ''}${accountType ? ' · ' + accountType : ''}${accountStatus ? ' · ' + accountStatus : ''}</div>
+          <div class="alatau-account-sub">${name}${currency ? ' · ' + currency : ''}${accountType ? ' · ' + accountType : ''}${accountStatus ? ' · ' + accountStatus : ''}${openDateLabel ? ' · открыт ' + openDateLabel : ''}</div>
         </div>
         <div class="alatau-account-balance">${money(balance)}${(balanceCurrency || currency) ? ' ' + (balanceCurrency || currency) : ''}</div>`;
       div.addEventListener('click', () => selectAccount(account, div));
@@ -361,12 +384,16 @@
       if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось получить выписку');
       const rows = normalizeStatementRows(data.statement);
       statementBody.innerHTML = rows.map(row => {
-        const dateValue = firstValue(row, ['date', 'operationDate', 'transactionDate', 'valueDate', 'createdAt'], '—');
+        const dateValue = firstValue(row, ['operDate', 'date', 'operationDate', 'transactionDate', 'valueDate', 'createdAt'], '—');
         const documentValue = firstValue(row, ['documentNumber', 'number', 'reference', 'id'], '—');
         const counterparty = firstValue(row, ['counterpartyName', 'partnerName', 'recipientName', 'senderName', 'beneficiaryName', 'payerName'], '—');
         const purpose = firstValue(row, ['purpose', 'paymentPurpose', 'description', 'details'], '—');
-        const debit = firstValue(row, ['debit', 'debitAmount', 'outcome', 'expense'], '');
-        const credit = firstValue(row, ['credit', 'creditAmount', 'income'], '');
+        const directDebit = firstValue(row, ['debit', 'debitAmount', 'outcome', 'expense'], '');
+        const directCredit = firstValue(row, ['credit', 'creditAmount', 'income'], '');
+        const amount = firstValue(row, ['amount', 'sum', 'operationAmount'], '');
+        const operationType = String(firstValue(row, ['operationType', 'type', 'direction'], '')).toUpperCase();
+        const debit = directDebit !== '' ? directDebit : (operationType === 'DEBIT' ? amount : '');
+        const credit = directCredit !== '' ? directCredit : (operationType === 'CREDIT' ? amount : '');
         return `<tr>
           <td>${dateValue}</td>
           <td>${documentValue}</td>
@@ -395,6 +422,8 @@
   bankEnvironment.addEventListener('change', () => {
     accountsList.innerHTML = '';
     selectedIban.value = '';
+    statementFrom.removeAttribute('min');
+    statementTo.removeAttribute('min');
     bankResult.textContent = '';
     statementResult.textContent = '';
     statementTableWrap.style.display = 'none';
