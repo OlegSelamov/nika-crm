@@ -23,6 +23,12 @@ def ensure_supplier_schema(conn):
             phone TEXT,
             email TEXT,
             address TEXT,
+            bank_name TEXT,
+            iban TEXT,
+            bic TEXT,
+            kbe TEXT,
+            knp TEXT,
+            payment_purpose TEXT,
             comment TEXT,
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT NOW(),
@@ -30,6 +36,12 @@ def ensure_supplier_schema(conn):
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_suppliers_company ON suppliers(company_id)")
+    cur.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS bank_name TEXT")
+    cur.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS iban TEXT")
+    cur.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS bic TEXT")
+    cur.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS kbe TEXT")
+    cur.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS knp TEXT")
+    cur.execute("ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS payment_purpose TEXT")
     cur.execute("ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS supplier_id INTEGER")
     conn.commit()
     cur.close()
@@ -273,7 +285,8 @@ def api_suppliers():
 
         if request.method == "GET":
             cur.execute("""
-                SELECT id, name, bin_iin, contact_name, phone, email, address, comment
+                SELECT id, name, bin_iin, contact_name, phone, email, address,
+                       bank_name, iban, bic, kbe, knp, payment_purpose, comment
                 FROM suppliers
                 WHERE company_id = %s AND is_active = TRUE
                 ORDER BY LOWER(name), id
@@ -288,9 +301,10 @@ def api_suppliers():
         cur.execute("""
             INSERT INTO suppliers (
                 company_id, name, bin_iin, contact_name, phone,
-                email, address, comment, created_at, updated_at
+                email, address, bank_name, iban, bic, kbe, knp,
+                payment_purpose, comment, created_at, updated_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
             RETURNING id
         """, (
             company_id,
@@ -300,6 +314,12 @@ def api_suppliers():
             str(data.get("phone") or "").strip() or None,
             str(data.get("email") or "").strip() or None,
             str(data.get("address") or "").strip() or None,
+            str(data.get("bank_name") or "").strip() or None,
+            str(data.get("iban") or "").replace(" ", "").upper() or None,
+            str(data.get("bic") or "").replace(" ", "").upper() or None,
+            str(data.get("kbe") or "").strip() or None,
+            str(data.get("knp") or "").strip() or None,
+            str(data.get("payment_purpose") or "").strip() or None,
             str(data.get("comment") or "").strip() or None,
         ))
         supplier_id = cur.fetchone()["id"]
@@ -386,7 +406,9 @@ def api_supplier_detail(supplier_id):
         cur.execute("""
             UPDATE suppliers
             SET name=%s, bin_iin=%s, contact_name=%s, phone=%s,
-                email=%s, address=%s, comment=%s, updated_at=NOW()
+                email=%s, address=%s, bank_name=%s, iban=%s, bic=%s,
+                kbe=%s, knp=%s, payment_purpose=%s, comment=%s,
+                updated_at=NOW()
             WHERE id=%s AND company_id=%s
         """, (
             name,
@@ -395,6 +417,12 @@ def api_supplier_detail(supplier_id):
             str(data.get("phone") or "").strip() or None,
             str(data.get("email") or "").strip() or None,
             str(data.get("address") or "").strip() or None,
+            str(data.get("bank_name") or "").strip() or None,
+            str(data.get("iban") or "").replace(" ", "").upper() or None,
+            str(data.get("bic") or "").replace(" ", "").upper() or None,
+            str(data.get("kbe") or "").strip() or None,
+            str(data.get("knp") or "").strip() or None,
+            str(data.get("payment_purpose") or "").strip() or None,
             str(data.get("comment") or "").strip() or None,
             supplier_id,
             company_id,
