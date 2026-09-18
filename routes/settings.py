@@ -598,6 +598,45 @@ def alatau_payment_draft():
 
     payment_type = "INTERNAL" if receiver_bic == "TSESKZKA" else "EXTERNAL"
 
+    # Resolve the recipient bank name from Alatau's own bank dictionary.
+    # Production validates recipientAccount.bankName as a required field.
+    receiver_bank_name = receiver_bic
+    try:
+        lookup_client, lookup_token, lookup_company_id, _ = _alatau_live_session(
+            company_id, environment
+        )
+        bank_rows = lookup_client.get_banks(lookup_token)
+        if isinstance(bank_rows, dict):
+            bank_rows = (
+                bank_rows.get("content")
+                or bank_rows.get("items")
+                or bank_rows.get("data")
+                or bank_rows.get("banks")
+                or []
+            )
+        if isinstance(bank_rows, list):
+            for bank in bank_rows:
+                if not isinstance(bank, dict):
+                    continue
+                bic = str(
+                    bank.get("bic")
+                    or bank.get("bankBic")
+                    or bank.get("code")
+                    or ""
+                ).replace(" ", "").upper()
+                if bic == receiver_bic:
+                    receiver_bank_name = str(
+                        bank.get("name")
+                        or bank.get("bankName")
+                        or bank.get("fullName")
+                        or receiver_bic
+                    ).strip()
+                    break
+    except AlatauError:
+        # The payment endpoint will still return a precise validation error if
+        # the bank dictionary is temporarily unavailable.
+        pass
+
     # Alatau v2 expects a nested payment model. Top-level aliases such as
     # paymentType/receiverIban are not part of the current Production schema.
     payload = {
@@ -612,6 +651,7 @@ def alatau_payment_draft():
             "recipientAccount": {
                 "iban": receiver_iban,
                 "bic": receiver_bic,
+                "bankName": receiver_bank_name,
             },
         },
         "details": {
