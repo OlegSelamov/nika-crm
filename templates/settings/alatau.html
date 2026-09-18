@@ -243,6 +243,10 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 #bankPaymentSection .alatau-actions + .alatau-help{margin-top:9px!important;font-size:11px;line-height:1.4}
 #paymentDraftResult{margin-top:9px!important;padding:9px 11px;font-size:12px;line-height:1.4}
 #paymentDraftResult:empty{display:none}
+.mobile-p12-block{margin-top:10px;padding:12px;border:1px solid #dcd7ff;border-radius:12px;background:#faf9ff}
+.mobile-p12-block .alatau-field label{font-size:12px}
+.mobile-p12-block input{font-size:14px!important;min-height:42px!important}
+.mobile-p12-note{margin-top:7px;color:#6f6885;font-size:11px;line-height:1.4}
 .bank-payment-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 7px}
 .bank-payment-source-grid .alatau-field{min-width:0}
 .bank-payment-source-grid select{padding:10px 11px;border:1px solid #dfe3eb;border-radius:10px;background:#fff;font-size:14px;min-height:40px}
@@ -558,11 +562,22 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       <label>Назначение платежа</label>
       <input id="paymentPurpose" type="text" placeholder="Оплата по счёту №...">
     </div>
+    {% if bank_workspace %}
+    <div id="mobileP12Block" class="mobile-p12-block" hidden>
+      <div class="alatau-field">
+        <label>Пароль ЭЦП (.p12)</label>
+        <input id="mobileP12Password" type="password" autocomplete="off" placeholder="Пароль используется только на этом телефоне">
+      </div>
+      <div class="mobile-p12-note">
+        Файл ЭЦП будет выбран при нажатии «Подписать и отправить». Файл и пароль не отправляются в Nika — подпись создаётся локально в приложении.
+      </div>
+    </div>
+    {% endif %}
     <div class="alatau-actions" style="margin-top:14px">
       <button id="createPaymentDraftButton" class="alatau-btn" type="button">Создать черновик в Alatau</button>
       <button id="signAndSendPaymentButton" class="alatau-btn secondary" type="button">Подписать ЭЦП и отправить</button>
     </div>
-    <div class="alatau-help" style="margin-top:10px">Подписанная отправка использует NCALayer и Production API Alatau. Банк сейчас предоставляет signed-payments в пилотном режиме; если доступ компании ещё не включён, Nika покажет ответ банка и деньги не будут отправлены.</div>
+    <div class="alatau-help" id="paymentSigningHelp" style="margin-top:10px">На компьютере подписание использует NCALayer. В мобильном приложении Nika может подписать платёж локально файлом .p12 и передать в Alatau только готовую JWS-подпись.</div>
     <div id="paymentDraftResult" style="margin-top:12px"></div>
   </section>
   {% if bank_workspace %}</div></div>{% endif %}
@@ -706,6 +721,9 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const createPaymentDraftButton = document.getElementById('createPaymentDraftButton');
   const signAndSendPaymentButton = document.getElementById('signAndSendPaymentButton');
   const paymentDraftResult = document.getElementById('paymentDraftResult');
+  const mobileP12Block = document.getElementById('mobileP12Block');
+  const mobileP12Password = document.getElementById('mobileP12Password');
+  const paymentSigningHelp = document.getElementById('paymentSigningHelp');
   const paymentSupplierSelect = document.getElementById('paymentSupplierSelect');
   const paymentTemplateSelect = document.getElementById('paymentTemplateSelect');
   const paymentSourceHint = document.getElementById('paymentSourceHint');
@@ -1169,6 +1187,62 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     }
   });
 
+  const mobileSignerPending = new Map();
+
+  const hasMobileP12Signer = () =>
+    !!(window.NikaMobileSigner && typeof window.NikaMobileSigner.postMessage === 'function');
+
+  window.NikaMobileSignerResult = (requestId, result) => {
+    const pending = mobileSignerPending.get(String(requestId));
+    if (!pending) return;
+    mobileSignerPending.delete(String(requestId));
+    window.clearTimeout(pending.timeoutId);
+    if (result && result.success && result.content) {
+      pending.resolve(result);
+    } else {
+      const error = new Error((result && result.error) || 'Не удалось подписать платёж на телефоне');
+      error.code = (result && result.code) || 'MOBILE_SIGN_FAILED';
+      pending.reject(error);
+    }
+  };
+
+  const signWithMobileP12 = (payload, password) => new Promise((resolve, reject) => {
+    if (!hasMobileP12Signer()) {
+      reject(new Error('Мобильный модуль подписи недоступен'));
+      return;
+    }
+    const requestId = 'p12-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    const timeoutId = window.setTimeout(() => {
+      mobileSignerPending.delete(requestId);
+      const error = new Error('Мобильное подписание не завершилось вовремя');
+      error.code = 'MOBILE_SIGN_TIMEOUT';
+      reject(error);
+    }, 180000);
+
+    mobileSignerPending.set(requestId, {resolve, reject, timeoutId});
+    window.NikaMobileSigner.postMessage(JSON.stringify({
+      action: 'signAlatauJws',
+      requestId,
+      payload: String(payload),
+      password: String(password || '')
+    }));
+  });
+
+  const syncSigningUi = () => {
+    const mobile = hasMobileP12Signer();
+    if (mobileP12Block) mobileP12Block.hidden = !mobile;
+    if (signAndSendPaymentButton) {
+      signAndSendPaymentButton.textContent = mobile
+        ? 'Выбрать .p12, подписать и отправить'
+        : 'Подписать ЭЦП и отправить';
+    }
+    if (paymentSigningHelp) {
+      paymentSigningHelp.textContent = mobile
+        ? 'Подпись создаётся локально на телефоне. Файл .p12 и пароль не передаются на сервер Nika.'
+        : 'Подписание выполняется через NCALayer и затем готовая JWS-подпись передаётся в Alatau City Bank.';
+    }
+  };
+
   const paymentFormData = (prepareOnly = false) => ({
     environment: 'production',
     accountIban: paymentAccountIban.value.trim(),
@@ -1190,9 +1264,16 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       paymentDraftResult.textContent = 'Подписанная отправка разрешена только для Production.';
       return;
     }
-    if (!window.NikaNCALayer?.signJws) {
+    const mobileSigning = hasMobileP12Signer();
+    if (!mobileSigning && !window.NikaNCALayer?.signJws) {
       paymentDraftResult.className = 'alatau-note error';
-      paymentDraftResult.textContent = 'Модуль NCALayer для JWS не загружен. Обновите страницу.';
+      paymentDraftResult.textContent = 'Модуль подписи недоступен. На компьютере запустите NCALayer, на телефоне обновите приложение Nika Business.';
+      return;
+    }
+    if (mobileSigning && !mobileP12Password?.value) {
+      paymentDraftResult.className = 'alatau-note error';
+      paymentDraftResult.textContent = 'Введите пароль от файла ЭЦП .p12.';
+      mobileP12Password?.focus();
       return;
     }
     const amount = paymentAmount.value || '0';
@@ -1200,7 +1281,9 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     if (!window.confirm(
       'ВНИМАНИЕ: это реальный банковский платёж.\n\n' +
       'Получатель: ' + recipient + '\nСумма: ' + amount + ' KZT\n\n' +
-      'После подписи ЭЦП Nika отправит платёж непосредственно в Alatau City Bank. Продолжить?'
+      (mobileSigning
+        ? 'Nika попросит выбрать файл .p12, подпишет платёж локально на телефоне и отправит готовую подпись в Alatau. Продолжить?'
+        : 'После подписи ЭЦП через NCALayer Nika отправит платёж непосредственно в Alatau City Bank. Продолжить?')
     )) return;
 
     signAndSendPaymentButton.disabled = true;
@@ -1218,10 +1301,15 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
         throw new Error(prepared.error || 'Не удалось подготовить платёж');
       }
 
-      paymentDraftResult.textContent = 'Выберите ЭЦП компании в NCALayer и подпишите платёж…';
       const canonicalPayload = JSON.stringify(prepared.payload);
-      const signed = await window.NikaNCALayer.signJws(canonicalPayload);
-      if (!signed.content) throw new Error('NCALayer не вернул JWS.');
+      paymentDraftResult.textContent = mobileSigning
+        ? 'Выберите файл ЭЦП .p12 на телефоне…'
+        : 'Выберите ЭЦП компании в NCALayer и подпишите платёж…';
+      const signed = mobileSigning
+        ? await signWithMobileP12(canonicalPayload, mobileP12Password.value)
+        : await window.NikaNCALayer.signJws(canonicalPayload);
+      if (!signed.content) throw new Error('Модуль подписи не вернул JWS.');
+      if (mobileSigning && mobileP12Password) mobileP12Password.value = '';
 
       paymentDraftResult.textContent = 'ЭЦП получена. Отправляем подписанный платёж в Alatau…';
       const sendResponse = await fetch('/api/integrations/alatau/payments/signed', {
@@ -1254,9 +1342,9 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       {% if bank_workspace %}window.setTimeout(() => { closePaymentModal(); loadAccountsButton.click(); loadPayments(true); }, 900);{% endif %}
     } catch (error) {
       paymentDraftResult.className = 'alatau-note error';
-      paymentDraftResult.textContent = window.NikaNCALayer?.friendlyError
+      paymentDraftResult.textContent = (!mobileSigning && window.NikaNCALayer?.friendlyError)
         ? window.NikaNCALayer.friendlyError(error)
-        : error.message;
+        : (error.message || 'Не удалось подписать платёж');
     } finally {
       signAndSendPaymentButton.disabled = false;
       createPaymentDraftButton.disabled = false;
@@ -1535,6 +1623,8 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   // "Мои банки" is an operational workspace: open Alatau in Production and
   // immediately show the company's live account/balance without an extra click.
   bankEnvironment.value = 'production';
+  syncSigningUi();
+  window.setTimeout(syncSigningUi, 350);
   window.setTimeout(() => {
     loadAccountsButton.click();
     loadPayments(true);
