@@ -28,6 +28,12 @@
             phone: document.getElementById('supplierPhone').value.trim(),
             email: document.getElementById('supplierEmail').value.trim(),
             address: document.getElementById('supplierAddress').value.trim(),
+            bank_name: document.getElementById('supplierBankName').value.trim(),
+            iban: document.getElementById('supplierIban').value.replace(/\s+/g, '').toUpperCase(),
+            bic: document.getElementById('supplierBic').value.replace(/\s+/g, '').toUpperCase(),
+            kbe: document.getElementById('supplierKbe').value.replace(/\D/g, '').slice(0, 2),
+            knp: document.getElementById('supplierKnp').value.replace(/\D/g, '').slice(0, 3),
+            payment_purpose: document.getElementById('supplierPaymentPurpose').value.trim(),
             comment: document.getElementById('supplierComment').value.trim(),
         };
     }
@@ -107,6 +113,12 @@
             document.getElementById('supplierPhone').value = supplier.phone || '';
             document.getElementById('supplierEmail').value = supplier.email || '';
             document.getElementById('supplierAddress').value = supplier.address || '';
+            document.getElementById('supplierBankName').value = supplier.bank_name || '';
+            document.getElementById('supplierIban').value = supplier.iban || '';
+            document.getElementById('supplierBic').value = supplier.bic || '';
+            document.getElementById('supplierKbe').value = supplier.kbe || '';
+            document.getElementById('supplierKnp').value = supplier.knp || '';
+            document.getElementById('supplierPaymentPurpose').value = supplier.payment_purpose || '';
             document.getElementById('supplierComment').value = supplier.comment || '';
         }
         modal.hidden = false;
@@ -171,6 +183,18 @@
     document.getElementById('supplierBin')?.addEventListener('input', function () {
         this.value = this.value.replace(/\D/g, '').slice(0, 12);
         clearLookupStatus();
+    });
+    document.getElementById('supplierIban')?.addEventListener('input', function () {
+        this.value = this.value.replace(/\s+/g, '').toUpperCase().slice(0, 20);
+    });
+    document.getElementById('supplierBic')?.addEventListener('input', function () {
+        this.value = this.value.replace(/\s+/g, '').toUpperCase().slice(0, 11);
+    });
+    document.getElementById('supplierKbe')?.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 2);
+    });
+    document.getElementById('supplierKnp')?.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 3);
     });
 
     form?.addEventListener('submit', async (event) => {
