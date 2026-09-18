@@ -28,6 +28,78 @@
         return document.getElementById(id);
     }
 
+    const mobileSignerPending = new Map();
+
+    function hasMobileSigner() {
+        return Boolean(window.NikaMobileSigner && typeof window.NikaMobileSigner.postMessage === "function");
+    }
+
+    function mobileP12Password() {
+        const input = element("esfMobileP12Password");
+        const password = String(input?.value || "");
+        if (!password) throw new Error("Введите пароль от файла ЭЦП .p12.");
+        return password;
+    }
+
+    function clearMobileP12Password() {
+        const input = element("esfMobileP12Password");
+        if (input) input.value = "";
+    }
+
+    window.NikaMobileSignerResult = function (requestId, result) {
+        const pending = mobileSignerPending.get(String(requestId));
+        if (!pending) return;
+        mobileSignerPending.delete(String(requestId));
+        window.clearTimeout(pending.timeoutId);
+        if (result && result.success) {
+            pending.resolve(result);
+            return;
+        }
+        const error = new Error((result && result.error) || "Не удалось подписать ЭЦП на телефоне.");
+        error.code = (result && result.code) || "MOBILE_SIGN_FAILED";
+        pending.reject(error);
+    };
+
+    function mobileSign(action, payload) {
+        return new Promise((resolve, reject) => {
+            if (!hasMobileSigner()) {
+                reject(new Error("Мобильный модуль подписи недоступен."));
+                return;
+            }
+            const requestId = "esf-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+            const timeoutId = window.setTimeout(() => {
+                mobileSignerPending.delete(requestId);
+                reject(new Error("Мобильное подписание не завершилось вовремя."));
+            }, 180000);
+            mobileSignerPending.set(requestId, { resolve, reject, timeoutId });
+            window.NikaMobileSigner.postMessage(JSON.stringify({
+                action,
+                requestId,
+                payload: String(payload || ""),
+                password: mobileP12Password()
+            }));
+        });
+    }
+
+    async function signRawLocal(payload) {
+        if (hasMobileSigner()) return mobileSign("signEsfRaw", payload);
+        if (!window.NikaNCALayer?.signRaw) throw new Error("Модуль подписи не загружен.");
+        return window.NikaNCALayer.signRaw(payload);
+    }
+
+    async function signXmlLocal(payload) {
+        if (hasMobileSigner()) return mobileSign("signEsfXml", payload);
+        if (!window.NikaNCALayer?.signXml) throw new Error("Модуль подписи не загружен.");
+        return window.NikaNCALayer.signXml(payload);
+    }
+
+    function syncMobileSigningUi() {
+        const mobile = hasMobileSigner();
+        const panel = element("esfMobileP12Panel");
+        if (panel) panel.hidden = !mobile;
+        const signButton = element("esfSign");
+        if (signButton) signButton.textContent = mobile ? "Выбрать .p12 и подписать" : "Подписать ЭЦП";
+    }
     function escapeHtml(value) {
         return String(value ?? "")
             .replace(/&/g, "&amp;")
@@ -171,7 +243,7 @@
     }
 
     async function authorize() {
-        if (!window.NikaNCALayer) throw new Error("Модуль NCALayer не загружен. Обновите страницу.");
+        if (!hasMobileSigner() && !window.NikaNCALayer) throw new Error("Модуль подписи не загружен. Обновите страницу или приложение.");
         const credentials = authCredentials();
         element("esfFooterStatus").textContent = "Получаем одноразовый тикет ИС ЭСФ…";
         const ticket = await requestJson(`/api/sales/${saleId}/esf/auth-ticket`, {
@@ -183,10 +255,12 @@
             documentState.api_environment = ticket.api_environment;
             renderStatus(documentState);
         }
-        element("esfFooterStatus").textContent = "Подпишите тикет авторизации в NCALayer…";
-        const signedTicket = await window.NikaNCALayer.signXml(ticket.auth_ticket_xml);
+        element("esfFooterStatus").textContent = hasMobileSigner()
+            ? "Выберите .p12 и подпишите тикет авторизации…"
+            : "Подпишите тикет авторизации в NCALayer…";
+        const signedTicket = await signXmlLocal(ticket.auth_ticket_xml);
         if (!signedTicket.signedXml || !String(signedTicket.signedXml).includes("Signature")) {
-            throw new Error("NCALayer не вернул подписанный тикет авторизации.");
+            throw new Error("Модуль подписи не вернул подписанный тикет авторизации.");
         }
         return { ...credentials, signed_auth_ticket: signedTicket.signedXml };
     }
@@ -231,6 +305,7 @@
             showMessage(friendlyOperationError(error), "error");
         } finally {
             if (element("esfAuthPassword")) element("esfAuthPassword").value = "";
+            clearMobileP12Password();
             setBusy(false);
             renderStatus(documentState);
         }
@@ -255,6 +330,7 @@
             showMessage(friendlyOperationError(error), "error");
         } finally {
             if (element("esfAuthPassword")) element("esfAuthPassword").value = "";
+            clearMobileP12Password();
             setBusy(false);
             renderStatus(documentState);
         }
@@ -277,10 +353,12 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ reason })
             });
-            element("esfFooterStatus").textContent = "Подпишите заявление на отзыв в NCALayer…";
-            const signed = await window.NikaNCALayer.signRaw(prepared.signable_xml);
+            element("esfFooterStatus").textContent = hasMobileSigner()
+                ? "Выберите .p12 и подпишите заявление на отзыв…"
+                : "Подпишите заявление на отзыв в NCALayer…";
+            const signed = await signRawLocal(prepared.signable_xml);
             if (!signed.signature || !signed.certificate) {
-                throw new Error("NCALayer не вернул подпись и сертификат для отзыва.");
+                throw new Error("Модуль подписи не вернул подпись и сертификат для отзыва.");
             }
             element("esfFooterStatus").textContent = "Отправляем заявление на отзыв в ИС ЭСФ…";
             const data = await requestJson(`/api/sales/${saleId}/esf/revoke`, {
@@ -299,6 +377,7 @@
             showMessage(friendlyOperationError(error), "error");
         } finally {
             if (element("esfAuthPassword")) element("esfAuthPassword").value = "";
+            clearMobileP12Password();
             setBusy(false);
             renderStatus(documentState);
         }
@@ -420,15 +499,20 @@
             showMessage("Заполните отмеченные обязательные поля, затем повторите подпись.", "warning");
             return;
         }
-        if (!window.NikaNCALayer) {
-            showMessage("Модуль NCALayer не загружен. Обновите страницу.", "error");
+        if (!hasMobileSigner() && !window.NikaNCALayer) {
+            showMessage("Модуль подписи не загружен. Обновите страницу или приложение.", "error");
             return;
         }
 
-        setBusy(true, "Ожидаем выбор ключа в NCALayer…");
-        showMessage("Откроется NCALayer. Выберите ключ компании и подтвердите подпись.", "info");
+        setBusy(true, hasMobileSigner() ? "Ожидаем выбор файла .p12…" : "Ожидаем выбор ключа в NCALayer…");
+        showMessage(
+            hasMobileSigner()
+                ? "Выберите файл ЭЦП .p12. Подпись будет создана локально на телефоне."
+                : "Откроется NCALayer. Выберите ключ компании и подтвердите подпись.",
+            "info"
+        );
         try {
-            const signed = await window.NikaNCALayer.signRaw(saved.invoice_xml);
+            const signed = await signRawLocal(saved.invoice_xml);
             const data = await requestJson(`/api/sales/${saleId}/esf/signature`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -444,11 +528,12 @@
             showValidation(documentState.validation_errors);
             showMessage(data.message, "success");
         } catch (error) {
-            const message = window.NikaNCALayer.friendlyError
+            const message = (!hasMobileSigner() && window.NikaNCALayer?.friendlyError)
                 ? window.NikaNCALayer.friendlyError(error)
                 : error.message;
             showMessage(message, "error");
         } finally {
+            clearMobileP12Password();
             setBusy(false);
             renderStatus(documentState);
         }
@@ -461,6 +546,8 @@
         modal.hidden = false;
         modal.setAttribute("aria-hidden", "false");
         document.body.classList.add("esf-modal-open");
+        syncMobileSigningUi();
+        window.setTimeout(syncMobileSigningUi, 250);
         setBusy(true, "Загружаем данные продажи…");
         showMessage("", "");
         showValidation([]);
