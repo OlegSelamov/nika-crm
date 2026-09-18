@@ -3,7 +3,22 @@
 {% block content %}
 <style>
 .alatau-page{max-width:1050px;margin:0 auto;padding:4px 0 42px;color:#202434}.alatau-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}.alatau-head h1{margin:0;font-size:29px;color:#202434!important}.alatau-head p{margin:6px 0 0;color:#7b8294;font-size:13px;line-height:1.5}.alatau-card{padding:22px;margin-bottom:15px;border:1px solid #e5e8ef;border-radius:20px;background:#fff;box-shadow:0 12px 32px rgba(40,44,72,.07)}.alatau-status{display:flex;align-items:center;gap:10px;margin-bottom:15px;font-size:14px;font-weight:800}.alatau-dot{width:10px;height:10px;border-radius:50%;background:#a2a8b4}.alatau-dot.on{background:#22a866;box-shadow:0 0 0 5px rgba(34,168,102,.12)}.alatau-dot.error{background:#d9534f;box-shadow:0 0 0 5px rgba(217,83,79,.10)}.alatau-note{padding:13px 15px;border-radius:13px;background:#f6f7fb;color:#60687a;font-size:12px;line-height:1.55}.alatau-note.success{background:#eaf8f0;color:#187c4c}.alatau-note.error{background:#fff1f1;color:#a23c3c}.alatau-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.alatau-field{display:grid;gap:6px}.alatau-field label{font-size:10px;font-weight:850;letter-spacing:.04em;color:#7b8294;text-transform:uppercase}.alatau-field input,.alatau-field select{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid #dfe3eb;border-radius:12px;background:#fff;color:#202434;font-size:13px}.alatau-field input:focus,.alatau-field select:focus{outline:none;border-color:#7a66ea;box-shadow:0 0 0 3px rgba(122,102,234,.10)}.alatau-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.alatau-btn{border:0;border-radius:12px;padding:11px 17px;background:#6f57e8;color:#fff;font-weight:800;cursor:pointer;text-decoration:none}.alatau-btn.secondary{background:#edf4ff;color:#3468bd}.alatau-btn.danger{background:#fff0f0;color:#b43e3e}.alatau-btn:disabled{opacity:.55;cursor:wait}.alatau-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:15px}.alatau-meta div{padding:12px;border-radius:12px;background:#f8f9fc}.alatau-meta small{display:block;color:#8b92a2;margin-bottom:4px}.alatau-meta strong{font-size:12px;word-break:break-word}.alatau-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.alatau-help{font-size:11px;color:#8a91a2;line-height:1.5;margin-top:6px}.alatau-env-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px}.alatau-env{padding:14px;border:1px solid #e8eaf0;border-radius:15px;background:#fafbfe}.alatau-env b{display:block;margin-bottom:5px}.alatau-env span{font-size:11px;color:#7c8495}.alatau-bank-toolbar{display:grid;grid-template-columns:180px 1fr auto;gap:10px;align-items:end}.alatau-bank-toolbar .alatau-field{min-width:0}.alatau-account-list{display:grid;gap:10px;margin-top:14px}.alatau-account{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:14px;border:1px solid #e6e9f0;border-radius:14px;background:#fbfcfe;cursor:pointer}.alatau-account.active{border-color:#806cf0;box-shadow:0 0 0 3px rgba(128,108,240,.08)}.alatau-account-title{font-weight:850;font-size:13px;word-break:break-word}.alatau-account-sub{margin-top:4px;color:#7d8494;font-size:11px}.alatau-account-balance{text-align:right;font-weight:850;font-size:14px;white-space:nowrap}.alatau-statement-tools{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-top:14px}.alatau-table-wrap{overflow:auto;margin-top:14px;border:1px solid #e6e9f0;border-radius:14px}.alatau-table{width:100%;border-collapse:collapse;min-width:760px}.alatau-table th,.alatau-table td{padding:11px 12px;border-bottom:1px solid #eef0f5;font-size:11px;text-align:left;vertical-align:top}.alatau-table th{background:#f7f8fb;color:#666e80;font-size:10px;text-transform:uppercase;letter-spacing:.04em}.alatau-table tr:last-child td{border-bottom:0}.alatau-empty{padding:18px;text-align:center;color:#8a91a1;font-size:12px}.alatau-credit{font-weight:800}.alatau-debit{font-weight:800}.alatau-section-title{display:flex;justify-content:space-between;gap:12px;align-items:center}.alatau-section-title h3{margin:0}.alatau-chip{font-size:10px;padding:6px 8px;border-radius:999px;background:#f1efff;color:#6048d8;font-weight:800}@media(max-width:700px){.alatau-head{display:block}.alatau-card{padding:15px;border-radius:16px}.alatau-grid,.alatau-meta,.alatau-env-cards,.alatau-bank-toolbar,.alatau-statement-tools{grid-template-columns:1fr}.alatau-head h1{font-size:24px}.alatau-account{grid-template-columns:1fr}.alatau-account-balance{text-align:left}}
+{% if bank_workspace %}
+<style>
+.alatau-page{max-width:none;height:calc(100vh - 86px);padding:0 8px 8px;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px;overflow:hidden}
+.alatau-head{margin:0;align-items:center}.alatau-head h1{font-size:23px}.alatau-head p{margin-top:2px}
+.bank-workspace-card{margin:0;padding:13px 16px;border-radius:15px}
+#bankAccountsSection{margin:0;padding:14px 16px;border-radius:15px;min-height:0;overflow:hidden;display:grid;grid-template-rows:auto auto minmax(0,1fr)}
+#bankAccountsSection .alatau-help{display:none}
+#bankAccountsSection .alatau-bank-toolbar{margin-top:9px;grid-template-columns:140px minmax(250px,1fr) auto}
+#accountsList{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-top:9px;overflow:auto;min-height:0}
+#bankAccountsSection .alatau-statement-tools,#bankAccountsSection #statementResult,#bankAccountsSection #statementTableWrap,#bankAccountsSection #cardsResult,#bankAccountsSection #cardsList,#bankAccountsSection #dictionariesResult{display:none}
+.bank-more-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.bank-more-actions .alatau-btn{padding:8px 12px;font-size:12px}
+.alatau-account{padding:11px 13px}
+@media(max-width:700px){.alatau-page{height:auto;min-height:calc(100vh - 72px);overflow:visible}.alatau-head p{display:none}#bankAccountsSection{overflow:visible}#accountsList{overflow:visible}.bank-summary-actions{display:grid;grid-template-columns:1fr 1fr}.bank-summary-actions .alatau-btn:first-child{grid-column:1/-1}}
 </style>
+{% endif %}
 
 {% set test_cfg = alatau_integrations.get('test') if alatau_integrations else None %}
 {% set prod_cfg = alatau_integrations.get('production') if alatau_integrations else None %}
@@ -17,7 +32,7 @@
   </div>
 
   {% if bank_workspace %}
-  <section class="alatau-card" style="border-color:#dfe5f2">
+  <section class="alatau-card bank-workspace-card" style="border-color:#dfe5f2">
     <div class="alatau-section-title">
       <div>
         <h3 style="margin:0">Alatau City Bank</h3>
@@ -154,13 +169,15 @@
     <div id="bankResult" style="margin-top:12px"></div>
     <div id="accountsList" class="alatau-account-list"></div>
 
-    <div class="alatau-actions" style="margin-top:12px">
-      <button id="testCardsButton" class="alatau-btn secondary" type="button">Проверить счета и карты</button>
+    <div class="bank-more-actions">
+      <button id="loadStatementQuickButton" class="alatau-btn secondary" type="button">Получить выписку</button>
+      <button id="testCardsButton" class="alatau-btn secondary" type="button">Счета и карты</button>
+      <button id="testDictionariesButtonTop" class="alatau-btn secondary" type="button">Справочники</button>
     </div>
     <div id="cardsResult" style="margin-top:12px"></div>
     <div id="cardsList" class="alatau-account-list"></div>
 
-    <div class="alatau-actions" style="margin-top:12px">
+    <div class="alatau-actions" style="display:none">
       <button id="testDictionariesButton" class="alatau-btn secondary" type="button">Проверить справочники API</button>
     </div>
     <div id="dictionariesResult" style="margin-top:12px"></div>
@@ -311,6 +328,8 @@
   const cardsList = document.getElementById('cardsList');
   const testDictionariesButton = document.getElementById('testDictionariesButton');
   const dictionariesResult = document.getElementById('dictionariesResult');
+  const loadStatementQuickButton = document.getElementById('loadStatementQuickButton');
+  const testDictionariesButtonTop = document.getElementById('testDictionariesButtonTop');
   const paymentAccountIban = document.getElementById('paymentAccountIban');
   const paymentAmount = document.getElementById('paymentAmount');
   const paymentReceiverName = document.getElementById('paymentReceiverName');
@@ -435,6 +454,16 @@
     }
   });
 
+
+  loadStatementQuickButton?.addEventListener('click', () => {
+    loadStatementButton.click();
+    window.setTimeout(() => {
+      statementResult.style.display = 'block';
+      statementTableWrap.style.display = statementBody.children.length ? 'block' : 'none';
+      statementResult.scrollIntoView({behavior:'smooth', block:'nearest'});
+    }, 250);
+  });
+  testDictionariesButtonTop?.addEventListener('click', () => testDictionariesButton.click());
 
   testCardsButton.addEventListener('click', async () => {
     testCardsButton.disabled = true;
@@ -747,7 +776,7 @@
   closeBankPaymentButton.addEventListener('click', closePaymentModal);
   bankPaymentModal.addEventListener('click', event => { if (event.target === bankPaymentModal) closePaymentModal(); });
   refreshBankButton.addEventListener('click', () => loadAccountsButton.click());
-  scrollStatementButton.addEventListener('click', () => document.getElementById('bankAccountsSection').scrollIntoView({behavior:'smooth'}));
+  scrollStatementButton.addEventListener('click', () => loadStatementQuickButton.click());
 
   // "Мои банки" is an operational workspace: open Alatau in Production and
   // immediately show the company's live account/balance without an extra click.
