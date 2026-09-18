@@ -7,10 +7,41 @@ class MobileP12Signer {
   static Future<Map<String, dynamic>> signAlatauJws({
     required String payload,
     required String password,
+  }) =>
+      _invoke(
+        'signAlatauJwsWithP12',
+        payload: payload,
+        password: password,
+      );
+
+  static Future<Map<String, dynamic>> signEsfRaw({
+    required String payload,
+    required String password,
+  }) =>
+      _invoke(
+        'signEsfRawWithP12',
+        payload: payload,
+        password: password,
+      );
+
+  static Future<Map<String, dynamic>> signEsfXml({
+    required String payload,
+    required String password,
+  }) =>
+      _invoke(
+        'signEsfXmlWithP12',
+        payload: payload,
+        password: password,
+      );
+
+  static Future<Map<String, dynamic>> _invoke(
+    String method, {
+    required String payload,
+    required String password,
   }) async {
     try {
       final result = await _channel.invokeMethod<dynamic>(
-        'signAlatauJwsWithP12',
+        method,
         {
           'payload': payload,
           'password': password,
@@ -20,7 +51,9 @@ class MobileP12Signer {
       if (result is Map) {
         return Map<String, dynamic>.from(result);
       }
-      throw const PlatformException(
+
+      // PlatformException is not a const class.
+      throw PlatformException(
         code: 'INVALID_SIGN_RESULT',
         message: 'Android вернул некорректный результат подписи',
       );
