@@ -228,21 +228,32 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   padding:14px;
   box-shadow:0 24px 70px rgba(20,25,45,.24);
 }
-.bank-payment-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
-.bank-payment-head h3{margin:0;font-size:17px}
-.bank-payment-close{border:0;background:#f1f3f7;border-radius:9px;width:32px;height:32px;font-size:20px;cursor:pointer}
+.bank-payment-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}
+.bank-payment-head h3{margin:0;font-size:21px;line-height:1.2}
+.bank-payment-close{border:0;background:#f1f3f7;border-radius:10px;width:38px;height:38px;font-size:24px;cursor:pointer}
 #bankPaymentSection .alatau-section-title{display:none}
-#bankPaymentSection>.alatau-help:first-of-type{margin:0 0 8px!important}
-#bankPaymentSection .alatau-bank-toolbar{margin-top:7px!important;gap:7px}
-#bankPaymentSection .alatau-field{gap:3px}
-#bankPaymentSection .alatau-field label{font-size:8px}
-#bankPaymentSection .alatau-field input{padding:8px 9px;border-radius:9px;font-size:11px}
-#bankPaymentSection>.alatau-field{margin-top:7px!important}
-#bankPaymentSection .alatau-actions{margin-top:9px!important;gap:7px}
-#bankPaymentSection .alatau-btn{padding:8px 11px;border-radius:9px;font-size:11px}
-#bankPaymentSection .alatau-actions + .alatau-help{margin-top:7px!important;font-size:9px;line-height:1.35}
-#paymentDraftResult{margin-top:7px!important;padding:7px 9px;font-size:10px;line-height:1.3}
+#bankPaymentSection>.alatau-help:first-of-type{margin:0 0 10px!important;font-size:13px;line-height:1.45}
+#bankPaymentSection .alatau-bank-toolbar{margin-top:9px!important;gap:10px}
+#bankPaymentSection .alatau-field{gap:5px}
+#bankPaymentSection .alatau-field label{font-size:12px;letter-spacing:.02em}
+#bankPaymentSection .alatau-field input{padding:10px 11px;border-radius:10px;font-size:14px;min-height:40px}
+#bankPaymentSection>.alatau-field{margin-top:9px!important}
+#bankPaymentSection .alatau-actions{margin-top:12px!important;gap:9px}
+#bankPaymentSection .alatau-btn{padding:10px 14px;border-radius:10px;font-size:13px}
+#bankPaymentSection .alatau-actions + .alatau-help{margin-top:9px!important;font-size:11px;line-height:1.4}
+#paymentDraftResult{margin-top:9px!important;padding:9px 11px;font-size:12px;line-height:1.4}
 #paymentDraftResult:empty{display:none}
+
+.bank-details-dialog{width:min(720px,100%);overflow:auto}
+.bank-details-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bank-detail-item{padding:12px 14px;border:1px solid #e5e9f1;border-radius:12px;background:#f9fbfe;min-width:0}
+.bank-detail-item.full{grid-column:1/-1}
+.bank-detail-label{font-size:12px;color:#7a8293;font-weight:750;margin-bottom:5px}
+.bank-detail-value{font-size:15px;color:#202434;font-weight:800;line-height:1.35;word-break:break-word}
+.bank-detail-value.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.02em}
+.bank-details-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+.bank-details-actions .alatau-btn{font-size:13px;padding:10px 14px}
+.bank-copy-result{margin-top:10px;font-size:12px;color:#187c4c;min-height:18px}
 
 @media(max-width:900px) and (min-width:701px){
   #bankAccountsSection{grid-template-columns:minmax(230px,36%) minmax(0,1fr)}
@@ -297,6 +308,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     </div>
     <div class="bank-summary-actions">
       <button class="alatau-btn" id="openBankPaymentButton" type="button">Новый платёж</button>
+      <button class="alatau-btn secondary" id="openAccountDetailsButton" type="button" disabled>Реквизиты счёта</button>
       <button class="alatau-btn secondary" id="scrollStatementButton" type="button">Обновить выписку</button>
       <button class="alatau-btn secondary" id="refreshBankButton" type="button">Обновить счета</button>
     </div>
@@ -518,6 +530,65 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     <div class="alatau-help" style="margin-top:10px">Подписанная отправка использует NCALayer и Production API Alatau. Банк сейчас предоставляет signed-payments в пилотном режиме; если доступ компании ещё не включён, Nika покажет ответ банка и деньги не будут отправлены.</div>
     <div id="paymentDraftResult" style="margin-top:12px"></div>
   </section>
+  {% if bank_workspace %}</div></div>{% endif %}
+
+  {% if bank_workspace %}
+  <div class="bank-payment-modal" id="bankAccountDetailsModal">
+    <div class="bank-payment-dialog bank-details-dialog">
+      <div class="bank-payment-head">
+        <h3>Реквизиты счёта</h3>
+        <button type="button" class="bank-payment-close" id="closeAccountDetailsButton">×</button>
+      </div>
+      <div class="bank-details-grid">
+        <div class="bank-detail-item full">
+          <div class="bank-detail-label">Владелец счёта</div>
+          <div class="bank-detail-value" id="detailsCompanyName">{{ (company_requisites.name if company_requisites else '') or '—' }}</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">БИН / ИИН</div>
+          <div class="bank-detail-value mono" id="detailsCompanyBin">{{ (company_requisites.bin if company_requisites else '') or '—' }}</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">Банк</div>
+          <div class="bank-detail-value" id="detailsBankName">{{ (company_requisites.bank if company_requisites else '') or 'Alatau City Bank' }}</div>
+        </div>
+        <div class="bank-detail-item full">
+          <div class="bank-detail-label">IBAN</div>
+          <div class="bank-detail-value mono" id="detailsIban">—</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">БИК</div>
+          <div class="bank-detail-value mono" id="detailsBic">{{ (company_requisites.bik if company_requisites else '') or 'TSESKZKA' }}</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">КБЕ</div>
+          <div class="bank-detail-value mono" id="detailsKbe">{{ (company_requisites.kbe if company_requisites else '') or '—' }}</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">Валюта</div>
+          <div class="bank-detail-value" id="detailsCurrency">—</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">Тип / статус</div>
+          <div class="bank-detail-value" id="detailsTypeStatus">—</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">Дата открытия</div>
+          <div class="bank-detail-value" id="detailsOpenDate">—</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">Доступный остаток</div>
+          <div class="bank-detail-value" id="detailsBalance">—</div>
+        </div>
+      </div>
+      <div class="bank-details-actions">
+        <button class="alatau-btn" type="button" id="copyIbanButton">Копировать IBAN</button>
+        <button class="alatau-btn secondary" type="button" id="copyAllRequisitesButton">Копировать все реквизиты</button>
+      </div>
+      <div class="bank-copy-result" id="bankCopyResult"></div>
+    </div>
+  </div>
+  {% endif %}
 
   <section class="alatau-card"{% if bank_workspace %} style="display:none"{% endif %}>
     <h3 style="margin:0 0 10px">Как подключается клиент Nika</h3>
@@ -618,6 +689,18 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const paymentsSummary = document.getElementById('paymentsSummary');
   const refreshPaymentsButton = document.getElementById('refreshPaymentsButton');
   const bankAccountsSection = document.getElementById('bankAccountsSection');
+  const openAccountDetailsButton = document.getElementById('openAccountDetailsButton');
+  const bankAccountDetailsModal = document.getElementById('bankAccountDetailsModal');
+  const closeAccountDetailsButton = document.getElementById('closeAccountDetailsButton');
+  const detailsIban = document.getElementById('detailsIban');
+  const detailsCurrency = document.getElementById('detailsCurrency');
+  const detailsTypeStatus = document.getElementById('detailsTypeStatus');
+  const detailsOpenDate = document.getElementById('detailsOpenDate');
+  const detailsBalance = document.getElementById('detailsBalance');
+  const copyIbanButton = document.getElementById('copyIbanButton');
+  const copyAllRequisitesButton = document.getElementById('copyAllRequisitesButton');
+  const bankCopyResult = document.getElementById('bankCopyResult');
+  let selectedAccountData = null;
 
   const toLocalISODate = value => {
     const year = value.getFullYear();
@@ -732,10 +815,29 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const selectAccount = (account, element) => {
     document.querySelectorAll('.alatau-account').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
+    selectedAccountData = account || null;
     selectedIban.value = String(firstValue(account, ['iban', 'account', 'accountNumber', 'number'], '')).toUpperCase();
     paymentAccountIban.value = selectedIban.value;
+    if (openAccountDetailsButton) openAccountDetailsButton.disabled = !selectedIban.value;
+
+    const currency = firstValue(account, ['currency', 'currencyCode'], 'KZT');
+    const accountType = firstValue(account, ['accountType', 'type', 'account_type'], '—');
+    const accountStatus = firstValue(account, ['status', 'accountStatus', 'state'], '—');
+    const balanceRaw = firstValue(account, ['balance', 'availableBalance', 'currentBalance', 'amount'], '—');
+    const balance = balanceRaw && typeof balanceRaw === 'object'
+      ? firstValue(balanceRaw, ['amount', 'value', 'balance'], '—')
+      : balanceRaw;
+    const balanceCurrency = balanceRaw && typeof balanceRaw === 'object'
+      ? firstValue(balanceRaw, ['currency', 'currencyCode'], currency)
+      : currency;
+
+    if (detailsIban) detailsIban.textContent = selectedIban.value || '—';
+    if (detailsCurrency) detailsCurrency.textContent = currency || '—';
+    if (detailsTypeStatus) detailsTypeStatus.textContent = [accountType, accountStatus].filter(Boolean).join(' · ') || '—';
+    if (detailsBalance) detailsBalance.textContent = `${money(balance)} ${balanceCurrency || ''}`.trim();
 
     const openDate = String(firstValue(account, ['openDate', 'open_date', 'openedAt'], '')).slice(0, 10);
+    if (detailsOpenDate) detailsOpenDate.textContent = openDate ? openDate.split('-').reverse().join('.') : '—';
     if (openDate) {
       statementFrom.min = openDate;
       statementTo.min = openDate;
@@ -755,6 +857,8 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const renderAccounts = accounts => {
     accountsList.innerHTML = '';
     selectedIban.value = '';
+    selectedAccountData = null;
+    if (openAccountDetailsButton) openAccountDetailsButton.disabled = true;
     if (!accounts.length) {
       accountsList.innerHTML = '<div class="alatau-empty">Банк не вернул доступных счетов.</div>';
       return;
@@ -1140,9 +1244,59 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const scrollStatementButton = document.getElementById('scrollStatementButton');
   const openPaymentModal = () => bankPaymentModal.classList.add('open');
   const closePaymentModal = () => bankPaymentModal.classList.remove('open');
+  const openAccountDetailsModal = () => {
+    if (!selectedAccountData || !selectedIban.value) return;
+    if (bankCopyResult) bankCopyResult.textContent = '';
+    bankAccountDetailsModal?.classList.add('open');
+  };
+  const closeAccountDetailsModal = () => bankAccountDetailsModal?.classList.remove('open');
+
+  const copyText = async textValue => {
+    if (!textValue) return false;
+    try {
+      await navigator.clipboard.writeText(textValue);
+      return true;
+    } catch (e) {
+      const area = document.createElement('textarea');
+      area.value = textValue;
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand('copy');
+      area.remove();
+      return ok;
+    }
+  };
+
   openBankPaymentButton.addEventListener('click', openPaymentModal);
   closeBankPaymentButton.addEventListener('click', closePaymentModal);
   bankPaymentModal.addEventListener('click', event => { if (event.target === bankPaymentModal) closePaymentModal(); });
+  openAccountDetailsButton?.addEventListener('click', openAccountDetailsModal);
+  closeAccountDetailsButton?.addEventListener('click', closeAccountDetailsModal);
+  bankAccountDetailsModal?.addEventListener('click', event => { if (event.target === bankAccountDetailsModal) closeAccountDetailsModal(); });
+  copyIbanButton?.addEventListener('click', async () => {
+    const ok = await copyText(detailsIban?.textContent?.trim());
+    if (bankCopyResult) bankCopyResult.textContent = ok ? 'IBAN скопирован.' : 'Не удалось скопировать IBAN.';
+  });
+  copyAllRequisitesButton?.addEventListener('click', async () => {
+    const companyName = document.getElementById('detailsCompanyName')?.textContent?.trim() || '—';
+    const bin = document.getElementById('detailsCompanyBin')?.textContent?.trim() || '—';
+    const bankName = document.getElementById('detailsBankName')?.textContent?.trim() || 'Alatau City Bank';
+    const bic = document.getElementById('detailsBic')?.textContent?.trim() || '—';
+    const kbe = document.getElementById('detailsKbe')?.textContent?.trim() || '—';
+    const requisites = [
+      companyName,
+      'БИН/ИИН: ' + bin,
+      'Банк: ' + bankName,
+      'IBAN: ' + (detailsIban?.textContent?.trim() || '—'),
+      'БИК: ' + bic,
+      'КБЕ: ' + kbe,
+      'Валюта: ' + (detailsCurrency?.textContent?.trim() || '—')
+    ].join('\n');
+    const ok = await copyText(requisites);
+    if (bankCopyResult) bankCopyResult.textContent = ok ? 'Реквизиты скопированы.' : 'Не удалось скопировать реквизиты.';
+  });
   refreshBankButton.addEventListener('click', () => loadAccountsButton.click());
   const setBankTab = name => {
     const statementMode = name === 'statement';
@@ -1185,6 +1339,12 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   }, true);
   refreshPaymentsButton?.addEventListener('click', () => loadPayments(true));
   scrollStatementButton.addEventListener('click', () => setBankTab('statement'));
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    closePaymentModal();
+    closeAccountDetailsModal();
+  });
 
   // "Мои банки" is an operational workspace: open Alatau in Production and
   // immediately show the company's live account/balance without an extra click.
