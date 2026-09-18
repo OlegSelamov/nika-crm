@@ -1346,6 +1346,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
         ? window.NikaNCALayer.friendlyError(error)
         : (error.message || 'Не удалось подписать платёж');
     } finally {
+      if (mobileSigning && mobileP12Password) mobileP12Password.value = '';
       signAndSendPaymentButton.disabled = false;
       createPaymentDraftButton.disabled = false;
     }
