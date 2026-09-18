@@ -144,6 +144,65 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 }
 #statementTableWrap .alatau-table td{padding:8px 9px;font-size:10px;line-height:1.3}
 
+.bank-tabs{
+  grid-column:2;
+  grid-row:1;
+  align-self:end;
+  justify-self:start;
+  display:flex;
+  gap:4px;
+  margin-left:0;
+}
+.bank-tab{
+  border:0;
+  background:#f1f4fa;
+  color:#64708a;
+  padding:7px 10px;
+  border-radius:9px;
+  font-size:10px;
+  font-weight:800;
+  cursor:pointer;
+}
+.bank-tab.active{background:#6f57e8;color:#fff}
+#paymentsPane{
+  grid-column:2;
+  grid-row:2 / 4;
+  min-height:0;
+  display:none;
+  overflow:hidden;
+}
+#paymentsPane.active{display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:7px}
+.payments-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.payments-summary{font-size:11px;font-weight:850;color:#4d5568}
+#refreshPaymentsButton{padding:7px 10px;border-radius:9px;font-size:10px}
+#paymentsResult:empty{display:none}
+#paymentsResult.alatau-note{padding:7px 9px;border-radius:9px;font-size:10px}
+.payments-list{min-height:0;overflow:auto;display:grid;align-content:start;gap:6px;scrollbar-width:thin}
+.payment-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:10px;
+  align-items:center;
+  padding:9px 10px;
+  border:1px solid #e7eaf1;
+  border-radius:11px;
+  background:#fbfcff;
+}
+.payment-main{min-width:0}
+.payment-name{font-size:11px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.payment-sub{margin-top:2px;font-size:9px;color:#7c8495;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.payment-amount{font-size:11px;font-weight:850;white-space:nowrap}
+.payment-status{padding:5px 7px;border-radius:999px;font-size:8px;font-weight:850;white-space:nowrap;background:#eef2f7;color:#5d6678}
+.payment-status.ok{background:#e8f8ee;color:#18784a}
+.payment-status.wait{background:#fff7dd;color:#8a6800}
+.payment-status.bad{background:#fff0f0;color:#a63a3a}
+.payment-status.info{background:#edf4ff;color:#315fba}
+.payment-empty{padding:18px;text-align:center;color:#8a91a1;font-size:11px;border:1px dashed #dfe4ed;border-radius:11px}
+#bankAccountsSection.statement-mode #paymentsPane{display:none}
+#bankAccountsSection.statement-mode [data-pane="statement"]{display:grid}
+#bankAccountsSection:not(.statement-mode) [data-pane="statement"]{display:none!important}
+#bankAccountsSection:not(.statement-mode) #statementTableWrap{display:none!important}
+
 .bank-payment-modal{
   display:none;
   position:fixed;
@@ -358,6 +417,21 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     <div id="bankResult" style="margin-top:12px"></div>
     <div id="accountsList" class="alatau-account-list"></div>
 
+    {% if bank_workspace %}
+    <div class="bank-tabs">
+      <button class="bank-tab active" type="button" data-bank-tab="payments">Платежи</button>
+      <button class="bank-tab" type="button" data-bank-tab="statement">Операции по счёту</button>
+    </div>
+    <div id="paymentsPane" class="bank-pane active">
+      <div class="payments-toolbar">
+        <div class="payments-summary" id="paymentsSummary">Платежи Nika</div>
+        <button id="refreshPaymentsButton" class="alatau-btn secondary" type="button">Обновить статусы</button>
+      </div>
+      <div id="paymentsResult"></div>
+      <div id="paymentsList" class="payments-list"></div>
+    </div>
+    {% endif %}
+
     <div class="bank-more-actions">
       <button id="loadStatementQuickButton" class="alatau-btn secondary" type="button">Получить выписку</button>
       <button id="testCardsButton" class="alatau-btn secondary" type="button">Счета и карты</button>
@@ -371,7 +445,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     </div>
     <div id="dictionariesResult" style="margin-top:12px"></div>
 
-    <div class="alatau-statement-tools">
+    <div class="alatau-statement-tools"{% if bank_workspace %} data-pane="statement"{% endif %}>
       <div class="alatau-field">
         <label for="statementFrom">С</label>
         <input id="statementFrom" type="date">
@@ -383,8 +457,8 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       <button id="loadStatementButton" class="alatau-btn secondary" type="button">Получить выписку</button>
     </div>
 
-    <div id="statementResult" style="margin-top:12px"></div>
-    <div id="statementTableWrap" class="alatau-table-wrap" style="display:none">
+    <div id="statementResult" style="margin-top:12px"{% if bank_workspace %} data-pane="statement"{% endif %}></div>
+    <div id="statementTableWrap" class="alatau-table-wrap" style="display:none"{% if bank_workspace %} data-pane="statement"{% endif %}>
       <table class="alatau-table">
         <thead>
           <tr>
@@ -532,6 +606,12 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const createPaymentDraftButton = document.getElementById('createPaymentDraftButton');
   const signAndSendPaymentButton = document.getElementById('signAndSendPaymentButton');
   const paymentDraftResult = document.getElementById('paymentDraftResult');
+  const paymentsPane = document.getElementById('paymentsPane');
+  const paymentsList = document.getElementById('paymentsList');
+  const paymentsResult = document.getElementById('paymentsResult');
+  const paymentsSummary = document.getElementById('paymentsSummary');
+  const refreshPaymentsButton = document.getElementById('refreshPaymentsButton');
+  const bankAccountsSection = document.getElementById('bankAccountsSection');
 
   const toLocalISODate = value => {
     const year = value.getFullYear();
@@ -560,6 +640,88 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   };
 
   const normalizeAccounts = payload => Array.isArray(payload) ? payload : [];
+
+  const paymentStatusLabel = raw => {
+    const code = String(raw || '').toUpperCase();
+    const map = {
+      CREATED: ['Создан', 'info'],
+      READY_TO_SEND: ['Черновик', 'info'],
+      SENT: ['Отправлен', 'wait'],
+      NEW: ['Создан', 'info'],
+      PROCESSING: ['В обработке', 'wait'],
+      PENDING: ['Ожидает', 'wait'],
+      IN_PROGRESS: ['В обработке', 'wait'],
+      EXECUTED: ['Исполнен', 'ok'],
+      COMPLETED: ['Исполнен', 'ok'],
+      SUCCESS: ['Исполнен', 'ok'],
+      ACCEPTED: ['Принят', 'ok'],
+      REJECTED: ['Отклонён', 'bad'],
+      FAILED: ['Ошибка', 'bad'],
+      ERROR: ['Ошибка', 'bad'],
+      CANCELLED: ['Отменён', 'bad'],
+      CANCELED: ['Отменён', 'bad']
+    };
+    return map[code] || [code || 'Неизвестно', 'info'];
+  };
+
+  const renderPayments = payments => {
+    if (!paymentsList) return;
+    paymentsList.innerHTML = '';
+    if (!payments.length) {
+      paymentsList.innerHTML = '<div class="payment-empty">Новых платежей из Nika пока нет. Платежи, созданные до включения истории, появятся в банковской выписке после активации доступа к выпискам.</div>';
+      if (paymentsSummary) paymentsSummary.textContent = 'Платежей: 0';
+      return;
+    }
+    if (paymentsSummary) paymentsSummary.textContent = `Платежей: ${payments.length}`;
+    payments.forEach(p => {
+      const [label, cls] = paymentStatusLabel(p.statusCode);
+      const dt = p.createdAt ? new Date(p.createdAt).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+      const row = document.createElement('div');
+      row.className = 'payment-row';
+      row.innerHTML = `
+        <div class="payment-main">
+          <div class="payment-name">${p.receiverName || 'Получатель не указан'}</div>
+          <div class="payment-sub">№ ${p.documentNumber || '—'} · ${dt}${p.purpose ? ' · ' + p.purpose : ''}</div>
+          ${p.statusMessage ? '<div class="payment-sub">' + p.statusMessage + '</div>' : ''}
+        </div>
+        <div class="payment-amount">${money(p.amount)} ${p.currency || 'KZT'}</div>
+        <div class="payment-status ${cls}">${label}</div>`;
+      paymentsList.appendChild(row);
+    });
+  };
+
+  const loadPayments = async (refresh = false) => {
+    if (!paymentsList) return;
+    if (refreshPaymentsButton) refreshPaymentsButton.disabled = true;
+    if (paymentsResult) {
+      paymentsResult.className = 'alatau-note';
+      paymentsResult.textContent = refresh ? 'Проверяем статусы в Alatau…' : 'Загружаем платежи…';
+    }
+    try {
+      const params = new URLSearchParams({environment:'production'});
+      if (refresh) params.set('refresh','1');
+      const response = await fetch('/api/integrations/alatau/payments/history?' + params.toString(), {headers:{'Accept':'application/json'}});
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось загрузить платежи');
+      renderPayments(Array.isArray(data.payments) ? data.payments : []);
+      if (paymentsResult) {
+        if (data.refresh_warning) {
+          paymentsResult.className = 'alatau-note error';
+          paymentsResult.textContent = 'Платежи показаны из Nika, но банк не дал обновить часть статусов: ' + data.refresh_warning;
+        } else {
+          paymentsResult.textContent = '';
+          paymentsResult.className = '';
+        }
+      }
+    } catch (error) {
+      if (paymentsResult) {
+        paymentsResult.className = 'alatau-note error';
+        paymentsResult.textContent = error.message;
+      }
+    } finally {
+      if (refreshPaymentsButton) refreshPaymentsButton.disabled = false;
+    }
+  };
 
   const selectAccount = (account, element) => {
     document.querySelectorAll('.alatau-account').forEach(el => el.classList.remove('active'));
@@ -635,9 +797,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       renderAccounts(accounts);
       bankResult.className = 'alatau-note success';
       bankResult.textContent = `Счета загружены: ${accounts.length}.`;
-      {% if bank_workspace %}
-      if (accounts.length) window.setTimeout(() => loadStatementButton.click(), 0);
-      {% endif %}
+
     } catch (error) {
       bankResult.className = 'alatau-note error';
       bankResult.textContent = error.message;
@@ -858,7 +1018,21 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       const sendResponse = await fetch('/api/integrations/alatau/payments/signed', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: JSON.stringify({environment: 'production', content: signed.content})
+        body: JSON.stringify({
+          environment: 'production',
+          content: signed.content,
+          payment: {
+            paymentType: prepared.payment_type || '',
+            accountIban: paymentAccountIban.value.trim(),
+            receiverName: paymentReceiverName.value.trim(),
+            receiverIinBin: paymentReceiverIinBin.value.trim(),
+            receiverIban: paymentReceiverIban.value.trim(),
+            receiverBic: paymentReceiverBic.value.trim(),
+            amount: paymentAmount.value,
+            documentNumber: paymentDocumentNumber.value.trim(),
+            purpose: paymentPurpose.value.trim()
+          }
+        })
       });
       const sent = await sendResponse.json();
       if (!sendResponse.ok || !sent.success) throw new Error(sent.error || 'Alatau отклонил подписанный платёж');
@@ -868,7 +1042,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       paymentDraftResult.className = 'alatau-note success';
       paymentDraftResult.textContent = 'Подписанный платёж принят Alatau' +
         (operationId ? '. Operation ID: ' + operationId : '') + '.';
-      {% if bank_workspace %}window.setTimeout(() => { closePaymentModal(); loadAccountsButton.click(); }, 900);{% endif %}
+      {% if bank_workspace %}window.setTimeout(() => { closePaymentModal(); loadAccountsButton.click(); loadPayments(true); }, 900);{% endif %}
     } catch (error) {
       paymentDraftResult.className = 'alatau-note error';
       paymentDraftResult.textContent = window.NikaNCALayer?.friendlyError
@@ -953,6 +1127,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 
   {% if bank_workspace %}
   const bankPaymentModal = document.getElementById('bankPaymentModal');
+  const bankTabs = Array.from(document.querySelectorAll('.bank-tab'));
   const openBankPaymentButton = document.getElementById('openBankPaymentButton');
   const closeBankPaymentButton = document.getElementById('closeBankPaymentButton');
   const refreshBankButton = document.getElementById('refreshBankButton');
@@ -963,12 +1138,24 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   closeBankPaymentButton.addEventListener('click', closePaymentModal);
   bankPaymentModal.addEventListener('click', event => { if (event.target === bankPaymentModal) closePaymentModal(); });
   refreshBankButton.addEventListener('click', () => loadAccountsButton.click());
-  scrollStatementButton.addEventListener('click', () => loadStatementQuickButton.click());
+  const setBankTab = name => {
+    const statementMode = name === 'statement';
+    bankAccountsSection?.classList.toggle('statement-mode', statementMode);
+    bankTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.bankTab === name));
+    paymentsPane?.classList.toggle('active', !statementMode);
+    if (statementMode) loadStatementQuickButton.click();
+  };
+  bankTabs.forEach(tab => tab.addEventListener('click', () => setBankTab(tab.dataset.bankTab)));
+  refreshPaymentsButton?.addEventListener('click', () => loadPayments(true));
+  scrollStatementButton.addEventListener('click', () => setBankTab('statement'));
 
   // "Мои банки" is an operational workspace: open Alatau in Production and
   // immediately show the company's live account/balance without an extra click.
   bankEnvironment.value = 'production';
-  window.setTimeout(() => loadAccountsButton.click(), 50);
+  window.setTimeout(() => {
+    loadAccountsButton.click();
+    loadPayments(true);
+  }, 50);
   {% endif %}
 
   bankEnvironment.addEventListener('change', () => {
