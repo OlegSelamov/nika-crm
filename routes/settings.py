@@ -667,6 +667,36 @@ def alatau_payment_draft():
     except (AlatauError, UnboundLocalError):
         pass
 
+    # Production also requires the human-readable KNP name.
+    knp_name = knp
+    try:
+        knp_rows = lookup_client.get_dictionary(lookup_token, "KNP")
+        if isinstance(knp_rows, dict):
+            knp_rows = (
+                knp_rows.get("content")
+                or knp_rows.get("items")
+                or knp_rows.get("data")
+                or knp_rows.get("values")
+                or []
+            )
+        if isinstance(knp_rows, list):
+            for row in knp_rows:
+                if not isinstance(row, dict):
+                    continue
+                row_code = str(
+                    row.get("code") or row.get("value") or row.get("id") or ""
+                ).strip()
+                if row_code == knp:
+                    knp_name = str(
+                        row.get("name")
+                        or row.get("title")
+                        or row.get("description")
+                        or knp
+                    ).strip()
+                    break
+    except (AlatauError, UnboundLocalError):
+        pass
+
     # Alatau v2 expects a nested payment model. Top-level aliases such as
     # paymentType/receiverIban are not part of the current Production schema.
     payload = {
@@ -694,6 +724,7 @@ def alatau_payment_draft():
             },
             "knp": {
                 "code": knp,
+                "name": knp_name,
             },
             "description": purpose,
             "payerIban": account_iban,
