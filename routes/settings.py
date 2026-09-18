@@ -271,6 +271,15 @@ def alatau_test_connection():
             "message": "Соединение с Alatau City Bank успешно",
         })
     except AlatauError as exc:
+        error_message = str(exc)
+        if environment == "test" and exc.status_code == 401:
+            error_message = (
+                "Песочница Alatau City Bank отклонила официальные TEST-реквизиты "
+                "client_id_test / client_secret_test (HTTP 401). "
+                "Запрос Nika соответствует опубликованной спецификации банка. "
+                "Повторите проверку позже или используйте Production с ключами вашего приложения."
+            )
+
         conn = get_db()
         try:
             cur = conn.cursor()
@@ -291,14 +300,14 @@ def alatau_test_connection():
                 company_id,
                 environment,
                 client_id or None,
-                str(exc)[:500],
+                error_message[:500],
             ))
             conn.commit()
         except Exception:
             conn.rollback()
         finally:
             pool.putconn(conn)
-        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+        return jsonify({"success": False, "error": error_message}), exc.status_code
 
 
 
