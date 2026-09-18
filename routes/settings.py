@@ -168,17 +168,21 @@ def alatau_test_connection():
     existing = _alatau_row(company_id, environment) or {}
     client = AlatauClient()
 
-    client_id = (request.form.get("client_id") or existing.get("client_id") or "").strip()
-    client_secret = (request.form.get("client_secret") or "").strip()
-    if not client_secret and existing.get("client_secret_encrypted"):
-        try:
-            client_secret = AlatauSecretCipher().decrypt(
-                existing.get("client_secret_encrypted")
-            )
-        except AlatauError as exc:
-            return jsonify({"success": False, "error": str(exc)}), exc.status_code
-    if not client_id or not client_secret:
-        return jsonify({"success": False, "error": "Укажите Client ID и Client Secret"}), 400
+    if environment == "test":
+        client_id = "client_id_test"
+        client_secret = "client_secret_test"
+    else:
+        client_id = (request.form.get("client_id") or existing.get("client_id") or "").strip()
+        client_secret = (request.form.get("client_secret") or "").strip()
+        if not client_secret and existing.get("client_secret_encrypted"):
+            try:
+                client_secret = AlatauSecretCipher().decrypt(
+                    existing.get("client_secret_encrypted")
+                )
+            except AlatauError as exc:
+                return jsonify({"success": False, "error": str(exc)}), exc.status_code
+        if not client_id or not client_secret:
+            return jsonify({"success": False, "error": "Укажите Client ID и Client Secret"}), 400
 
     try:
         auth = client.authenticate(client_id, client_secret)
@@ -186,7 +190,10 @@ def alatau_test_connection():
         access_token = auth.get("accessToken")
         accounts = client.get_accounts(access_token, bank_company_id)
 
-        encrypted_secret = AlatauSecretCipher().encrypt(client_secret)
+        encrypted_secret = (
+            None if environment == "test"
+            else AlatauSecretCipher().encrypt(client_secret)
+        )
 
         conn = get_db()
         try:
@@ -306,15 +313,19 @@ def _alatau_live_session(company_id, environment):
             status_code=409,
         )
 
-    client_id = (integration.get("client_id") or "").strip()
-    encrypted_secret = integration.get("client_secret_encrypted")
-    if not client_id or not encrypted_secret:
-        raise AlatauError(
-            "У подключения отсутствуют Client ID или Client Secret. Подключите банк повторно",
-            status_code=409,
-        )
+    if environment == "test":
+        client_id = "client_id_test"
+        client_secret = "client_secret_test"
+    else:
+        client_id = (integration.get("client_id") or "").strip()
+        encrypted_secret = integration.get("client_secret_encrypted")
+        if not client_id or not encrypted_secret:
+            raise AlatauError(
+                "У подключения отсутствуют Client ID или Client Secret. Подключите банк повторно",
+                status_code=409,
+            )
+        client_secret = AlatauSecretCipher().decrypt(encrypted_secret)
 
-    client_secret = AlatauSecretCipher().decrypt(encrypted_secret)
     client = AlatauClient()
     auth = client.authenticate(client_id, client_secret)
     access_token = auth.get("accessToken")
@@ -350,7 +361,10 @@ def alatau_accounts():
         if isinstance(payload, list):
             accounts = payload
         elif isinstance(payload, dict):
-            accounts = payload.get("accounts") or payload.get("data") or payload.get("items") or []
+            accounts = payload.get("accounts") or payload.get("data") or payload.get("items")
+            if accounts is None and payload.get("iban"):
+                accounts = [payload]
+            accounts = accounts or []
         else:
             accounts = []
 
