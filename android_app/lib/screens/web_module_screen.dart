@@ -85,12 +85,10 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
   }
 
   Future<void> _handleMobileSignerMessage(String rawMessage) async {
-    if (!widget.path.startsWith('/banks')) return;
     final currentUrl = ready ? await controller.currentUrl() : null;
     final currentUri = currentUrl == null ? null : Uri.tryParse(currentUrl);
     if (currentUri == null ||
-        currentUri.host.toLowerCase() != 'www.nikabusiness.com' ||
-        currentUri.path != '/banks') {
+        currentUri.host.toLowerCase() != 'www.nikabusiness.com') {
       return;
     }
 
@@ -99,7 +97,12 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
       final decoded = jsonDecode(rawMessage);
       if (decoded is! Map) return;
       final message = Map<String, dynamic>.from(decoded);
-      if (message['action'] != 'signAlatauJws') return;
+      final action = (message['action'] ?? '').toString();
+
+      final bankAction = action == 'signAlatauJws' && currentUri.path == '/banks';
+      final esfAction = (action == 'signEsfRaw' || action == 'signEsfXml') &&
+          currentUri.path == '/sales';
+      if (!bankAction && !esfAction) return;
 
       requestId = (message['requestId'] ?? '').toString();
       final payload = (message['payload'] ?? '').toString();
@@ -111,16 +114,30 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
           const {
             'success': false,
             'code': 'INVALID_REQUEST',
-            'error': 'Нет данных платежа для подписи',
+            'error': 'Нет данных для подписи',
           },
         );
         return;
       }
 
-      final result = await MobileP12Signer.signAlatauJws(
-        payload: payload,
-        password: password,
-      );
+      final result = switch (action) {
+        'signAlatauJws' => await MobileP12Signer.signAlatauJws(
+            payload: payload,
+            password: password,
+          ),
+        'signEsfRaw' => await MobileP12Signer.signEsfRaw(
+            payload: payload,
+            password: password,
+          ),
+        'signEsfXml' => await MobileP12Signer.signEsfXml(
+            payload: payload,
+            password: password,
+          ),
+        _ => throw PlatformException(
+            code: 'UNSUPPORTED_SIGN_ACTION',
+            message: 'Неизвестный режим подписи',
+          ),
+      };
 
       await _sendSignerResult(
         requestId,
