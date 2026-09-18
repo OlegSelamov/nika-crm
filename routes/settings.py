@@ -1,4 +1,6 @@
+import re
 import secrets
+from datetime import date, timedelta
 
 from flask import Blueprint, jsonify, render_template, request, session, redirect
 from models import get_db, pool
@@ -267,6 +269,167 @@ def alatau_test_connection():
             conn.rollback()
         finally:
             pool.putconn(conn)
+        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
+
+def _alatau_touch(company_id, environment, *, bank_company_id=None, error=None):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_alatau_table(cur)
+        cur.execute("""
+            UPDATE alatau_integrations
+            SET bank_company_id = COALESCE(%s, bank_company_id),
+                last_checked_at = NOW(),
+                last_error = %s,
+                updated_at = NOW()
+            WHERE company_id = %s AND environment = %s
+        """, (bank_company_id, error, company_id, environment))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        pool.putconn(conn)
+
+
+def _alatau_live_session(company_id, environment):
+    environment = (environment or "test").strip().lower()
+    if environment not in ("test", "production"):
+        raise AlatauError("Неверный режим подключения", status_code=400)
+
+    integration = _alatau_row(company_id, environment)
+    if not integration or integration.get("status") != "connected":
+        label = "TEST" if environment == "test" else "Production"
+        raise AlatauError(
+            f"Сначала подключите Alatau City Bank для среды {label}",
+            status_code=409,
+        )
+
+    client_id = (integration.get("client_id") or "").strip()
+    encrypted_secret = integration.get("client_secret_encrypted")
+    if not client_id or not encrypted_secret:
+        raise AlatauError(
+            "У подключения отсутствуют Client ID или Client Secret. Подключите банк повторно",
+            status_code=409,
+        )
+
+    client_secret = AlatauSecretCipher().decrypt(encrypted_secret)
+    client = AlatauClient()
+    auth = client.authenticate(client_id, client_secret)
+    access_token = auth.get("accessToken")
+    bank_company_id = auth.get("companyId")
+    if not access_token or not bank_company_id:
+        raise AlatauError(
+            "Alatau City Bank не вернул accessToken/companyId",
+            status_code=502,
+        )
+
+    _alatau_touch(
+        company_id,
+        environment,
+        bank_company_id=bank_company_id,
+        error=None,
+    )
+    return client, access_token, bank_company_id, environment
+
+
+@settings_bp.route("/api/integrations/alatau/accounts")
+def alatau_accounts():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    environment = (request.args.get("environment") or "test").strip().lower()
+    try:
+        client, access_token, bank_company_id, environment = _alatau_live_session(
+            company_id, environment
+        )
+        payload = client.get_accounts(access_token, bank_company_id)
+
+        if isinstance(payload, list):
+            accounts = payload
+        elif isinstance(payload, dict):
+            accounts = payload.get("accounts") or payload.get("data") or payload.get("items") or []
+        else:
+            accounts = []
+
+        _alatau_touch(
+            company_id,
+            environment,
+            bank_company_id=bank_company_id,
+            error=None,
+        )
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "company_id": bank_company_id,
+            "accounts": accounts,
+        })
+    except AlatauError as exc:
+        _alatau_touch(company_id, environment, error=str(exc)[:500])
+        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
+@settings_bp.route("/api/integrations/alatau/statements")
+def alatau_statements():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    environment = (request.args.get("environment") or "test").strip().lower()
+    iban = (request.args.get("iban") or "").strip().upper()
+    date_to_text = request.args.get("date_to") or date.today().isoformat()
+    date_from_text = request.args.get("date_from") or (
+        date.today() - timedelta(days=30)
+    ).isoformat()
+
+    if not re.fullmatch(r"KZ[A-Z0-9]{18}", iban):
+        return jsonify({"success": False, "error": "Неверный IBAN"}), 400
+
+    try:
+        date_from_value = date.fromisoformat(date_from_text)
+        date_to_value = date.fromisoformat(date_to_text)
+    except ValueError:
+        return jsonify({"success": False, "error": "Неверный формат даты"}), 400
+
+    if date_from_value > date_to_value:
+        return jsonify({"success": False, "error": "Дата начала позже даты окончания"}), 400
+    if (date_to_value - date_from_value).days > 92:
+        return jsonify({
+            "success": False,
+            "error": "Alatau City Bank позволяет запрашивать выписку максимум за 92 дня",
+        }), 400
+
+    page = max(request.args.get("page", 1, type=int), 1)
+    page_size = min(max(request.args.get("page_size", 100, type=int), 1), 200)
+
+    try:
+        client, access_token, bank_company_id, environment = _alatau_live_session(
+            company_id, environment
+        )
+        statement = client.get_statement(
+            access_token,
+            bank_company_id,
+            iban,
+            date_from_value.isoformat(),
+            date_to_value.isoformat(),
+            page=page,
+            page_size=page_size,
+        )
+        _alatau_touch(
+            company_id,
+            environment,
+            bank_company_id=bank_company_id,
+            error=None,
+        )
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "statement": statement,
+        })
+    except AlatauError as exc:
+        _alatau_touch(company_id, environment, error=str(exc)[:500])
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
 
 
