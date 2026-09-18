@@ -36,18 +36,17 @@ object KalkanJwsSigner {
     fun signAlatauJws(
         context: Context,
         keyUri: Uri,
-        password: String,
+        passwordChars: CharArray,
         payload: String,
     ): Map<String, Any?> {
         if (payload.isBlank()) {
             throw SigningException("EMPTY_PAYLOAD", "Нет данных платежа для подписи")
         }
-        if (password.isEmpty()) {
+        if (passwordChars.isEmpty()) {
             throw SigningException("EMPTY_PASSWORD", "Введите пароль ЭЦП")
         }
 
         val provider = loadKalkanProvider()
-        val passwordChars = password.toCharArray()
 
         try {
             val keyStore = KeyStore.getInstance("PKCS12", provider)
