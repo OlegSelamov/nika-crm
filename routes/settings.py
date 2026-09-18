@@ -49,6 +49,8 @@ def _ensure_alatau_table(cur):
             environment TEXT NOT NULL DEFAULT 'test',
             client_id TEXT,
             client_secret_encrypted TEXT,
+            access_token_encrypted TEXT,
+            token_expires_at TIMESTAMPTZ,
             bank_company_id TEXT,
             status TEXT NOT NULL DEFAULT 'disconnected',
             connected_at TIMESTAMPTZ,
@@ -57,6 +59,14 @@ def _ensure_alatau_table(cur):
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         )
+    """)
+    cur.execute("""
+        ALTER TABLE alatau_integrations
+        ADD COLUMN IF NOT EXISTS access_token_encrypted TEXT
+    """)
+    cur.execute("""
+        ALTER TABLE alatau_integrations
+        ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ
     """)
     cur.execute("""
         ALTER TABLE alatau_integrations
@@ -116,6 +126,8 @@ def _safe_alatau_row(row):
         "last_checked_at": row.get("last_checked_at"),
         "last_error": row.get("last_error"),
         "has_secret": bool(row.get("client_secret_encrypted")),
+        "has_token": bool(row.get("access_token_encrypted")),
+        "token_expires_at": row.get("token_expires_at"),
     }
 
 
@@ -190,10 +202,14 @@ def alatau_test_connection():
         access_token = auth.get("accessToken")
         accounts = client.get_accounts(access_token, bank_company_id)
 
-        encrypted_secret = (
-            None if environment == "test"
-            else AlatauSecretCipher().encrypt(client_secret)
-        )
+        cipher = AlatauSecretCipher()
+        encrypted_secret = cipher.encrypt(client_secret)
+        encrypted_token = cipher.encrypt(access_token)
+        expires_in = auth.get("expiresIn") or auth.get("expires_in") or 3600
+        try:
+            expires_in = max(int(expires_in), 60)
+        except (TypeError, ValueError):
+            expires_in = 3600
 
         conn = get_db()
         try:
@@ -202,10 +218,12 @@ def alatau_test_connection():
             cur.execute("""
                 INSERT INTO alatau_integrations (
                     company_id, environment, client_id, client_secret_encrypted,
+                    access_token_encrypted, token_expires_at,
                     bank_company_id, status, connected_at, last_checked_at,
                     last_error, updated_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, 'connected', NOW(), NOW(), NULL, NOW()
+                    %s, %s, %s, %s, %s, NOW() + (%s || ' seconds')::interval,
+                    %s, 'connected', NOW(), NOW(), NULL, NOW()
                 )
                 ON CONFLICT (company_id, environment) DO UPDATE SET
                     environment = EXCLUDED.environment,
@@ -214,6 +232,8 @@ def alatau_test_connection():
                         EXCLUDED.client_secret_encrypted,
                         alatau_integrations.client_secret_encrypted
                     ),
+                    access_token_encrypted = EXCLUDED.access_token_encrypted,
+                    token_expires_at = EXCLUDED.token_expires_at,
                     bank_company_id = EXCLUDED.bank_company_id,
                     status = 'connected',
                     connected_at = COALESCE(alatau_integrations.connected_at, NOW()),
@@ -225,6 +245,8 @@ def alatau_test_connection():
                 environment,
                 client_id,
                 encrypted_secret,
+                encrypted_token,
+                str(expires_in),
                 bank_company_id,
             ))
             conn.commit()
@@ -313,28 +335,79 @@ def _alatau_live_session(company_id, environment):
             status_code=409,
         )
 
-    if environment == "test":
-        client_id = "client_id_test"
-        client_secret = "client_secret_test"
-    else:
+    cipher = AlatauSecretCipher()
+    client = AlatauClient()
+    bank_company_id = integration.get("bank_company_id")
+
+    access_token = None
+    token_expires_at = integration.get("token_expires_at")
+    if integration.get("access_token_encrypted") and token_expires_at:
+        try:
+            from datetime import datetime, timezone
+            expiry = token_expires_at
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+            if expiry > datetime.now(timezone.utc) + timedelta(seconds=30):
+                access_token = cipher.decrypt(integration.get("access_token_encrypted"))
+        except Exception:
+            access_token = None
+
+    if not access_token:
         client_id = (integration.get("client_id") or "").strip()
         encrypted_secret = integration.get("client_secret_encrypted")
-        if not client_id or not encrypted_secret:
-            raise AlatauError(
-                "У подключения отсутствуют Client ID или Client Secret. Подключите банк повторно",
-                status_code=409,
-            )
-        client_secret = AlatauSecretCipher().decrypt(encrypted_secret)
 
-    client = AlatauClient()
-    auth = client.authenticate(client_id, client_secret)
-    access_token = auth.get("accessToken")
-    bank_company_id = auth.get("companyId")
-    if not access_token or not bank_company_id:
-        raise AlatauError(
-            "Alatau City Bank не вернул accessToken/companyId",
-            status_code=502,
-        )
+        if environment == "test" and (not client_id or not encrypted_secret):
+            client_id = "client_id_test"
+            client_secret = "client_secret_test"
+        else:
+            if not client_id or not encrypted_secret:
+                raise AlatauError(
+                    "У подключения отсутствуют Client ID или Client Secret. Подключите банк повторно",
+                    status_code=409,
+                )
+            client_secret = cipher.decrypt(encrypted_secret)
+
+        auth = client.authenticate(client_id, client_secret)
+        access_token = auth.get("accessToken")
+        bank_company_id = auth.get("companyId")
+        if not access_token or not bank_company_id:
+            raise AlatauError(
+                "Alatau City Bank не вернул accessToken/companyId",
+                status_code=502,
+            )
+
+        expires_in = auth.get("expiresIn") or auth.get("expires_in") or 3600
+        try:
+            expires_in = max(int(expires_in), 60)
+        except (TypeError, ValueError):
+            expires_in = 3600
+
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            _ensure_alatau_table(cur)
+            cur.execute("""
+                UPDATE alatau_integrations
+                SET access_token_encrypted = %s,
+                    token_expires_at = NOW() + (%s || ' seconds')::interval,
+                    bank_company_id = %s,
+                    last_checked_at = NOW(),
+                    last_error = NULL,
+                    updated_at = NOW()
+                WHERE company_id = %s AND environment = %s
+            """, (
+                cipher.encrypt(access_token),
+                str(expires_in),
+                bank_company_id,
+                company_id,
+                environment,
+            ))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            pool.putconn(conn)
 
     _alatau_touch(
         company_id,
@@ -356,7 +429,14 @@ def alatau_accounts():
         client, access_token, bank_company_id, environment = _alatau_live_session(
             company_id, environment
         )
-        payload = client.get_accounts(access_token, bank_company_id)
+        try:
+            payload = client.get_accounts(access_token, bank_company_id)
+            endpoint = "v1"
+        except AlatauError as first_exc:
+            if first_exc.status_code not in (400, 404):
+                raise
+            payload = client.get_accounts_cards(access_token, bank_company_id)
+            endpoint = "v3"
 
         if isinstance(payload, list):
             accounts = payload
@@ -378,6 +458,7 @@ def alatau_accounts():
             "success": True,
             "environment": environment,
             "company_id": bank_company_id,
+            "endpoint": endpoint,
             "accounts": accounts,
         })
     except AlatauError as exc:
@@ -468,6 +549,8 @@ def alatau_disconnect():
             SET status = 'disconnected',
                 client_id = NULL,
                 client_secret_encrypted = NULL,
+                access_token_encrypted = NULL,
+                token_expires_at = NULL,
                 bank_company_id = NULL,
                 last_error = NULL,
                 updated_at = NOW()
