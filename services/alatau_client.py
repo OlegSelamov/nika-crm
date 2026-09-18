@@ -217,9 +217,20 @@ class AlatauClient:
                 timeout=self.timeout,
                 allow_redirects=False,
             )
+        except requests.Timeout as exc:
+            raise AlatauError(
+                f"Alatau City Bank не ответил за {self.timeout} сек. Повторите запрос; если ошибка повторяется, проверьте доступ VPS к business.alataucitybank.kz",
+                status_code=504,
+            ) from exc
+        except requests.ConnectionError as exc:
+            raise AlatauError(
+                "VPS не смог установить соединение с Alatau City Bank. Это сетевая ошибка между сервером Nika и API банка.",
+                status_code=502,
+            ) from exc
         except requests.RequestException as exc:
             raise AlatauError(
-                "Не удалось получить данные из Alatau City Bank"
+                f"Ошибка соединения с Alatau City Bank: {exc.__class__.__name__}",
+                status_code=502,
             ) from exc
 
         if 300 <= response.status_code < 400:
