@@ -199,7 +199,7 @@ class MainActivity : FlutterActivity() {
             val response = KalkanJwsSigner.signAlatauJws(
                 context = this,
                 keyUri = uri,
-                password = String(password),
+                passwordChars = password,
                 payload = payload,
             )
             clearPendingSigning()
