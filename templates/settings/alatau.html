@@ -2,43 +2,54 @@
 
 {% block content %}
 <style>
-.alatau-page{max-width:1050px;margin:0 auto;padding:4px 0 42px;color:#202434}.alatau-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}.alatau-head h1{margin:0;font-size:29px;color:#202434!important}.alatau-head p{margin:6px 0 0;color:#7b8294;font-size:13px;line-height:1.5}.alatau-card{padding:22px;margin-bottom:15px;border:1px solid #e5e8ef;border-radius:20px;background:#fff;box-shadow:0 12px 32px rgba(40,44,72,.07)}.alatau-status{display:flex;align-items:center;gap:10px;margin-bottom:15px;font-size:14px;font-weight:800}.alatau-dot{width:10px;height:10px;border-radius:50%;background:#a2a8b4}.alatau-dot.on{background:#22a866;box-shadow:0 0 0 5px rgba(34,168,102,.12)}.alatau-dot.error{background:#d9534f;box-shadow:0 0 0 5px rgba(217,83,79,.10)}.alatau-note{padding:13px 15px;border-radius:13px;background:#f6f7fb;color:#60687a;font-size:12px;line-height:1.55}.alatau-note.success{background:#eaf8f0;color:#187c4c}.alatau-note.error{background:#fff1f1;color:#a23c3c}.alatau-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.alatau-field{display:grid;gap:6px}.alatau-field label{font-size:10px;font-weight:850;letter-spacing:.04em;color:#7b8294;text-transform:uppercase}.alatau-field input,.alatau-field select{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid #dfe3eb;border-radius:12px;background:#fff;color:#202434;font-size:13px}.alatau-field input:focus,.alatau-field select:focus{outline:none;border-color:#7a66ea;box-shadow:0 0 0 3px rgba(122,102,234,.10)}.alatau-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.alatau-btn{border:0;border-radius:12px;padding:11px 17px;background:#6f57e8;color:#fff;font-weight:800;cursor:pointer;text-decoration:none}.alatau-btn.secondary{background:#edf4ff;color:#3468bd}.alatau-btn.danger{background:#fff0f0;color:#b43e3e}.alatau-btn:disabled{opacity:.55;cursor:wait}.alatau-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:15px}.alatau-meta div{padding:12px;border-radius:12px;background:#f8f9fc}.alatau-meta small{display:block;color:#8b92a2;margin-bottom:4px}.alatau-meta strong{font-size:12px;word-break:break-word}.alatau-hidden{display:none}.alatau-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.alatau-help{font-size:11px;color:#8a91a2;line-height:1.5;margin-top:6px}@media(max-width:700px){.alatau-head{display:block}.alatau-card{padding:15px;border-radius:16px}.alatau-grid,.alatau-meta{grid-template-columns:1fr}.alatau-head h1{font-size:24px}}
+.alatau-page{max-width:1050px;margin:0 auto;padding:4px 0 42px;color:#202434}.alatau-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}.alatau-head h1{margin:0;font-size:29px;color:#202434!important}.alatau-head p{margin:6px 0 0;color:#7b8294;font-size:13px;line-height:1.5}.alatau-card{padding:22px;margin-bottom:15px;border:1px solid #e5e8ef;border-radius:20px;background:#fff;box-shadow:0 12px 32px rgba(40,44,72,.07)}.alatau-status{display:flex;align-items:center;gap:10px;margin-bottom:15px;font-size:14px;font-weight:800}.alatau-dot{width:10px;height:10px;border-radius:50%;background:#a2a8b4}.alatau-dot.on{background:#22a866;box-shadow:0 0 0 5px rgba(34,168,102,.12)}.alatau-dot.error{background:#d9534f;box-shadow:0 0 0 5px rgba(217,83,79,.10)}.alatau-note{padding:13px 15px;border-radius:13px;background:#f6f7fb;color:#60687a;font-size:12px;line-height:1.55}.alatau-note.success{background:#eaf8f0;color:#187c4c}.alatau-note.error{background:#fff1f1;color:#a23c3c}.alatau-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.alatau-field{display:grid;gap:6px}.alatau-field label{font-size:10px;font-weight:850;letter-spacing:.04em;color:#7b8294;text-transform:uppercase}.alatau-field input,.alatau-field select{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid #dfe3eb;border-radius:12px;background:#fff;color:#202434;font-size:13px}.alatau-field input:focus,.alatau-field select:focus{outline:none;border-color:#7a66ea;box-shadow:0 0 0 3px rgba(122,102,234,.10)}.alatau-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.alatau-btn{border:0;border-radius:12px;padding:11px 17px;background:#6f57e8;color:#fff;font-weight:800;cursor:pointer;text-decoration:none}.alatau-btn.secondary{background:#edf4ff;color:#3468bd}.alatau-btn.danger{background:#fff0f0;color:#b43e3e}.alatau-btn:disabled{opacity:.55;cursor:wait}.alatau-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:15px}.alatau-meta div{padding:12px;border-radius:12px;background:#f8f9fc}.alatau-meta small{display:block;color:#8b92a2;margin-bottom:4px}.alatau-meta strong{font-size:12px;word-break:break-word}.alatau-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.alatau-help{font-size:11px;color:#8a91a2;line-height:1.5;margin-top:6px}.alatau-env-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px}.alatau-env{padding:14px;border:1px solid #e8eaf0;border-radius:15px;background:#fafbfe}.alatau-env b{display:block;margin-bottom:5px}.alatau-env span{font-size:11px;color:#7c8495}@media(max-width:700px){.alatau-head{display:block}.alatau-card{padding:15px;border-radius:16px}.alatau-grid,.alatau-meta,.alatau-env-cards{grid-template-columns:1fr}.alatau-head h1{font-size:24px}}
 </style>
+
+{% set test_cfg = alatau_integrations.get('test') if alatau_integrations else None %}
+{% set prod_cfg = alatau_integrations.get('production') if alatau_integrations else None %}
 
 <div class="alatau-page">
   <div class="alatau-head">
     <div>
       <h1>🏦 Alatau City Bank</h1>
-      <p>Business API: счета, остатки, выписки и последующая автоматизация банковских операций.</p>
+      <p>Business API: счета, выписки и дальнейшая автоматизация банковских операций.</p>
     </div>
   </div>
 
   {% if request.args.get('disconnected') %}
-    <div class="alatau-note" style="margin-bottom:14px">Доступ Alatau City Bank отключён.</div>
+    <div class="alatau-note" style="margin-bottom:14px">Доступ Alatau City Bank отключён для выбранной среды.</div>
   {% endif %}
 
+  <div class="alatau-env-cards">
+    <div class="alatau-env">
+      <b>Тестовая среда</b>
+      <span>{% if test_cfg and test_cfg.status == 'connected' %}🟢 Подключено{% elif test_cfg and test_cfg.status == 'error' %}🔴 Ошибка{% else %}⚪ Не подключено{% endif %}</span>
+    </div>
+    <div class="alatau-env">
+      <b>Production</b>
+      <span>{% if prod_cfg and prod_cfg.status == 'connected' %}🟢 Подключено{% elif prod_cfg and prod_cfg.status == 'error' %}🔴 Ошибка{% else %}⚪ Не подключено{% endif %}</span>
+    </div>
+  </div>
+
   <section class="alatau-card">
-    <div class="alatau-status">
-      <span class="alatau-dot {% if alatau and alatau.status == 'connected' %}on{% elif alatau and alatau.status == 'error' %}error{% endif %}"></span>
-      {% if alatau and alatau.status == 'connected' %}Alatau City Bank подключён{% elif alatau and alatau.status == 'error' %}Последняя проверка завершилась ошибкой{% else %}Alatau City Bank не подключён{% endif %}
-    </div>
-
     <div class="alatau-note">
-      Для песочницы банк официально использует тестовые реквизиты, поэтому ничего вводить не нужно. Для реального счёта Client ID и Client Secret создаются в интернет-банке в разделе Business API. Client Secret хранится в Nika только в зашифрованном виде.
+      У каждой компании сохраняются собственные ключи Alatau City Bank. Тестовые и боевые реквизиты хранятся отдельно. Client Secret шифруется на сервере и после сохранения не возвращается в браузер или приложение.
     </div>
 
-    {% if alatau and alatau.last_error %}
-      <div class="alatau-note error" style="margin-top:10px">{{ alatau.last_error }}</div>
+    {% if not alatau_config.secret_storage_configured %}
+      <div class="alatau-note error" style="margin-top:10px">
+        На сервере не настроен ключ шифрования интеграций. Добавьте <span class="alatau-code">NIKA_INTEGRATION_ENCRYPTION_KEY</span> в .env.
+      </div>
     {% endif %}
 
     <form id="alatauForm" style="margin-top:16px">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="alatau-grid">
         <div class="alatau-field">
-          <label for="environment">Режим</label>
+          <label for="environment">Среда</label>
           <select id="environment" name="environment">
-            <option value="sandbox" {% if not alatau or alatau.environment != 'production' %}selected{% endif %}>Песочница</option>
-            <option value="production" {% if alatau and alatau.environment == 'production' %}selected{% endif %}>Рабочий счёт</option>
+            <option value="test">Тестовая</option>
+            <option value="production">Production</option>
           </select>
         </div>
         <div class="alatau-field">
@@ -47,19 +58,20 @@
         </div>
       </div>
 
-      <div id="productionFields" class="alatau-grid" style="margin-top:12px">
+      <div class="alatau-grid" style="margin-top:12px">
         <div class="alatau-field">
           <label for="clientId">Client ID</label>
-          <input id="clientId" name="client_id" type="text" autocomplete="off" value="{{ alatau.client_id if alatau and alatau.client_id else '' }}" placeholder="Client ID из Business API">
+          <input id="clientId" name="client_id" type="text" autocomplete="off" placeholder="Client ID из Business API">
         </div>
         <div class="alatau-field">
           <label for="clientSecret">Client Secret</label>
-          <input id="clientSecret" name="client_secret" type="password" autocomplete="new-password" placeholder="{% if alatau and alatau.has_secret %}Секрет уже сохранён — оставьте пустым, чтобы не менять{% else %}Client Secret из Business API{% endif %}">
+          <input id="clientSecret" name="client_secret" type="password" autocomplete="new-password" placeholder="Client Secret из Business API">
+          <div id="secretHint" class="alatau-help"></div>
         </div>
       </div>
 
       <div class="alatau-actions">
-        <button id="testButton" class="alatau-btn" type="submit">Проверить подключение</button>
+        <button id="testButton" class="alatau-btn" type="submit">Сохранить и проверить</button>
         <a class="alatau-btn secondary" href="/settings/integrations">Назад к интеграциям</a>
       </div>
     </form>
@@ -67,42 +79,81 @@
     <div id="testResult" style="margin-top:12px"></div>
   </section>
 
-  {% if alatau %}
   <section class="alatau-card">
-    <h3 style="margin:0">Состояние подключения</h3>
+    <h3 style="margin:0">Состояние подключений</h3>
     <div class="alatau-meta">
-      <div><small>Режим</small><strong>{{ 'Рабочий' if alatau.environment == 'production' else 'Песочница' }}</strong></div>
-      <div><small>Company ID банка</small><strong class="alatau-code">{{ alatau.bank_company_id or '—' }}</strong></div>
-      <div><small>Последняя проверка</small><strong>{{ alatau.last_checked_at or 'ещё не выполнялась' }}</strong></div>
+      <div><small>TEST Company ID</small><strong class="alatau-code">{{ test_cfg.bank_company_id if test_cfg and test_cfg.bank_company_id else '—' }}</strong></div>
+      <div><small>TEST последняя проверка</small><strong>{{ test_cfg.last_checked_at if test_cfg and test_cfg.last_checked_at else '—' }}</strong></div>
+      <div><small>TEST статус</small><strong>{{ test_cfg.status if test_cfg and test_cfg.status else 'disconnected' }}</strong></div>
+      <div><small>PROD Company ID</small><strong class="alatau-code">{{ prod_cfg.bank_company_id if prod_cfg and prod_cfg.bank_company_id else '—' }}</strong></div>
+      <div><small>PROD последняя проверка</small><strong>{{ prod_cfg.last_checked_at if prod_cfg and prod_cfg.last_checked_at else '—' }}</strong></div>
+      <div><small>PROD статус</small><strong>{{ prod_cfg.status if prod_cfg and prod_cfg.status else 'disconnected' }}</strong></div>
     </div>
-    {% if alatau.status == 'connected' %}
-    <form method="post" action="/api/integrations/alatau/disconnect" class="alatau-actions" onsubmit="return confirm('Отключить Alatau City Bank для этой организации?')">
+
+    {% if (test_cfg and test_cfg.last_error) or (prod_cfg and prod_cfg.last_error) %}
+      <div class="alatau-note error" style="margin-top:12px">
+        {% if test_cfg and test_cfg.last_error %}<b>TEST:</b> {{ test_cfg.last_error }}<br>{% endif %}
+        {% if prod_cfg and prod_cfg.last_error %}<b>PROD:</b> {{ prod_cfg.last_error }}{% endif %}
+      </div>
+    {% endif %}
+
+    {% if (test_cfg and test_cfg.status == 'connected') or (prod_cfg and prod_cfg.status == 'connected') %}
+    <form id="disconnectForm" method="post" action="/api/integrations/alatau/disconnect" class="alatau-actions" onsubmit="return confirm('Отключить выбранную среду Alatau City Bank? Сохранённый Client Secret будет удалён.')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="alatau-btn danger" type="submit">Отключить банк</button>
+      <select name="environment" style="padding:10px 12px;border:1px solid #dfe3eb;border-radius:12px">
+        {% if test_cfg and test_cfg.status == 'connected' %}<option value="test">Тестовая среда</option>{% endif %}
+        {% if prod_cfg and prod_cfg.status == 'connected' %}<option value="production">Production</option>{% endif %}
+      </select>
+      <button class="alatau-btn danger" type="submit">Отключить выбранную среду</button>
     </form>
     {% endif %}
   </section>
-  {% endif %}
 
   <section class="alatau-card">
-    <h3 style="margin:0 0 10px">Что проверяет кнопка</h3>
-    <div class="alatau-help">Nika получает авторизационный токен Business API, затем запрашивает список счетов компании. Если оба запроса проходят успешно, подключение считается рабочим. Пароль от интернет-банка Nika не получает и не хранит.</div>
+    <h3 style="margin:0 0 10px">Как подключается клиент Nika</h3>
+    <div class="alatau-help">
+      Клиент получает Client ID и Client Secret в Alatau City Bank Business API, открывает Nika Business → Настройки → Интеграции → Alatau City Bank, выбирает TEST или Production, вводит ключи один раз и нажимает «Сохранить и проверить». Nika проверяет авторизацию и список счетов. В дальнейшем секрет повторно вводить не нужно.
+    </div>
   </section>
 </div>
 
 <script>
 (() => {
+  const configs = {
+    test: {
+      clientId: {{ (test_cfg.client_id if test_cfg and test_cfg.client_id else '')|tojson }},
+      hasSecret: {{ (test_cfg.has_secret if test_cfg else false)|tojson }},
+      status: {{ (test_cfg.status if test_cfg else '')|tojson }}
+    },
+    production: {
+      clientId: {{ (prod_cfg.client_id if prod_cfg and prod_cfg.client_id else '')|tojson }},
+      hasSecret: {{ (prod_cfg.has_secret if prod_cfg else false)|tojson }},
+      status: {{ (prod_cfg.status if prod_cfg else '')|tojson }}
+    }
+  };
+
   const form = document.getElementById('alatauForm');
   const environment = document.getElementById('environment');
-  const productionFields = document.getElementById('productionFields');
+  const clientId = document.getElementById('clientId');
+  const clientSecret = document.getElementById('clientSecret');
+  const secretHint = document.getElementById('secretHint');
   const resultBox = document.getElementById('testResult');
   const button = document.getElementById('testButton');
 
   const syncMode = () => {
-    const production = environment.value === 'production';
-    productionFields.classList.toggle('alatau-hidden', !production);
-    button.textContent = production ? 'Сохранить и проверить' : 'Проверить песочницу';
+    const cfg = configs[environment.value] || {};
+    clientId.value = cfg.clientId || '';
+    clientSecret.value = '';
+    clientSecret.placeholder = cfg.hasSecret
+      ? 'Секрет уже сохранён — оставьте пустым, чтобы не менять'
+      : 'Client Secret из Business API';
+    secretHint.textContent = cfg.hasSecret
+      ? 'Client Secret сохранён в зашифрованном виде.'
+      : 'Client Secret ещё не сохранён для этой среды.';
+    resultBox.textContent = '';
+    resultBox.className = '';
   };
+
   environment.addEventListener('change', syncMode);
   syncMode();
 
