@@ -475,6 +475,36 @@ def alatau_accounts():
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
 
 
+
+@settings_bp.route("/api/integrations/alatau/cards")
+def alatau_cards():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    environment = (request.args.get("environment") or "production").strip().lower()
+    try:
+        client, access_token, bank_company_id, environment = _alatau_live_session(
+            company_id, environment
+        )
+        payload = client.get_accounts_cards(access_token, bank_company_id)
+        _alatau_touch(
+            company_id,
+            environment,
+            bank_company_id=bank_company_id,
+            error=None,
+        )
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "company_id": bank_company_id,
+            "data": payload,
+        })
+    except AlatauError as exc:
+        _alatau_touch(company_id, environment, error=str(exc)[:500])
+        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
 @settings_bp.route("/api/integrations/alatau/statements")
 def alatau_statements():
     company_id, error = _alatau_current_company()
