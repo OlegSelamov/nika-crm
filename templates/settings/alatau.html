@@ -142,6 +142,11 @@
     <div id="cardsResult" style="margin-top:12px"></div>
     <div id="cardsList" class="alatau-account-list"></div>
 
+    <div class="alatau-actions" style="margin-top:12px">
+      <button id="testDictionariesButton" class="alatau-btn secondary" type="button">Проверить справочники API</button>
+    </div>
+    <div id="dictionariesResult" style="margin-top:12px"></div>
+
     <div class="alatau-statement-tools">
       <div class="alatau-field">
         <label for="statementFrom">С</label>
@@ -248,6 +253,8 @@
   const testCardsButton = document.getElementById('testCardsButton');
   const cardsResult = document.getElementById('cardsResult');
   const cardsList = document.getElementById('cardsList');
+  const testDictionariesButton = document.getElementById('testDictionariesButton');
+  const dictionariesResult = document.getElementById('dictionariesResult');
 
   const toLocalISODate = value => {
     const year = value.getFullYear();
@@ -421,6 +428,43 @@
       cardsResult.textContent = error.message;
     } finally {
       testCardsButton.disabled = false;
+    }
+  });
+
+
+  testDictionariesButton.addEventListener('click', async () => {
+    testDictionariesButton.disabled = true;
+    dictionariesResult.className = 'alatau-note';
+    dictionariesResult.textContent = 'Проверяем справочники Business API…';
+
+    try {
+      const params = new URLSearchParams({
+        environment: bankEnvironment.value,
+        code: 'KBE'
+      });
+      const response = await fetch('/api/integrations/alatau/dictionaries?' + params.toString(), {
+        headers: {'Accept': 'application/json'}
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось получить справочники');
+
+      const values = Array.isArray(data.values) ? data.values : [];
+      const banks = Array.isArray(data.banks) ? data.banks : [];
+      const sampleKbe = values[0]
+        ? ` Первый КБЕ: ${firstValue(values[0], ['code'], '—')} — ${firstValue(values[0], ['name'], '—')}.`
+        : '';
+      const sampleBank = banks[0]
+        ? ` Первый банк: ${firstValue(banks[0], ['bic'], '—')} — ${firstValue(banks[0], ['name'], '—')}.`
+        : '';
+
+      dictionariesResult.className = 'alatau-note success';
+      dictionariesResult.textContent =
+        `Справочники работают. КБЕ: ${values.length}, банков: ${banks.length}.${sampleKbe}${sampleBank}`;
+    } catch (error) {
+      dictionariesResult.className = 'alatau-note error';
+      dictionariesResult.textContent = error.message;
+    } finally {
+      testDictionariesButton.disabled = false;
     }
   });
 
