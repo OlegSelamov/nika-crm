@@ -315,7 +315,9 @@ def pay_sale():
         print("REKASSA RESULT:")
         print(rekassa_result)
 
-        if rekassa_result.get("status") != "OK":
+        rekassa_status = rekassa_result.get("status")
+
+        if rekassa_status not in {"OK", "SKIPPED"}:
             fiscal_error = (
                 rekassa_result.get("message")
                 or rekassa_result.get("error")
@@ -336,6 +338,7 @@ def pay_sale():
         "success": True,
         "sale_id": sale_id,
         "fiscalized": rekassa_result.get("status") == "OK",
+        "rekassa_required": rekassa_result.get("status") != "SKIPPED",
         "rekassa": {
             "status": rekassa_result.get("status"),
             "message": rekassa_result.get("message") or rekassa_result.get("error"),
