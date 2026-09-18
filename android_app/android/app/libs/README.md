@@ -3,8 +3,9 @@
 Mobile P12 signing in Nika Business uses the official KalkanCrypt Java/JCE
 provider from the National Certification Authority of Kazakhstan.
 
-Place the official Kalkan Android JAR/AAR from the NCA SDK in this directory
-before building the APK, for example:
+Download the official SDK from the NCA developer distribution
+(https://www.pki.gov.kz/get-sdk), then place the official Kalkan Android
+JAR/AAR in this directory before building the APK, for example:
 
 - `knca_provider_jce_kalkan*.jar`
 
