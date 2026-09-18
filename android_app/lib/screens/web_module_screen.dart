@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../services/api_service.dart';
+import '../services/mobile_p12_signer.dart';
 import '../theme/app_theme.dart';
 
 class WebModuleScreen extends StatefulWidget {
@@ -42,6 +46,10 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
 
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        'NikaMobileSigner',
+        onMessageReceived: (message) => _handleMobileSignerMessage(message.message),
+      )
       ..setBackgroundColor(AppColors.background)
       ..setUserAgent('NikaBusinessMobile/2.0')
       ..setNavigationDelegate(
@@ -74,6 +82,78 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
       ..loadRequest(Uri.parse('${ApiService.baseUrl}${widget.path}'));
 
     if (mounted) setState(() => ready = true);
+  }
+
+  Future<void> _handleMobileSignerMessage(String rawMessage) async {
+    if (!widget.path.startsWith('/banks')) return;
+
+    String requestId = '';
+    try {
+      final decoded = jsonDecode(rawMessage);
+      if (decoded is! Map) return;
+      final message = Map<String, dynamic>.from(decoded);
+      if (message['action'] != 'signAlatauJws') return;
+
+      requestId = (message['requestId'] ?? '').toString();
+      final payload = (message['payload'] ?? '').toString();
+      final password = (message['password'] ?? '').toString();
+
+      if (requestId.isEmpty || payload.isEmpty) {
+        await _sendSignerResult(
+          requestId,
+          const {
+            'success': false,
+            'code': 'INVALID_REQUEST',
+            'error': 'Нет данных платежа для подписи',
+          },
+        );
+        return;
+      }
+
+      final result = await MobileP12Signer.signAlatauJws(
+        payload: payload,
+        password: password,
+      );
+
+      await _sendSignerResult(
+        requestId,
+        {
+          'success': true,
+          ...result,
+        },
+      );
+    } on PlatformException catch (error) {
+      await _sendSignerResult(
+        requestId,
+        {
+          'success': false,
+          'code': error.code,
+          'error': error.message ?? 'Не удалось подписать платёж',
+        },
+      );
+    } catch (error) {
+      await _sendSignerResult(
+        requestId,
+        {
+          'success': false,
+          'code': 'MOBILE_SIGN_FAILED',
+          'error': error.toString(),
+        },
+      );
+    }
+  }
+
+  Future<void> _sendSignerResult(
+    String requestId,
+    Map<String, dynamic> result,
+  ) async {
+    if (!ready || requestId.isEmpty) return;
+    final requestJson = jsonEncode(requestId);
+    final resultJson = jsonEncode(result);
+    await controller.runJavaScript(
+      'window.NikaMobileSignerResult && '
+      'window.NikaMobileSignerResult($requestJson, $resultJson);',
+    );
   }
 
   Future<bool> _back() async {
