@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.content.ActivityNotFoundException
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -19,6 +20,11 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val updateChannel = "com.nikabusiness.app/updates"
     private val scannerChannel = "com.nikabusiness.app/scanner"
+    private val signingChannel = "com.nikabusiness.app/signing"
+    private val p12RequestCode = 9301
+    private var pendingSigningResult: MethodChannel.Result? = null
+    private var pendingSigningPayload: String? = null
+    private var pendingSigningPassword: CharArray? = null
     private var updateDownloadId: Long = -1
     private var receiverRegistered = false
     private var scannerTone: ToneGenerator? = null
@@ -69,6 +75,55 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, signingChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "signAlatauJwsWithP12" -> {
+                        val payload = call.argument<String>("payload") ?: ""
+                        val password = call.argument<String>("password") ?: ""
+                        if (payload.isBlank()) {
+                            result.error("EMPTY_PAYLOAD", "Нет данных платежа для подписи", null)
+                            return@setMethodCallHandler
+                        }
+                        if (password.isEmpty()) {
+                            result.error("EMPTY_PASSWORD", "Введите пароль ЭЦП", null)
+                            return@setMethodCallHandler
+                        }
+                        if (pendingSigningResult != null) {
+                            result.error("SIGNING_BUSY", "Уже открыт выбор ЭЦП", null)
+                            return@setMethodCallHandler
+                        }
+
+                        pendingSigningResult = result
+                        pendingSigningPayload = payload
+                        pendingSigningPassword = password.toCharArray()
+
+                        try {
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "*/*"
+                                putExtra(
+                                    Intent.EXTRA_MIME_TYPES,
+                                    arrayOf(
+                                        "application/x-pkcs12",
+                                        "application/pkcs12",
+                                        "application/octet-stream",
+                                    )
+                                )
+                            }
+                            startActivityForResult(intent, p12RequestCode)
+                        } catch (error: ActivityNotFoundException) {
+                            clearPendingSigning()
+                            result.error("FILE_PICKER_UNAVAILABLE", "На телефоне нет приложения для выбора файла ЭЦП", null)
+                        } catch (error: Exception) {
+                            clearPendingSigning()
+                            result.error("FILE_PICKER_FAILED", error.message ?: "Не удалось открыть выбор ЭЦП", null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, updateChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -117,11 +172,61 @@ class MainActivity : FlutterActivity() {
         updateDownloadId = manager.enqueue(request)
     }
 
+    @Deprecated("Deprecated in Android")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode != p12RequestCode) {
+            super.onActivityResult(requestCode, resultCode, data)
+            return
+        }
+
+        val callback = pendingSigningResult
+        val payload = pendingSigningPayload
+        val password = pendingSigningPassword
+
+        if (callback == null || payload == null || password == null) {
+            clearPendingSigning()
+            return
+        }
+
+        if (resultCode != RESULT_OK || data?.data == null) {
+            clearPendingSigning()
+            callback.error("USER_CANCELLED", "Выбор ЭЦП отменён", null)
+            return
+        }
+
+        val uri = data.data!!
+        try {
+            val response = KalkanJwsSigner.signAlatauJws(
+                context = this,
+                keyUri = uri,
+                password = String(password),
+                payload = payload,
+            )
+            clearPendingSigning()
+            callback.success(response)
+        } catch (error: KalkanJwsSigner.SigningException) {
+            clearPendingSigning()
+            callback.error(error.code, error.message, null)
+        } catch (error: Exception) {
+            clearPendingSigning()
+            callback.error("SIGN_FAILED", error.message ?: "Не удалось подписать платёж", null)
+        }
+    }
+
+    private fun clearPendingSigning() {
+        pendingSigningPassword?.fill('\u0000')
+        pendingSigningPassword = null
+        pendingSigningPayload = null
+        pendingSigningResult = null
+    }
+
     override fun onDestroy() {
         if (receiverRegistered) unregisterReceiver(downloadReceiver)
         receiverRegistered = false
         scannerTone?.release()
         scannerTone = null
+        pendingSigningResult?.error("ACTIVITY_DESTROYED", "Окно приложения закрыто", null)
+        clearPendingSigning()
         super.onDestroy()
     }
 }
