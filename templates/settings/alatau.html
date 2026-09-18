@@ -2,7 +2,7 @@
 
 {% block content %}
 <style>
-.alatau-page{max-width:1050px;margin:0 auto;padding:4px 0 42px;color:#202434}.alatau-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}.alatau-head h1{margin:0;font-size:29px;color:#202434!important}.alatau-head p{margin:6px 0 0;color:#7b8294;font-size:13px;line-height:1.5}.alatau-card{padding:22px;margin-bottom:15px;border:1px solid #e5e8ef;border-radius:20px;background:#fff;box-shadow:0 12px 32px rgba(40,44,72,.07)}.alatau-status{display:flex;align-items:center;gap:10px;margin-bottom:15px;font-size:14px;font-weight:800}.alatau-dot{width:10px;height:10px;border-radius:50%;background:#a2a8b4}.alatau-dot.on{background:#22a866;box-shadow:0 0 0 5px rgba(34,168,102,.12)}.alatau-dot.error{background:#d9534f;box-shadow:0 0 0 5px rgba(217,83,79,.10)}.alatau-note{padding:13px 15px;border-radius:13px;background:#f6f7fb;color:#60687a;font-size:12px;line-height:1.55}.alatau-note.success{background:#eaf8f0;color:#187c4c}.alatau-note.error{background:#fff1f1;color:#a23c3c}.alatau-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.alatau-field{display:grid;gap:6px}.alatau-field label{font-size:10px;font-weight:850;letter-spacing:.04em;color:#7b8294;text-transform:uppercase}.alatau-field input,.alatau-field select{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid #dfe3eb;border-radius:12px;background:#fff;color:#202434;font-size:13px}.alatau-field input:focus,.alatau-field select:focus{outline:none;border-color:#7a66ea;box-shadow:0 0 0 3px rgba(122,102,234,.10)}.alatau-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.alatau-btn{border:0;border-radius:12px;padding:11px 17px;background:#6f57e8;color:#fff;font-weight:800;cursor:pointer;text-decoration:none}.alatau-btn.secondary{background:#edf4ff;color:#3468bd}.alatau-btn.danger{background:#fff0f0;color:#b43e3e}.alatau-btn:disabled{opacity:.55;cursor:wait}.alatau-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:15px}.alatau-meta div{padding:12px;border-radius:12px;background:#f8f9fc}.alatau-meta small{display:block;color:#8b92a2;margin-bottom:4px}.alatau-meta strong{font-size:12px;word-break:break-word}.alatau-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.alatau-help{font-size:11px;color:#8a91a2;line-height:1.5;margin-top:6px}.alatau-env-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px}.alatau-env{padding:14px;border:1px solid #e8eaf0;border-radius:15px;background:#fafbfe}.alatau-env b{display:block;margin-bottom:5px}.alatau-env span{font-size:11px;color:#7c8495}@media(max-width:700px){.alatau-head{display:block}.alatau-card{padding:15px;border-radius:16px}.alatau-grid,.alatau-meta,.alatau-env-cards{grid-template-columns:1fr}.alatau-head h1{font-size:24px}}
+.alatau-page{max-width:1050px;margin:0 auto;padding:4px 0 42px;color:#202434}.alatau-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}.alatau-head h1{margin:0;font-size:29px;color:#202434!important}.alatau-head p{margin:6px 0 0;color:#7b8294;font-size:13px;line-height:1.5}.alatau-card{padding:22px;margin-bottom:15px;border:1px solid #e5e8ef;border-radius:20px;background:#fff;box-shadow:0 12px 32px rgba(40,44,72,.07)}.alatau-status{display:flex;align-items:center;gap:10px;margin-bottom:15px;font-size:14px;font-weight:800}.alatau-dot{width:10px;height:10px;border-radius:50%;background:#a2a8b4}.alatau-dot.on{background:#22a866;box-shadow:0 0 0 5px rgba(34,168,102,.12)}.alatau-dot.error{background:#d9534f;box-shadow:0 0 0 5px rgba(217,83,79,.10)}.alatau-note{padding:13px 15px;border-radius:13px;background:#f6f7fb;color:#60687a;font-size:12px;line-height:1.55}.alatau-note.success{background:#eaf8f0;color:#187c4c}.alatau-note.error{background:#fff1f1;color:#a23c3c}.alatau-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.alatau-field{display:grid;gap:6px}.alatau-field label{font-size:10px;font-weight:850;letter-spacing:.04em;color:#7b8294;text-transform:uppercase}.alatau-field input,.alatau-field select{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid #dfe3eb;border-radius:12px;background:#fff;color:#202434;font-size:13px}.alatau-field input:focus,.alatau-field select:focus{outline:none;border-color:#7a66ea;box-shadow:0 0 0 3px rgba(122,102,234,.10)}.alatau-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.alatau-btn{border:0;border-radius:12px;padding:11px 17px;background:#6f57e8;color:#fff;font-weight:800;cursor:pointer;text-decoration:none}.alatau-btn.secondary{background:#edf4ff;color:#3468bd}.alatau-btn.danger{background:#fff0f0;color:#b43e3e}.alatau-btn:disabled{opacity:.55;cursor:wait}.alatau-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:15px}.alatau-meta div{padding:12px;border-radius:12px;background:#f8f9fc}.alatau-meta small{display:block;color:#8b92a2;margin-bottom:4px}.alatau-meta strong{font-size:12px;word-break:break-word}.alatau-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.alatau-help{font-size:11px;color:#8a91a2;line-height:1.5;margin-top:6px}.alatau-env-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px}.alatau-env{padding:14px;border:1px solid #e8eaf0;border-radius:15px;background:#fafbfe}.alatau-env b{display:block;margin-bottom:5px}.alatau-env span{font-size:11px;color:#7c8495}.alatau-bank-toolbar{display:grid;grid-template-columns:180px 1fr auto;gap:10px;align-items:end}.alatau-bank-toolbar .alatau-field{min-width:0}.alatau-account-list{display:grid;gap:10px;margin-top:14px}.alatau-account{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:14px;border:1px solid #e6e9f0;border-radius:14px;background:#fbfcfe;cursor:pointer}.alatau-account.active{border-color:#806cf0;box-shadow:0 0 0 3px rgba(128,108,240,.08)}.alatau-account-title{font-weight:850;font-size:13px;word-break:break-word}.alatau-account-sub{margin-top:4px;color:#7d8494;font-size:11px}.alatau-account-balance{text-align:right;font-weight:850;font-size:14px;white-space:nowrap}.alatau-statement-tools{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-top:14px}.alatau-table-wrap{overflow:auto;margin-top:14px;border:1px solid #e6e9f0;border-radius:14px}.alatau-table{width:100%;border-collapse:collapse;min-width:760px}.alatau-table th,.alatau-table td{padding:11px 12px;border-bottom:1px solid #eef0f5;font-size:11px;text-align:left;vertical-align:top}.alatau-table th{background:#f7f8fb;color:#666e80;font-size:10px;text-transform:uppercase;letter-spacing:.04em}.alatau-table tr:last-child td{border-bottom:0}.alatau-empty{padding:18px;text-align:center;color:#8a91a1;font-size:12px}.alatau-credit{font-weight:800}.alatau-debit{font-weight:800}.alatau-section-title{display:flex;justify-content:space-between;gap:12px;align-items:center}.alatau-section-title h3{margin:0}.alatau-chip{font-size:10px;padding:6px 8px;border-radius:999px;background:#f1efff;color:#6048d8;font-weight:800}@media(max-width:700px){.alatau-head{display:block}.alatau-card{padding:15px;border-radius:16px}.alatau-grid,.alatau-meta,.alatau-env-cards,.alatau-bank-toolbar,.alatau-statement-tools{grid-template-columns:1fr}.alatau-head h1{font-size:24px}.alatau-account{grid-template-columns:1fr}.alatau-account-balance{text-align:left}}
 </style>
 
 {% set test_cfg = alatau_integrations.get('test') if alatau_integrations else None %}
@@ -110,6 +110,63 @@
   </section>
 
   <section class="alatau-card">
+    <div class="alatau-section-title">
+      <h3>Счета и выписка</h3>
+      <span class="alatau-chip">Business API</span>
+    </div>
+    <div class="alatau-help" style="margin-top:8px">
+      Выберите подключённую среду, загрузите счета и нажмите на нужный IBAN. После этого можно получить банковскую выписку за период до 92 дней.
+    </div>
+
+    <div class="alatau-bank-toolbar" style="margin-top:14px">
+      <div class="alatau-field">
+        <label for="bankEnvironment">Среда</label>
+        <select id="bankEnvironment">
+          <option value="test" {% if not (test_cfg and test_cfg.status == 'connected') and prod_cfg and prod_cfg.status == 'connected' %}{% else %}selected{% endif %}>TEST</option>
+          <option value="production" {% if not (test_cfg and test_cfg.status == 'connected') and prod_cfg and prod_cfg.status == 'connected' %}selected{% endif %}>Production</option>
+        </select>
+      </div>
+      <div class="alatau-field">
+        <label>Выбранный счёт</label>
+        <input id="selectedIban" type="text" readonly placeholder="Сначала загрузите счета">
+      </div>
+      <button id="loadAccountsButton" class="alatau-btn" type="button">Загрузить счета</button>
+    </div>
+
+    <div id="bankResult" style="margin-top:12px"></div>
+    <div id="accountsList" class="alatau-account-list"></div>
+
+    <div class="alatau-statement-tools">
+      <div class="alatau-field">
+        <label for="statementFrom">С</label>
+        <input id="statementFrom" type="date">
+      </div>
+      <div class="alatau-field">
+        <label for="statementTo">По</label>
+        <input id="statementTo" type="date">
+      </div>
+      <button id="loadStatementButton" class="alatau-btn secondary" type="button">Получить выписку</button>
+    </div>
+
+    <div id="statementResult" style="margin-top:12px"></div>
+    <div id="statementTableWrap" class="alatau-table-wrap" style="display:none">
+      <table class="alatau-table">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Документ</th>
+            <th>Контрагент</th>
+            <th>Назначение</th>
+            <th>Дебет</th>
+            <th>Кредит</th>
+          </tr>
+        </thead>
+        <tbody id="statementBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="alatau-card">
     <h3 style="margin:0 0 10px">Как подключается клиент Nika</h3>
     <div class="alatau-help">
       Клиент получает Client ID и Client Secret в Alatau City Bank Business API, открывает Nika Business → Настройки → Интеграции → Alatau City Bank, выбирает TEST или Production, вводит ключи один раз и нажимает «Сохранить и проверить». Nika проверяет авторизацию и список счетов. В дальнейшем секрет повторно вводить не нужно.
@@ -156,6 +213,171 @@
 
   environment.addEventListener('change', syncMode);
   syncMode();
+
+
+  const bankEnvironment = document.getElementById('bankEnvironment');
+  const selectedIban = document.getElementById('selectedIban');
+  const loadAccountsButton = document.getElementById('loadAccountsButton');
+  const accountsList = document.getElementById('accountsList');
+  const bankResult = document.getElementById('bankResult');
+  const statementFrom = document.getElementById('statementFrom');
+  const statementTo = document.getElementById('statementTo');
+  const loadStatementButton = document.getElementById('loadStatementButton');
+  const statementResult = document.getElementById('statementResult');
+  const statementBody = document.getElementById('statementBody');
+  const statementTableWrap = document.getElementById('statementTableWrap');
+
+  const today = new Date();
+  const from = new Date();
+  from.setDate(today.getDate() - 30);
+  statementTo.value = today.toISOString().slice(0, 10);
+  statementFrom.value = from.toISOString().slice(0, 10);
+
+  const firstValue = (obj, keys, fallback = '') => {
+    for (const key of keys) {
+      if (obj && obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
+    }
+    return fallback;
+  };
+
+  const money = value => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return value || '—';
+    return new Intl.NumberFormat('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(number);
+  };
+
+  const normalizeAccounts = payload => Array.isArray(payload) ? payload : [];
+
+  const selectAccount = (account, element) => {
+    document.querySelectorAll('.alatau-account').forEach(el => el.classList.remove('active'));
+    element.classList.add('active');
+    selectedIban.value = String(firstValue(account, ['iban', 'account', 'accountNumber', 'number'], '')).toUpperCase();
+    statementResult.textContent = '';
+    statementTableWrap.style.display = 'none';
+  };
+
+  const renderAccounts = accounts => {
+    accountsList.innerHTML = '';
+    selectedIban.value = '';
+    if (!accounts.length) {
+      accountsList.innerHTML = '<div class="alatau-empty">Банк не вернул доступных счетов.</div>';
+      return;
+    }
+    accounts.forEach(account => {
+      const iban = firstValue(account, ['iban', 'account', 'accountNumber', 'number'], 'Счёт');
+      const currency = firstValue(account, ['currency', 'currencyCode'], '');
+      const balance = firstValue(account, ['balance', 'availableBalance', 'currentBalance', 'amount'], '—');
+      const name = firstValue(account, ['name', 'accountName', 'title', 'typeName'], 'Банковский счёт');
+      const div = document.createElement('div');
+      div.className = 'alatau-account';
+      div.innerHTML = `
+        <div>
+          <div class="alatau-account-title">${iban}</div>
+          <div class="alatau-account-sub">${name}${currency ? ' · ' + currency : ''}</div>
+        </div>
+        <div class="alatau-account-balance">${money(balance)}${currency ? ' ' + currency : ''}</div>`;
+      div.addEventListener('click', () => selectAccount(account, div));
+      accountsList.appendChild(div);
+    });
+  };
+
+  loadAccountsButton.addEventListener('click', async () => {
+    loadAccountsButton.disabled = true;
+    bankResult.className = 'alatau-note';
+    bankResult.textContent = 'Загружаем счета Alatau City Bank…';
+    accountsList.innerHTML = '';
+    selectedIban.value = '';
+    try {
+      const params = new URLSearchParams({environment: bankEnvironment.value});
+      const response = await fetch('/api/integrations/alatau/accounts?' + params.toString(), {headers: {'Accept': 'application/json'}});
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось получить счета');
+      const accounts = normalizeAccounts(data.accounts);
+      renderAccounts(accounts);
+      bankResult.className = 'alatau-note success';
+      bankResult.textContent = `Счета загружены: ${accounts.length}.`;
+    } catch (error) {
+      bankResult.className = 'alatau-note error';
+      bankResult.textContent = error.message;
+    } finally {
+      loadAccountsButton.disabled = false;
+    }
+  });
+
+  const normalizeStatementRows = statement => {
+    if (Array.isArray(statement)) return statement;
+    if (!statement || typeof statement !== 'object') return [];
+    for (const key of ['transactions', 'operations', 'items', 'data', 'entries', 'documents']) {
+      if (Array.isArray(statement[key])) return statement[key];
+      if (statement[key] && Array.isArray(statement[key].items)) return statement[key].items;
+    }
+    return [];
+  };
+
+  loadStatementButton.addEventListener('click', async () => {
+    const iban = selectedIban.value.trim();
+    if (!iban) {
+      statementResult.className = 'alatau-note error';
+      statementResult.textContent = 'Сначала выберите банковский счёт.';
+      return;
+    }
+    loadStatementButton.disabled = true;
+    statementResult.className = 'alatau-note';
+    statementResult.textContent = 'Загружаем выписку…';
+    statementTableWrap.style.display = 'none';
+    statementBody.innerHTML = '';
+    try {
+      const params = new URLSearchParams({
+        environment: bankEnvironment.value,
+        iban,
+        date_from: statementFrom.value,
+        date_to: statementTo.value,
+        page: '1',
+        page_size: '200'
+      });
+      const response = await fetch('/api/integrations/alatau/statements?' + params.toString(), {headers: {'Accept': 'application/json'}});
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось получить выписку');
+      const rows = normalizeStatementRows(data.statement);
+      statementBody.innerHTML = rows.map(row => {
+        const dateValue = firstValue(row, ['date', 'operationDate', 'transactionDate', 'valueDate', 'createdAt'], '—');
+        const documentValue = firstValue(row, ['documentNumber', 'number', 'reference', 'id'], '—');
+        const counterparty = firstValue(row, ['counterpartyName', 'partnerName', 'recipientName', 'senderName', 'beneficiaryName', 'payerName'], '—');
+        const purpose = firstValue(row, ['purpose', 'paymentPurpose', 'description', 'details'], '—');
+        const debit = firstValue(row, ['debit', 'debitAmount', 'outcome', 'expense'], '');
+        const credit = firstValue(row, ['credit', 'creditAmount', 'income'], '');
+        return `<tr>
+          <td>${dateValue}</td>
+          <td>${documentValue}</td>
+          <td>${counterparty}</td>
+          <td>${purpose}</td>
+          <td class="alatau-debit">${debit === '' ? '—' : money(debit)}</td>
+          <td class="alatau-credit">${credit === '' ? '—' : money(credit)}</td>
+        </tr>`;
+      }).join('');
+      if (rows.length) {
+        statementTableWrap.style.display = 'block';
+        statementResult.className = 'alatau-note success';
+        statementResult.textContent = `Операций в выписке: ${rows.length}.`;
+      } else {
+        statementResult.className = 'alatau-note';
+        statementResult.textContent = 'За выбранный период операций нет.';
+      }
+    } catch (error) {
+      statementResult.className = 'alatau-note error';
+      statementResult.textContent = error.message;
+    } finally {
+      loadStatementButton.disabled = false;
+    }
+  });
+
+  bankEnvironment.addEventListener('change', () => {
+    accountsList.innerHTML = '';
+    selectedIban.value = '';
+    bankResult.textContent = '';
+    statementResult.textContent = '';
+    statementTableWrap.style.display = 'none';
+  });
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
