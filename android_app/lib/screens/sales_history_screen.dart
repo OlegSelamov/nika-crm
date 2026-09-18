@@ -8,6 +8,7 @@ import 'sale_detail_screen.dart';
 import 'sale_document_preview_screen.dart';
 import 'check_screen.dart';
 import 'refund_check_screen.dart';
+import 'web_module_screen.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -1332,8 +1333,14 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
     }
 
     if (doc.type == 'esf') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ЭСФ готовится отдельно и будет подписываться через ЭЦП.')),
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WebModuleScreen(
+            title: 'ЭСФ',
+            path: '/sales?esf_sale=$saleId',
+          ),
+        ),
       );
       return;
     }
