@@ -673,7 +673,22 @@ class _MoreScreen extends StatelessWidget {
     final visibleSections = sections.where((item) =>
       enabledModules == null || enabledModules!.contains(item.moduleCode)
     ).toList();
-    if (currentRole == 'admin' || currentRole == 'owner') {
+    final bankRole = currentRole == 'admin' ||
+        currentRole == 'owner' ||
+        currentRole == 'creator' ||
+        currentRole == 'super_admin';
+    if (bankRole) {
+      visibleSections.add(
+        const _SectionData(
+          null,
+          'Мои банки',
+          'Счета, платежи и ЭЦП',
+          Icons.account_balance_wallet_outlined,
+          Color(0xFF5B5BD6),
+          WebModuleScreen(title: 'Мои банки', path: '/banks'),
+          standalone: true,
+        ),
+      );
       visibleSections.add(
         const _SectionData(null, 'Пользователи', 'Сотрудники и права доступа', Icons.badge_outlined, Color(0xFF0E9384), EmployeesScreen()),
       );
@@ -803,7 +818,8 @@ class _AppDrawer extends StatelessWidget {
                   if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const ModulePage(title: 'Школа', child: SchoolScreen())); }),
                   if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(const ModulePage(title: 'Склад', child: StockScreen())); }),
                   if (hasModule('clients')) _drawerItem(Icons.people_alt_outlined, 'Клиенты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Клиенты', child: ClientsScreen())); }),
-                  if (currentRole == 'admin' || currentRole == 'owner') _drawerItem(Icons.badge_outlined, 'Пользователи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Пользователи', child: EmployeesScreen())); }),
+                  if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.account_balance_wallet_outlined, 'Мои банки', () { Navigator.pop(context); openPage(const WebModuleScreen(title: 'Мои банки', path: '/banks')); }),
+                  if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.badge_outlined, 'Пользователи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Пользователи', child: EmployeesScreen())); }),
                   if (hasModule('settings')) _drawerItem(Icons.settings_outlined, 'Настройки', () { Navigator.pop(context); openPage(const ModulePage(title: 'Настройки', child: SettingsScreen())); }),
                 ],
               ),
