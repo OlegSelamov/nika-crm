@@ -533,8 +533,16 @@ def alatau_statements():
             "statement": statement,
         })
     except AlatauError as exc:
-        _alatau_touch(company_id, environment, error=str(exc)[:500])
-        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+        error_message = str(exc)
+        if exc.status_code == 412:
+            error_message = (
+                "Alatau City Bank вернул HTTP 412 — нарушение предусловий для выписки. "
+                "По спецификации выписка v3 доступна только для счетов с типом ACCOUNT. "
+                "Также проверьте, что у Production-приложения Business API включён доступ "
+                "«Выгрузка выписки»; после изменения прав банк требует новые Client ID / Client Secret."
+            )
+        _alatau_touch(company_id, environment, error=error_message[:500])
+        return jsonify({"success": False, "error": error_message}), exc.status_code
 
 
 @settings_bp.route("/api/integrations/alatau/disconnect", methods=["POST"])
