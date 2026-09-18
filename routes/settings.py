@@ -735,8 +735,18 @@ def alatau_payment_draft():
             "vat": False,
             "urgent": False,
             "documentId": document_number,
+            "permitRecord": False,
+            "paymentPurpose": purpose,
         },
     }
+
+    if data.get("prepareOnly") is True:
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "payment_type": payment_type,
+            "payload": payload,
+        })
 
     try:
         client, access_token, bank_company_id, environment = _alatau_live_session(
