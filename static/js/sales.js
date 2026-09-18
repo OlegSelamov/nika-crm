@@ -755,7 +755,7 @@ async function submitSalePayment({
         window.dispatchEvent(new CustomEvent("nika:sale-completed"));
         showCashChangeNotice(cashChange);
 
-        if (data.fiscalized !== true) {
+        if (data.rekassa_required === true && data.fiscalized !== true) {
             const reason = data.rekassa?.message || "reKassa отклонила чек";
             alert(
                 "Продажа сохранена, но чек НЕ фискализирован.\n\n" +
