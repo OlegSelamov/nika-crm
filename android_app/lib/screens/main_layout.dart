@@ -35,6 +35,7 @@ import 'tasks_screen.dart';
 import 'whatsapp_screen.dart';
 import 'writeoff_screen.dart';
 import 'web_module_screen.dart';
+import 'banks_screen.dart';
 import 'cto_screen.dart';
 
 class MainLayout extends StatefulWidget {
@@ -685,8 +686,7 @@ class _MoreScreen extends StatelessWidget {
           'Счета, платежи и ЭЦП',
           Icons.account_balance_wallet_outlined,
           Color(0xFF5B5BD6),
-          WebModuleScreen(title: 'Мои банки', path: '/banks'),
-          standalone: true,
+          BanksScreen(),
         ),
       );
       visibleSections.add(
@@ -818,7 +818,7 @@ class _AppDrawer extends StatelessWidget {
                   if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const ModulePage(title: 'Школа', child: SchoolScreen())); }),
                   if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(const ModulePage(title: 'Склад', child: StockScreen())); }),
                   if (hasModule('clients')) _drawerItem(Icons.people_alt_outlined, 'Клиенты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Клиенты', child: ClientsScreen())); }),
-                  if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.account_balance_wallet_outlined, 'Мои банки', () { Navigator.pop(context); openPage(const WebModuleScreen(title: 'Мои банки', path: '/banks')); }),
+                  if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.account_balance_wallet_outlined, 'Мои банки', () { Navigator.pop(context); openPage(const ModulePage(title: 'Мои банки', child: BanksScreen())); }),
                   if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.badge_outlined, 'Пользователи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Пользователи', child: EmployeesScreen())); }),
                   if (hasModule('settings')) _drawerItem(Icons.settings_outlined, 'Настройки', () { Navigator.pop(context); openPage(const ModulePage(title: 'Настройки', child: SettingsScreen())); }),
                 ],
