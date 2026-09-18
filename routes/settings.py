@@ -286,12 +286,30 @@ def my_banks():
         "production": _safe_alatau_row(_alatau_row(company_id, "production")),
     }
 
+    # Юридические реквизиты берём из карточки организации Nika.
+    # Банковские реквизиты (банк/БИК/IBAN) приходят отдельно из Alatau API.
+    company_requisites = {}
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT name, address, bin, kbe
+            FROM companies
+            WHERE id = %s
+            LIMIT 1
+        """, (company_id,))
+        row = cur.fetchone()
+        company_requisites = dict(row) if row else {}
+    finally:
+        pool.putconn(conn)
+
     return render_template(
         "settings/alatau.html",
         alatau_integrations=integrations,
         alatau_config=AlatauClient.configuration_status(),
         csrf_token=_alatau_csrf_token(),
         bank_workspace=True,
+        company_requisites=company_requisites,
     )
 
 
@@ -608,6 +626,49 @@ def alatau_accounts():
         else:
             accounts = []
 
+        # Банк и БИК берём из справочника самого Alatau. Если справочник
+        # временно недоступен, оставляем безопасный fallback для текущей интеграции.
+        bank_info = {
+            "name": "Alatau City Bank",
+            "bic": "TSESKZKA",
+        }
+        try:
+            bank_rows = client.get_banks(access_token)
+            if isinstance(bank_rows, dict):
+                bank_rows = (
+                    bank_rows.get("content")
+                    or bank_rows.get("items")
+                    or bank_rows.get("data")
+                    or bank_rows.get("banks")
+                    or []
+                )
+            if isinstance(bank_rows, list):
+                preferred = None
+                for bank in bank_rows:
+                    if not isinstance(bank, dict):
+                        continue
+                    bic = str(
+                        bank.get("bic")
+                        or bank.get("bankBic")
+                        or bank.get("code")
+                        or ""
+                    ).replace(" ", "").upper()
+                    name = str(
+                        bank.get("name")
+                        or bank.get("bankName")
+                        or bank.get("fullName")
+                        or ""
+                    ).strip()
+                    if bic == "TSESKZKA":
+                        preferred = {"name": name or "Alatau City Bank", "bic": bic}
+                        break
+                    if not preferred and "ALATAU" in name.upper():
+                        preferred = {"name": name, "bic": bic or "TSESKZKA"}
+                if preferred:
+                    bank_info = preferred
+        except AlatauError:
+            pass
+
         _alatau_touch(
             company_id,
             environment,
@@ -620,6 +681,7 @@ def alatau_accounts():
             "company_id": bank_company_id,
             "endpoint": endpoint,
             "accounts": accounts,
+            "bank": bank_info,
         })
     except AlatauError as exc:
         _alatau_touch(company_id, environment, error=str(exc)[:500])
