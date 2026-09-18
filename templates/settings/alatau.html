@@ -208,7 +208,9 @@
     </div>
     <div class="alatau-actions" style="margin-top:14px">
       <button id="createPaymentDraftButton" class="alatau-btn" type="button">Создать черновик в Alatau</button>
+      <button id="signAndSendPaymentButton" class="alatau-btn secondary" type="button">Подписать ЭЦП и отправить</button>
     </div>
+    <div class="alatau-help" style="margin-top:10px">Подписанная отправка использует NCALayer и Production API Alatau. Банк сейчас предоставляет signed-payments в пилотном режиме; если доступ компании ещё не включён, Nika покажет ответ банка и деньги не будут отправлены.</div>
     <div id="paymentDraftResult" style="margin-top:12px"></div>
   </section>
 
@@ -301,6 +303,7 @@
   const paymentDocumentNumber = document.getElementById('paymentDocumentNumber');
   const paymentPurpose = document.getElementById('paymentPurpose');
   const createPaymentDraftButton = document.getElementById('createPaymentDraftButton');
+  const signAndSendPaymentButton = document.getElementById('signAndSendPaymentButton');
   const paymentDraftResult = document.getElementById('paymentDraftResult');
 
   const toLocalISODate = value => {
@@ -561,6 +564,85 @@
     }
   });
 
+  const paymentFormData = (prepareOnly = false) => ({
+    environment: 'production',
+    accountIban: paymentAccountIban.value.trim(),
+    amount: paymentAmount.value,
+    receiverName: paymentReceiverName.value.trim(),
+    receiverIinBin: paymentReceiverIinBin.value.trim(),
+    receiverIban: paymentReceiverIban.value.trim(),
+    receiverBic: paymentReceiverBic.value.trim(),
+    kbe: paymentKbe.value.trim(),
+    knp: paymentKnp.value.trim(),
+    documentNumber: paymentDocumentNumber.value.trim(),
+    purpose: paymentPurpose.value.trim(),
+    prepareOnly
+  });
+
+  signAndSendPaymentButton.addEventListener('click', async () => {
+    if (bankEnvironment.value !== 'production') {
+      paymentDraftResult.className = 'alatau-note error';
+      paymentDraftResult.textContent = 'Подписанная отправка разрешена только для Production.';
+      return;
+    }
+    if (!window.NikaNCALayer?.signJws) {
+      paymentDraftResult.className = 'alatau-note error';
+      paymentDraftResult.textContent = 'Модуль NCALayer для JWS не загружен. Обновите страницу.';
+      return;
+    }
+    const amount = paymentAmount.value || '0';
+    const recipient = paymentReceiverName.value.trim() || '—';
+    if (!window.confirm(
+      'ВНИМАНИЕ: это реальный банковский платёж.\n\n' +
+      'Получатель: ' + recipient + '\nСумма: ' + amount + ' KZT\n\n' +
+      'После подписи ЭЦП Nika отправит платёж непосредственно в Alatau City Bank. Продолжить?'
+    )) return;
+
+    signAndSendPaymentButton.disabled = true;
+    createPaymentDraftButton.disabled = true;
+    try {
+      paymentDraftResult.className = 'alatau-note';
+      paymentDraftResult.textContent = 'Готовим платёж для подписи…';
+      const prepareResponse = await fetch('/api/integrations/alatau/payments/draft', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify(paymentFormData(true))
+      });
+      const prepared = await prepareResponse.json();
+      if (!prepareResponse.ok || !prepared.success || !prepared.payload) {
+        throw new Error(prepared.error || 'Не удалось подготовить платёж');
+      }
+
+      paymentDraftResult.textContent = 'Выберите ЭЦП компании в NCALayer и подпишите платёж…';
+      const canonicalPayload = JSON.stringify(prepared.payload);
+      const signed = await window.NikaNCALayer.signJws(canonicalPayload);
+      if (!signed.content) throw new Error('NCALayer не вернул JWS.');
+
+      paymentDraftResult.textContent = 'ЭЦП получена. Отправляем подписанный платёж в Alatau…';
+      const sendResponse = await fetch('/api/integrations/alatau/payments/signed', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({environment: 'production', content: signed.content})
+      });
+      const sent = await sendResponse.json();
+      if (!sendResponse.ok || !sent.success) throw new Error(sent.error || 'Alatau отклонил подписанный платёж');
+
+      const payment = sent.payment || {};
+      const operationId = firstValue(payment, ['operationId', 'id', 'paymentId'], '');
+      paymentDraftResult.className = 'alatau-note success';
+      paymentDraftResult.textContent = 'Подписанный платёж принят Alatau' +
+        (operationId ? '. Operation ID: ' + operationId : '') + '.';
+    } catch (error) {
+      paymentDraftResult.className = 'alatau-note error';
+      paymentDraftResult.textContent = window.NikaNCALayer?.friendlyError
+        ? window.NikaNCALayer.friendlyError(error)
+        : error.message;
+    } finally {
+      signAndSendPaymentButton.disabled = false;
+      createPaymentDraftButton.disabled = false;
+    }
+  });
+
   const normalizeStatementRows = statement => {
     if (Array.isArray(statement)) return statement;
     if (!statement || typeof statement !== 'object') return [];
@@ -667,4 +749,5 @@
   });
 })();
 </script>
+<script src="{{ url_for('static', filename='js/ncalayer.js') }}"></script>
 {% endblock %}
