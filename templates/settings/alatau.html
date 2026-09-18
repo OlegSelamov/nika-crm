@@ -279,6 +279,8 @@
     accounts.forEach(account => {
       const iban = firstValue(account, ['iban', 'account', 'accountNumber', 'number'], 'Счёт');
       const currency = firstValue(account, ['currency', 'currencyCode'], '');
+      const accountType = firstValue(account, ['accountType', 'type', 'account_type'], '');
+      const accountStatus = firstValue(account, ['status', 'accountStatus', 'state'], '');
       const balanceRaw = firstValue(account, ['balance', 'availableBalance', 'currentBalance', 'amount'], '—');
       const balance = balanceRaw && typeof balanceRaw === 'object'
         ? firstValue(balanceRaw, ['amount', 'value', 'balance'], '—')
@@ -292,7 +294,7 @@
       div.innerHTML = `
         <div>
           <div class="alatau-account-title">${iban}</div>
-          <div class="alatau-account-sub">${name}${currency ? ' · ' + currency : ''}</div>
+          <div class="alatau-account-sub">${name}${currency ? ' · ' + currency : ''}${accountType ? ' · ' + accountType : ''}${accountStatus ? ' · ' + accountStatus : ''}</div>
         </div>
         <div class="alatau-account-balance">${money(balance)}${(balanceCurrency || currency) ? ' ' + (balanceCurrency || currency) : ''}</div>`;
       div.addEventListener('click', () => selectAccount(account, div));
