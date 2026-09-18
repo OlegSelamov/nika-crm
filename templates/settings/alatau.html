@@ -136,6 +136,12 @@
     <div id="bankResult" style="margin-top:12px"></div>
     <div id="accountsList" class="alatau-account-list"></div>
 
+    <div class="alatau-actions" style="margin-top:12px">
+      <button id="testCardsButton" class="alatau-btn secondary" type="button">Проверить счета и карты</button>
+    </div>
+    <div id="cardsResult" style="margin-top:12px"></div>
+    <div id="cardsList" class="alatau-account-list"></div>
+
     <div class="alatau-statement-tools">
       <div class="alatau-field">
         <label for="statementFrom">С</label>
@@ -239,6 +245,9 @@
   const statementResult = document.getElementById('statementResult');
   const statementBody = document.getElementById('statementBody');
   const statementTableWrap = document.getElementById('statementTableWrap');
+  const testCardsButton = document.getElementById('testCardsButton');
+  const cardsResult = document.getElementById('cardsResult');
+  const cardsList = document.getElementById('cardsList');
 
   const toLocalISODate = value => {
     const year = value.getFullYear();
@@ -345,6 +354,73 @@
       bankResult.textContent = error.message;
     } finally {
       loadAccountsButton.disabled = false;
+    }
+  });
+
+
+  testCardsButton.addEventListener('click', async () => {
+    testCardsButton.disabled = true;
+    cardsResult.className = 'alatau-note';
+    cardsResult.textContent = 'Проверяем метод счетов и карт…';
+    cardsList.innerHTML = '';
+
+    try {
+      const params = new URLSearchParams({environment: bankEnvironment.value});
+      const response = await fetch('/api/integrations/alatau/cards?' + params.toString(), {
+        headers: {'Accept': 'application/json'}
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось получить счета и карты');
+
+      const payload = data.data || {};
+      const accounts = Array.isArray(payload) ? payload : (payload.accounts || []);
+      let cardCount = 0;
+
+      if (!accounts.length) {
+        cardsList.innerHTML = '<div class="alatau-empty">Метод сработал, но банк не вернул счетов/карт.</div>';
+      } else {
+        accounts.forEach(account => {
+          const cards = Array.isArray(account.cards) ? account.cards : [];
+          cardCount += cards.length;
+
+          const iban = firstValue(account, ['iban', 'accountNumber', 'number'], 'Счёт');
+          const accountId = firstValue(account, ['id'], '—');
+          const balanceRaw = firstValue(account, ['availableBalance', 'balance'], {});
+          const balanceAmount = balanceRaw && typeof balanceRaw === 'object'
+            ? firstValue(balanceRaw, ['amount'], '—')
+            : balanceRaw;
+          const balanceCurrency = balanceRaw && typeof balanceRaw === 'object'
+            ? firstValue(balanceRaw, ['currency'], '')
+            : '';
+
+          const cardText = cards.length
+            ? cards.map(card => {
+                const number = firstValue(card, ['cardNumber', 'number'], 'Карта');
+                const cardId = firstValue(card, ['id'], '—');
+                return `<div class="alatau-account-sub">💳 ${number} · ID ${cardId}</div>`;
+              }).join('')
+            : '<div class="alatau-account-sub">Привязанных карт нет</div>';
+
+          const div = document.createElement('div');
+          div.className = 'alatau-account';
+          div.innerHTML = `
+            <div>
+              <div class="alatau-account-title">${iban}</div>
+              <div class="alatau-account-sub">Account ID: ${accountId}</div>
+              ${cardText}
+            </div>
+            <div class="alatau-account-balance">${money(balanceAmount)}${balanceCurrency ? ' ' + balanceCurrency : ''}</div>`;
+          cardsList.appendChild(div);
+        });
+      }
+
+      cardsResult.className = 'alatau-note success';
+      cardsResult.textContent = `Метод /v3/accounts/cards работает. Счетов: ${accounts.length}, карт: ${cardCount}.`;
+    } catch (error) {
+      cardsResult.className = 'alatau-note error';
+      cardsResult.textContent = error.message;
+    } finally {
+      testCardsButton.disabled = false;
     }
   });
 
