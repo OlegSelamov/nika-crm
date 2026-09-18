@@ -539,51 +539,54 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
         <h3>Реквизиты счёта</h3>
         <button type="button" class="bank-payment-close" id="closeAccountDetailsButton">×</button>
       </div>
+      <div class="alatau-note" style="margin:0 0 12px;font-size:13px;line-height:1.45">
+        Данные ниже получены непосредственно из Business API Alatau City Bank. Nika не подставляет сюда реквизиты из профиля компании.
+      </div>
       <div class="bank-details-grid">
-        <div class="bank-detail-item full">
-          <div class="bank-detail-label">Владелец счёта</div>
-          <div class="bank-detail-value" id="detailsCompanyName">{{ (company_requisites.name if company_requisites else '') or '—' }}</div>
-        </div>
-        <div class="bank-detail-item">
-          <div class="bank-detail-label">БИН / ИИН</div>
-          <div class="bank-detail-value mono" id="detailsCompanyBin">{{ (company_requisites.bin if company_requisites else '') or '—' }}</div>
-        </div>
-        <div class="bank-detail-item">
-          <div class="bank-detail-label">Банк</div>
-          <div class="bank-detail-value" id="detailsBankName">{{ (company_requisites.bank if company_requisites else '') or 'Alatau City Bank' }}</div>
-        </div>
         <div class="bank-detail-item full">
           <div class="bank-detail-label">IBAN</div>
           <div class="bank-detail-value mono" id="detailsIban">—</div>
         </div>
         <div class="bank-detail-item">
-          <div class="bank-detail-label">БИК</div>
-          <div class="bank-detail-value mono" id="detailsBic">{{ (company_requisites.bik if company_requisites else '') or 'TSESKZKA' }}</div>
+          <div class="bank-detail-label">Банк</div>
+          <div class="bank-detail-value">АО «Alatau City Bank»</div>
         </div>
         <div class="bank-detail-item">
-          <div class="bank-detail-label">КБЕ</div>
-          <div class="bank-detail-value mono" id="detailsKbe">{{ (company_requisites.kbe if company_requisites else '') or '—' }}</div>
+          <div class="bank-detail-label">БИК банка</div>
+          <div class="bank-detail-value mono" id="detailsBic">TSESKZKA</div>
         </div>
         <div class="bank-detail-item">
           <div class="bank-detail-label">Валюта</div>
           <div class="bank-detail-value" id="detailsCurrency">—</div>
         </div>
         <div class="bank-detail-item">
-          <div class="bank-detail-label">Тип / статус</div>
-          <div class="bank-detail-value" id="detailsTypeStatus">—</div>
+          <div class="bank-detail-label">Тип счёта</div>
+          <div class="bank-detail-value" id="detailsAccountType">—</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">Статус счёта</div>
+          <div class="bank-detail-value" id="detailsAccountStatus">—</div>
         </div>
         <div class="bank-detail-item">
           <div class="bank-detail-label">Дата открытия</div>
           <div class="bank-detail-value" id="detailsOpenDate">—</div>
         </div>
         <div class="bank-detail-item">
-          <div class="bank-detail-label">Доступный остаток</div>
+          <div class="bank-detail-label">Баланс</div>
           <div class="bank-detail-value" id="detailsBalance">—</div>
+        </div>
+        <div class="bank-detail-item">
+          <div class="bank-detail-label">Доступный остаток</div>
+          <div class="bank-detail-value" id="detailsAvailableBalance">—</div>
+        </div>
+        <div class="bank-detail-item full">
+          <div class="bank-detail-label">ID компании в Alatau Business API</div>
+          <div class="bank-detail-value mono" id="detailsBankCompanyId">—</div>
         </div>
       </div>
       <div class="bank-details-actions">
         <button class="alatau-btn" type="button" id="copyIbanButton">Копировать IBAN</button>
-        <button class="alatau-btn secondary" type="button" id="copyAllRequisitesButton">Копировать все реквизиты</button>
+        <button class="alatau-btn secondary" type="button" id="copyAllRequisitesButton">Копировать реквизиты счёта</button>
       </div>
       <div class="bank-copy-result" id="bankCopyResult"></div>
     </div>
@@ -694,9 +697,12 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const closeAccountDetailsButton = document.getElementById('closeAccountDetailsButton');
   const detailsIban = document.getElementById('detailsIban');
   const detailsCurrency = document.getElementById('detailsCurrency');
-  const detailsTypeStatus = document.getElementById('detailsTypeStatus');
+  const detailsAccountType = document.getElementById('detailsAccountType');
+  const detailsAccountStatus = document.getElementById('detailsAccountStatus');
   const detailsOpenDate = document.getElementById('detailsOpenDate');
   const detailsBalance = document.getElementById('detailsBalance');
+  const detailsAvailableBalance = document.getElementById('detailsAvailableBalance');
+  const detailsBankCompanyId = document.getElementById('detailsBankCompanyId');
   const copyIbanButton = document.getElementById('copyIbanButton');
   const copyAllRequisitesButton = document.getElementById('copyAllRequisitesButton');
   const bankCopyResult = document.getElementById('bankCopyResult');
@@ -820,21 +826,30 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     paymentAccountIban.value = selectedIban.value;
     if (openAccountDetailsButton) openAccountDetailsButton.disabled = !selectedIban.value;
 
-    const currency = firstValue(account, ['currency', 'currencyCode'], 'KZT');
-    const accountType = firstValue(account, ['accountType', 'type', 'account_type'], '—');
-    const accountStatus = firstValue(account, ['status', 'accountStatus', 'state'], '—');
-    const balanceRaw = firstValue(account, ['balance', 'availableBalance', 'currentBalance', 'amount'], '—');
+    const balanceRaw = firstValue(account, ['balance', 'currentBalance', 'amount'], '—');
+    const availableRaw = firstValue(account, ['availableBalance'], '');
     const balance = balanceRaw && typeof balanceRaw === 'object'
       ? firstValue(balanceRaw, ['amount', 'value', 'balance'], '—')
       : balanceRaw;
-    const balanceCurrency = balanceRaw && typeof balanceRaw === 'object'
-      ? firstValue(balanceRaw, ['currency', 'currencyCode'], currency)
-      : currency;
+    const availableBalance = availableRaw && typeof availableRaw === 'object'
+      ? firstValue(availableRaw, ['amount', 'value', 'balance'], '—')
+      : (availableRaw !== '' ? availableRaw : balance);
+    const currency = (
+      (balanceRaw && typeof balanceRaw === 'object' && firstValue(balanceRaw, ['currency', 'currencyCode'], ''))
+      || (availableRaw && typeof availableRaw === 'object' && firstValue(availableRaw, ['currency', 'currencyCode'], ''))
+      || firstValue(account, ['currency', 'currencyCode'], '—')
+    );
+    const accountType = firstValue(account, ['accountType', 'type', 'account_type'], '—');
+    const accountStatus = firstValue(account, ['status', 'accountStatus', 'state'], '—');
+    const bankCompanyId = firstValue(account, ['companyId', 'company_id'], '—');
 
     if (detailsIban) detailsIban.textContent = selectedIban.value || '—';
     if (detailsCurrency) detailsCurrency.textContent = currency || '—';
-    if (detailsTypeStatus) detailsTypeStatus.textContent = [accountType, accountStatus].filter(Boolean).join(' · ') || '—';
-    if (detailsBalance) detailsBalance.textContent = `${money(balance)} ${balanceCurrency || ''}`.trim();
+    if (detailsAccountType) detailsAccountType.textContent = accountType || '—';
+    if (detailsAccountStatus) detailsAccountStatus.textContent = accountStatus || '—';
+    if (detailsBalance) detailsBalance.textContent = `${money(balance)} ${currency && currency !== '—' ? currency : ''}`.trim();
+    if (detailsAvailableBalance) detailsAvailableBalance.textContent = `${money(availableBalance)} ${currency && currency !== '—' ? currency : ''}`.trim();
+    if (detailsBankCompanyId) detailsBankCompanyId.textContent = bankCompanyId || '—';
 
     const openDate = String(firstValue(account, ['openDate', 'open_date', 'openedAt'], '')).slice(0, 10);
     if (detailsOpenDate) detailsOpenDate.textContent = openDate ? openDate.split('-').reverse().join('.') : '—';
@@ -1280,22 +1295,17 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     if (bankCopyResult) bankCopyResult.textContent = ok ? 'IBAN скопирован.' : 'Не удалось скопировать IBAN.';
   });
   copyAllRequisitesButton?.addEventListener('click', async () => {
-    const companyName = document.getElementById('detailsCompanyName')?.textContent?.trim() || '—';
-    const bin = document.getElementById('detailsCompanyBin')?.textContent?.trim() || '—';
-    const bankName = document.getElementById('detailsBankName')?.textContent?.trim() || 'Alatau City Bank';
-    const bic = document.getElementById('detailsBic')?.textContent?.trim() || '—';
-    const kbe = document.getElementById('detailsKbe')?.textContent?.trim() || '—';
     const requisites = [
-      companyName,
-      'БИН/ИИН: ' + bin,
-      'Банк: ' + bankName,
+      'Банк: АО «Alatau City Bank»',
+      'БИК: TSESKZKA',
       'IBAN: ' + (detailsIban?.textContent?.trim() || '—'),
-      'БИК: ' + bic,
-      'КБЕ: ' + kbe,
-      'Валюта: ' + (detailsCurrency?.textContent?.trim() || '—')
+      'Валюта: ' + (detailsCurrency?.textContent?.trim() || '—'),
+      'Тип счёта: ' + (detailsAccountType?.textContent?.trim() || '—'),
+      'Статус: ' + (detailsAccountStatus?.textContent?.trim() || '—'),
+      'Дата открытия: ' + (detailsOpenDate?.textContent?.trim() || '—')
     ].join('\n');
     const ok = await copyText(requisites);
-    if (bankCopyResult) bankCopyResult.textContent = ok ? 'Реквизиты скопированы.' : 'Не удалось скопировать реквизиты.';
+    if (bankCopyResult) bankCopyResult.textContent = ok ? 'Реквизиты счёта скопированы.' : 'Не удалось скопировать реквизиты.';
   });
   refreshBankButton.addEventListener('click', () => loadAccountsButton.click());
   const setBankTab = name => {
