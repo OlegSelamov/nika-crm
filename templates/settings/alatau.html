@@ -243,6 +243,13 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 #bankPaymentSection .alatau-actions + .alatau-help{margin-top:9px!important;font-size:11px;line-height:1.4}
 #paymentDraftResult{margin-top:9px!important;padding:9px 11px;font-size:12px;line-height:1.4}
 #paymentDraftResult:empty{display:none}
+.bank-template-picker{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end;margin:10px 0}
+.bank-template-picker .alatau-field{min-width:0}
+.bank-template-picker select{padding:10px 11px;border-radius:10px;font-size:14px;min-height:40px}
+.bank-template-picker .alatau-btn{padding:10px 12px;font-size:12px;white-space:nowrap}
+#paymentTemplateResult{margin-bottom:8px}
+#paymentTemplateResult:empty{display:none}
+#paymentTemplateResult.alatau-note{padding:8px 10px;font-size:11px;line-height:1.35}
 
 .bank-details-dialog{width:min(720px,100%);overflow:auto}
 .bank-details-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -283,6 +290,8 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   .bank-payment-modal{padding:8px;overflow:auto}
   .bank-payment-dialog{max-height:none;overflow:visible}
   #bankPaymentSection .alatau-bank-toolbar{grid-template-columns:1fr}
+  .bank-template-picker{grid-template-columns:1fr 1fr}
+  .bank-template-picker .alatau-field{grid-column:1/-1}
 }
 </style>
 {% endif %}
@@ -503,6 +512,19 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     <div class="alatau-help" style="margin-top:8px">
       {% if bank_workspace %}Создайте платёж, подпишите его ЭЦП через NCALayer и передайте напрямую в Alatau City Bank. Черновик по-прежнему можно создать отдельно.{% else %}Создаёт черновик платежа контрагенту в Alatau City Bank. Деньги автоматически не отправляются — документ нужно подписать в интернет-банке.{% endif %}
     </div>
+    {% if bank_workspace %}
+    <div class="bank-template-picker">
+      <div class="alatau-field">
+        <label>Сохранённый контрагент / шаблон</label>
+        <select id="paymentTemplateSelect">
+          <option value="">Новый платёж без шаблона</option>
+        </select>
+      </div>
+      <button id="savePaymentTemplateButton" class="alatau-btn secondary" type="button">Сохранить шаблон</button>
+      <button id="deletePaymentTemplateButton" class="alatau-btn danger" type="button" disabled>Удалить</button>
+    </div>
+    <div id="paymentTemplateResult"></div>
+    {% endif %}
     <div class="alatau-bank-toolbar" style="margin-top:14px">
       <div class="alatau-field"><label>Счёт списания</label><input id="paymentAccountIban" type="text" placeholder="Выберите счёт выше"></div>
       <div class="alatau-field"><label>Сумма, KZT</label><input id="paymentAmount" type="number" min="0.01" step="0.01" placeholder="1000"></div>
@@ -672,6 +694,11 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const createPaymentDraftButton = document.getElementById('createPaymentDraftButton');
   const signAndSendPaymentButton = document.getElementById('signAndSendPaymentButton');
   const paymentDraftResult = document.getElementById('paymentDraftResult');
+  const paymentTemplateSelect = document.getElementById('paymentTemplateSelect');
+  const savePaymentTemplateButton = document.getElementById('savePaymentTemplateButton');
+  const deletePaymentTemplateButton = document.getElementById('deletePaymentTemplateButton');
+  const paymentTemplateResult = document.getElementById('paymentTemplateResult');
+  let paymentTemplates = [];
   const paymentsPane = document.getElementById('paymentsPane');
   const paymentsList = document.getElementById('paymentsList');
   const paymentsResult = document.getElementById('paymentsResult');
@@ -740,6 +767,48 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     };
     return map[code] || [code || 'Неизвестно', 'info'];
   };
+
+  const loadPaymentTemplates = async () => {
+    if (!paymentTemplateSelect) return;
+    try {
+      const response = await fetch('/api/integrations/alatau/payment-templates', {headers:{'Accept':'application/json'}});
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось загрузить шаблоны');
+      paymentTemplates = Array.isArray(data.templates) ? data.templates : [];
+      paymentTemplateSelect.innerHTML = '<option value="">Новый платёж без шаблона</option>' +
+        paymentTemplates.map(t => '<option value="' + t.id + '">' +
+          (t.name || 'Контрагент') + (t.iinBin ? ' · ' + t.iinBin : '') +
+        '</option>').join('');
+      if (deletePaymentTemplateButton) deletePaymentTemplateButton.disabled = true;
+    } catch (error) {
+      if (paymentTemplateResult) {
+        paymentTemplateResult.className = 'alatau-note error';
+        paymentTemplateResult.textContent = error.message;
+      }
+    }
+  };
+
+  const applyPaymentTemplate = template => {
+    if (!template) return;
+    paymentReceiverName.value = template.name || '';
+    paymentReceiverIinBin.value = template.iinBin || '';
+    paymentReceiverIban.value = template.iban || '';
+    paymentReceiverBic.value = template.bic || '';
+    paymentKbe.value = template.kbe || '';
+    paymentKnp.value = template.knp || '';
+    if (template.purpose) paymentPurpose.value = template.purpose;
+  };
+
+  const currentTemplatePayload = () => ({
+    id: paymentTemplateSelect?.value || null,
+    name: paymentReceiverName.value.trim(),
+    iinBin: paymentReceiverIinBin.value.trim(),
+    iban: paymentReceiverIban.value.trim(),
+    bic: paymentReceiverBic.value.trim(),
+    kbe: paymentKbe.value.trim(),
+    knp: paymentKnp.value.trim(),
+    purpose: paymentPurpose.value.trim()
+  });
 
   const renderPayments = payments => {
     if (!paymentsList) return;
@@ -1249,6 +1318,70 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     }
   };
 
+  paymentTemplateSelect?.addEventListener('change', () => {
+    const id = Number(paymentTemplateSelect.value || 0);
+    const template = paymentTemplates.find(item => Number(item.id) === id);
+    if (template) applyPaymentTemplate(template);
+    if (deletePaymentTemplateButton) deletePaymentTemplateButton.disabled = !template;
+    if (paymentTemplateResult) {
+      paymentTemplateResult.textContent = '';
+      paymentTemplateResult.className = '';
+    }
+  });
+
+  savePaymentTemplateButton?.addEventListener('click', async () => {
+    const payload = currentTemplatePayload();
+    if (!payload.name) {
+      paymentTemplateResult.className = 'alatau-note error';
+      paymentTemplateResult.textContent = 'Сначала укажите получателя.';
+      return;
+    }
+    savePaymentTemplateButton.disabled = true;
+    try {
+      const response = await fetch('/api/integrations/alatau/payment-templates', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось сохранить шаблон');
+      await loadPaymentTemplates();
+      paymentTemplateSelect.value = String(data.id);
+      if (deletePaymentTemplateButton) deletePaymentTemplateButton.disabled = false;
+      paymentTemplateResult.className = 'alatau-note success';
+      paymentTemplateResult.textContent = 'Шаблон сохранён.';
+    } catch (error) {
+      paymentTemplateResult.className = 'alatau-note error';
+      paymentTemplateResult.textContent = error.message;
+    } finally {
+      savePaymentTemplateButton.disabled = false;
+    }
+  });
+
+  deletePaymentTemplateButton?.addEventListener('click', async () => {
+    const id = paymentTemplateSelect?.value;
+    if (!id) return;
+    if (!window.confirm('Удалить этот шаблон платежа?')) return;
+    deletePaymentTemplateButton.disabled = true;
+    try {
+      const response = await fetch('/api/integrations/alatau/payment-templates/' + id, {
+        method:'DELETE',
+        headers:{'Accept':'application/json'}
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось удалить шаблон');
+      paymentTemplateSelect.value = '';
+      await loadPaymentTemplates();
+      paymentTemplateResult.className = 'alatau-note success';
+      paymentTemplateResult.textContent = 'Шаблон удалён.';
+    } catch (error) {
+      paymentTemplateResult.className = 'alatau-note error';
+      paymentTemplateResult.textContent = error.message;
+    } finally {
+      deletePaymentTemplateButton.disabled = !paymentTemplateSelect?.value;
+    }
+  });
+
   openBankPaymentButton.addEventListener('click', openPaymentModal);
   closeBankPaymentButton.addEventListener('click', closePaymentModal);
   bankPaymentModal.addEventListener('click', event => { if (event.target === bankPaymentModal) closePaymentModal(); });
@@ -1334,6 +1467,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   window.setTimeout(() => {
     loadAccountsButton.click();
     loadPayments(true);
+    loadPaymentTemplates();
   }, 50);
   {% endif %}
 
