@@ -16,12 +16,23 @@
     </div>
   </div>
 
+  {% if bank_workspace %}
+  <section class="alatau-card" style="border-color:#dfe5f2">
+    <div class="alatau-section-title">
+      <div>
+        <h3 style="margin:0">Alatau City Bank</h3>
+        <div class="alatau-help" style="margin-top:5px">Business API подключён. Счета и доступные банковские данные загружаются автоматически.</div>
+      </div>
+      <span class="alatau-chip">{% if prod_cfg and prod_cfg.status == 'connected' %}Подключён{% else %}Не подключён{% endif %}</span>
+    </div>
+  </section>
+  {% endif %}
+
   {% if request.args.get('disconnected') %}
     <div class="alatau-note" style="margin-bottom:14px">Доступ Alatau City Bank отключён для выбранной среды.</div>
   {% endif %}
 
-  {% if not bank_workspace %}
-  <div class="alatau-env-cards">
+  <div class="alatau-env-cards"{% if bank_workspace %} style="display:none"{% endif %}>
     <div class="alatau-env">
       <b>Тестовая среда</b>
       <span>{% if test_cfg and test_cfg.status == 'connected' %}🟢 Подключено{% elif test_cfg and test_cfg.status == 'error' %}🔴 Ошибка{% else %}⚪ Не подключено{% endif %}</span>
@@ -32,7 +43,7 @@
     </div>
   </div>
 
-  <section class="alatau-card">
+  <section class="alatau-card"{% if bank_workspace %} style="display:none"{% endif %}>
     <div class="alatau-note">
       У каждой компании сохраняются собственные ключи Alatau City Bank. Тестовые и боевые реквизиты хранятся отдельно. Client Secret шифруется на сервере и после сохранения не возвращается в браузер или приложение.
     </div>
@@ -80,7 +91,7 @@
     <div id="testResult" style="margin-top:12px"></div>
   </section>
 
-  <section class="alatau-card">
+  <section class="alatau-card"{% if bank_workspace %} style="display:none"{% endif %}>
     <h3 style="margin:0">Состояние подключений</h3>
     <div class="alatau-meta">
       <div><small>TEST Company ID</small><strong class="alatau-code">{{ test_cfg.bank_company_id if test_cfg and test_cfg.bank_company_id else '—' }}</strong></div>
@@ -109,8 +120,6 @@
     </form>
     {% endif %}
   </section>
-
-  {% endif %}
 
   <section class="alatau-card">
     <div class="alatau-section-title">
@@ -217,14 +226,12 @@
     <div id="paymentDraftResult" style="margin-top:12px"></div>
   </section>
 
-  {% if not bank_workspace %}
-  <section class="alatau-card">
+  <section class="alatau-card"{% if bank_workspace %} style="display:none"{% endif %}>
     <h3 style="margin:0 0 10px">Как подключается клиент Nika</h3>
     <div class="alatau-help">
       Клиент получает Client ID и Client Secret в Alatau City Bank Business API, открывает Nika Business → Настройки → Интеграции → Alatau City Bank, выбирает TEST или Production, вводит ключи один раз и нажимает «Сохранить и проверить». Nika проверяет авторизацию и список счетов. В дальнейшем секрет повторно вводить не нужно.
     </div>
   </section>
-  {% endif %}
 </div>
 
 <script>
@@ -394,6 +401,7 @@
         <div class="alatau-account-balance">${money(balance)}${(balanceCurrency || currency) ? ' ' + (balanceCurrency || currency) : ''}</div>`;
       div.addEventListener('click', () => selectAccount(account, div));
       accountsList.appendChild(div);
+      if (accountsList.children.length === 1) selectAccount(account, div);
     });
   };
 
@@ -718,6 +726,13 @@
       loadStatementButton.disabled = false;
     }
   });
+
+  {% if bank_workspace %}
+  // "Мои банки" is an operational workspace: open Alatau in Production and
+  // immediately show the company's live account/balance without an extra click.
+  bankEnvironment.value = 'production';
+  window.setTimeout(() => loadAccountsButton.click(), 50);
+  {% endif %}
 
   bankEnvironment.addEventListener('change', () => {
     accountsList.innerHTML = '';
