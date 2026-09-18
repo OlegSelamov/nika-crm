@@ -50,7 +50,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   overflow:hidden;
   display:grid;
   grid-template-columns:minmax(260px,31%) minmax(0,1fr);
-  grid-template-rows:auto auto minmax(0,1fr);
+  grid-template-rows:auto auto auto minmax(0,1fr);
   gap:8px 12px;
 }
 #bankAccountsSection>.alatau-section-title{
@@ -75,7 +75,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 
 #accountsList{
   grid-column:1;
-  grid-row:3;
+  grid-row:3 / 5;
   margin:0;
   min-height:0;
   overflow:auto;
@@ -100,17 +100,15 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 
 #bankAccountsSection .alatau-statement-tools{
   grid-column:2;
-  grid-row:1;
+  grid-row:2;
   margin:0;
   display:grid;
-  pointer-events:none;
+  pointer-events:auto;
   grid-template-columns:minmax(120px,170px) minmax(120px,170px) auto;
   justify-content:end;
   gap:7px;
   align-items:end;
 }
-#bankAccountsSection .alatau-statement-tools .alatau-field,
-#bankAccountsSection .alatau-statement-tools .alatau-btn{pointer-events:auto}
 #bankAccountsSection .alatau-statement-tools .alatau-field{gap:3px}
 #bankAccountsSection .alatau-statement-tools .alatau-field label{font-size:8px}
 #bankAccountsSection .alatau-statement-tools input{padding:8px 9px;border-radius:9px;font-size:11px}
@@ -118,7 +116,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 
 #statementResult{
   grid-column:2;
-  grid-row:2;
+  grid-row:3;
   margin:0!important;
   min-height:0;
   padding:7px 9px;
@@ -130,7 +128,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 
 #statementTableWrap{
   grid-column:2;
-  grid-row:3;
+  grid-row:4;
   margin:0;
   min-height:0;
   height:100%;
@@ -150,14 +148,16 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 .bank-tabs{
   grid-column:2;
   grid-row:1;
-  align-self:end;
-  justify-self:start;
+  align-self:center;
+  justify-self:stretch;
   display:flex;
   gap:4px;
-  margin-left:0;
+  margin:0;
   position:relative;
-  z-index:5;
+  z-index:20;
   pointer-events:auto;
+  min-height:32px;
+  background:#fff;
 }
 .bank-tab{
   border:0;
@@ -172,7 +172,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 .bank-tab.active{background:#6f57e8;color:#fff}
 #paymentsPane{
   grid-column:2;
-  grid-row:2 / 4;
+  grid-row:2 / 5;
   min-height:0;
   display:none;
   overflow:hidden;
@@ -1171,7 +1171,18 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       loadPayments(false);
     }
   };
-  bankTabs.forEach(tab => tab.addEventListener('click', () => setBankTab(tab.dataset.bankTab)));
+  bankTabs.forEach(tab => tab.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    setBankTab(tab.dataset.bankTab);
+  }, true));
+  document.addEventListener('click', event => {
+    const tab = event.target.closest?.('.bank-tab');
+    if (!tab || !bankAccountsSection?.contains(tab)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setBankTab(tab.dataset.bankTab);
+  }, true);
   refreshPaymentsButton?.addEventListener('click', () => loadPayments(true));
   scrollStatementButton.addEventListener('click', () => setBankTab('statement'));
 
