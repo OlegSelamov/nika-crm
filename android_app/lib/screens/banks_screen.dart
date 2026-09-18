@@ -482,7 +482,7 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
     setState(() => selectedChoice = value);
     if (value.startsWith('s:')) {
       final id = int.tryParse(value.substring(2));
-      final item = suppliers.where((e) => int.tryParse('${e['id']}') == id).cast<Map<String, dynamic>?>().firstOrNull;
+      final item = suppliers.where((e) => int.tryParse('${e['id']}') == id).firstOrNull;
       if (item != null) {
         receiverName.text = '${item['name'] ?? ''}';
         receiverIin.text = '${item['bin_iin'] ?? ''}';
@@ -496,7 +496,7 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
     }
     if (value.startsWith('t:')) {
       final id = int.tryParse(value.substring(2));
-      final item = templates.where((e) => int.tryParse('${e['id']}') == id).cast<Map<String, dynamic>?>().firstOrNull;
+      final item = templates.where((e) => int.tryParse('${e['id']}') == id).firstOrNull;
       if (item != null) {
         receiverName.text = '${item['name'] ?? ''}';
         receiverIin.text = '${item['iinBin'] ?? ''}';
