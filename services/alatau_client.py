@@ -111,6 +111,10 @@ class AlatauClient:
         payload = cls._json(response)
         if isinstance(payload, dict):
             error = payload.get("error")
+            if isinstance(error, str) and error:
+                description = payload.get("error_description") or payload.get("description")
+                message = f"{error}: {description}" if description else error
+                return f"HTTP {response.status_code}. {message}"[:500]
             if isinstance(error, dict):
                 description = error.get("description") or error.get("message")
                 code = error.get("code")
@@ -122,7 +126,11 @@ class AlatauClient:
                     first = details[0]
                     if isinstance(first, dict) and first.get("message"):
                         return f"HTTP {response.status_code}. {first['message']}"[:500]
-            message = payload.get("message") or payload.get("description")
+            message = (
+                payload.get("message")
+                or payload.get("description")
+                or payload.get("error_description")
+            )
             if message:
                 return f"HTTP {response.status_code}. {message}"[:500]
 
@@ -179,7 +187,11 @@ class AlatauClient:
         access_token = payload.get("accessToken") if isinstance(payload, dict) else None
         company_id = payload.get("companyId") if isinstance(payload, dict) else None
         if response.status_code >= 400 or not access_token or not company_id:
-            status_code = 401 if response.status_code in (401, 403) else 502
+            status_code = (
+                response.status_code
+                if response.status_code in (400, 401, 403, 404, 412, 424, 429)
+                else 502
+            )
             raise AlatauError(
                 self._error_message(
                     response,
@@ -219,7 +231,11 @@ class AlatauClient:
 
         payload = self._json(response)
         if response.status_code >= 400:
-            status_code = 401 if response.status_code in (401, 403) else 502
+            status_code = (
+                response.status_code
+                if response.status_code in (400, 401, 403, 404, 412, 424, 429)
+                else 502
+            )
             raise AlatauError(
                 self._error_message(
                     response,
@@ -233,6 +249,13 @@ class AlatauClient:
         return self.request(
             "GET",
             f"/v1/companies/{company_id}/accounts",
+            access_token,
+        )
+
+    def get_accounts_cards(self, access_token, company_id):
+        return self.request(
+            "GET",
+            f"/v3/companies/{company_id}/accounts/cards",
             access_token,
         )
 
