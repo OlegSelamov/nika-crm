@@ -243,10 +243,12 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
 #bankPaymentSection .alatau-actions + .alatau-help{margin-top:9px!important;font-size:11px;line-height:1.4}
 #paymentDraftResult{margin-top:9px!important;padding:9px 11px;font-size:12px;line-height:1.4}
 #paymentDraftResult:empty{display:none}
-.bank-template-picker{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end;margin:10px 0}
-.bank-template-picker .alatau-field{min-width:0}
-.bank-template-picker select{padding:10px 11px;border-radius:10px;font-size:14px;min-height:40px}
-.bank-template-picker .alatau-btn{padding:10px 12px;font-size:12px;white-space:nowrap}
+.bank-payment-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 7px}
+.bank-payment-source-grid .alatau-field{min-width:0}
+.bank-payment-source-grid select{padding:10px 11px;border:1px solid #dfe3eb;border-radius:10px;background:#fff;font-size:14px;min-height:40px}
+.bank-template-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-bottom:8px}
+.bank-template-actions>span{margin-right:auto;color:#7d8494;font-size:11px;line-height:1.35}
+.bank-template-actions .alatau-btn{padding:8px 10px;font-size:11px;white-space:nowrap}
 #paymentTemplateResult{margin-bottom:8px}
 #paymentTemplateResult:empty{display:none}
 #paymentTemplateResult.alatau-note{padding:8px 10px;font-size:11px;line-height:1.35}
@@ -290,8 +292,9 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   .bank-payment-modal{padding:8px;overflow:auto}
   .bank-payment-dialog{max-height:none;overflow:visible}
   #bankPaymentSection .alatau-bank-toolbar{grid-template-columns:1fr}
-  .bank-template-picker{grid-template-columns:1fr 1fr}
-  .bank-template-picker .alatau-field{grid-column:1/-1}
+  .bank-payment-source-grid{grid-template-columns:1fr}
+  .bank-template-actions{align-items:stretch;flex-wrap:wrap}
+  .bank-template-actions>span{width:100%;margin:0 0 3px}
 }
 </style>
 {% endif %}
@@ -513,15 +516,24 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       {% if bank_workspace %}Создайте платёж, подпишите его ЭЦП через NCALayer и передайте напрямую в Alatau City Bank. Черновик по-прежнему можно создать отдельно.{% else %}Создаёт черновик платежа контрагенту в Alatau City Bank. Деньги автоматически не отправляются — документ нужно подписать в интернет-банке.{% endif %}
     </div>
     {% if bank_workspace %}
-    <div class="bank-template-picker">
+    <div class="bank-payment-source-grid">
       <div class="alatau-field">
-        <label>Сохранённый контрагент / шаблон</label>
+        <label>Поставщик</label>
+        <select id="paymentSupplierSelect">
+          <option value="">Не выбран</option>
+        </select>
+      </div>
+      <div class="alatau-field">
+        <label>Другой контрагент / шаблон</label>
         <select id="paymentTemplateSelect">
           <option value="">Новый платёж без шаблона</option>
         </select>
       </div>
-      <button id="savePaymentTemplateButton" class="alatau-btn secondary" type="button">Сохранить шаблон</button>
-      <button id="deletePaymentTemplateButton" class="alatau-btn danger" type="button" disabled>Удалить</button>
+    </div>
+    <div class="bank-template-actions">
+      <span id="paymentSourceHint">Для поставщиков реквизиты берутся из карточки поставщика.</span>
+      <button id="savePaymentTemplateButton" class="alatau-btn secondary" type="button">Сохранить как шаблон</button>
+      <button id="deletePaymentTemplateButton" class="alatau-btn danger" type="button" disabled>Удалить шаблон</button>
     </div>
     <div id="paymentTemplateResult"></div>
     {% endif %}
@@ -694,11 +706,14 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const createPaymentDraftButton = document.getElementById('createPaymentDraftButton');
   const signAndSendPaymentButton = document.getElementById('signAndSendPaymentButton');
   const paymentDraftResult = document.getElementById('paymentDraftResult');
+  const paymentSupplierSelect = document.getElementById('paymentSupplierSelect');
   const paymentTemplateSelect = document.getElementById('paymentTemplateSelect');
+  const paymentSourceHint = document.getElementById('paymentSourceHint');
   const savePaymentTemplateButton = document.getElementById('savePaymentTemplateButton');
   const deletePaymentTemplateButton = document.getElementById('deletePaymentTemplateButton');
   const paymentTemplateResult = document.getElementById('paymentTemplateResult');
   let paymentTemplates = [];
+  let paymentSuppliers = [];
   const paymentsPane = document.getElementById('paymentsPane');
   const paymentsList = document.getElementById('paymentsList');
   const paymentsResult = document.getElementById('paymentsResult');
@@ -766,6 +781,41 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       CANCELED: ['Отменён', 'bad']
     };
     return map[code] || [code || 'Неизвестно', 'info'];
+  };
+
+  const loadPaymentSuppliers = async () => {
+    if (!paymentSupplierSelect) return;
+    try {
+      const response = await fetch('/api/suppliers', {headers:{'Accept':'application/json'}});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Не удалось загрузить поставщиков');
+      paymentSuppliers = Array.isArray(data) ? data : [];
+      paymentSupplierSelect.innerHTML = '<option value="">Не выбран</option>' +
+        paymentSuppliers.map(s => '<option value="' + s.id + '">' +
+          (s.name || 'Поставщик') + (s.bin_iin ? ' · ' + s.bin_iin : '') +
+        '</option>').join('');
+      if (paymentSourceHint) {
+        paymentSourceHint.textContent = paymentSuppliers.length
+          ? 'Для поставщиков реквизиты берутся из карточки поставщика.'
+          : 'Поставщиков пока нет или модуль «Поставщики» недоступен.';
+      }
+    } catch (error) {
+      paymentSuppliers = [];
+      paymentSupplierSelect.innerHTML = '<option value="">Поставщики недоступны</option>';
+      paymentSupplierSelect.disabled = true;
+      if (paymentSourceHint) paymentSourceHint.textContent = 'Поставщиков можно подключить и заполнить в разделе «Поставщики».';
+    }
+  };
+
+  const applySupplierToPayment = supplier => {
+    if (!supplier) return;
+    paymentReceiverName.value = supplier.name || '';
+    paymentReceiverIinBin.value = supplier.bin_iin || '';
+    paymentReceiverIban.value = supplier.iban || '';
+    paymentReceiverBic.value = supplier.bic || '';
+    paymentKbe.value = supplier.kbe || '';
+    paymentKnp.value = supplier.knp || '';
+    paymentPurpose.value = supplier.payment_purpose || '';
   };
 
   const loadPaymentTemplates = async () => {
@@ -1318,10 +1368,31 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     }
   };
 
+  paymentSupplierSelect?.addEventListener('change', () => {
+    const id = Number(paymentSupplierSelect.value || 0);
+    const supplier = paymentSuppliers.find(item => Number(item.id) === id);
+    if (!supplier) return;
+
+    applySupplierToPayment(supplier);
+
+    // Поставщик является источником истины; отдельный шаблон не нужен.
+    if (paymentTemplateSelect) paymentTemplateSelect.value = '';
+    if (deletePaymentTemplateButton) deletePaymentTemplateButton.disabled = true;
+    if (paymentTemplateResult) {
+      paymentTemplateResult.className = 'alatau-note success';
+      paymentTemplateResult.textContent = supplier.iban
+        ? 'Реквизиты поставщика подставлены.'
+        : 'Поставщик выбран. IBAN не заполнен — добавьте банковские реквизиты в карточке поставщика.';
+    }
+  });
+
   paymentTemplateSelect?.addEventListener('change', () => {
     const id = Number(paymentTemplateSelect.value || 0);
     const template = paymentTemplates.find(item => Number(item.id) === id);
-    if (template) applyPaymentTemplate(template);
+    if (template) {
+      applyPaymentTemplate(template);
+      if (paymentSupplierSelect) paymentSupplierSelect.value = '';
+    }
     if (deletePaymentTemplateButton) deletePaymentTemplateButton.disabled = !template;
     if (paymentTemplateResult) {
       paymentTemplateResult.textContent = '';
@@ -1467,6 +1538,7 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   window.setTimeout(() => {
     loadAccountsButton.click();
     loadPayments(true);
+    loadPaymentSuppliers();
     loadPaymentTemplates();
   }, 50);
   {% endif %}
