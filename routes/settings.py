@@ -765,6 +765,42 @@ def alatau_payment_draft():
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
 
 
+@settings_bp.route("/api/integrations/alatau/payments/signed", methods=["POST"])
+def alatau_signed_payment():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    environment = (data.get("environment") or "production").strip().lower()
+    content = (data.get("content") or "").strip()
+    if environment != "production":
+        return jsonify({"success": False, "error": "Подписанные платежи разрешены только в Production"}), 400
+    if not content or content.count(".") != 2:
+        return jsonify({"success": False, "error": "NCALayer не передал корректный JWS"}), 400
+
+    try:
+        client, access_token, bank_company_id, environment = _alatau_live_session(
+            company_id, environment
+        )
+        result = client.send_signed_payment(access_token, bank_company_id, content)
+        _alatau_touch(
+            company_id,
+            environment,
+            bank_company_id=bank_company_id,
+            error=None,
+        )
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "company_id": bank_company_id,
+            "payment": result,
+        })
+    except AlatauError as exc:
+        _alatau_touch(company_id, environment, error=str(exc)[:500])
+        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
 @settings_bp.route("/api/integrations/alatau/statements")
 def alatau_statements():
     company_id, error = _alatau_current_company()
