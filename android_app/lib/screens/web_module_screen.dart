@@ -86,6 +86,13 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
 
   Future<void> _handleMobileSignerMessage(String rawMessage) async {
     if (!widget.path.startsWith('/banks')) return;
+    final currentUrl = ready ? await controller.currentUrl() : null;
+    final currentUri = currentUrl == null ? null : Uri.tryParse(currentUrl);
+    if (currentUri == null ||
+        currentUri.host.toLowerCase() != 'www.nikabusiness.com' ||
+        currentUri.path != '/banks') {
+      return;
+    }
 
     String requestId = '';
     try {
