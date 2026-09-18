@@ -93,6 +93,28 @@ def _ensure_alatau_table(cur):
     """)
 
 
+def _ensure_bank_payment_templates_table(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bank_payment_templates (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            iin_bin TEXT,
+            iban TEXT,
+            bic TEXT,
+            kbe TEXT,
+            knp TEXT,
+            purpose TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bank_payment_templates_company
+        ON bank_payment_templates(company_id, updated_at DESC)
+    """)
+
+
 def _ensure_alatau_payment_history_table(cur):
     cur.execute("""
         CREATE TABLE IF NOT EXISTS alatau_payment_history (
@@ -753,6 +775,160 @@ def alatau_dictionaries():
         _alatau_touch(company_id, environment, error=str(exc)[:500])
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
 
+
+
+@settings_bp.route("/api/integrations/alatau/payment-templates")
+def alatau_payment_templates():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_bank_payment_templates_table(cur)
+        conn.commit()
+        cur.execute("""
+            SELECT id, name, iin_bin, iban, bic, kbe, knp, purpose,
+                   created_at, updated_at
+            FROM bank_payment_templates
+            WHERE company_id = %s
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 200
+        """, (company_id,))
+        rows = cur.fetchall() or []
+
+        templates = []
+        for item in rows:
+            row = dict(item) if not isinstance(item, dict) else item
+            templates.append({
+                "id": row.get("id"),
+                "name": row.get("name") or "",
+                "iinBin": row.get("iin_bin") or "",
+                "iban": row.get("iban") or "",
+                "bic": row.get("bic") or "",
+                "kbe": row.get("kbe") or "",
+                "knp": row.get("knp") or "",
+                "purpose": row.get("purpose") or "",
+                "createdAt": row.get("created_at").isoformat()
+                    if row.get("created_at") else None,
+                "updatedAt": row.get("updated_at").isoformat()
+                    if row.get("updated_at") else None,
+            })
+
+        return jsonify({"success": True, "templates": templates})
+    finally:
+        pool.putconn(conn)
+
+
+@settings_bp.route("/api/integrations/alatau/payment-templates", methods=["POST"])
+def alatau_save_payment_template():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    template_id = data.get("id")
+    name = (data.get("name") or "").strip()
+    iin_bin = (data.get("iinBin") or "").strip()
+    iban = (data.get("iban") or "").replace(" ", "").upper()
+    bic = (data.get("bic") or "").replace(" ", "").upper()
+    kbe = (data.get("kbe") or "").strip()
+    knp = (data.get("knp") or "").strip()
+    purpose = (data.get("purpose") or "").strip()
+
+    if not name:
+        return jsonify({"success": False, "error": "Укажите название контрагента"}), 400
+    if iin_bin and (len(iin_bin) != 12 or not iin_bin.isdigit()):
+        return jsonify({"success": False, "error": "БИН/ИИН должен содержать 12 цифр"}), 400
+    if iban and not re.fullmatch(r"KZ[A-Z0-9]{18}", iban):
+        return jsonify({"success": False, "error": "Неверный IBAN контрагента"}), 400
+    if bic and not re.fullmatch(r"[A-Z0-9]{8,11}", bic):
+        return jsonify({"success": False, "error": "Неверный БИК"}), 400
+    if kbe and (len(kbe) != 2 or not kbe.isdigit()):
+        return jsonify({"success": False, "error": "КБЕ должен состоять из 2 цифр"}), 400
+    if knp and (len(knp) != 3 or not knp.isdigit()):
+        return jsonify({"success": False, "error": "КНП должен состоять из 3 цифр"}), 400
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_bank_payment_templates_table(cur)
+
+        if template_id:
+            cur.execute("""
+                UPDATE bank_payment_templates
+                SET name = %s,
+                    iin_bin = %s,
+                    iban = %s,
+                    bic = %s,
+                    kbe = %s,
+                    knp = %s,
+                    purpose = %s,
+                    updated_at = NOW()
+                WHERE id = %s AND company_id = %s
+                RETURNING id
+            """, (
+                name, iin_bin or None, iban or None, bic or None,
+                kbe or None, knp or None, purpose or None,
+                template_id, company_id,
+            ))
+        else:
+            cur.execute("""
+                INSERT INTO bank_payment_templates (
+                    company_id, name, iin_bin, iban, bic, kbe, knp, purpose,
+                    created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                RETURNING id
+            """, (
+                company_id, name, iin_bin or None, iban or None,
+                bic or None, kbe or None, knp or None, purpose or None,
+            ))
+
+        row = cur.fetchone()
+        if not row:
+            conn.rollback()
+            return jsonify({"success": False, "error": "Шаблон не найден"}), 404
+        saved_id = row.get("id") if isinstance(row, dict) else row[0]
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "id": saved_id,
+            "message": "Шаблон платежа сохранён",
+        })
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@settings_bp.route("/api/integrations/alatau/payment-templates/<int:template_id>", methods=["DELETE"])
+def alatau_delete_payment_template(template_id):
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_bank_payment_templates_table(cur)
+        cur.execute("""
+            DELETE FROM bank_payment_templates
+            WHERE id = %s AND company_id = %s
+            RETURNING id
+        """, (template_id, company_id))
+        row = cur.fetchone()
+        conn.commit()
+        if not row:
+            return jsonify({"success": False, "error": "Шаблон не найден"}), 404
+        return jsonify({"success": True})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
 
 @settings_bp.route("/api/integrations/alatau/payments/draft", methods=["POST"])
