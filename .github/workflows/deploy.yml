@@ -76,9 +76,27 @@ jobs:
           fi
 
           sudo systemctl restart nika-crm
-          sleep 2
-          sudo systemctl is-active --quiet nika-crm
+          sleep 4
 
+          if ! sudo systemctl is-active --quiet nika-crm; then
+            echo "nika-crm service is not active"
+            sudo systemctl status nika-crm --no-pager -l || true
+            sudo journalctl -u nika-crm -n 120 --no-pager || true
+            exit 1
+          fi
+
+          APP_PORT="$(sudo systemctl show nika-crm -p ExecStart --value | sed -n 's/.*--bind[ =][^:]*:\([0-9][0-9]*\).*/\1/p' | head -n1)"
+          APP_PORT="${APP_PORT:-8000}"
+
+          if ! curl -fsS --max-time 8 "http://127.0.0.1:${APP_PORT}/login" >/dev/null; then
+            echo "nika-crm is active but HTTP health check failed on port ${APP_PORT}"
+            sudo systemctl status nika-crm --no-pager -l || true
+            sudo journalctl -u nika-crm -n 160 --no-pager || true
+            sudo ss -ltnp || true
+            exit 1
+          fi
+
+          echo "HTTP health check passed on port ${APP_PORT}"
           echo "Deployed commit:"
           git rev-parse --short HEAD
           REMOTE
