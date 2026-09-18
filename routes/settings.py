@@ -286,28 +286,12 @@ def my_banks():
         "production": _safe_alatau_row(_alatau_row(company_id, "production")),
     }
 
-    company_requisites = {}
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT name, bin, address, phone, iik, bik, bank, kbe, director
-            FROM companies
-            WHERE id = %s
-            LIMIT 1
-        """, (company_id,))
-        row = cur.fetchone()
-        company_requisites = dict(row) if row else {}
-    finally:
-        pool.putconn(conn)
-
     return render_template(
         "settings/alatau.html",
         alatau_integrations=integrations,
         alatau_config=AlatauClient.configuration_status(),
         csrf_token=_alatau_csrf_token(),
         bank_workspace=True,
-        company_requisites=company_requisites,
     )
 
 
