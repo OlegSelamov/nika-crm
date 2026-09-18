@@ -93,6 +93,135 @@ def _ensure_alatau_table(cur):
     """)
 
 
+def _ensure_alatau_payment_history_table(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS alatau_payment_history (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            environment TEXT NOT NULL DEFAULT 'production',
+            operation_id TEXT,
+            payment_type TEXT,
+            payer_iban TEXT,
+            receiver_name TEXT,
+            receiver_iin_bin TEXT,
+            receiver_iban TEXT,
+            receiver_bic TEXT,
+            amount NUMERIC(18,2),
+            currency TEXT NOT NULL DEFAULT 'KZT',
+            document_number TEXT,
+            purpose TEXT,
+            status_code TEXT NOT NULL DEFAULT 'CREATED',
+            status_message TEXT,
+            bank_status_timestamp TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_alatau_payment_history_operation
+        ON alatau_payment_history(company_id, environment, operation_id)
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_alatau_payment_history_company_created
+        ON alatau_payment_history(company_id, created_at DESC)
+    """)
+
+
+def _alatau_payment_result_fields(result):
+    payload = result if isinstance(result, dict) else {}
+    payment = payload.get("payment") if isinstance(payload.get("payment"), dict) else payload
+    operation_id = (
+        payment.get("operationId")
+        or payment.get("operation_id")
+        or payload.get("operationId")
+        or payload.get("operation_id")
+    )
+    status = payment.get("status") or payload.get("status") or "CREATED"
+    if isinstance(status, dict):
+        status_code = str(status.get("code") or "CREATED")
+        status_message = str(status.get("message") or "")
+        status_timestamp = status.get("timestamp")
+    else:
+        status_code = str(status or "CREATED")
+        status_message = ""
+        status_timestamp = None
+    return operation_id, status_code, status_message, status_timestamp
+
+
+def _alatau_store_payment(company_id, environment, meta, result=None, *,
+                          fallback_status="CREATED", fallback_message=""):
+    meta = meta or {}
+    operation_id, status_code, status_message, status_timestamp = (
+        _alatau_payment_result_fields(result)
+    )
+    if not status_code or status_code == "CREATED":
+        status_code = fallback_status
+    if not status_message:
+        status_message = fallback_message
+
+    amount = meta.get("amount")
+    try:
+        amount = round(float(amount), 2) if amount not in (None, "") else None
+    except (TypeError, ValueError):
+        amount = None
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_alatau_payment_history_table(cur)
+        cur.execute("""
+            INSERT INTO alatau_payment_history (
+                company_id, environment, operation_id, payment_type,
+                payer_iban, receiver_name, receiver_iin_bin,
+                receiver_iban, receiver_bic, amount, currency,
+                document_number, purpose, status_code, status_message,
+                bank_status_timestamp, created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'KZT',
+                %s, %s, %s, %s, %s, NOW(), NOW()
+            )
+            ON CONFLICT (company_id, environment, operation_id) DO UPDATE SET
+                payment_type = COALESCE(EXCLUDED.payment_type, alatau_payment_history.payment_type),
+                payer_iban = COALESCE(EXCLUDED.payer_iban, alatau_payment_history.payer_iban),
+                receiver_name = COALESCE(EXCLUDED.receiver_name, alatau_payment_history.receiver_name),
+                receiver_iin_bin = COALESCE(EXCLUDED.receiver_iin_bin, alatau_payment_history.receiver_iin_bin),
+                receiver_iban = COALESCE(EXCLUDED.receiver_iban, alatau_payment_history.receiver_iban),
+                receiver_bic = COALESCE(EXCLUDED.receiver_bic, alatau_payment_history.receiver_bic),
+                amount = COALESCE(EXCLUDED.amount, alatau_payment_history.amount),
+                document_number = COALESCE(EXCLUDED.document_number, alatau_payment_history.document_number),
+                purpose = COALESCE(EXCLUDED.purpose, alatau_payment_history.purpose),
+                status_code = EXCLUDED.status_code,
+                status_message = EXCLUDED.status_message,
+                bank_status_timestamp = COALESCE(EXCLUDED.bank_status_timestamp, alatau_payment_history.bank_status_timestamp),
+                updated_at = NOW()
+            RETURNING id
+        """, (
+            company_id,
+            environment,
+            operation_id,
+            meta.get("paymentType"),
+            meta.get("accountIban"),
+            meta.get("receiverName"),
+            meta.get("receiverIinBin"),
+            meta.get("receiverIban"),
+            meta.get("receiverBic"),
+            amount,
+            meta.get("documentNumber"),
+            meta.get("purpose"),
+            status_code[:120],
+            (status_message or "")[:500] or None,
+            status_timestamp or None,
+        ))
+        row = cur.fetchone()
+        conn.commit()
+        return row.get("id") if isinstance(row, dict) else (row[0] if row else None)
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        pool.putconn(conn)
+
+
 def _alatau_row(company_id, environment):
     conn = get_db()
     try:
@@ -784,6 +913,24 @@ def alatau_payment_draft():
             bank_company_id=bank_company_id,
             error=None,
         )
+        _alatau_store_payment(
+            company_id,
+            environment,
+            {
+                "paymentType": payment_type,
+                "accountIban": account_iban,
+                "receiverName": receiver_name,
+                "receiverIinBin": receiver_iin_bin,
+                "receiverIban": receiver_iban,
+                "receiverBic": receiver_bic,
+                "amount": amount,
+                "documentNumber": document_number,
+                "purpose": purpose,
+            },
+            result,
+            fallback_status="READY_TO_SEND",
+            fallback_message="Черновик создан в Alatau",
+        )
         return jsonify({
             "success": True,
             "environment": environment,
@@ -805,6 +952,7 @@ def alatau_signed_payment():
     data = request.get_json(silent=True) or {}
     environment = (data.get("environment") or "production").strip().lower()
     content = (data.get("content") or "").strip()
+    payment_meta = data.get("payment") if isinstance(data.get("payment"), dict) else {}
     if environment != "production":
         return jsonify({"success": False, "error": "Подписанные платежи разрешены только в Production"}), 400
     if not content or content.count(".") != 2:
@@ -821,6 +969,14 @@ def alatau_signed_payment():
             bank_company_id=bank_company_id,
             error=None,
         )
+        _alatau_store_payment(
+            company_id,
+            environment,
+            payment_meta,
+            result,
+            fallback_status="SENT",
+            fallback_message="Платёж подписан и передан в Alatau",
+        )
         return jsonify({
             "success": True,
             "environment": environment,
@@ -829,7 +985,138 @@ def alatau_signed_payment():
         })
     except AlatauError as exc:
         _alatau_touch(company_id, environment, error=str(exc)[:500])
+        _alatau_store_payment(
+            company_id,
+            environment,
+            payment_meta,
+            None,
+            fallback_status="ERROR",
+            fallback_message=str(exc),
+        )
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
+@settings_bp.route("/api/integrations/alatau/payments/history")
+def alatau_payment_history():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    environment = (request.args.get("environment") or "production").strip().lower()
+    refresh = (request.args.get("refresh") or "").strip().lower() in ("1", "true", "yes")
+    refresh_warning = None
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_alatau_payment_history_table(cur)
+        conn.commit()
+
+        if refresh:
+            try:
+                client, access_token, bank_company_id, environment = _alatau_live_session(
+                    company_id, environment
+                )
+                cur.execute("""
+                    SELECT id, operation_id
+                    FROM alatau_payment_history
+                    WHERE company_id = %s
+                      AND environment = %s
+                      AND operation_id IS NOT NULL
+                    ORDER BY created_at DESC
+                    LIMIT 40
+                """, (company_id, environment))
+                rows_to_refresh = cur.fetchall() or []
+
+                for payment_row in rows_to_refresh:
+                    row = dict(payment_row) if not isinstance(payment_row, dict) else payment_row
+                    operation_id = row.get("operation_id")
+                    if not operation_id:
+                        continue
+                    try:
+                        status_payload = client.get_payment_status(
+                            access_token, bank_company_id, operation_id
+                        )
+                        status_obj = (
+                            status_payload.get("status")
+                            if isinstance(status_payload, dict)
+                            else None
+                        )
+                        if isinstance(status_obj, dict):
+                            status_code = str(status_obj.get("code") or "UNKNOWN")
+                            status_message = str(status_obj.get("message") or "")
+                            status_timestamp = status_obj.get("timestamp")
+                        else:
+                            status_code = str(status_obj or "UNKNOWN")
+                            status_message = ""
+                            status_timestamp = None
+                        cur.execute("""
+                            UPDATE alatau_payment_history
+                            SET status_code = %s,
+                                status_message = %s,
+                                bank_status_timestamp = COALESCE(%s, bank_status_timestamp),
+                                updated_at = NOW()
+                            WHERE id = %s
+                        """, (
+                            status_code[:120],
+                            status_message[:500] or None,
+                            status_timestamp or None,
+                            row.get("id"),
+                        ))
+                    except AlatauError as status_exc:
+                        if status_exc.status_code not in (400, 404):
+                            refresh_warning = str(status_exc)
+                conn.commit()
+            except AlatauError as exc:
+                refresh_warning = str(exc)
+
+        cur.execute("""
+            SELECT id, operation_id, payment_type, payer_iban,
+                   receiver_name, receiver_iin_bin, receiver_iban, receiver_bic,
+                   amount, currency, document_number, purpose,
+                   status_code, status_message, bank_status_timestamp,
+                   created_at, updated_at
+            FROM alatau_payment_history
+            WHERE company_id = %s AND environment = %s
+            ORDER BY created_at DESC
+            LIMIT 100
+        """, (company_id, environment))
+        rows = cur.fetchall() or []
+
+        payments = []
+        for item in rows:
+            row = dict(item) if not isinstance(item, dict) else item
+            payments.append({
+                "id": row.get("id"),
+                "operationId": row.get("operation_id"),
+                "paymentType": row.get("payment_type"),
+                "payerIban": row.get("payer_iban"),
+                "receiverName": row.get("receiver_name"),
+                "receiverIinBin": row.get("receiver_iin_bin"),
+                "receiverIban": row.get("receiver_iban"),
+                "receiverBic": row.get("receiver_bic"),
+                "amount": float(row.get("amount")) if row.get("amount") is not None else None,
+                "currency": row.get("currency") or "KZT",
+                "documentNumber": row.get("document_number"),
+                "purpose": row.get("purpose"),
+                "statusCode": row.get("status_code"),
+                "statusMessage": row.get("status_message"),
+                "bankStatusTimestamp": row.get("bank_status_timestamp").isoformat()
+                    if row.get("bank_status_timestamp") else None,
+                "createdAt": row.get("created_at").isoformat()
+                    if row.get("created_at") else None,
+                "updatedAt": row.get("updated_at").isoformat()
+                    if row.get("updated_at") else None,
+            })
+
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "payments": payments,
+            "refresh_warning": refresh_warning,
+        })
+    finally:
+        pool.putconn(conn)
 
 
 @settings_bp.route("/api/integrations/alatau/statements")
