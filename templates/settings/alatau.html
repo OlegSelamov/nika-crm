@@ -25,6 +25,11 @@
       </div>
       <span class="alatau-chip">{% if prod_cfg and prod_cfg.status == 'connected' %}Подключён{% else %}Не подключён{% endif %}</span>
     </div>
+    <div class="bank-summary-actions">
+      <button class="alatau-btn" id="openBankPaymentButton" type="button">Создать платёж</button>
+      <button class="alatau-btn secondary" id="scrollStatementButton" type="button">Выписка</button>
+      <button class="alatau-btn secondary" id="refreshBankButton" type="button">Обновить</button>
+    </div>
   </section>
   {% endif %}
 
@@ -90,6 +95,7 @@
 
     <div id="testResult" style="margin-top:12px"></div>
   </section>
+  {% if bank_workspace %}</div></div>{% endif %}
 
   <section class="alatau-card"{% if bank_workspace %} style="display:none"{% endif %}>
     <h3 style="margin:0">Состояние подключений</h3>
@@ -121,7 +127,7 @@
     {% endif %}
   </section>
 
-  <section class="alatau-card">
+  <section class="alatau-card" id="bankAccountsSection">
     <div class="alatau-section-title">
       <h3>Счета и выписка</h3>
       <span class="alatau-chip">Business API</span>
@@ -189,9 +195,10 @@
     </div>
   </section>
 
-  <section class="alatau-card">
+  {% if bank_workspace %}<div class="bank-payment-modal" id="bankPaymentModal"><div class="bank-payment-dialog"><div class="bank-payment-head"><h3>Новое платёжное поручение</h3><button type="button" class="bank-payment-close" id="closeBankPaymentButton">×</button></div>{% endif %}
+  <section class="alatau-card" id="bankPaymentSection"{% if bank_workspace %} style="box-shadow:none;border:0;padding:0;margin:0"{% endif %}>
     <div class="alatau-section-title">
-      <h3>{% if bank_workspace %}Новое платёжное поручение{% else %}Черновик платёжного поручения{% endif %}</h3>
+      <h3>{% if bank_workspace %}Платёж{% else %}Черновик платёжного поручения{% endif %}</h3>
       <span class="alatau-chip">Production</span>
     </div>
     <div class="alatau-help" style="margin-top:8px">
@@ -645,6 +652,7 @@
       paymentDraftResult.className = 'alatau-note success';
       paymentDraftResult.textContent = 'Подписанный платёж принят Alatau' +
         (operationId ? '. Operation ID: ' + operationId : '') + '.';
+      {% if bank_workspace %}window.setTimeout(() => { closePaymentModal(); loadAccountsButton.click(); }, 900);{% endif %}
     } catch (error) {
       paymentDraftResult.className = 'alatau-note error';
       paymentDraftResult.textContent = window.NikaNCALayer?.friendlyError
@@ -728,6 +736,19 @@
   });
 
   {% if bank_workspace %}
+  const bankPaymentModal = document.getElementById('bankPaymentModal');
+  const openBankPaymentButton = document.getElementById('openBankPaymentButton');
+  const closeBankPaymentButton = document.getElementById('closeBankPaymentButton');
+  const refreshBankButton = document.getElementById('refreshBankButton');
+  const scrollStatementButton = document.getElementById('scrollStatementButton');
+  const openPaymentModal = () => bankPaymentModal.classList.add('open');
+  const closePaymentModal = () => bankPaymentModal.classList.remove('open');
+  openBankPaymentButton.addEventListener('click', openPaymentModal);
+  closeBankPaymentButton.addEventListener('click', closePaymentModal);
+  bankPaymentModal.addEventListener('click', event => { if (event.target === bankPaymentModal) closePaymentModal(); });
+  refreshBankButton.addEventListener('click', () => loadAccountsButton.click());
+  scrollStatementButton.addEventListener('click', () => document.getElementById('bankAccountsSection').scrollIntoView({behavior:'smooth'}));
+
   // "Мои банки" is an operational workspace: open Alatau in Production and
   // immediately show the company's live account/balance without an extra click.
   bankEnvironment.value = 'production';
