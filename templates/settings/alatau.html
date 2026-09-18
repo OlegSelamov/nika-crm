@@ -11,8 +11,8 @@
 <div class="alatau-page">
   <div class="alatau-head">
     <div>
-      <h1>🏦 Alatau City Bank</h1>
-      <p>Business API: счета, выписки и дальнейшая автоматизация банковских операций.</p>
+      <h1>{% if bank_workspace %}🏦 Мои банки{% else %}🏦 Alatau City Bank{% endif %}</h1>
+      <p>{% if bank_workspace %}Счета, выписки и платежи компании в одном разделе Nika Business.{% else %}Business API: счета, выписки и дальнейшая автоматизация банковских операций.{% endif %}</p>
     </div>
   </div>
 
@@ -20,6 +20,7 @@
     <div class="alatau-note" style="margin-bottom:14px">Доступ Alatau City Bank отключён для выбранной среды.</div>
   {% endif %}
 
+  {% if not bank_workspace %}
   <div class="alatau-env-cards">
     <div class="alatau-env">
       <b>Тестовая среда</b>
@@ -109,6 +110,8 @@
     {% endif %}
   </section>
 
+  {% endif %}
+
   <section class="alatau-card">
     <div class="alatau-section-title">
       <h3>Счета и выписка</h3>
@@ -179,11 +182,11 @@
 
   <section class="alatau-card">
     <div class="alatau-section-title">
-      <h3>Черновик платёжного поручения</h3>
+      <h3>{% if bank_workspace %}Новое платёжное поручение{% else %}Черновик платёжного поручения{% endif %}</h3>
       <span class="alatau-chip">Production</span>
     </div>
     <div class="alatau-help" style="margin-top:8px">
-      Создаёт черновик платежа контрагенту в Alatau City Bank. Деньги автоматически не отправляются — документ нужно подписать в интернет-банке.
+      {% if bank_workspace %}Создайте платёж, подпишите его ЭЦП через NCALayer и передайте напрямую в Alatau City Bank. Черновик по-прежнему можно создать отдельно.{% else %}Создаёт черновик платежа контрагенту в Alatau City Bank. Деньги автоматически не отправляются — документ нужно подписать в интернет-банке.{% endif %}
     </div>
     <div class="alatau-bank-toolbar" style="margin-top:14px">
       <div class="alatau-field"><label>Счёт списания</label><input id="paymentAccountIban" type="text" placeholder="Выберите счёт выше"></div>
@@ -214,12 +217,14 @@
     <div id="paymentDraftResult" style="margin-top:12px"></div>
   </section>
 
+  {% if not bank_workspace %}
   <section class="alatau-card">
     <h3 style="margin:0 0 10px">Как подключается клиент Nika</h3>
     <div class="alatau-help">
       Клиент получает Client ID и Client Secret в Alatau City Bank Business API, открывает Nika Business → Настройки → Интеграции → Alatau City Bank, выбирает TEST или Production, вводит ключи один раз и нажимает «Сохранить и проверить». Nika проверяет авторизацию и список счетов. В дальнейшем секрет повторно вводить не нужно.
     </div>
   </section>
+  {% endif %}
 </div>
 
 <script>
