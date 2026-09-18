@@ -293,6 +293,14 @@ class AlatauClient:
             json=payload,
         )
 
+    def send_signed_payment(self, access_token, company_id, content):
+        return self.request(
+            "POST",
+            f"/v2/companies/{company_id}/signed-payments",
+            access_token,
+            json={"content": content},
+        )
+
     def get_statement(
         self,
         access_token,
