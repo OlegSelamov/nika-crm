@@ -144,6 +144,27 @@ def integrations():
     return render_template("settings/integrations.html")
 
 
+@settings_bp.route("/banks")
+def my_banks():
+    company_id, error = _alatau_current_company()
+    if error:
+        if error[1] == 401:
+            return redirect("/login")
+        return redirect("/settings")
+
+    integrations = {
+        "test": _safe_alatau_row(_alatau_row(company_id, "test")),
+        "production": _safe_alatau_row(_alatau_row(company_id, "production")),
+    }
+    return render_template(
+        "settings/alatau.html",
+        alatau_integrations=integrations,
+        alatau_config=AlatauClient.configuration_status(),
+        csrf_token=_alatau_csrf_token(),
+        bank_workspace=True,
+    )
+
+
 @settings_bp.route("/settings/integrations/alatau")
 def alatau_settings():
     company_id, error = _alatau_current_company()
