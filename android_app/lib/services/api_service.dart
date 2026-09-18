@@ -702,6 +702,61 @@ class ApiService {
     return bytes;
   }
 
+  static Future<Map<String, dynamic>> bankAccounts() async =>
+      Map<String, dynamic>.from(await _request(
+        'GET',
+        '/api/integrations/alatau/accounts',
+        query: {'environment': 'production'},
+      ));
+
+  static Future<Map<String, dynamic>> bankPayments({bool refresh = false}) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET',
+        '/api/integrations/alatau/payments/history',
+        query: {
+          'environment': 'production',
+          if (refresh) 'refresh': '1',
+        },
+      ));
+
+  static Future<List<Map<String, dynamic>>> bankPaymentTemplates() async {
+    final result = Map<String, dynamic>.from(
+      await _request('GET', '/api/integrations/alatau/payment-templates'),
+    );
+    return List<dynamic>.from(result['templates'] ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  static Future<Map<String, dynamic>> prepareBankPayment(
+    Map<String, dynamic> payment,
+  ) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST',
+        '/api/integrations/alatau/payments/draft',
+        timeout: const Duration(seconds: 60),
+        body: {
+          ...payment,
+          'environment': 'production',
+          'prepareOnly': true,
+        },
+      ));
+
+  static Future<Map<String, dynamic>> sendSignedBankPayment({
+    required String content,
+    required Map<String, dynamic> payment,
+  }) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST',
+        '/api/integrations/alatau/payments/signed',
+        timeout: const Duration(seconds: 90),
+        body: {
+          'environment': 'production',
+          'content': content,
+          'payment': payment,
+        },
+      ));
+
   static Future<Map<String, dynamic>> notifications() async =>
       Map<String, dynamic>.from(
         await _request('GET', '/api/notifications'),
