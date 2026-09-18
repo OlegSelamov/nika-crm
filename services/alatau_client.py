@@ -301,6 +301,13 @@ class AlatauClient:
             json={"content": content},
         )
 
+    def get_payment_status(self, access_token, company_id, operation_id):
+        return self.request(
+            "GET",
+            f"/v1/companies/{company_id}/payments/{operation_id}/status",
+            access_token,
+        )
+
     def get_statement(
         self,
         access_token,
