@@ -512,6 +512,78 @@ def alatau_statements():
         client, access_token, bank_company_id, environment = _alatau_live_session(
             company_id, environment
         )
+
+        # Before requesting a statement, check the live account metadata.
+        # Alatau returns accountType/status/openDate from the v1 accounts method.
+        account = None
+        try:
+            accounts_payload = client.get_accounts(access_token, bank_company_id)
+            if isinstance(accounts_payload, list):
+                account_rows = accounts_payload
+            elif isinstance(accounts_payload, dict):
+                account_rows = (
+                    accounts_payload.get("accounts")
+                    or accounts_payload.get("data")
+                    or accounts_payload.get("items")
+                )
+                if account_rows is None and accounts_payload.get("iban"):
+                    account_rows = [accounts_payload]
+                account_rows = account_rows or []
+            else:
+                account_rows = []
+
+            account = next(
+                (
+                    row for row in account_rows
+                    if str(row.get("iban") or "").strip().upper() == iban
+                ),
+                None,
+            )
+        except AlatauError:
+            # The statement request below remains the source of truth if account
+            # metadata cannot be loaded for some reason.
+            account = None
+
+        if account:
+            account_type = str(account.get("accountType") or "").strip().upper()
+            if account_type and account_type != "ACCOUNT":
+                return jsonify({
+                    "success": False,
+                    "error": (
+                        f"Выписка v3 недоступна для типа счёта {account_type}. "
+                        "Alatau City Bank разрешает этот метод только для счетов ACCOUNT."
+                    ),
+                    "account": {
+                        "iban": iban,
+                        "accountType": account_type,
+                        "status": account.get("status"),
+                        "openDate": account.get("openDate"),
+                    },
+                }), 400
+
+            open_date_text = str(account.get("openDate") or "").strip()
+            if open_date_text:
+                try:
+                    open_date_value = date.fromisoformat(open_date_text[:10])
+                except ValueError:
+                    open_date_value = None
+                if open_date_value and date_from_value < open_date_value:
+                    return jsonify({
+                        "success": False,
+                        "code": "date_before_account_open",
+                        "error": (
+                            f"Счёт открыт {open_date_value.strftime('%d.%m.%Y')}. "
+                            "Нельзя запрашивать выписку за период до даты открытия счёта."
+                        ),
+                        "open_date": open_date_value.isoformat(),
+                        "account": {
+                            "iban": iban,
+                            "accountType": account.get("accountType"),
+                            "status": account.get("status"),
+                            "openDate": open_date_value.isoformat(),
+                        },
+                    }), 400
+
         statement = client.get_statement(
             access_token,
             bank_company_id,
