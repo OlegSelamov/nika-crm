@@ -9,3 +9,4 @@ pytz
 openpyxl
 boto3
 Pillow
+cryptography
