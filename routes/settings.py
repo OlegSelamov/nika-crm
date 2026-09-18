@@ -505,6 +505,42 @@ def alatau_cards():
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
 
 
+
+@settings_bp.route("/api/integrations/alatau/dictionaries")
+def alatau_dictionaries():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    environment = (request.args.get("environment") or "production").strip().lower()
+    code = (request.args.get("code") or "KBE").strip().upper()
+    if code not in ("KBE", "KNP", "KBK"):
+        return jsonify({"success": False, "error": "Неверный код справочника"}), 400
+
+    try:
+        client, access_token, bank_company_id, environment = _alatau_live_session(
+            company_id, environment
+        )
+        values = client.get_dictionary(access_token, code)
+        banks = client.get_banks(access_token)
+        _alatau_touch(
+            company_id,
+            environment,
+            bank_company_id=bank_company_id,
+            error=None,
+        )
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "code": code,
+            "values": values,
+            "banks": banks,
+        })
+    except AlatauError as exc:
+        _alatau_touch(company_id, environment, error=str(exc)[:500])
+        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
 @settings_bp.route("/api/integrations/alatau/statements")
 def alatau_statements():
     company_id, error = _alatau_current_company()
