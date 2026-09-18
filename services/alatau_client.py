@@ -259,6 +259,21 @@ class AlatauClient:
             access_token,
         )
 
+    def get_dictionary(self, access_token, code):
+        return self.request(
+            "GET",
+            "/v1/dictionaries",
+            access_token,
+            params={"code": code},
+        )
+
+    def get_banks(self, access_token):
+        return self.request(
+            "GET",
+            "/v1/dictionaries/banks",
+            access_token,
+        )
+
     def get_statement(
         self,
         access_token,
