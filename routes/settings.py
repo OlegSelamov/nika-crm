@@ -541,6 +541,104 @@ def alatau_dictionaries():
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
 
 
+
+@settings_bp.route("/api/integrations/alatau/payments/draft", methods=["POST"])
+def alatau_payment_draft():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    environment = (data.get("environment") or "production").strip().lower()
+    account_iban = (data.get("accountIban") or "").replace(" ", "").upper()
+    receiver_name = (data.get("receiverName") or "").strip()
+    receiver_iin_bin = (data.get("receiverIinBin") or "").strip()
+    receiver_iban = (data.get("receiverIban") or "").replace(" ", "").upper()
+    receiver_bic = (data.get("receiverBic") or "").replace(" ", "").upper()
+    kbe = (data.get("kbe") or "").strip()
+    knp = (data.get("knp") or "").strip()
+    purpose = (data.get("purpose") or "").strip()
+    document_number = (data.get("documentNumber") or "").strip()
+
+    try:
+        amount = float(data.get("amount"))
+    except (TypeError, ValueError):
+        amount = 0
+
+    missing = []
+    for field, value in (
+        ("счёт списания", account_iban),
+        ("получатель", receiver_name),
+        ("БИН/ИИН", receiver_iin_bin),
+        ("IBAN получателя", receiver_iban),
+        ("БИК получателя", receiver_bic),
+        ("КБЕ", kbe),
+        ("КНП", knp),
+        ("назначение платежа", purpose),
+        ("номер документа", document_number),
+    ):
+        if not value:
+            missing.append(field)
+    if missing:
+        return jsonify({
+            "success": False,
+            "error": "Заполните: " + ", ".join(missing),
+        }), 400
+
+    if amount <= 0:
+        return jsonify({"success": False, "error": "Сумма должна быть больше 0"}), 400
+    if len(receiver_iin_bin) not in (12,):
+        return jsonify({"success": False, "error": "БИН/ИИН должен содержать 12 цифр"}), 400
+    if not receiver_iin_bin.isdigit():
+        return jsonify({"success": False, "error": "БИН/ИИН должен содержать только цифры"}), 400
+    if len(kbe) != 2 or not kbe.isdigit():
+        return jsonify({"success": False, "error": "КБЕ должен состоять из 2 цифр"}), 400
+    if len(knp) != 3 or not knp.isdigit():
+        return jsonify({"success": False, "error": "КНП должен состоять из 3 цифр"}), 400
+
+    payment_type = "INTERNAL" if receiver_bic == "TSESKZKA" else "EXTERNAL"
+    payload = {
+        "accountIban": account_iban,
+        "receiverName": receiver_name,
+        "receiverIinBin": receiver_iin_bin,
+        "receiverIban": receiver_iban,
+        "receiverBic": receiver_bic,
+        "amount": round(amount, 2),
+        "currency": "KZT",
+        "kbe": kbe,
+        "knp": knp,
+        "purpose": purpose,
+        "documentNumber": document_number,
+        "paymentType": payment_type,
+    }
+
+    try:
+        client, access_token, bank_company_id, environment = _alatau_live_session(
+            company_id, environment
+        )
+        result = client.create_contractor_draft(
+            access_token,
+            bank_company_id,
+            payload,
+        )
+        _alatau_touch(
+            company_id,
+            environment,
+            bank_company_id=bank_company_id,
+            error=None,
+        )
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "company_id": bank_company_id,
+            "payment_type": payment_type,
+            "draft": result,
+        })
+    except AlatauError as exc:
+        _alatau_touch(company_id, environment, error=str(exc)[:500])
+        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
 @settings_bp.route("/api/integrations/alatau/statements")
 def alatau_statements():
     company_id, error = _alatau_current_company()
