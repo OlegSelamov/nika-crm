@@ -368,6 +368,22 @@
                 <ul id="esfValidationList"></ul>
             </div>
 
+            <section id="esfMobileP12Panel" class="esf-api-panel" hidden>
+                <div class="esf-api-panel-head">
+                    <div>
+                        <strong>Подписание на телефоне</strong>
+                        <span>Файл ЭЦП остаётся на устройстве</span>
+                    </div>
+                    <span class="esf-environment-badge">.p12</span>
+                </div>
+                <div class="esf-api-fields">
+                    <label>Пароль ЭЦП
+                        <input id="esfMobileP12Password" type="password" maxlength="256" autocomplete="off" placeholder="Не отправляется в Nika">
+                    </label>
+                </div>
+                <small>После нажатия «Подписать» приложение попросит выбрать файл .p12. Файл и пароль используются только локально на телефоне.</small>
+            </section>
+
             <section id="esfApiPanel" class="esf-api-panel" hidden>
                 <div class="esf-api-panel-head">
                     <div>
