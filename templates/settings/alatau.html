@@ -199,14 +199,27 @@
 
   const syncMode = () => {
     const cfg = configs[environment.value] || {};
-    clientId.value = cfg.clientId || '';
-    clientSecret.value = '';
-    clientSecret.placeholder = cfg.hasSecret
-      ? 'Секрет уже сохранён — оставьте пустым, чтобы не менять'
-      : 'Client Secret из Business API';
-    secretHint.textContent = cfg.hasSecret
-      ? 'Client Secret сохранён в зашифрованном виде.'
-      : 'Client Secret ещё не сохранён для этой среды.';
+    const isTest = environment.value === 'test';
+
+    clientId.disabled = isTest;
+    clientSecret.disabled = isTest;
+
+    if (isTest) {
+      clientId.value = 'client_id_test';
+      clientSecret.value = '';
+      clientSecret.placeholder = 'Используется тестовый ключ банка автоматически';
+      secretHint.textContent = 'Для TEST Nika автоматически использует официальные sandbox-реквизиты Alatau City Bank.';
+    } else {
+      clientId.value = cfg.clientId || '';
+      clientSecret.value = '';
+      clientSecret.placeholder = cfg.hasSecret
+        ? 'Секрет уже сохранён — оставьте пустым, чтобы не менять'
+        : 'Client Secret из Business API';
+      secretHint.textContent = cfg.hasSecret
+        ? 'Client Secret сохранён в зашифрованном виде.'
+        : 'Client Secret ещё не сохранён для этой среды.';
+    }
+
     resultBox.textContent = '';
     resultBox.className = '';
   };
@@ -266,7 +279,13 @@
     accounts.forEach(account => {
       const iban = firstValue(account, ['iban', 'account', 'accountNumber', 'number'], 'Счёт');
       const currency = firstValue(account, ['currency', 'currencyCode'], '');
-      const balance = firstValue(account, ['balance', 'availableBalance', 'currentBalance', 'amount'], '—');
+      const balanceRaw = firstValue(account, ['balance', 'availableBalance', 'currentBalance', 'amount'], '—');
+      const balance = balanceRaw && typeof balanceRaw === 'object'
+        ? firstValue(balanceRaw, ['amount', 'value', 'balance'], '—')
+        : balanceRaw;
+      const balanceCurrency = balanceRaw && typeof balanceRaw === 'object'
+        ? firstValue(balanceRaw, ['currency', 'currencyCode'], '')
+        : '';
       const name = firstValue(account, ['name', 'accountName', 'title', 'typeName'], 'Банковский счёт');
       const div = document.createElement('div');
       div.className = 'alatau-account';
@@ -275,7 +294,7 @@
           <div class="alatau-account-title">${iban}</div>
           <div class="alatau-account-sub">${name}${currency ? ' · ' + currency : ''}</div>
         </div>
-        <div class="alatau-account-balance">${money(balance)}${currency ? ' ' + currency : ''}</div>`;
+        <div class="alatau-account-balance">${money(balance)}${(balanceCurrency || currency) ? ' ' + (balanceCurrency || currency) : ''}</div>`;
       div.addEventListener('click', () => selectAccount(account, div));
       accountsList.appendChild(div);
     });
