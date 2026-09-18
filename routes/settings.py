@@ -637,6 +637,36 @@ def alatau_payment_draft():
         # the bank dictionary is temporarily unavailable.
         pass
 
+    # Production requires the human-readable KBE name as well as its code.
+    kbe_name = kbe
+    try:
+        kbe_rows = lookup_client.get_dictionary(lookup_token, "KBE")
+        if isinstance(kbe_rows, dict):
+            kbe_rows = (
+                kbe_rows.get("content")
+                or kbe_rows.get("items")
+                or kbe_rows.get("data")
+                or kbe_rows.get("values")
+                or []
+            )
+        if isinstance(kbe_rows, list):
+            for row in kbe_rows:
+                if not isinstance(row, dict):
+                    continue
+                row_code = str(
+                    row.get("code") or row.get("value") or row.get("id") or ""
+                ).strip()
+                if row_code == kbe:
+                    kbe_name = str(
+                        row.get("name")
+                        or row.get("title")
+                        or row.get("description")
+                        or kbe
+                    ).strip()
+                    break
+    except (AlatauError, UnboundLocalError):
+        pass
+
     # Alatau v2 expects a nested payment model. Top-level aliases such as
     # paymentType/receiverIban are not part of the current Production schema.
     payload = {
@@ -647,6 +677,7 @@ def alatau_payment_draft():
             "name": receiver_name,
             "kbe": {
                 "code": kbe,
+                "name": kbe_name,
             },
             "recipientAccount": {
                 "iban": receiver_iban,
