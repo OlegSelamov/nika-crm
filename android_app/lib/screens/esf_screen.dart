@@ -409,6 +409,7 @@ class _EsfSignDialogState extends State<_EsfSignDialog> {
   bool signing = false;
   bool savedReady = false;
   bool rememberPassword = false;
+  bool rememberKey = false;
   String? error;
 
   @override
@@ -422,6 +423,7 @@ class _EsfSignDialogState extends State<_EsfSignDialog> {
       final info = await MobileP12Signer.savedKeyInfo();
       final saved = await MobileP12Signer.loadSavedPassword();
       savedReady = info['hasKey'] == true && info['hasPassword'] == true;
+      rememberKey = info['hasKey'] == true;
       if (saved != null && saved.isNotEmpty) {
         password.text = saved;
         rememberPassword = true;
@@ -460,9 +462,15 @@ class _EsfSignDialogState extends State<_EsfSignDialog> {
     try {
       final result = widget.xmlMode
           ? await MobileP12Signer.signEsfXml(
-              payload: widget.payload, password: password.text)
+              payload: widget.payload,
+              password: password.text,
+              saveKey: rememberKey,
+            )
           : await MobileP12Signer.signEsfRaw(
-              payload: widget.payload, password: password.text);
+              payload: widget.payload,
+              password: password.text,
+              saveKey: rememberKey,
+            );
       if (rememberPassword) {
         await MobileP12Signer.savePassword(password.text);
       }
@@ -508,6 +516,17 @@ class _EsfSignDialogState extends State<_EsfSignDialog> {
               onChanged: signing
                   ? null
                   : (v) => setState(() => rememberPassword = v ?? false),
+            ),
+            CheckboxListTile(
+              value: rememberKey,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Сохранить ключ на телефоне'),
+              subtitle: const Text(
+                'Ключ останется только во внутреннем хранилище Nika Business.',
+              ),
+              onChanged: signing
+                  ? null
+                  : (v) => setState(() => rememberKey = v ?? false),
             ),
             if (error != null)
               Text(error!,
