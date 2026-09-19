@@ -1192,6 +1192,10 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
   const hasMobileP12Signer = () =>
     !!(window.NikaMobileSigner && typeof window.NikaMobileSigner.postMessage === 'function');
 
+  const isMobileBrowser = () =>
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') &&
+    !hasMobileP12Signer();
+
   window.NikaMobileSignerResult = (requestId, result) => {
     const pending = mobileSignerPending.get(String(requestId));
     if (!pending) return;
@@ -1239,7 +1243,9 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
     if (paymentSigningHelp) {
       paymentSigningHelp.textContent = mobile
         ? 'Подпись создаётся локально на телефоне. Файл .p12 и пароль не передаются на сервер Nika.'
-        : 'Подписание выполняется через NCALayer и затем готовая JWS-подпись передаётся в Alatau City Bank.';
+        : (isMobileBrowser()
+            ? 'На мобильном сайте подписание .p12 недоступно. Для подписи откройте «Мои банки» в приложении Nika Business.'
+            : 'Подписание выполняется через NCALayer и затем готовая JWS-подпись передаётся в Alatau City Bank.');
     }
   };
 
@@ -1265,6 +1271,11 @@ body.nika-app-shell .page-shell{height:calc(100vh - 40px);box-sizing:border-box;
       return;
     }
     const mobileSigning = hasMobileP12Signer();
+    if (isMobileBrowser()) {
+      paymentDraftResult.className = 'alatau-note error';
+      paymentDraftResult.textContent = 'В мобильном браузере Chrome/Safari файл .p12 подписать нельзя. Откройте «Мои банки» в приложении Nika Business.';
+      return;
+    }
     if (!mobileSigning && !window.NikaNCALayer?.signJws) {
       paymentDraftResult.className = 'alatau-note error';
       paymentDraftResult.textContent = 'Модуль подписи недоступен. На компьютере запустите NCALayer, на телефоне обновите приложение Nika Business.';
