@@ -122,7 +122,15 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "signAlatauJwsWithSavedP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
-                        startSavedP12Signing(payload, result)
+                        startSavedP12Signing("signAlatauJwsWithP12", payload, result)
+                    }
+                    "signEsfRawWithSavedP12" -> {
+                        val payload = call.argument<String>("payload") ?: ""
+                        startSavedP12Signing("signEsfRawWithP12", payload, result)
+                    }
+                    "signEsfXmlWithSavedP12" -> {
+                        val payload = call.argument<String>("payload") ?: ""
+                        startSavedP12Signing("signEsfXmlWithP12", payload, result)
                     }
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
@@ -234,6 +242,7 @@ class MainActivity : FlutterFragmentActivity() {
 
 
     private fun startSavedP12Signing(
+        method: String,
         payload: String,
         result: MethodChannel.Result,
     ) {
@@ -274,12 +283,30 @@ class MainActivity : FlutterFragmentActivity() {
                     authResult: BiometricPrompt.AuthenticationResult,
                 ) {
                     try {
-                        val response = KalkanJwsSigner.signAlatauJws(
-                            context = this@MainActivity,
-                            keyUri = keyUri,
-                            passwordChars = password.toCharArray(),
-                            payload = payload,
-                        )
+                        val response = when (method) {
+                            "signAlatauJwsWithP12" -> KalkanJwsSigner.signAlatauJws(
+                                context = this@MainActivity,
+                                keyUri = keyUri,
+                                passwordChars = password.toCharArray(),
+                                payload = payload,
+                            )
+                            "signEsfRawWithP12" -> KalkanJwsSigner.signEsfRaw(
+                                context = this@MainActivity,
+                                keyUri = keyUri,
+                                passwordChars = password.toCharArray(),
+                                payload = payload,
+                            )
+                            "signEsfXmlWithP12" -> KalkanJwsSigner.signEsfXml(
+                                context = this@MainActivity,
+                                keyUri = keyUri,
+                                passwordChars = password.toCharArray(),
+                                payload = payload,
+                            )
+                            else -> throw KalkanJwsSigner.SigningException(
+                                "UNKNOWN_SIGN_METHOD",
+                                "Неизвестный режим подписи",
+                            )
+                        }
                         result.success(response)
                     } catch (error: KalkanJwsSigner.SigningException) {
                         result.error(error.code, error.message, null)
