@@ -47,6 +47,36 @@ object KalkanJwsSigner {
     class SigningException(val code: String, message: String, cause: Throwable? = null) :
         Exception(message, cause)
 
+    fun capabilities(): Map<String, Any?> {
+        val providerClass = listOf(
+            "kz.gov.pki.kalkan.jce.provider.KalkanProvider",
+            "kz.gov.pki.kalkan.provider.KalkanProvider",
+        ).firstOrNull { className ->
+            try {
+                Class.forName(className)
+                true
+            } catch (_: Throwable) {
+                false
+            }
+        }
+
+        val xmlAvailable = try {
+            Class.forName("org.apache.xml.security.signature.XMLSignature")
+            true
+        } catch (_: Throwable) {
+            false
+        }
+
+        return mapOf(
+            "kalkanInstalled" to (providerClass != null),
+            "providerClass" to providerClass,
+            "xmlSignatureInstalled" to xmlAvailable,
+            "readyForAlatau" to (providerClass != null),
+            "readyForEsfRaw" to (providerClass != null),
+            "readyForEsfXml" to (providerClass != null && xmlAvailable),
+        )
+    }
+
     private data class KeyMaterial(
         val provider: Provider,
         val privateKey: PrivateKey,
