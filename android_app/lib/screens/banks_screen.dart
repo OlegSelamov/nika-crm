@@ -18,9 +18,15 @@ class BanksScreen extends StatefulWidget {
 class _BanksScreenState extends State<BanksScreen> {
   bool loading = true;
   bool refreshingPayments = false;
+  bool loadingStatement = false;
+  String bankView = 'payments';
   String? error;
+  String? statementWarning;
   List<Map<String, dynamic>> accounts = [];
   List<Map<String, dynamic>> payments = [];
+  List<Map<String, dynamic>> statementOperations = [];
+  DateTime statementFrom = DateTime.now().subtract(const Duration(days: 30));
+  DateTime statementTo = DateTime.now();
   Map<String, dynamic>? selectedAccount;
   Map<String, dynamic> bank = const {};
   Map<String, dynamic> company = const {};
@@ -157,6 +163,145 @@ class _BanksScreenState extends State<BanksScreen> {
     } finally {
       if (mounted) setState(() => refreshingPayments = false);
     }
+  }
+
+  String _dateParam(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+  String _dateLabel(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}.${value.month.toString().padLeft(2, '0')}.${value.year}';
+
+  Future<void> _setBankView(String value) async {
+    if (bankView == value) return;
+    setState(() => bankView = value);
+    if (value == 'statement' && statementOperations.isEmpty) {
+      await _loadStatement();
+    }
+  }
+
+  Future<void> _pickStatementDate({required bool from}) async {
+    final initial = from ? statementFrom : statementTo;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime.now().subtract(const Duration(days: 3650)),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      if (from) {
+        statementFrom = picked;
+        if (statementFrom.isAfter(statementTo)) statementTo = statementFrom;
+      } else {
+        statementTo = picked;
+        if (statementTo.isBefore(statementFrom)) statementFrom = statementTo;
+      }
+    });
+    await _loadStatement();
+  }
+
+  Future<void> _loadStatement({bool silent = false}) async {
+    if (_selectedIban.isEmpty || loadingStatement) return;
+    if (!silent) {
+      setState(() {
+        loadingStatement = true;
+        statementWarning = null;
+      });
+    } else {
+      setState(() => loadingStatement = true);
+    }
+
+    try {
+      final result = await ApiService.bankStatement(
+        iban: _selectedIban,
+        dateFrom: _dateParam(statementFrom),
+        dateTo: _dateParam(statementTo),
+      );
+      final rows = List<dynamic>.from(result['operations'] ?? const [])
+          .whereType<Map>()
+          .map((item) {
+            final operation = Map<String, dynamic>.from(item);
+            operation['accountIban'] = _selectedIban;
+            return operation;
+          })
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        statementOperations = rows;
+        statementWarning = _text(result['smart_warning']).isEmpty
+            ? null
+            : _text(result['smart_warning']);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      } else {
+        setState(() => statementWarning = e.toString());
+      }
+    } finally {
+      if (mounted) setState(() => loadingStatement = false);
+    }
+  }
+
+  String _statementLinkLabel(Map<String, dynamic> operation) {
+    final link = _asMap(operation['link']);
+    if (link.isNotEmpty) return 'Связано';
+    final suggestions = List<dynamic>.from(operation['suggestions'] ?? const []);
+    if (suggestions.isNotEmpty) return 'Nika нашла совпадение';
+    return 'Не связано';
+  }
+
+  Color _statementLinkColor(Map<String, dynamic> operation) {
+    final link = _asMap(operation['link']);
+    if (link.isNotEmpty) return AppColors.success;
+    final suggestions = List<dynamic>.from(operation['suggestions'] ?? const []);
+    if (suggestions.isNotEmpty) return AppColors.primary;
+    return AppColors.warning;
+  }
+
+  Future<Map<String, dynamic>?> _linkStatementOperation(
+    Map<String, dynamic> operation,
+    String type,
+    int id,
+  ) async {
+    final link = await ApiService.linkBankStatementOperation(
+      operation: operation,
+      linkType: type,
+      linkId: id,
+    );
+    if (!mounted) return link;
+    setState(() {
+      operation['link'] = link;
+      operation['suggestions'] = <dynamic>[];
+    });
+    return link;
+  }
+
+  Future<void> _clearStatementLink(Map<String, dynamic> operation) async {
+    await ApiService.linkBankStatementOperation(
+      operation: operation,
+      clear: true,
+    );
+    if (!mounted) return;
+    setState(() => operation['link'] = null);
+  }
+
+  Future<void> _openStatementOperation(Map<String, dynamic> operation) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BankStatementOperationSheet(
+        operation: operation,
+        onLink: (type, id) => _linkStatementOperation(operation, type, id),
+        onClear: () => _clearStatementLink(operation),
+      ),
+    );
   }
 
   void _showRequisites() {
@@ -305,7 +450,14 @@ class _BanksScreenState extends State<BanksScreen> {
                   ),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(20),
-                    onTap: () => setState(() => selectedAccount = account),
+                    onTap: () async {
+                      setState(() {
+                        selectedAccount = account;
+                        statementOperations = [];
+                        statementWarning = null;
+                      });
+                      if (bankView == 'statement') await _loadStatement();
+                    },
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(children: [
@@ -350,60 +502,642 @@ class _BanksScreenState extends State<BanksScreen> {
               ),
             ),
           ]),
-          const SizedBox(height: 24),
-          Row(children: [
-            const Expanded(child: Text('Платежи', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
-            IconButton(
-              tooltip: 'Обновить статусы',
-              onPressed: refreshingPayments ? null : _refreshPayments,
-              icon: refreshingPayments
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.sync_rounded),
+          const SizedBox(height: 22),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'payments',
+                  icon: Icon(Icons.swap_horiz_rounded),
+                  label: Text('Платежи'),
+                ),
+                ButtonSegment(
+                  value: 'statement',
+                  icon: Icon(Icons.auto_awesome_rounded),
+                  label: Text('Умная выписка'),
+                ),
+              ],
+              selected: {bankView},
+              onSelectionChanged: (values) {
+                if (values.isNotEmpty) _setBankView(values.first);
+              },
             ),
-          ]),
-          if (payments.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(18),
-                child: Text('Платежей из Nika пока нет.', style: TextStyle(color: AppColors.muted)),
+          ),
+          const SizedBox(height: 18),
+          if (bankView == 'payments') ...[
+            Row(children: [
+              const Expanded(
+                child: Text(
+                  'Платежи',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                ),
               ),
-            )
-          else
-            ...payments.map((p) {
-              final created = DateTime.tryParse(_text(p['createdAt']))?.toLocal();
-              final date = created == null
-                  ? ''
-                  : '${created.day.toString().padLeft(2, '0')}.${created.month.toString().padLeft(2, '0')}.${created.year}';
-              return Card(
+              IconButton(
+                tooltip: 'Обновить статусы',
+                onPressed: refreshingPayments ? null : _refreshPayments,
+                icon: refreshingPayments
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync_rounded),
+              ),
+            ]),
+            if (payments.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(18),
+                  child: Text(
+                    'Платежей из Nika пока нет.',
+                    style: TextStyle(color: AppColors.muted),
+                  ),
+                ),
+              )
+            else
+              ...payments.map((p) {
+                final created = DateTime.tryParse(_text(p['createdAt']))?.toLocal();
+                final date = created == null
+                    ? ''
+                    : '${created.day.toString().padLeft(2, '0')}.${created.month.toString().padLeft(2, '0')}.${created.year}';
+                return Card(
+                  elevation: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.all(15),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _text(p['receiverName']).isEmpty
+                                    ? 'Получатель не указан'
+                                    : _text(p['receiverName']),
+                                style: const TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '№ ${_text(p['documentNumber']).isEmpty ? '—' : _text(p['documentNumber'])}${date.isEmpty ? '' : ' · $date'}',
+                                style: const TextStyle(
+                                  color: AppColors.muted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              if (_text(p['purpose']).isNotEmpty) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  _text(p['purpose']),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${_money(p['amount'])} ${_text(p['currency']).isEmpty ? 'KZT' : _text(p['currency'])}',
+                              style: const TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 7),
+                            StatusPill(
+                              _paymentStatus(p),
+                              color: _paymentStatusColor(p),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ] else ...[
+            Row(
+              children: [
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Умная банковская выписка',
+                        style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Nika ищет связи с клиентами, продажами, поставщиками и расходами',
+                        style: TextStyle(color: AppColors.muted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Обновить выписку',
+                  onPressed: loadingStatement ? null : _loadStatement,
+                  icon: loadingStatement
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.sync_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: loadingStatement
+                        ? null
+                        : () => _pickStatementDate(from: true),
+                    icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                    label: Text('С ${_dateLabel(statementFrom)}'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: loadingStatement
+                        ? null
+                        : () => _pickStatementDate(from: false),
+                    icon: const Icon(Icons.event_outlined, size: 18),
+                    label: Text('По ${_dateLabel(statementTo)}'),
+                  ),
+                ),
+              ],
+            ),
+            if (loadingStatement)
+              const Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: LinearProgressIndicator(),
+              ),
+            if (statementWarning != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  statementWarning!,
+                  style: const TextStyle(
+                    color: AppColors.warning,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            if (!loadingStatement && statementOperations.isEmpty)
+              const Card(
                 elevation: 0,
                 child: Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(
-                        _text(p['receiverName']).isEmpty ? 'Получатель не указан' : _text(p['receiverName']),
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '№ ${_text(p['documentNumber']).isEmpty ? '—' : _text(p['documentNumber'])}${date.isEmpty ? '' : ' · $date'}',
-                        style: const TextStyle(color: AppColors.muted, fontSize: 12),
-                      ),
-                      if (_text(p['purpose']).isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Text(_text(p['purpose']), maxLines: 2, overflow: TextOverflow.ellipsis),
-                      ],
-                    ])),
-                    const SizedBox(width: 12),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text('${_money(p['amount'])} ${_text(p['currency']).isEmpty ? 'KZT' : _text(p['currency'])}', style: const TextStyle(fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 7),
-                      StatusPill(_paymentStatus(p), color: _paymentStatusColor(p)),
-                    ]),
-                  ]),
+                  padding: EdgeInsets.all(18),
+                  child: Text(
+                    'За выбранный период операций нет.',
+                    style: TextStyle(color: AppColors.muted),
+                  ),
                 ),
-              );
-            }),
+              )
+            else
+              ...statementOperations.map((operation) {
+                final direction = _text(operation['direction']);
+                final incoming = direction == 'credit';
+                final counterparty = _text(operation['counterpartyName']).isEmpty
+                    ? (incoming ? 'Входящий платёж' : 'Исходящий платёж')
+                    : _text(operation['counterpartyName']);
+                final amountText =
+                    '${incoming ? '+' : direction == 'debit' ? '−' : ''}${_money(operation['amount'])} ${_text(operation['currency']).isEmpty ? 'KZT' : _text(operation['currency'])}';
+                final dateText = _text(operation['date']);
+                return Card(
+                  elevation: 0,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => _openStatementOperation(operation),
+                    child: Padding(
+                      padding: const EdgeInsets.all(15),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: (incoming
+                                    ? AppColors.success
+                                    : AppColors.danger)
+                                .withOpacity(.10),
+                            child: Icon(
+                              incoming
+                                  ? Icons.south_west_rounded
+                                  : Icons.north_east_rounded,
+                              color: incoming
+                                  ? AppColors.success
+                                  : AppColors.danger,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  counterparty,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                if (_text(operation['purpose']).isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    _text(operation['purpose']),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                                const SizedBox(height: 7),
+                                StatusPill(
+                                  _statementLinkLabel(operation),
+                                  color: _statementLinkColor(operation),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                amountText,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: incoming
+                                      ? AppColors.success
+                                      : AppColors.danger,
+                                ),
+                              ),
+                              if (dateText.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  dateText.length >= 10
+                                      ? dateText.substring(0, 10)
+                                      : dateText,
+                                  style: const TextStyle(
+                                    color: AppColors.muted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppColors.muted,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BankStatementOperationSheet extends StatefulWidget {
+  final Map<String, dynamic> operation;
+  final Future<Map<String, dynamic>?> Function(String type, int id) onLink;
+  final Future<void> Function() onClear;
+
+  const _BankStatementOperationSheet({
+    required this.operation,
+    required this.onLink,
+    required this.onClear,
+  });
+
+  @override
+  State<_BankStatementOperationSheet> createState() =>
+      _BankStatementOperationSheetState();
+}
+
+class _BankStatementOperationSheetState
+    extends State<_BankStatementOperationSheet> {
+  bool busy = false;
+  String? error;
+
+  Map<String, dynamic> _map(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+  String _text(dynamic value) => value == null ? '' : '$value';
+
+  String _typeLabel(String type) {
+    switch (type) {
+      case 'supplier':
+        return 'Поставщик';
+      case 'client':
+        return 'Клиент';
+      case 'sale':
+        return 'Продажа';
+      case 'expense':
+        return 'Расход';
+      default:
+        return 'Связь';
+    }
+  }
+
+  Future<void> _link(Map<String, dynamic> suggestion) async {
+    if (busy) return;
+    final id = int.tryParse('${suggestion['id'] ?? ''}');
+    final type = _text(suggestion['type']);
+    if (id == null || type.isEmpty) return;
+
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      final link = await widget.onLink(type, id);
+      if (!mounted) return;
+      setState(() {
+        widget.operation['link'] = link;
+        widget.operation['suggestions'] = <dynamic>[];
+      });
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _clear() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.onClear();
+      if (!mounted) return;
+      setState(() => widget.operation['link'] = null);
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final operation = widget.operation;
+    final link = _map(operation['link']);
+    final suggestions = List<dynamic>.from(operation['suggestions'] ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final direction = _text(operation['direction']);
+    final incoming = direction == 'credit';
+    final amount = double.tryParse('${operation['amount'] ?? 0}') ?? 0;
+    final amountLabel =
+        '${incoming ? '+' : direction == 'debit' ? '−' : ''}${amount.toStringAsFixed(2)} ${_text(operation['currency']).isEmpty ? 'KZT' : _text(operation['currency'])}';
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .92,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 26),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _text(operation['counterpartyName']).isEmpty
+                          ? (incoming ? 'Входящий платёж' : 'Исходящий платёж')
+                          : _text(operation['counterpartyName']),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    amountLabel,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: incoming ? AppColors.success : AppColors.danger,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _detail('Дата', _text(operation['date'])),
+              _detail('№ документа', _text(operation['documentNumber'])),
+              _detail('БИН / ИИН', _text(operation['counterpartyIinBin'])),
+              _detail('Назначение', _text(operation['purpose'])),
+              const SizedBox(height: 18),
+              if (link.isNotEmpty) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withOpacity(.10),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.success.withOpacity(.25),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.link_rounded,
+                        color: AppColors.success,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Связано · ${_typeLabel(_text(link['type']))}',
+                              style: const TextStyle(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _text(link['label']).isEmpty
+                                  ? 'Объект #${link['id']}'
+                                  : _text(link['label']),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: busy ? null : _clear,
+                        child: const Text('Отвязать'),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                const Text(
+                  'Предложения Nika',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Связь не создаётся автоматически — вы подтверждаете её сами.',
+                  style: TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                if (suggestions.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withOpacity(.45),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      'Подходящих совпадений пока не найдено.',
+                      style: TextStyle(color: AppColors.muted),
+                    ),
+                  )
+                else
+                  ...suggestions.map((suggestion) {
+                    final score = int.tryParse('${suggestion['score'] ?? 0}') ?? 0;
+                    return Card(
+                      elevation: 0,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              child: Text('$score%'),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _text(suggestion['label']),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${_typeLabel(_text(suggestion['type']))} · ${_text(suggestion['reason'])}',
+                                    style: const TextStyle(
+                                      color: AppColors.muted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  if (_text(suggestion['subtitle']).isNotEmpty)
+                                    Text(
+                                      _text(suggestion['subtitle']),
+                                      style: const TextStyle(
+                                        color: AppColors.muted,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton.tonal(
+                              onPressed: busy ? null : () => _link(suggestion),
+                              child: const Text('Связать'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+              ],
+              if (busy) ...[
+                const SizedBox(height: 10),
+                const LinearProgressIndicator(),
+              ],
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  error!,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detail(String label, String value) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 105,
+            child: Text(
+              label,
+              style: const TextStyle(color: AppColors.muted),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
       ),
     );

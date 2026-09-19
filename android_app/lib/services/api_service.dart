@@ -719,6 +719,55 @@ class ApiService {
         },
       ));
 
+  static Future<Map<String, dynamic>> bankStatement({
+    required String iban,
+    required String dateFrom,
+    required String dateTo,
+  }) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET',
+        '/api/integrations/alatau/statements',
+        timeout: const Duration(seconds: 60),
+        query: {
+          'environment': 'production',
+          'iban': iban,
+          'date_from': dateFrom,
+          'date_to': dateTo,
+          'page': '1',
+          'page_size': '200',
+          'smart': '1',
+        },
+      ));
+
+  static Future<Map<String, dynamic>?> linkBankStatementOperation({
+    required Map<String, dynamic> operation,
+    String? linkType,
+    int? linkId,
+    bool clear = false,
+  }) async {
+    final result = Map<String, dynamic>.from(await _request(
+      'POST',
+      '/api/integrations/alatau/statement-links',
+      body: {
+        'environment': 'production',
+        'operationKey': operation['operationKey'],
+        'accountIban': operation['accountIban'],
+        'date': operation['date'],
+        'direction': operation['direction'],
+        'amount': operation['amount'],
+        'currency': operation['currency'],
+        'counterpartyName': operation['counterpartyName'],
+        'counterpartyIinBin': operation['counterpartyIinBin'],
+        'purpose': operation['purpose'],
+        if (clear) 'clear': true,
+        if (!clear) 'linkType': linkType,
+        if (!clear) 'linkId': linkId,
+      },
+    ));
+    final link = result['link'];
+    return link is Map ? Map<String, dynamic>.from(link) : null;
+  }
+
   static Future<List<Map<String, dynamic>>> bankPaymentTemplates() async {
     final result = Map<String, dynamic>.from(
       await _request('GET', '/api/integrations/alatau/payment-templates'),

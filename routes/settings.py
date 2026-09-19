@@ -1,3 +1,4 @@
+import hashlib
 import re
 import secrets
 from datetime import date, timedelta
@@ -1374,6 +1375,524 @@ def alatau_payment_history():
         pool.putconn(conn)
 
 
+
+def _ensure_bank_statement_links_table(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bank_statement_links (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            environment TEXT NOT NULL DEFAULT 'production',
+            operation_key TEXT NOT NULL,
+            account_iban TEXT,
+            operation_date DATE,
+            direction TEXT,
+            amount NUMERIC(14, 2),
+            currency TEXT,
+            counterparty_name TEXT,
+            counterparty_iin_bin TEXT,
+            purpose TEXT,
+            link_type TEXT NOT NULL,
+            link_id BIGINT NOT NULL,
+            link_label TEXT,
+            created_by INTEGER,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_bank_statement_links_operation
+        ON bank_statement_links(company_id, environment, operation_key)
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bank_statement_links_company
+        ON bank_statement_links(company_id, environment, updated_at DESC)
+    """)
+
+
+def _statement_rows(statement):
+    if isinstance(statement, list):
+        return [row for row in statement if isinstance(row, dict)]
+    if not isinstance(statement, dict):
+        return []
+
+    for key in ("transactions", "operations", "items", "data", "entries", "documents"):
+        nested = statement.get(key)
+        if isinstance(nested, list):
+            return [row for row in nested if isinstance(row, dict)]
+        if isinstance(nested, dict):
+            items = nested.get("items")
+            if isinstance(items, list):
+                return [row for row in items if isinstance(row, dict)]
+    return []
+
+
+def _statement_first(source, keys, default=""):
+    if not isinstance(source, dict):
+        return default
+    for key in keys:
+        value = source.get(key)
+        if value not in (None, "", [], {}):
+            return value
+    return default
+
+
+def _statement_number(value):
+    if isinstance(value, dict):
+        value = _statement_first(value, ("amount", "value", "sum", "balance"), 0)
+    if isinstance(value, (int, float)):
+        return abs(float(value))
+    text = str(value or "").replace("\u00a0", "").replace(" ", "").replace(",", ".")
+    text = re.sub(r"[^0-9.\-]", "", text)
+    try:
+        return abs(float(text))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _statement_date_value(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    candidates = [text[:10]]
+    if "." in text[:10]:
+        parts = text[:10].split(".")
+        if len(parts) == 3:
+            candidates.append(f"{parts[2]}-{parts[1]}-{parts[0]}")
+    for candidate in candidates:
+        try:
+            return date.fromisoformat(candidate)
+        except ValueError:
+            continue
+    return None
+
+
+def _statement_normalize_name(value):
+    return re.sub(r"[^a-zа-яё0-9]+", "", str(value or "").lower(), flags=re.IGNORECASE)
+
+
+def _statement_nested_counterparty(row):
+    name = str(_statement_first(
+        row,
+        (
+            "counterpartyName", "partnerName", "recipientName", "senderName",
+            "beneficiaryName", "payerName", "receiverName", "customerName",
+        ),
+        "",
+    ) or "").strip()
+    iin_bin = re.sub(r"\D", "", str(_statement_first(
+        row,
+        (
+            "counterpartyIinBin", "counterpartyBin", "counterpartyIin",
+            "iinBin", "iinOrBin", "payerIin", "payerBin", "senderIin",
+            "senderBin", "recipientIin", "recipientBin", "beneficiaryIin",
+            "beneficiaryBin",
+        ),
+        "",
+    ) or ""))
+
+    if name and iin_bin:
+        return name, iin_bin
+
+    for key in (
+        "counterparty", "partner", "payer", "sender", "recipient",
+        "beneficiary", "paymentRecipient", "customer",
+    ):
+        nested = row.get(key)
+        if not isinstance(nested, dict):
+            continue
+        if not name:
+            name = str(_statement_first(
+                nested,
+                ("name", "fullName", "companyName", "title"),
+                "",
+            ) or "").strip()
+        if not iin_bin:
+            iin_bin = re.sub(r"\D", "", str(_statement_first(
+                nested,
+                ("iinBin", "iinOrBin", "bin", "iin", "identifier"),
+                "",
+            ) or ""))
+        if name and iin_bin:
+            break
+    return name, iin_bin
+
+
+def _normalize_statement_operation(row, iban):
+    direct_debit = _statement_number(_statement_first(
+        row, ("debit", "debitAmount", "outcome", "expense"), 0
+    ))
+    direct_credit = _statement_number(_statement_first(
+        row, ("credit", "creditAmount", "income"), 0
+    ))
+    generic_amount = _statement_number(_statement_first(
+        row, ("amount", "sum", "operationAmount", "paymentAmount"), 0
+    ))
+    operation_type = str(_statement_first(
+        row, ("operationType", "type", "direction"), ""
+    ) or "").upper()
+
+    if direct_debit > 0:
+        direction = "debit"
+        amount = direct_debit
+    elif direct_credit > 0:
+        direction = "credit"
+        amount = direct_credit
+    elif operation_type in ("DEBIT", "OUT", "OUTGOING", "EXPENSE"):
+        direction = "debit"
+        amount = generic_amount
+    elif operation_type in ("CREDIT", "IN", "INCOMING", "INCOME"):
+        direction = "credit"
+        amount = generic_amount
+    else:
+        direction = "unknown"
+        amount = generic_amount
+
+    date_raw = _statement_first(
+        row,
+        ("operDate", "date", "operationDate", "transactionDate", "valueDate", "createdAt"),
+        "",
+    )
+    operation_date = _statement_date_value(date_raw)
+    document_number = str(_statement_first(
+        row, ("documentNumber", "number", "reference", "documentId"), ""
+    ) or "").strip()
+    external_id = str(_statement_first(
+        row, ("operationId", "transactionId", "id", "reference"), ""
+    ) or "").strip()
+    counterparty_name, counterparty_iin_bin = _statement_nested_counterparty(row)
+    purpose = str(_statement_first(
+        row, ("purpose", "paymentPurpose", "description", "details"), ""
+    ) or "").strip()
+    if isinstance(row.get("details"), dict):
+        details = row.get("details")
+        if not purpose or purpose.startswith("{"):
+            purpose = str(_statement_first(
+                details, ("paymentPurpose", "description", "purpose"), ""
+            ) or "").strip()
+
+    currency = str(_statement_first(
+        row, ("currency", "currencyCode"), ""
+    ) or "").strip().upper()
+    for amount_key in ("amount", "sum", "operationAmount", "paymentAmount", "debitAmount", "creditAmount"):
+        amount_obj = row.get(amount_key)
+        if isinstance(amount_obj, dict):
+            currency = str(_statement_first(
+                amount_obj, ("currency", "currencyCode"), currency or "KZT"
+            ) or "KZT").strip().upper()
+            break
+    if not currency:
+        currency = "KZT"
+
+    seed = "|".join([
+        str(iban or "").upper(),
+        external_id,
+        operation_date.isoformat() if operation_date else str(date_raw or ""),
+        document_number,
+        direction,
+        f"{amount:.2f}",
+        counterparty_iin_bin,
+        counterparty_name,
+        purpose,
+    ])
+    operation_key = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:40]
+
+    return {
+        "operationKey": operation_key,
+        "externalId": external_id,
+        "date": operation_date.isoformat() if operation_date else str(date_raw or ""),
+        "documentNumber": document_number,
+        "counterpartyName": counterparty_name,
+        "counterpartyIinBin": counterparty_iin_bin,
+        "purpose": purpose,
+        "direction": direction,
+        "amount": round(amount, 2),
+        "currency": currency,
+        "raw": row,
+    }
+
+
+def _statement_suggestions(company_id, environment, operations, date_from_value, date_to_value):
+    if not operations:
+        return operations
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_bank_statement_links_table(cur)
+        conn.commit()
+
+        cur.execute("""
+            SELECT operation_key, link_type, link_id, link_label, updated_at
+            FROM bank_statement_links
+            WHERE company_id = %s AND environment = %s
+            ORDER BY updated_at DESC
+            LIMIT 1000
+        """, (company_id, environment))
+        links = {}
+        for row in cur.fetchall() or []:
+            item = dict(row) if not isinstance(row, dict) else row
+            links[item["operation_key"]] = {
+                "type": item.get("link_type"),
+                "id": item.get("link_id"),
+                "label": item.get("link_label") or "",
+                "linked": True,
+            }
+
+        cur.execute("""
+            SELECT id, name, bin_iin, iban
+            FROM suppliers
+            WHERE company_id = %s AND COALESCE(is_active, TRUE) = TRUE
+            ORDER BY id DESC
+            LIMIT 1000
+        """, (company_id,))
+        suppliers = [
+            dict(row) if not isinstance(row, dict) else row
+            for row in (cur.fetchall() or [])
+        ]
+
+        cur.execute("""
+            SELECT id, full_name, company_name, iin
+            FROM clients
+            WHERE company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+            ORDER BY id DESC
+            LIMIT 2000
+        """, (company_id,))
+        clients = [
+            dict(row) if not isinstance(row, dict) else row
+            for row in (cur.fetchall() or [])
+        ]
+
+        range_from = date_from_value - timedelta(days=3)
+        range_to = date_to_value + timedelta(days=3)
+        cur.execute("""
+            SELECT s.id, s.sale_number, s.total_amount, s.created_at,
+                   c.id AS client_id, c.full_name, c.company_name, c.iin
+            FROM sales s
+            LEFT JOIN clients c ON c.id = s.client_id
+            WHERE s.company_id = %s
+              AND DATE(s.created_at) BETWEEN %s AND %s
+              AND COALESCE(s.is_refunded, FALSE) = FALSE
+            ORDER BY s.created_at DESC
+            LIMIT 1500
+        """, (company_id, range_from, range_to))
+        sales = [
+            dict(row) if not isinstance(row, dict) else row
+            for row in (cur.fetchall() or [])
+        ]
+
+        cur.execute("""
+            SELECT id, category, description, amount, date, source_type, source_id
+            FROM expenses
+            WHERE company_id = %s
+              AND date BETWEEN %s AND %s
+            ORDER BY date DESC, id DESC
+            LIMIT 1500
+        """, (company_id, range_from, range_to))
+        expenses = [
+            dict(row) if not isinstance(row, dict) else row
+            for row in (cur.fetchall() or [])
+        ]
+
+        for operation in operations:
+            operation["link"] = links.get(operation["operationKey"])
+            if operation["link"]:
+                operation["suggestions"] = []
+                continue
+
+            direction = operation.get("direction")
+            amount = float(operation.get("amount") or 0)
+            op_date = _statement_date_value(operation.get("date"))
+            cp_name = str(operation.get("counterpartyName") or "").strip()
+            cp_norm = _statement_normalize_name(cp_name)
+            cp_iin = re.sub(r"\D", "", str(operation.get("counterpartyIinBin") or ""))
+            purpose_norm = _statement_normalize_name(operation.get("purpose"))
+            suggestions = []
+
+            def add_suggestion(kind, entity_id, label, score, reason, subtitle=""):
+                if not entity_id or score < 70:
+                    return
+                suggestions.append({
+                    "type": kind,
+                    "id": entity_id,
+                    "label": label or f"{kind} #{entity_id}",
+                    "subtitle": subtitle,
+                    "score": min(int(score), 100),
+                    "reason": reason,
+                })
+
+            if direction == "debit":
+                for supplier in suppliers:
+                    score = 0
+                    reasons = []
+                    supplier_iin = re.sub(r"\D", "", str(supplier.get("bin_iin") or ""))
+                    supplier_norm = _statement_normalize_name(supplier.get("name"))
+                    if cp_iin and supplier_iin and cp_iin == supplier_iin:
+                        score = 100
+                        reasons.append("совпадает БИН/ИИН")
+                    elif cp_norm and supplier_norm:
+                        if cp_norm == supplier_norm:
+                            score = 94
+                            reasons.append("совпадает название")
+                        elif len(cp_norm) >= 5 and (cp_norm in supplier_norm or supplier_norm in cp_norm):
+                            score = 84
+                            reasons.append("похоже название")
+                    if score:
+                        add_suggestion(
+                            "supplier",
+                            supplier.get("id"),
+                            supplier.get("name"),
+                            score,
+                            ", ".join(reasons),
+                            supplier.get("bin_iin") or "",
+                        )
+
+                for expense in expenses:
+                    expense_amount = float(expense.get("amount") or 0)
+                    if abs(expense_amount - amount) > 0.01:
+                        continue
+                    expense_date = expense.get("date")
+                    date_score = 0
+                    if op_date and expense_date:
+                        try:
+                            date_score = max(0, 12 - abs((op_date - expense_date).days) * 4)
+                        except TypeError:
+                            date_score = 0
+                    desc_norm = _statement_normalize_name(expense.get("description"))
+                    text_score = 0
+                    if cp_norm and desc_norm and (cp_norm in desc_norm or desc_norm in cp_norm):
+                        text_score = 10
+                    elif purpose_norm and desc_norm and len(desc_norm) >= 5 and desc_norm in purpose_norm:
+                        text_score = 8
+                    score = 72 + date_score + text_score
+                    add_suggestion(
+                        "expense",
+                        expense.get("id"),
+                        expense.get("description"),
+                        score,
+                        "совпадает сумма" + (", близкая дата" if date_score else ""),
+                        expense.get("category") or "",
+                    )
+
+            elif direction == "credit":
+                matching_client_ids = set()
+                for client in clients:
+                    score = 0
+                    reasons = []
+                    client_iin = re.sub(r"\D", "", str(client.get("iin") or ""))
+                    names = [
+                        str(client.get("company_name") or "").strip(),
+                        str(client.get("full_name") or "").strip(),
+                    ]
+                    if cp_iin and client_iin and cp_iin == client_iin:
+                        score = 100
+                        reasons.append("совпадает БИН/ИИН")
+                    else:
+                        for name in names:
+                            norm = _statement_normalize_name(name)
+                            if cp_norm and norm:
+                                if cp_norm == norm:
+                                    score = max(score, 94)
+                                    reasons = ["совпадает имя/компания"]
+                                elif len(cp_norm) >= 5 and (cp_norm in norm or norm in cp_norm):
+                                    score = max(score, 84)
+                                    reasons = ["похоже имя/компания"]
+                    if score:
+                        matching_client_ids.add(client.get("id"))
+                        label = client.get("company_name") or client.get("full_name")
+                        add_suggestion(
+                            "client",
+                            client.get("id"),
+                            label,
+                            score,
+                            ", ".join(reasons),
+                            client.get("iin") or "",
+                        )
+
+                for sale in sales:
+                    sale_amount = float(sale.get("total_amount") or 0)
+                    if abs(sale_amount - amount) > 0.01:
+                        continue
+                    created_at = sale.get("created_at")
+                    sale_date = created_at.date() if hasattr(created_at, "date") else None
+                    date_score = 0
+                    if op_date and sale_date:
+                        date_score = max(0, 14 - abs((op_date - sale_date).days) * 4)
+                    client_bonus = 12 if sale.get("client_id") in matching_client_ids else 0
+                    score = 70 + date_score + client_bonus
+                    label_name = sale.get("company_name") or sale.get("full_name") or "Продажа"
+                    add_suggestion(
+                        "sale",
+                        sale.get("id"),
+                        f"{label_name} · Продажа №{sale.get('sale_number') or sale.get('id')}",
+                        score,
+                        "совпадает сумма" + (", клиент" if client_bonus else ""),
+                        f"{sale_amount:.2f} KZT",
+                    )
+
+            suggestions.sort(key=lambda item: (-item["score"], item["type"], str(item["label"])))
+            deduped = []
+            seen = set()
+            for suggestion in suggestions:
+                key = (suggestion["type"], suggestion["id"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                deduped.append(suggestion)
+                if len(deduped) >= 5:
+                    break
+            operation["suggestions"] = deduped
+
+        return operations
+    finally:
+        pool.putconn(conn)
+
+
+def _bank_link_entity(cur, company_id, link_type, link_id):
+    if link_type == "supplier":
+        cur.execute("""
+            SELECT id, name
+            FROM suppliers
+            WHERE id = %s AND company_id = %s AND COALESCE(is_active, TRUE) = TRUE
+        """, (link_id, company_id))
+        row = cur.fetchone()
+        return row, (row.get("name") if row else None)
+
+    if link_type == "client":
+        cur.execute("""
+            SELECT id, full_name, company_name
+            FROM clients
+            WHERE id = %s AND company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+        """, (link_id, company_id))
+        row = cur.fetchone()
+        label = (row.get("company_name") or row.get("full_name")) if row else None
+        return row, label
+
+    if link_type == "sale":
+        cur.execute("""
+            SELECT s.id, s.sale_number, c.full_name, c.company_name
+            FROM sales s
+            LEFT JOIN clients c ON c.id = s.client_id
+            WHERE s.id = %s AND s.company_id = %s
+        """, (link_id, company_id))
+        row = cur.fetchone()
+        if not row:
+            return None, None
+        client_name = row.get("company_name") or row.get("full_name") or "Продажа"
+        return row, f"{client_name} · Продажа №{row.get('sale_number') or row.get('id')}"
+
+    if link_type == "expense":
+        cur.execute("""
+            SELECT id, category, description
+            FROM expenses
+            WHERE id = %s AND company_id = %s
+        """, (link_id, company_id))
+        row = cur.fetchone()
+        label = row.get("description") if row else None
+        return row, label
+
+    return None, None
+
+
 @settings_bp.route("/api/integrations/alatau/statements")
 def alatau_statements():
     company_id, error = _alatau_current_company()
@@ -1498,11 +2017,34 @@ def alatau_statements():
             bank_company_id=bank_company_id,
             error=None,
         )
-        return jsonify({
+        response_payload = {
             "success": True,
             "environment": environment,
             "statement": statement,
-        })
+        }
+        if (request.args.get("smart", "").strip().lower() in ("1", "true", "yes"):
+            operations = [
+                _normalize_statement_operation(row, iban)
+                for row in _statement_rows(statement)
+            ]
+            try:
+                operations = _statement_suggestions(
+                    company_id,
+                    environment,
+                    operations,
+                    date_from_value,
+                    date_to_value,
+                )
+            except Exception as smart_error:
+                # The live bank statement remains usable even if the local
+                # reconciliation layer has a temporary schema/data problem.
+                for operation in operations:
+                    operation["link"] = None
+                    operation["suggestions"] = []
+                response_payload["smart_warning"] = str(smart_error)
+            response_payload["operations"] = operations
+
+        return jsonify(response_payload)
     except AlatauError as exc:
         error_message = str(exc)
         if exc.status_code == 412:
@@ -1514,6 +2056,117 @@ def alatau_statements():
             )
         _alatau_touch(company_id, environment, error=error_message[:500])
         return jsonify({"success": False, "error": error_message}), exc.status_code
+
+
+
+@settings_bp.route("/api/integrations/alatau/statement-links", methods=["POST"])
+def alatau_statement_link():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    environment = str(data.get("environment") or "production").strip().lower()
+    if environment not in ("test", "production"):
+        return jsonify({"success": False, "error": "Неверный режим подключения"}), 400
+
+    operation_key = str(data.get("operationKey") or "").strip()
+    if not re.fullmatch(r"[a-f0-9]{40}", operation_key):
+        return jsonify({"success": False, "error": "Некорректный идентификатор операции"}), 400
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_bank_statement_links_table(cur)
+
+        if data.get("clear") is True:
+            cur.execute("""
+                DELETE FROM bank_statement_links
+                WHERE company_id = %s AND environment = %s AND operation_key = %s
+            """, (company_id, environment, operation_key))
+            conn.commit()
+            return jsonify({"success": True, "link": None})
+
+        link_type = str(data.get("linkType") or "").strip().lower()
+        if link_type not in ("supplier", "client", "sale", "expense"):
+            return jsonify({"success": False, "error": "Неизвестный тип связи"}), 400
+        try:
+            link_id = int(data.get("linkId"))
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "Не выбран объект для связи"}), 400
+
+        entity, label = _bank_link_entity(cur, company_id, link_type, link_id)
+        if not entity:
+            return jsonify({"success": False, "error": "Объект для связи не найден"}), 404
+
+        operation_date = _statement_date_value(data.get("date"))
+        amount = _statement_number(data.get("amount"))
+        direction = str(data.get("direction") or "unknown").strip().lower()
+        if direction not in ("debit", "credit", "unknown"):
+            direction = "unknown"
+
+        cur.execute("""
+            INSERT INTO bank_statement_links (
+                company_id, environment, operation_key, account_iban,
+                operation_date, direction, amount, currency,
+                counterparty_name, counterparty_iin_bin, purpose,
+                link_type, link_id, link_label, created_by,
+                created_at, updated_at
+            )
+            VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                NOW(), NOW()
+            )
+            ON CONFLICT (company_id, environment, operation_key)
+            DO UPDATE SET
+                account_iban = EXCLUDED.account_iban,
+                operation_date = EXCLUDED.operation_date,
+                direction = EXCLUDED.direction,
+                amount = EXCLUDED.amount,
+                currency = EXCLUDED.currency,
+                counterparty_name = EXCLUDED.counterparty_name,
+                counterparty_iin_bin = EXCLUDED.counterparty_iin_bin,
+                purpose = EXCLUDED.purpose,
+                link_type = EXCLUDED.link_type,
+                link_id = EXCLUDED.link_id,
+                link_label = EXCLUDED.link_label,
+                created_by = EXCLUDED.created_by,
+                updated_at = NOW()
+        """, (
+            company_id,
+            environment,
+            operation_key,
+            str(data.get("accountIban") or "").replace(" ", "").upper() or None,
+            operation_date,
+            direction,
+            amount or None,
+            str(data.get("currency") or "KZT").upper()[:8],
+            str(data.get("counterpartyName") or "").strip()[:300] or None,
+            re.sub(r"\D", "", str(data.get("counterpartyIinBin") or ""))[:12] or None,
+            str(data.get("purpose") or "").strip()[:1000] or None,
+            link_type,
+            link_id,
+            str(label or "")[:300],
+            session.get("user_id"),
+        ))
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "link": {
+                "type": link_type,
+                "id": link_id,
+                "label": label or "",
+                "linked": True,
+            },
+        })
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
 
 @settings_bp.route("/api/integrations/alatau/disconnect", methods=["POST"])
