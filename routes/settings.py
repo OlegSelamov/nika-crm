@@ -2002,15 +2002,43 @@ def alatau_statements():
                         },
                     }), 400
 
-        statement = client.get_statement(
-            access_token,
-            bank_company_id,
-            iban,
-            date_from_value.isoformat(),
-            date_to_value.isoformat(),
-            page=page,
-            page_size=page_size,
-        )
+        effective_date_to = date_to_value
+        statement = None
+        fallback_date_to = None
+        try:
+            statement = client.get_statement(
+                access_token,
+                bank_company_id,
+                iban,
+                date_from_value.isoformat(),
+                effective_date_to.isoformat(),
+                page=page,
+                page_size=page_size,
+            )
+        except AlatauError as statement_exc:
+            if statement_exc.status_code != 412 or date_to_value < date.today():
+                raise
+
+            # The v3 specification defines dateTo by the operational banking
+            # day. On a weekend (or before today's banking day is closed),
+            # Alatau may reject "today" with HTTP 412. Retry the last weekday.
+            fallback_date_to = date.today() - timedelta(days=1)
+            while fallback_date_to.weekday() >= 5:
+                fallback_date_to -= timedelta(days=1)
+
+            if fallback_date_to < date_from_value:
+                raise
+
+            statement = client.get_statement(
+                access_token,
+                bank_company_id,
+                iban,
+                date_from_value.isoformat(),
+                fallback_date_to.isoformat(),
+                page=page,
+                page_size=page_size,
+            )
+            effective_date_to = fallback_date_to
         _alatau_touch(
             company_id,
             environment,
@@ -2021,6 +2049,9 @@ def alatau_statements():
             "success": True,
             "environment": environment,
             "statement": statement,
+            "requested_date_to": date_to_value.isoformat(),
+            "effective_date_to": effective_date_to.isoformat(),
+            "used_previous_banking_day": bool(fallback_date_to),
         }
         if request.args.get("smart", "").strip().lower() in ("1", "true", "yes"):
             operations = [

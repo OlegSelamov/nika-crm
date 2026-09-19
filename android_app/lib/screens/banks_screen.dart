@@ -25,8 +25,8 @@ class _BanksScreenState extends State<BanksScreen> {
   List<Map<String, dynamic>> accounts = [];
   List<Map<String, dynamic>> payments = [];
   List<Map<String, dynamic>> statementOperations = [];
-  DateTime statementFrom = DateTime.now().subtract(const Duration(days: 30));
-  DateTime statementTo = DateTime.now();
+  late DateTime statementFrom;
+  late DateTime statementTo;
   Map<String, dynamic>? selectedAccount;
   Map<String, dynamic> bank = const {};
   Map<String, dynamic> company = const {};
@@ -34,7 +34,18 @@ class _BanksScreenState extends State<BanksScreen> {
   @override
   void initState() {
     super.initState();
+    statementTo = _previousBankingDay(DateTime.now());
+    statementFrom = statementTo.subtract(const Duration(days: 30));
     _load();
+  }
+
+  DateTime _previousBankingDay(DateTime now) {
+    var value = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
+    while (value.weekday == DateTime.saturday ||
+        value.weekday == DateTime.sunday) {
+      value = value.subtract(const Duration(days: 1));
+    }
+    return value;
   }
 
   String _text(dynamic value) => value == null ? '' : '$value';
@@ -227,11 +238,20 @@ class _BanksScreenState extends State<BanksScreen> {
           })
           .toList();
       if (!mounted) return;
+      final usedPreviousBankingDay =
+          result['used_previous_banking_day'] == true;
+      final effectiveDateTo = _text(result['effective_date_to']);
       setState(() {
         statementOperations = rows;
-        statementWarning = _text(result['smart_warning']).isEmpty
-            ? null
-            : _text(result['smart_warning']);
+        if (_text(result['smart_warning']).isNotEmpty) {
+          statementWarning = _text(result['smart_warning']);
+        } else if (usedPreviousBankingDay && effectiveDateTo.isNotEmpty) {
+          statementWarning =
+              'Alatau не принимает текущий незакрытый банковский день. '
+              'Показана выписка по $effectiveDateTo.';
+        } else {
+          statementWarning = null;
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -451,10 +471,20 @@ class _BanksScreenState extends State<BanksScreen> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(20),
                     onTap: () async {
+                      final openDate = DateTime.tryParse(
+                        _text(_first(account, const ['openDate', 'open_date'])),
+                      );
                       setState(() {
                         selectedAccount = account;
                         statementOperations = [];
                         statementWarning = null;
+                        if (openDate != null && statementFrom.isBefore(openDate)) {
+                          statementFrom = DateTime(
+                            openDate.year,
+                            openDate.month,
+                            openDate.day,
+                          );
+                        }
                       });
                       if (bankView == 'statement') await _loadStatement();
                     },
