@@ -532,6 +532,14 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
 
     setState(() => sending = true);
     try {
+      final capabilities = await MobileP12Signer.capabilities();
+      if (capabilities['readyForAlatau'] != true) {
+        throw const ApiException(
+          'В этой сборке Nika Business нет KalkanCrypt НУЦ РК. '
+          'Подпись .p12 пока недоступна: установите сборку с официальным Kalkan SDK.',
+        );
+      }
+
       final payment = _paymentData();
       final prepared = await ApiService.prepareBankPayment(payment);
       final payload = prepared['payload'];
