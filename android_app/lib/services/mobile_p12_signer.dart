@@ -73,21 +73,25 @@ class MobileP12Signer {
   static Future<Map<String, dynamic>> signEsfRaw({
     required String payload,
     required String password,
+    bool saveKey = false,
   }) =>
       _invoke(
         'signEsfRawWithP12',
         payload: payload,
         password: password,
+        saveKey: saveKey,
       );
 
   static Future<Map<String, dynamic>> signEsfXml({
     required String payload,
     required String password,
+    bool saveKey = false,
   }) =>
       _invoke(
         'signEsfXmlWithP12',
         payload: payload,
         password: password,
+        saveKey: saveKey,
       );
 
   static Future<Map<String, dynamic>> _invokeSaved(
