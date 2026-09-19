@@ -44,6 +44,8 @@ object KalkanJwsSigner {
         "http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
     private const val XML_ENVELOPED_URI =
         "http://www.w3.org/2000/09/xmldsig#enveloped-signature"
+    private const val XML_C14N_WITH_COMMENTS_URI =
+        "http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments"
 
     class SigningException(val code: String, message: String, cause: Throwable? = null) :
         Exception(message, cause)
@@ -329,29 +331,36 @@ object KalkanJwsSigner {
         privateKey: PrivateKey,
         certificate: X509Certificate,
     ): String {
+        var stage = "создание XMLSignature"
         try {
             val xmlSignatureClass = Class.forName("org.apache.xml.security.signature.XMLSignature")
             val transformsClass = Class.forName("org.apache.xml.security.transforms.Transforms")
 
+            // Повторяем рабочую схему NCANode/Kalkan: стандартный 3-аргументный
+            // конструктор XMLSignature, затем enveloped + canonicalization transform.
             val xmlSignature = xmlSignatureClass
                 .getConstructor(
                     Document::class.java,
                     String::class.java,
                     String::class.java,
-                    String::class.java,
                 )
-                .newInstance(document, "", XML_SIGNATURE_URI, XML_C14N_URI)
+                .newInstance(document, "", XML_SIGNATURE_URI)
 
+            stage = "добавление Signature в DOM"
             val signatureElement = xmlSignatureClass.getMethod("getElement").invoke(xmlSignature)
                 as org.w3c.dom.Node
             document.documentElement.appendChild(signatureElement)
 
+            stage = "создание transforms"
             val transforms = transformsClass
                 .getConstructor(Document::class.java)
                 .newInstance(document)
             transformsClass.getMethod("addTransform", String::class.java)
                 .invoke(transforms, XML_ENVELOPED_URI)
+            transformsClass.getMethod("addTransform", String::class.java)
+                .invoke(transforms, XML_C14N_WITH_COMMENTS_URI)
 
+            stage = "добавление Reference"
             xmlSignatureClass
                 .getMethod(
                     "addDocument",
@@ -361,11 +370,15 @@ object KalkanJwsSigner {
                 )
                 .invoke(xmlSignature, "", transforms, XML_DIGEST_URI)
 
+            stage = "добавление сертификата"
             xmlSignatureClass.getMethod("addKeyInfo", X509Certificate::class.java)
                 .invoke(xmlSignature, certificate)
+
+            stage = "криптографическая подпись"
             xmlSignatureClass.getMethod("sign", Key::class.java)
                 .invoke(xmlSignature, privateKey)
 
+            stage = "сериализация signed XML"
             val transformer = TransformerFactory.newInstance().newTransformer()
             transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no")
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
@@ -375,9 +388,22 @@ object KalkanJwsSigner {
         } catch (error: SigningException) {
             throw error
         } catch (error: Throwable) {
+            var root: Throwable = error
+            val visited = HashSet<Throwable>()
+            while (root.cause != null && root.cause !== root && visited.add(root)) {
+                root = root.cause!!
+            }
+            val rootMessage = root.message
+                ?.replace(Regex("\\s+"), " ")
+                ?.trim()
+                ?.take(240)
+            val detail = buildString {
+                append(root.javaClass.simpleName)
+                if (!rootMessage.isNullOrBlank()) append(": ").append(rootMessage)
+            }
             throw SigningException(
                 "XML_SIGN_FAILED",
-                "Не удалось сформировать XML-подпись ИС ЭСФ. Проверьте версии Kalkan XMLDSig и Apache xmlsec из одного комплекта SDK НУЦ.",
+                "Не удалось сформировать XML-подпись ИС ЭСФ на этапе «$stage». $detail",
                 error,
             )
         }
