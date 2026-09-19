@@ -70,6 +70,7 @@ dependencies {
         "dir" to "libs",
         "include" to listOf("*.jar", "*.aar")
     )))
+    implementation("androidx.biometric:biometric:1.1.0")
 }
 
 flutter {
