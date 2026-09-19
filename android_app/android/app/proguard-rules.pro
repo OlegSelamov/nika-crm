@@ -14,3 +14,8 @@
 
 # Android ESF signing uses the DOM path only; desktop StAX APIs are optional.
 -dontwarn javax.xml.stream.**
+
+
+# JAXB belongs to optional Santuario XML encryption/StAX paths.
+# Nika's ESF mobile signature uses only DOM JSR-105 XMLDSig.
+-dontwarn jakarta.xml.bind.**
