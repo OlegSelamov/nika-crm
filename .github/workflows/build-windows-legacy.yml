@@ -7,12 +7,6 @@ on:
         description: "Existing release version, for example 1.2.12"
         required: true
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/build-windows-legacy.yml"
-
 permissions:
   contents: write
 
@@ -23,7 +17,6 @@ concurrency:
 jobs:
   windows_legacy:
     name: Build and publish Windows 8.1 installer
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-legacy]')
     runs-on: windows-latest
     timeout-minutes: 25
     steps:

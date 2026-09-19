@@ -8,8 +8,14 @@ on:
         required: true
         type: string
   push:
+    branches:
+      - main
     tags:
       - "v*"
+    paths:
+      - "android_app/**"
+      - "desktop/**"
+      - ".github/workflows/build-apps.yml"
 
 permissions:
   contents: write
@@ -34,12 +40,19 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - name: Resolve version
         id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         shell: pwsh
         run: |
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $version = "${{ inputs.version }}".Trim()
-          } else {
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
             $version = "${{ github.ref_name }}".TrimStart("v")
+          } else {
+            $latest = (gh release view --json tagName --jq .tagName).Trim().TrimStart("v")
+            if ($latest -notmatch '^(\d+)\.(\d+)\.(\d+)$') { throw "Cannot auto-bump latest release version: $latest" }
+            $version = "$($Matches[1]).$($Matches[2]).$([int]$Matches[3] + 1)"
           }
           if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "Invalid version: $version" }
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -90,12 +103,19 @@ jobs:
           cache-dependency-path: desktop/legacy/package-lock.json
       - name: Resolve version
         id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         shell: pwsh
         run: |
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $version = "${{ inputs.version }}".Trim()
-          } else {
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
             $version = "${{ github.ref_name }}".TrimStart("v")
+          } else {
+            $latest = (gh release view --json tagName --jq .tagName).Trim().TrimStart("v")
+            if ($latest -notmatch '^(\d+)\.(\d+)\.(\d+)$') { throw "Cannot auto-bump latest release version: $latest" }
+            $version = "$($Matches[1]).$($Matches[2]).$([int]$Matches[3] + 1)"
           }
           if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "Invalid version: $version" }
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -155,13 +175,25 @@ jobs:
           cache: true
       - name: Resolve version
         id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="\${GITHUB_REF_NAME#v}"
+            LATEST="$(gh release view --json tagName --jq .tagName)"
+            LATEST="${LATEST#v}"
+            if ! printf '%s' "$LATEST" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "Cannot auto-bump latest release version: $LATEST"
+              exit 1
+            fi
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST"
+            VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
           fi
           VERSION="$(printf '%s' "$VERSION" | tr -d '[:space:]')"
           if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
