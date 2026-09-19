@@ -307,20 +307,37 @@ object KalkanJwsSigner {
 
     private fun initializeXmlSecurity(provider: Provider) {
         try {
-            System.setProperty(
-                "org.apache.xml.security.resource.config",
-                "/kz/gov/pki/kalkan/xmldsig/pkigovkz.xml",
-            )
-            val initClass = Class.forName("org.apache.xml.security.Init")
-            initClass.getMethod("init").invoke(null)
+            // Это официальный способ инициализации Kalkan XMLDSig. Он не только
+            // запускает Apache Santuario, но и регистрирует казахстанские GOST URI
+            // (SignatureMethod/DigestMethod) в xmlsec. Простого Init.init() +
+            // JCEMapper.setProviderId(...) недостаточно: тогда Santuario видит URI,
+            // но отвечает algorithms.NoSuchAlgorithmNoEx.
+            val kncaXsClass = Class.forName("kz.gov.pki.kalkan.xmldsig.KncaXS")
+            kncaXsClass.getMethod("loadXMLSecurity").invoke(null)
 
+            // Явно оставляем Kalkan JCE provider выбранным для JCE-вызовов.
             val mapperClass = Class.forName("org.apache.xml.security.algorithms.JCEMapper")
-            mapperClass.getMethod("setProviderId", String::class.java)
-                .invoke(null, provider.name)
+            try {
+                mapperClass.getMethod("setProviderId", String::class.java)
+                    .invoke(null, provider.name)
+            } catch (_: Throwable) {
+                // В разных версиях Santuario этого метода может не быть.
+                // KncaXS.loadXMLSecurity() уже выполнил основную регистрацию.
+            }
         } catch (error: Throwable) {
+            var root: Throwable = error
+            val visited = HashSet<Throwable>()
+            while (root.cause != null && root.cause !== root && visited.add(root)) {
+                root = root.cause!!
+            }
+            val detail = root.message
+                ?.replace(Regex("\\s+"), " ")
+                ?.trim()
+                ?.take(220)
             throw SigningException(
-                "KALKAN_XMLDSIG_NOT_INSTALLED",
-                "Для мобильной авторизации ИС ЭСФ добавьте из SDK НУЦ библиотеки kalkancrypt_xmldsig, kalkancrypt и совместимый Apache xmlsec в android/app/libs.",
+                "KALKAN_XMLDSIG_INIT_FAILED",
+                "Не удалось инициализировать Kalkan XMLDSig через KncaXS.loadXMLSecurity()" +
+                    if (detail.isNullOrBlank()) "" else ": $detail",
                 error,
             )
         }
