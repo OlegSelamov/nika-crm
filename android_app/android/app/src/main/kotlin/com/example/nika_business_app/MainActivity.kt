@@ -13,11 +13,14 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.content.ActivityNotFoundException
-import io.flutter.embedding.android.FlutterActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val updateChannel = "com.nikabusiness.app/updates"
     private val scannerChannel = "com.nikabusiness.app/scanner"
     private val signingChannel = "com.nikabusiness.app/signing"
@@ -26,6 +29,7 @@ class MainActivity : FlutterActivity() {
     private var pendingSigningPayload: String? = null
     private var pendingSigningPassword: CharArray? = null
     private var pendingSigningMethod: String? = null
+    private var pendingSaveKey: Boolean = false
     private var updateDownloadId: Long = -1
     private var receiverRegistered = false
     private var scannerTone: ToneGenerator? = null
