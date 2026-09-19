@@ -43,6 +43,32 @@ class MobileP12Signer {
     await _channel.invokeMethod<void>('clearSavedP12Key');
   }
 
+  static Future<Map<String, dynamic>?> loadSavedEsfAuth() async {
+    final result = await _channel.invokeMethod<dynamic>('loadSavedEsfAuth');
+    if (result == null) return null;
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return null;
+  }
+
+  static Future<void> saveEsfAuth({
+    required String iin,
+    required String password,
+    required String profileType,
+  }) async {
+    await _channel.invokeMethod<void>(
+      'saveEsfAuth',
+      {
+        'iin': iin,
+        'password': password,
+        'profile_type': profileType,
+      },
+    );
+  }
+
+  static Future<void> clearSavedEsfAuth() async {
+    await _channel.invokeMethod<void>('clearSavedEsfAuth');
+  }
+
   static Future<Map<String, dynamic>> signAlatauWithSavedKey({
     required String payload,
   }) =>

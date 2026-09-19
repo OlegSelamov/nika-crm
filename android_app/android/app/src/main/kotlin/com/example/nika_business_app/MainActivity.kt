@@ -120,6 +120,33 @@ class MainActivity : FlutterFragmentActivity() {
                         SecureSigningPasswordStore.clear(this)
                         result.success(null)
                     }
+                    "loadSavedEsfAuth" -> {
+                        result.success(SecureEsfAuthStore.load(this))
+                    }
+                    "saveEsfAuth" -> {
+                        val iin = call.argument<String>("iin") ?: ""
+                        val password = call.argument<String>("password") ?: ""
+                        val profileType = call.argument<String>("profile_type") ?: "ADMIN_ENTERPRISE"
+                        try {
+                            SecureEsfAuthStore.save(
+                                context = this,
+                                iin = iin,
+                                password = password,
+                                profileType = profileType,
+                            )
+                            result.success(null)
+                        } catch (error: Exception) {
+                            result.error(
+                                "ESF_AUTH_SAVE_FAILED",
+                                error.message ?: "Не удалось сохранить пароль ИС ЭСФ",
+                                null,
+                            )
+                        }
+                    }
+                    "clearSavedEsfAuth" -> {
+                        SecureEsfAuthStore.clear(this)
+                        result.success(null)
+                    }
                     "signAlatauJwsWithSavedP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
                         startSavedP12Signing("signAlatauJwsWithP12", payload, result)

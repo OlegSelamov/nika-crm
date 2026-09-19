@@ -423,8 +423,6 @@ class _EsfSignDialogState extends State<_EsfSignDialog> {
   bool loading = true;
   bool signing = false;
   bool savedReady = false;
-  bool rememberPassword = false;
-  bool rememberKey = false;
   String? error;
 
   @override
@@ -436,13 +434,7 @@ class _EsfSignDialogState extends State<_EsfSignDialog> {
   Future<void> _load() async {
     try {
       final info = await MobileP12Signer.savedKeyInfo();
-      final saved = await MobileP12Signer.loadSavedPassword();
       savedReady = info['hasKey'] == true && info['hasPassword'] == true;
-      rememberKey = info['hasKey'] == true;
-      if (saved != null && saved.isNotEmpty) {
-        password.text = saved;
-        rememberPassword = true;
-      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -479,16 +471,14 @@ class _EsfSignDialogState extends State<_EsfSignDialog> {
           ? await MobileP12Signer.signEsfXml(
               payload: widget.payload,
               password: password.text,
-              saveKey: rememberKey,
+              saveKey: true,
             )
           : await MobileP12Signer.signEsfRaw(
               payload: widget.payload,
               password: password.text,
-              saveKey: rememberKey,
+              saveKey: true,
             );
-      if (rememberPassword) {
-        await MobileP12Signer.savePassword(password.text);
-      }
+      await MobileP12Signer.savePassword(password.text);
       if (mounted) Navigator.pop(context, result);
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
@@ -508,62 +498,70 @@ class _EsfSignDialogState extends State<_EsfSignDialog> {
   Widget build(BuildContext context) => AlertDialog(
         title: Text(widget.title),
         content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            if (savedReady)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: signing ? null : _saved,
-                  icon: const Icon(Icons.fingerprint),
-                  label: const Text('Подписать по биометрии'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (loading)
+                const LinearProgressIndicator()
+              else if (savedReady)
+                const Text(
+                  'ЭЦП уже сохранена на этом телефоне. Подтвердите подпись биометрией.',
+                  style: TextStyle(color: AppColors.muted),
+                )
+              else ...[
+                const Text(
+                  'При первом подписании выберите файл .p12 и введите пароль ЭЦП. '
+                  'Nika Business сохранит ключ и пароль на этом телефоне, '
+                  'а следующие подписи будут подтверждаться биометрией.',
+                  style: TextStyle(color: AppColors.muted),
                 ),
-              ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Пароль ЭЦП'),
-            ),
-            CheckboxListTile(
-              value: rememberPassword,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Сохранить пароль'),
-              onChanged: signing
-                  ? null
-                  : (v) => setState(() => rememberPassword = v ?? false),
-            ),
-            CheckboxListTile(
-              value: rememberKey,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Сохранить ключ на телефоне'),
-              subtitle: const Text(
-                'Ключ останется только во внутреннем хранилище Nika Business.',
-              ),
-              onChanged: signing
-                  ? null
-                  : (v) => setState(() => rememberKey = v ?? false),
-            ),
-            if (error != null)
-              Text(error!,
+                const SizedBox(height: 12),
+                TextField(
+                  controller: password,
+                  obscureText: true,
+                  enabled: !signing,
+                  decoration: const InputDecoration(labelText: 'Пароль ЭЦП'),
+                ),
+              ],
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  error!,
                   style: const TextStyle(
-                      color: AppColors.danger, fontWeight: FontWeight.w700)),
-            if (widget.xmlMode)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  'Авторизационный XML подписывается локально через Kalkan XMLDSig.',
-                  style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-          ]),
+              ],
+              if (widget.xmlMode)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Авторизационный XML подписывается локально через Kalkan XMLDSig.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
+                ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: signing ? null : () => Navigator.pop(context),
-              child: const Text('Отмена')),
-          FilledButton(
-            onPressed: loading || signing ? null : _manual,
-            child: Text(signing ? 'Подписываем…' : 'Выбрать .p12'),
+            onPressed: signing ? null : () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          FilledButton.icon(
+            onPressed: loading || signing
+                ? null
+                : (savedReady ? _saved : _manual),
+            icon: Icon(savedReady ? Icons.fingerprint : Icons.key),
+            label: Text(
+              signing
+                  ? 'Подписываем…'
+                  : (savedReady
+                      ? 'Подписать по биометрии'
+                      : 'Выбрать .p12 и подписать'),
+            ),
           ),
         ],
       );
@@ -579,54 +577,150 @@ class _EsfAuthDialogState extends State<_EsfAuthDialog> {
   final iin = TextEditingController();
   final password = TextEditingController();
   String profile = 'ADMIN_ENTERPRISE';
+  bool loading = true;
+  bool saving = false;
+  bool rememberPassword = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedAuth();
+  }
+
+  Future<void> _loadSavedAuth() async {
+    try {
+      final saved = await MobileP12Signer.loadSavedEsfAuth();
+      if (saved != null) {
+        final savedIin = '${saved['iin'] ?? ''}';
+        final savedPassword = '${saved['password'] ?? ''}';
+        final savedProfile = '${saved['profile_type'] ?? ''}';
+        if (savedIin.isNotEmpty) iin.text = savedIin;
+        if (savedPassword.isNotEmpty) {
+          password.text = savedPassword;
+          rememberPassword = true;
+        }
+        if (const {
+          'ADMIN_ENTERPRISE',
+          'ENTREPRENEUR',
+          'USER',
+        }.contains(savedProfile)) {
+          profile = savedProfile;
+        }
+      }
+    } catch (_) {
+      // Saved authorization is only a convenience. Manual entry still works.
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _continue() async {
+    final clean = iin.text.replaceAll(RegExp(r'\D'), '');
+    if (clean.length != 12) {
+      setState(() => error = 'Введите ИИН пользователя — 12 цифр');
+      return;
+    }
+    if (password.text.isEmpty) {
+      setState(() => error = 'Введите пароль ИС ЭСФ');
+      return;
+    }
+
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      if (rememberPassword) {
+        await MobileP12Signer.saveEsfAuth(
+          iin: clean,
+          password: password.text,
+          profileType: profile,
+        );
+      } else {
+        await MobileP12Signer.clearSavedEsfAuth();
+      }
+      if (!mounted) return;
+      Navigator.pop(context, <String, String>{
+        'iin': clean,
+        'password': password.text,
+        'profile_type': profile,
+      });
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
         title: const Text('Вход в ИС ЭСФ'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: iin,
-            maxLength: 12,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'ИИН пользователя'),
-          ),
-          TextField(
-            controller: password,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Пароль ИС ЭСФ'),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            value: profile,
-            decoration: const InputDecoration(labelText: 'Профиль'),
-            items: const [
-              DropdownMenuItem(
-                  value: 'ADMIN_ENTERPRISE',
-                  child: Text('Администратор предприятия')),
-              DropdownMenuItem(
-                  value: 'ENTREPRENEUR', child: Text('Предприниматель')),
-              DropdownMenuItem(value: 'USER', child: Text('Пользователь')),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (loading) const LinearProgressIndicator(),
+            TextField(
+              controller: iin,
+              enabled: !saving,
+              maxLength: 12,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'ИИН пользователя'),
+            ),
+            TextField(
+              controller: password,
+              enabled: !saving,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Пароль ИС ЭСФ'),
+            ),
+            CheckboxListTile(
+              value: rememberPassword,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Сохранить пароль ИС ЭСФ'),
+              subtitle: const Text(
+                'Пароль будет храниться зашифрованным на этом телефоне.',
+              ),
+              onChanged: loading || saving
+                  ? null
+                  : (v) => setState(() => rememberPassword = v ?? false),
+            ),
+            const SizedBox(height: 4),
+            DropdownButtonFormField<String>(
+              value: profile,
+              decoration: const InputDecoration(labelText: 'Профиль'),
+              items: const [
+                DropdownMenuItem(
+                    value: 'ADMIN_ENTERPRISE',
+                    child: Text('Администратор предприятия')),
+                DropdownMenuItem(
+                    value: 'ENTREPRENEUR', child: Text('Предприниматель')),
+                DropdownMenuItem(value: 'USER', child: Text('Пользователь')),
+              ],
+              onChanged: saving
+                  ? null
+                  : (v) {
+                      if (v != null) setState(() => profile = v);
+                    },
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                error!,
+                style: const TextStyle(
+                  color: AppColors.danger,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
-            onChanged: (v) {
-              if (v != null) setState(() => profile = v);
-            },
-          ),
-        ]),
+          ]),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Отмена')),
+            onPressed: saving ? null : () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
           FilledButton(
-            onPressed: () {
-              final clean = iin.text.replaceAll(RegExp(r'\D'), '');
-              if (clean.length != 12 || password.text.isEmpty) return;
-              Navigator.pop(context, <String, String>{
-                'iin': clean,
-                'password': password.text,
-                'profile_type': profile,
-              });
-            },
-            child: const Text('Продолжить'),
+            onPressed: loading || saving ? null : _continue,
+            child: Text(saving ? 'Сохраняем…' : 'Продолжить'),
           ),
         ],
       );
