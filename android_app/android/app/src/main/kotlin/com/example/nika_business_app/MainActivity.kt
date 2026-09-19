@@ -232,6 +232,85 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+
+    private fun startSavedP12Signing(
+        payload: String,
+        result: MethodChannel.Result,
+    ) {
+        if (payload.isBlank()) {
+            result.error("EMPTY_PAYLOAD", "Нет данных для подписи", null)
+            return
+        }
+        val keyUri = SecureSigningKeyStore.savedUri(this)
+        val password = SecureSigningPasswordStore.load(this)
+        if (keyUri == null || password.isNullOrEmpty()) {
+            result.error(
+                "SAVED_KEY_UNAVAILABLE",
+                "Сначала сохраните ключ и пароль ЭЦП на этом телефоне",
+                null,
+            )
+            return
+        }
+
+        val authenticators =
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        val biometricManager = BiometricManager.from(this)
+        if (biometricManager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            result.error(
+                "BIOMETRIC_UNAVAILABLE",
+                "На телефоне не настроен отпечаток, биометрия или блокировка экрана",
+                null,
+            )
+            return
+        }
+
+        val executor = ContextCompat.getMainExecutor(this)
+        val prompt = BiometricPrompt(
+            this,
+            executor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(
+                    authResult: BiometricPrompt.AuthenticationResult,
+                ) {
+                    try {
+                        val response = KalkanJwsSigner.signAlatauJws(
+                            context = this@MainActivity,
+                            keyUri = keyUri,
+                            passwordChars = password.toCharArray(),
+                            payload = payload,
+                        )
+                        result.success(response)
+                    } catch (error: KalkanJwsSigner.SigningException) {
+                        result.error(error.code, error.message, null)
+                    } catch (error: Exception) {
+                        result.error(
+                            "SIGN_FAILED",
+                            error.message ?: "Не удалось подписать платёж",
+                            null,
+                        )
+                    }
+                }
+
+                override fun onAuthenticationError(
+                    errorCode: Int,
+                    errString: CharSequence,
+                ) {
+                    result.error("BIOMETRIC_CANCELLED", errString.toString(), null)
+                }
+            },
+        )
+
+        prompt.authenticate(
+            BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Подтвердите подпись")
+                .setSubtitle("Nika Business использует сохранённую ЭЦП")
+                .setAllowedAuthenticators(authenticators)
+                .build()
+        )
+    }
+
+
     private fun startUpdateDownload(url: String, version: String) {
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             setTitle("Nika Business $version")
