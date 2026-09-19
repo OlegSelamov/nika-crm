@@ -242,19 +242,21 @@ object KalkanJwsSigner {
     }
 
     private fun parseXml(payload: String): Document {
-        // В браузере NCALayer получает authTicketXml как строку и сам разбирает XML.
-        // Android DocumentBuilder строже: ИС ЭСФ иногда присылает декларацию вроде
-        // <?xml version="0.0" ...?>, которую NCALayer принимает, а Xerces отклоняет
-        // с "Unknown version 0.0". XML-декларация не входит в canonicalized
-        // SignedInfo, поэтому безопасно убрать её перед DOM-разбором. При сериализации
-        // Transformer сам вернёт корректную декларацию XML 1.0 / UTF-8.
-        val xml = payload
-            .trimStart('\uFEFF', '\u200B')
+        // NCALayer в браузере терпимее к декларации authTicketXml, чем Android Xerces.
+        // ИС ЭСФ может вернуть некорректный version="0.0". Для XMLDSig сама
+        // декларация не участвует в подписываемом DOM, поэтому удаляем любые XML
+        // declarations до разбора, а Transformer при выдаче signedXml создаст
+        // корректную декларацию XML 1.0 / UTF-8.
+        var xml = payload
+            .trimStart('\uFEFF', '\u200B', '\u200E', '\u200F', '\u2060')
             .trim()
-            .replaceFirst(
-                Regex("""^<\?xml[^>]*\?>\s*""", RegexOption.IGNORE_CASE),
-                "",
-            )
+
+        val declarationPattern = Regex(
+            """<\?xml\b.*?\?>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+        )
+        xml = xml.replace(declarationPattern, "").trim()
+
         if (xml.isEmpty()) {
             throw SigningException("EMPTY_XML", "ИС ЭСФ вернула пустой XML тикета авторизации")
         }
