@@ -369,7 +369,7 @@ class _BanksScreenState extends State<BanksScreen> {
         ),
       );
 
-  Future<void> _newPayment() async {
+  Future<void> _newPayment([Map<String, dynamic>? initialPayment]) async {
     if (_selectedIban.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Сначала выберите банковский счёт')),
@@ -384,9 +384,28 @@ class _BanksScreenState extends State<BanksScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => _BankPaymentSheet(
         payerIban: _selectedIban,
+        initialPayment: initialPayment,
       ),
     );
     if (changed == true) await _refreshPayments();
+  }
+
+  Future<void> _openPaymentDetails(Map<String, dynamic> payment) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _BankPaymentDetailsSheet(
+        payment: payment,
+        statusLabel: _paymentStatus(payment),
+        statusColor: _paymentStatusColor(payment),
+        onRepeat: () {
+          Navigator.pop(sheetContext);
+          Future.microtask(() => _newPayment(payment));
+        },
+      ),
+    );
   }
 
   String _paymentStatus(Map<String, dynamic> item) {
@@ -593,9 +612,12 @@ class _BanksScreenState extends State<BanksScreen> {
                     : '${created.day.toString().padLeft(2, '0')}.${created.month.toString().padLeft(2, '0')}.${created.year}';
                 return Card(
                   elevation: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.all(15),
-                    child: Row(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => _openPaymentDetails(p),
+                    child: Padding(
+                      padding: const EdgeInsets.all(15),
+                      child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
@@ -643,6 +665,7 @@ class _BanksScreenState extends State<BanksScreen> {
                           ],
                         ),
                       ],
+                    ),
                     ),
                   ),
                 );
@@ -842,6 +865,141 @@ class _BanksScreenState extends State<BanksScreen> {
               }),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _BankPaymentDetailsSheet extends StatelessWidget {
+  final Map<String, dynamic> payment;
+  final String statusLabel;
+  final Color statusColor;
+  final VoidCallback onRepeat;
+
+  const _BankPaymentDetailsSheet({
+    required this.payment,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.onRepeat,
+  });
+
+  String _text(dynamic value) => value == null ? '' : '$value';
+
+  String _money(dynamic value) {
+    final number = value is num
+        ? value.toDouble()
+        : double.tryParse('$value'.replaceAll(' ', '').replaceAll(',', '.')) ?? 0;
+    return number.toStringAsFixed(2);
+  }
+
+  Widget _row(String label, String value) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(label, style: const TextStyle(color: AppColors.muted)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final created = DateTime.tryParse(_text(payment['createdAt']))?.toLocal();
+    final date = created == null
+        ? ''
+        : '${created.day.toString().padLeft(2, '0')}.${created.month.toString().padLeft(2, '0')}.${created.year} '
+          '${created.hour.toString().padLeft(2, '0')}:${created.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .90,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 26),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Банковский платёж',
+                      style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  StatusPill(statusLabel, color: statusColor),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                _text(payment['receiverName']).isEmpty
+                    ? 'Получатель не указан'
+                    : _text(payment['receiverName']),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${_money(payment['amount'])} ${_text(payment['currency']).isEmpty ? 'KZT' : _text(payment['currency'])}',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 18),
+              _row('БИН / ИИН', _text(payment['receiverIinBin'])),
+              _row('IBAN', _text(payment['receiverIban'])),
+              _row('БИК', _text(payment['receiverBic'])),
+              _row('КБЕ', _text(payment['kbe'])),
+              _row('КНП', _text(payment['knp'])),
+              _row('№ документа', _text(payment['documentNumber'])),
+              _row('Дата', date),
+              _row('Назначение', _text(payment['purpose'])),
+              _row('Operation ID', _text(payment['operationId'])),
+              if (_text(payment['statusMessage']).isNotEmpty)
+                _row('Статус банка', _text(payment['statusMessage'])),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onRepeat,
+                  icon: const Icon(Icons.replay_rounded),
+                  label: const Text('Повторить платёж'),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Реквизиты, сумма и назначение будут подставлены автоматически. '
+                'Перед подписью их можно изменить.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1178,8 +1336,12 @@ class _BankStatementOperationSheetState
 
 class _BankPaymentSheet extends StatefulWidget {
   final String payerIban;
+  final Map<String, dynamic>? initialPayment;
 
-  const _BankPaymentSheet({required this.payerIban});
+  const _BankPaymentSheet({
+    required this.payerIban,
+    this.initialPayment,
+  });
 
   @override
   State<_BankPaymentSheet> createState() => _BankPaymentSheetState();
@@ -1205,7 +1367,53 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
   @override
   void initState() {
     super.initState();
+    _applyInitialPayment();
     _loadChoices();
+  }
+
+  void _applyInitialPayment() {
+    final initial = widget.initialPayment;
+    if (initial == null) return;
+    receiverName.text = '${initial['receiverName'] ?? ''}';
+    receiverIin.text = '${initial['receiverIinBin'] ?? ''}';
+    receiverIban.text = '${initial['receiverIban'] ?? ''}';
+    receiverBic.text = '${initial['receiverBic'] ?? ''}';
+    kbe.text = '${initial['kbe'] ?? ''}';
+    knp.text = '${initial['knp'] ?? ''}';
+    final initialAmount = initial['amount'];
+    if (initialAmount != null) {
+      final number = initialAmount is num
+          ? initialAmount.toDouble()
+          : double.tryParse('$initialAmount');
+      amount.text = number == null ? '$initialAmount' : number.toStringAsFixed(2);
+    }
+    purpose.text = '${initial['purpose'] ?? ''}';
+    // A repeated bank payment must get its own document number.
+    documentNumber.clear();
+  }
+
+  void _fillMissingFromKnownCounterparty() {
+    if (widget.initialPayment == null) return;
+    final iin = receiverIin.text.replaceAll(RegExp(r'\D'), '');
+    final iban = receiverIban.text.replaceAll(' ', '').toUpperCase();
+
+    Map<String, dynamic>? known;
+    for (final supplier in suppliers) {
+      final supplierIin = '${supplier['bin_iin'] ?? ''}'.replaceAll(RegExp(r'\D'), '');
+      final supplierIban = '${supplier['iban'] ?? ''}'.replaceAll(' ', '').toUpperCase();
+      if ((iin.isNotEmpty && supplierIin == iin) ||
+          (iban.isNotEmpty && supplierIban == iban)) {
+        known = supplier;
+        break;
+      }
+    }
+
+    if (known != null) {
+      if (kbe.text.isEmpty) kbe.text = '${known['kbe'] ?? ''}';
+      if (knp.text.isEmpty) knp.text = '${known['knp'] ?? ''}';
+      if (receiverBic.text.isEmpty) receiverBic.text = '${known['bic'] ?? ''}';
+      if (purpose.text.isEmpty) purpose.text = '${known['payment_purpose'] ?? ''}';
+    }
   }
 
   @override
@@ -1238,6 +1446,7 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
         templates = results[1] as List<Map<String, dynamic>>;
         loadingChoices = false;
       });
+      _fillMissingFromKnownCounterparty();
     } catch (_) {
       if (mounted) setState(() => loadingChoices = false);
     }

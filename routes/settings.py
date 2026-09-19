@@ -129,6 +129,8 @@ def _ensure_alatau_payment_history_table(cur):
             receiver_iin_bin TEXT,
             receiver_iban TEXT,
             receiver_bic TEXT,
+            kbe TEXT,
+            knp TEXT,
             amount NUMERIC(18,2),
             currency TEXT NOT NULL DEFAULT 'KZT',
             document_number TEXT,
@@ -140,6 +142,8 @@ def _ensure_alatau_payment_history_table(cur):
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     """)
+    cur.execute("ALTER TABLE alatau_payment_history ADD COLUMN IF NOT EXISTS kbe TEXT")
+    cur.execute("ALTER TABLE alatau_payment_history ADD COLUMN IF NOT EXISTS knp TEXT")
     cur.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS uq_alatau_payment_history_operation
         ON alatau_payment_history(company_id, environment, operation_id)
@@ -196,11 +200,11 @@ def _alatau_store_payment(company_id, environment, meta, result=None, *,
             INSERT INTO alatau_payment_history (
                 company_id, environment, operation_id, payment_type,
                 payer_iban, receiver_name, receiver_iin_bin,
-                receiver_iban, receiver_bic, amount, currency,
+                receiver_iban, receiver_bic, kbe, knp, amount, currency,
                 document_number, purpose, status_code, status_message,
                 bank_status_timestamp, created_at, updated_at
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'KZT',
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'KZT',
                 %s, %s, %s, %s, %s, NOW(), NOW()
             )
             ON CONFLICT (company_id, environment, operation_id) DO UPDATE SET
@@ -210,6 +214,8 @@ def _alatau_store_payment(company_id, environment, meta, result=None, *,
                 receiver_iin_bin = COALESCE(EXCLUDED.receiver_iin_bin, alatau_payment_history.receiver_iin_bin),
                 receiver_iban = COALESCE(EXCLUDED.receiver_iban, alatau_payment_history.receiver_iban),
                 receiver_bic = COALESCE(EXCLUDED.receiver_bic, alatau_payment_history.receiver_bic),
+                kbe = COALESCE(EXCLUDED.kbe, alatau_payment_history.kbe),
+                knp = COALESCE(EXCLUDED.knp, alatau_payment_history.knp),
                 amount = COALESCE(EXCLUDED.amount, alatau_payment_history.amount),
                 document_number = COALESCE(EXCLUDED.document_number, alatau_payment_history.document_number),
                 purpose = COALESCE(EXCLUDED.purpose, alatau_payment_history.purpose),
@@ -228,6 +234,8 @@ def _alatau_store_payment(company_id, environment, meta, result=None, *,
             meta.get("receiverIinBin"),
             meta.get("receiverIban"),
             meta.get("receiverBic"),
+            meta.get("kbe"),
+            meta.get("knp"),
             amount,
             meta.get("documentNumber"),
             meta.get("purpose"),
@@ -1179,6 +1187,8 @@ def alatau_payment_draft():
                 "receiverIinBin": receiver_iin_bin,
                 "receiverIban": receiver_iban,
                 "receiverBic": receiver_bic,
+                "kbe": kbe,
+                "knp": knp,
                 "amount": amount,
                 "documentNumber": document_number,
                 "purpose": purpose,
@@ -1329,7 +1339,7 @@ def alatau_payment_history():
         cur.execute("""
             SELECT id, operation_id, payment_type, payer_iban,
                    receiver_name, receiver_iin_bin, receiver_iban, receiver_bic,
-                   amount, currency, document_number, purpose,
+                   kbe, knp, amount, currency, document_number, purpose,
                    status_code, status_message, bank_status_timestamp,
                    created_at, updated_at
             FROM alatau_payment_history
@@ -1351,6 +1361,8 @@ def alatau_payment_history():
                 "receiverIinBin": row.get("receiver_iin_bin"),
                 "receiverIban": row.get("receiver_iban"),
                 "receiverBic": row.get("receiver_bic"),
+                "kbe": row.get("kbe"),
+                "knp": row.get("knp"),
                 "amount": float(row.get("amount")) if row.get("amount") is not None else None,
                 "currency": row.get("currency") or "KZT",
                 "documentNumber": row.get("document_number"),
