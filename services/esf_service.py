@@ -7,6 +7,8 @@ the official IS ESF web services.
 
 from dataclasses import dataclass
 import os
+import logging
+import time
 import re
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
@@ -22,6 +24,8 @@ PASSWORD_TEXT = (
     "http://docs.oasis-open.org/wss/2004/01/"
     "oasis-200401-wss-username-token-profile-1.0#PasswordText"
 )
+
+logger = logging.getLogger(__name__)
 
 API_BASES = {
     "test": "https://test3.esf.kgd.gov.kz:8443/esf-web/ws/api1",
@@ -138,9 +142,20 @@ def _fault_details(root):
 def _soap_call(service, request_element, *, username=None, password=None):
     config = configuration()
     payload = _soap_envelope(request_element, username=username, password=password)
+    url = f"{config.base_url}/{service}"
+    started = time.monotonic()
+    logger.warning(
+        "ESF SOAP start service=%s env=%s url=%s timeout=%ss payload_bytes=%s auth=%s",
+        service,
+        config.environment,
+        url,
+        config.timeout,
+        len(payload),
+        bool(username),
+    )
     try:
         response = requests.post(
-            f"{config.base_url}/{service}",
+            url,
             data=payload,
             headers={"Content-Type": "text/xml; charset=UTF-8", "SOAPAction": ""},
             timeout=config.timeout,
@@ -151,9 +166,31 @@ def _soap_call(service, request_element, *, username=None, password=None):
     except requests.RequestException as exc:
         raise EsfApiError(f"Не удалось подключиться к ИС ЭСФ: {exc}") from exc
 
+    elapsed = time.monotonic() - started
+    logger.warning(
+        "ESF SOAP response service=%s status=%s elapsed=%.3fs content_type=%s server=%s cf_ray=%s bytes=%s",
+        service,
+        response.status_code,
+        elapsed,
+        response.headers.get("Content-Type", ""),
+        response.headers.get("Server", ""),
+        response.headers.get("CF-RAY", ""),
+        len(response.content or b""),
+    )
+
     try:
         root = ET.fromstring(response.content)
     except ET.ParseError as exc:
+        preview = (response.text or "").replace("\n", " ").replace("\r", " ")[:500]
+        logger.error(
+            "ESF SOAP non-XML service=%s status=%s content_type=%s server=%s cf_ray=%s body_preview=%r",
+            service,
+            response.status_code,
+            response.headers.get("Content-Type", ""),
+            response.headers.get("Server", ""),
+            response.headers.get("CF-RAY", ""),
+            preview,
+        )
         raise EsfApiError(
             f"ИС ЭСФ вернула ответ в неизвестном формате (HTTP {response.status_code}).",
             status_code=response.status_code,

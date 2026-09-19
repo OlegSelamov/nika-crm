@@ -8,6 +8,8 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from hashlib import sha256
 import json
+import logging
+import time
 import re
 from xml.etree import ElementTree as ET
 
@@ -28,6 +30,7 @@ from utils.timezone import now_kz
 
 
 esf_bp = Blueprint("esf", __name__)
+logger = logging.getLogger(__name__)
 ESF_VERSION = "InvoiceV2"
 MONEY = Decimal("0.01")
 ESF_PROFILE_TYPES = {
@@ -770,13 +773,15 @@ def get_sale_esf_auth_ticket(sale_id):
 
 @esf_bp.route("/api/sales/<int:sale_id>/esf/session", methods=["POST"])
 def open_sale_esf_session(sale_id):
-    """Open an IS ESF API session in a separate short HTTP request.
-
-    Cloudflare proxies nikabusiness.com and long synchronous requests can exceed
-    the edge/origin window. Session creation and invoice upload are therefore
-    split into two requests; each upstream SOAP call keeps its own 60s timeout.
-    """
+    """Open an IS ESF API session in a separate short HTTP request."""
+    started = time.monotonic()
     company_id = session.get("company_id")
+    logger.warning(
+        "ESF session route start sale_id=%s company_id=%s remote=%s",
+        sale_id,
+        company_id,
+        request.headers.get("CF-Connecting-IP") or request.remote_addr,
+    )
     if not company_id:
         return jsonify({"success": False, "error": "Компания не выбрана"}), 401
 
@@ -804,9 +809,34 @@ def open_sale_esf_session(sale_id):
             return jsonify({"success": False, "error": str(error)}), 400
 
         try:
+            logger.warning(
+                "ESF session route calling create_signed_session sale_id=%s tin=%s profile=%s",
+                sale_id,
+                auth.get("tin"),
+                auth.get("profile_type"),
+            )
             api_session_id = create_signed_session(**auth)
+            logger.warning(
+                "ESF session route success sale_id=%s elapsed=%.3fs",
+                sale_id,
+                time.monotonic() - started,
+            )
         except EsfApiError as error:
+            logger.exception(
+                "ESF session route EsfApiError sale_id=%s elapsed=%.3fs status=%s message=%s",
+                sale_id,
+                time.monotonic() - started,
+                getattr(error, "status_code", None),
+                str(error),
+            )
             return _api_error_json(error)
+        except Exception:
+            logger.exception(
+                "ESF session route unexpected error sale_id=%s elapsed=%.3fs",
+                sale_id,
+                time.monotonic() - started,
+            )
+            raise
 
         return jsonify({
             "success": True,
