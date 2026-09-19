@@ -120,6 +120,18 @@ jobs:
           fi
 
           echo "HTTP health check passed on port ${APP_PORT}"
+
+          echo "Recent Nika service errors:"
+          sudo journalctl -u nika-crm --since "20 minutes ago" --no-pager \
+            | grep -E "WORKER TIMEOUT|Traceback|ERROR|Exception|Timeout|Connection" \
+            | tail -n 120 || true
+
+          echo "IS ESF outbound connectivity:"
+          curl -k -sS -o /dev/null \
+            --connect-timeout 8 --max-time 15 \
+            -w 'HTTP=%{http_code} connect=%{time_connect}s tls=%{time_appconnect}s total=%{time_total}s\n' \
+            "https://esf.gov.kz:8443/esf-web/ws/api1/AuthService" || true
+
           echo "Deployed commit:"
           git rev-parse --short HEAD
           REMOTE
