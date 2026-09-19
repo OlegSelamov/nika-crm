@@ -191,14 +191,29 @@ class _EsfScreenState extends State<EsfScreen> {
 
       setState(() {
         busy = true;
-        message = 'Отправляем ЭСФ…';
+        message = 'Открываем сессию ИС ЭСФ…';
       });
+      final sessionResult = await ApiService.openSaleEsfSession(
+        widget.saleId,
+        iin: auth['iin']!,
+        password: auth['password']!,
+        signedAuthTicket: '${signed['signedXml'] ?? ''}',
+        profileType: auth['profile_type']!,
+      );
+      final sessionId = '${sessionResult['session_id'] ?? ''}';
+      if (sessionId.isEmpty) {
+        throw const ApiException('ИС ЭСФ не вернула идентификатор сессии');
+      }
+
+      if (!mounted) return;
+      setState(() => message = 'Отправляем ЭСФ…');
       final result = await ApiService.sendSaleEsf(
         widget.saleId,
         iin: auth['iin']!,
         password: auth['password']!,
         signedAuthTicket: '${signed['signedXml'] ?? ''}',
         profileType: auth['profile_type']!,
+        sessionId: sessionId,
       );
       _apply(_map(result['document']));
       message = '${result['message'] ?? 'ЭСФ отправлена'}';

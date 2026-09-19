@@ -768,6 +768,58 @@ def get_sale_esf_auth_ticket(sale_id):
         pool.putconn(conn)
 
 
+@esf_bp.route("/api/sales/<int:sale_id>/esf/session", methods=["POST"])
+def open_sale_esf_session(sale_id):
+    """Open an IS ESF API session in a separate short HTTP request.
+
+    Cloudflare proxies nikabusiness.com and long synchronous requests can exceed
+    the edge/origin window. Session creation and invoice upload are therefore
+    split into two requests; each upstream SOAP call keeps its own 60s timeout.
+    """
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_esf_schema(cur)
+        cur.execute(
+            "SELECT * FROM esf_documents WHERE company_id=%s AND sale_id=%s",
+            (company_id, sale_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "ЭСФ не найдена"}), 404
+        if row.get("status") not in {"signed", "failed"} or not row.get("signature"):
+            return jsonify({"success": False, "error": "Сначала подпишите ЭСФ"}), 409
+
+        try:
+            auth = _api_auth_payload(
+                data,
+                (row.get("payload") or {}).get("seller", {}).get("tin"),
+            )
+        except ValueError as error:
+            return jsonify({"success": False, "error": str(error)}), 400
+
+        try:
+            api_session_id = create_signed_session(**auth)
+        except EsfApiError as error:
+            return _api_error_json(error)
+
+        return jsonify({
+            "success": True,
+            "session_id": api_session_id,
+            "api_environment": esf_api_configuration().environment,
+            "message": "Сессия ИС ЭСФ открыта.",
+        })
+    finally:
+        conn.rollback()
+        cur.close()
+        pool.putconn(conn)
+
+
 @esf_bp.route("/api/sales/<int:sale_id>/esf/auth-check", methods=["POST"])
 def check_sale_esf_auth(sale_id):
     """Open and immediately close an IS ESF API session without sending a document."""
@@ -858,6 +910,10 @@ def send_sale_esf(sale_id):
         except ValueError as error:
             return jsonify({"success": False, "error": str(error)}), 400
 
+        provided_session_id = str(data.get("session_id") or "").strip()
+        if len(provided_session_id) > 500 or any(ord(ch) < 32 for ch in provided_session_id):
+            return jsonify({"success": False, "error": "Некорректная сессия ИС ЭСФ."}), 400
+
         previous_status = row["status"]
         config = esf_api_configuration()
         cur.execute(
@@ -867,7 +923,7 @@ def send_sale_esf(sale_id):
         conn.commit()
 
         try:
-            api_session_id = create_signed_session(**auth)
+            api_session_id = provided_session_id or create_signed_session(**auth)
             result = send_invoice(
                 session_id=api_session_id,
                 invoice_xml=row["invoice_xml"],

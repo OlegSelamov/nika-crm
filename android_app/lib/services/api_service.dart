@@ -809,7 +809,7 @@ class ApiService {
         ),
       );
 
-  static Future<Map<String, dynamic>> sendSaleEsf(
+  static Future<Map<String, dynamic>> openSaleEsfSession(
     int saleId, {
     required String iin,
     required String password,
@@ -819,13 +819,36 @@ class ApiService {
       Map<String, dynamic>.from(
         await _request(
           'POST',
-          '/api/sales/$saleId/esf/send',
-          timeout: const Duration(seconds: 120),
+          '/api/sales/$saleId/esf/session',
+          timeout: const Duration(seconds: 75),
           body: {
             'iin': iin,
             'password': password,
             'signed_auth_ticket': signedAuthTicket,
             'profile_type': profileType,
+          },
+        ),
+      );
+
+  static Future<Map<String, dynamic>> sendSaleEsf(
+    int saleId, {
+    required String iin,
+    required String password,
+    required String signedAuthTicket,
+    required String profileType,
+    String sessionId = '',
+  }) async =>
+      Map<String, dynamic>.from(
+        await _request(
+          'POST',
+          '/api/sales/$saleId/esf/send',
+          timeout: const Duration(seconds: 75),
+          body: {
+            'iin': iin,
+            'password': password,
+            'signed_auth_ticket': signedAuthTicket,
+            'profile_type': profileType,
+            if (sessionId.isNotEmpty) 'session_id': sessionId,
           },
         ),
       );
