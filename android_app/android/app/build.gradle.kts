@@ -78,6 +78,8 @@ dependencies {
         isTransitive = false
     }
     implementation("org.slf4j:slf4j-api:2.0.9")
+    implementation("javax.xml.crypto:jsr105-api:1.0.1")
+    implementation("commons-codec:commons-codec:1.15")
 }
 
 flutter {
