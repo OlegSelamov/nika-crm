@@ -129,6 +129,23 @@ class MainActivity : FlutterActivity() {
         password: String,
         result: MethodChannel.Result,
     ) {
+        val capabilities = KalkanJwsSigner.capabilities()
+        val capabilityKey = when (method) {
+            "signAlatauJwsWithP12" -> "readyForAlatau"
+            "signEsfRawWithP12" -> "readyForEsfRaw"
+            "signEsfXmlWithP12" -> "readyForEsfXml"
+            else -> null
+        }
+        if (capabilityKey != null && capabilities[capabilityKey] != true) {
+            val message = if (method == "signEsfXmlWithP12") {
+                "В этой сборке Nika Business нет полного KalkanCrypt XMLDSig SDK НУЦ РК."
+            } else {
+                "В этой сборке Nika Business нет KalkanCrypt НУЦ РК."
+            }
+            result.error("KALKAN_NOT_INSTALLED", message, capabilities)
+            return
+        }
+
         if (payload.isBlank()) {
             result.error("EMPTY_PAYLOAD", "Нет данных для подписи", null)
             return
