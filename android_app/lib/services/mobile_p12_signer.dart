@@ -4,7 +4,7 @@ class MobileP12Signer {
   static const MethodChannel _channel =
       MethodChannel('com.nikabusiness.app/signing');
 
-  static Future<Map<String, dynamic>> signAlatauJws({
+  static Future<Map<String, dynamic>> capabilities() async {\n    final result = await _channel.invokeMethod<dynamic>('getSigningCapabilities');\n    if (result is Map) {\n      return Map<String, dynamic>.from(result);\n    }\n    throw PlatformException(\n      code: 'INVALID_CAPABILITIES',\n      message: 'Android не вернул состояние криптомодуля',\n    );\n  }\n  static Future<Map<String, dynamic>> signAlatauJws({
     required String payload,
     required String password,
   }) =>
