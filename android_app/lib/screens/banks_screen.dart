@@ -701,25 +701,36 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
   bool loading = true;
   bool signing = false;
   bool rememberPassword = false;
+  bool rememberKey = false;
   bool hidePassword = true;
+  bool hasSavedKey = false;
+  bool hasSavedPassword = false;
+  String savedKeyName = '';
   String? error;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedPassword();
+    _loadSigningState();
   }
 
-  Future<void> _loadSavedPassword() async {
+  Future<void> _loadSigningState() async {
     try {
-      final saved = await MobileP12Signer.loadSavedPassword();
+      final info = await MobileP12Signer.savedKeyInfo();
+      final savedPassword = await MobileP12Signer.loadSavedPassword();
       if (!mounted) return;
-      if (saved != null && saved.isNotEmpty) {
-        password.text = saved;
-        rememberPassword = true;
-      }
+      setState(() {
+        hasSavedKey = info['hasKey'] == true;
+        hasSavedPassword = info['hasPassword'] == true;
+        savedKeyName = '${info['name'] ?? ''}';
+        if (savedPassword != null && savedPassword.isNotEmpty) {
+          password.text = savedPassword;
+          rememberPassword = true;
+        }
+        rememberKey = hasSavedKey;
+      });
     } catch (_) {
-      // Подпись остаётся доступной даже если сохранённый пароль прочитать нельзя.
+      // Ручной режим подписи остаётся доступен.
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -732,7 +743,27 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
     super.dispose();
   }
 
-  Future<void> _sign() async {
+  Future<void> _signWithSavedKey() async {
+    if (signing) return;
+    setState(() {
+      signing = true;
+      error = null;
+    });
+
+    try {
+      final signed = await MobileP12Signer.signAlatauWithSavedKey(
+        payload: widget.payload,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, signed);
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => signing = false);
+    }
+  }
+
+  Future<void> _signWithSelectedKey() async {
     if (signing) return;
     if (password.text.isEmpty) {
       setState(() => error = 'Введите пароль ЭЦП');
@@ -748,6 +779,7 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
       final signed = await MobileP12Signer.signAlatauJws(
         payload: widget.payload,
         password: password.text,
+        saveKey: rememberKey,
       );
 
       if (rememberPassword) {
@@ -759,11 +791,26 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
       if (!mounted) return;
       Navigator.pop(context, signed);
     } catch (e) {
-      if (mounted) {
-        setState(() => error = e.toString());
-      }
+      if (mounted) setState(() => error = e.toString());
     } finally {
       if (mounted) setState(() => signing = false);
+    }
+  }
+
+  Future<void> _forgetSavedKey() async {
+    try {
+      await MobileP12Signer.clearSavedKey();
+      if (!mounted) return;
+      setState(() {
+        hasSavedKey = false;
+        hasSavedPassword = false;
+        savedKeyName = '';
+        rememberKey = false;
+        rememberPassword = false;
+        password.clear();
+      });
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
     }
   }
 
@@ -772,6 +819,7 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
     final receiver = widget.receiverName.isEmpty
         ? 'Получатель не указан'
         : widget.receiverName;
+    final canUseBiometric = hasSavedKey && hasSavedPassword;
 
     return AlertDialog(
       title: const Row(
@@ -782,16 +830,13 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
         ],
       ),
       content: SizedBox(
-        width: 420,
+        width: 430,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                receiver,
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
+              Text(receiver, style: const TextStyle(fontWeight: FontWeight.w900)),
               if (widget.amount.isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Text(
@@ -799,20 +844,73 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
                   style: const TextStyle(color: AppColors.muted),
                 ),
               ],
-              const SizedBox(height: 16),
+              if (canUseBiometric) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(.45),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.fingerprint_rounded, size: 28),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              savedKeyName.isEmpty ? 'Сохранённая ЭЦП' : savedKeyName,
+                              style: const TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: signing ? null : _signWithSavedKey,
+                          icon: const Icon(Icons.fingerprint_rounded),
+                          label: const Text('Подписать по биометрии'),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: signing ? null : _forgetSavedKey,
+                          child: const Text('Удалить сохранённый ключ'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      child: Text('или другой ключ', style: TextStyle(color: AppColors.muted)),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 14),
               TextField(
                 controller: password,
                 enabled: !loading && !signing,
                 obscureText: hidePassword,
                 enableSuggestions: false,
                 autocorrect: false,
-                autofocus: true,
                 decoration: InputDecoration(
                   labelText: 'Пароль ЭЦП',
                   prefixIcon: const Icon(Icons.key_rounded),
                   suffixIcon: IconButton(
-                    onPressed: () =>
-                        setState(() => hidePassword = !hidePassword),
+                    onPressed: () => setState(() => hidePassword = !hidePassword),
                     icon: Icon(
                       hidePassword
                           ? Icons.visibility_outlined
@@ -820,26 +918,42 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
                     ),
                   ),
                 ),
-                onSubmitted: (_) => _sign(),
               ),
-              const SizedBox(height: 8),
               CheckboxListTile(
                 value: rememberPassword,
                 onChanged: signing
                     ? null
-                    : (value) => setState(
-                          () => rememberPassword = value ?? false,
-                        ),
+                    : (value) => setState(() => rememberPassword = value ?? false),
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 title: const Text(
                   'Сохранить пароль на этом телефоне',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
+              ),
+              CheckboxListTile(
+                value: rememberKey,
+                onChanged: signing
+                    ? null
+                    : (value) => setState(() => rememberKey = value ?? false),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text(
+                  'Сохранить файл ключа на этом телефоне',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
                 subtitle: const Text(
-                  'Пароль хранится зашифрованно через Android Keystore и не отправляется на сервер.',
+                  'Ключ хранится только внутри Nika Business и не отправляется на сервер.',
                 ),
               ),
+              if (rememberKey && !rememberPassword)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Для подписи по отпечатку или биометрии сохраните также пароль.',
+                    style: TextStyle(color: AppColors.warning, fontSize: 12),
+                  ),
+                ),
               if (error != null) ...[
                 const SizedBox(height: 8),
                 Container(
@@ -860,7 +974,7 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
               ],
               const SizedBox(height: 10),
               const Text(
-                'После нажатия откроется выбор файла .p12.',
+                'При ручной подписи откроется выбор файла .p12.',
                 style: TextStyle(color: AppColors.muted, fontSize: 12),
               ),
             ],
@@ -873,7 +987,7 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton.icon(
-          onPressed: loading || signing ? null : _sign,
+          onPressed: loading || signing ? null : _signWithSelectedKey,
           icon: signing
               ? const SizedBox(
                   width: 16,
