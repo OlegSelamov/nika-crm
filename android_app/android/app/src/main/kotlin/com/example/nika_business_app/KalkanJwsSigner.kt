@@ -35,6 +35,12 @@ object KalkanJwsSigner {
     private const val HEADER_ALG = "ECGOST3410-2015-512"
     private const val SIGNING_ALGORITHM = "ECGOST3410-2015-512"
     private const val SIGNING_OID = "1.2.398.3.10.1.1.2.3.2"
+    private const val SIGNING_EKU_OID = "1.3.6.1.5.5.7.3.4"
+    private const val AUTH_EKU_OID = "1.3.6.1.5.5.7.3.2"
+    private const val ORG_EKU_OID = "1.2.398.3.3.4.1.2"
+    private const val ORG_HEAD_EKU_OID = "1.2.398.3.3.4.1.2.1"
+    private const val ORG_TRUSTED_EKU_OID = "1.2.398.3.3.4.1.2.2"
+    private const val ORG_EMPLOYEE_EKU_OID = "1.2.398.3.3.4.1.2.5"
 
     private const val XML_SIGNATURE_URI =
         "urn:ietf:params:xml:ns:pkigovkz:xmlsec:algorithms:gostr34102015-gostr34112015-512"
@@ -114,6 +120,28 @@ object KalkanJwsSigner {
                 throw SigningException(
                     "UNEXPECTED_SIGNATURE_FORMAT",
                     "Kalkan вернул подпись неожиданного формата (${signatureBytes.size} байт вместо 128)",
+                )
+            }
+
+            // Do not send a JWS that our own Kalkan provider cannot verify.
+            // This catches a wrong key/certificate alias or provider-format issue
+            // before Alatau turns it into the misleading generic HTTP 424 error.
+            val verifier = createSignature(material.provider)
+            val locallyValid = try {
+                verifier.initVerify(material.certificate.publicKey)
+                verifier.update(signingInput)
+                verifier.verify(signatureBytes)
+            } catch (error: Exception) {
+                throw SigningException(
+                    "SIGN_VERIFY_FAILED",
+                    "Не удалось проверить сформированную банковскую подпись локально",
+                    error,
+                )
+            }
+            if (!locallyValid) {
+                throw SigningException(
+                    "SIGN_VERIFY_FAILED",
+                    "Сформированная банковская подпись не прошла локальную проверку",
                 )
             }
 
@@ -525,25 +553,68 @@ object KalkanJwsSigner {
         }
     }
 
-    private fun certificateResult(certificate: X509Certificate): Map<String, Any?> = mapOf(
-        "certificateSubject" to certificate.subjectX500Principal.name,
-        "certificateSerial" to certificate.serialNumber.toString(16).uppercase(),
-        "certificateNotBefore" to certificate.notBefore.time,
-        "certificateNotAfter" to certificate.notAfter.time,
-    )
+    private fun certificateResult(certificate: X509Certificate): Map<String, Any?> {
+        val eku = try {
+            certificate.extendedKeyUsage ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return mapOf(
+            "certificateSubject" to certificate.subjectX500Principal.name,
+            "certificateSerial" to certificate.serialNumber.toString(16).uppercase(),
+            "certificateNotBefore" to certificate.notBefore.time,
+            "certificateNotAfter" to certificate.notAfter.time,
+            "certificateExtendedKeyUsage" to eku,
+            "certificateIsSigning" to (SIGNING_EKU_OID in eku),
+            "certificateIsAuthOnly" to (
+                AUTH_EKU_OID in eku && SIGNING_EKU_OID !in eku
+            ),
+        )
+    }
 
     private fun findSigningAlias(keyStore: KeyStore): String? {
+        data class Candidate(val alias: String, val score: Int)
+
         val aliases = keyStore.aliases()
-        var fallback: String? = null
+        val candidates = mutableListOf<Candidate>()
         while (aliases.hasMoreElements()) {
             val alias = aliases.nextElement()
             if (!keyStore.isKeyEntry(alias)) continue
-            if (fallback == null) fallback = alias
             val cert = keyStore.getCertificate(alias) as? X509Certificate ?: continue
+
             val keyUsage = cert.keyUsage
-            if (keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])) return alias
+            val digitalSignature =
+                keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])
+
+            val eku = try {
+                cert.extendedKeyUsage ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            var score = 0
+            if (digitalSignature) score += 20
+
+            // NCALayer uses 1.3.6.1.5.5.7.3.4 specifically for an EDS signing
+            // certificate. Authentication certificates use ...3.2 and must not
+            // be preferred for a bank payment.
+            if (SIGNING_EKU_OID in eku) score += 200
+            if (AUTH_EKU_OID in eku && SIGNING_EKU_OID !in eku) score -= 200
+
+            // For a legal entity, prefer the director / authorised signatory
+            // certificate exactly as the Alatau NCALayer module does in its
+            // signing-key selector.
+            when {
+                ORG_HEAD_EKU_OID in eku -> score += 60
+                ORG_TRUSTED_EKU_OID in eku -> score += 50
+                ORG_EMPLOYEE_EKU_OID in eku -> score += 30
+                ORG_EKU_OID in eku -> score += 20
+            }
+
+            candidates += Candidate(alias, score)
         }
-        return fallback
+
+        return candidates.maxByOrNull { it.score }?.alias
     }
 
     private fun buildHeader(
