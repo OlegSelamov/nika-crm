@@ -343,6 +343,47 @@ object KalkanJwsSigner {
         } catch (_: Throwable) {
         }
 
+        // Rebuild Santuario's standard registries as well. On some Android
+        // processes Init may have become "initialized" before it actually populated
+        // every registry. The current symptom is an empty Transform registry
+        // ("Unknown transformation ... enveloped-signature").
+        fun invokeStaticNoArg(className: String, methodName: String) {
+            Class.forName(className).getMethod(methodName).invoke(null)
+        }
+
+        invokeStaticNoArg(
+            "org.apache.xml.security.transforms.Transform",
+            "registerDefaultAlgorithms",
+        )
+        invokeStaticNoArg(
+            "org.apache.xml.security.c14n.Canonicalizer",
+            "registerDefaultAlgorithms",
+        )
+        invokeStaticNoArg(
+            "org.apache.xml.security.algorithms.SignatureAlgorithm",
+            "registerDefaultAlgorithms",
+        )
+        invokeStaticNoArg(
+            "org.apache.xml.security.algorithms.JCEMapper",
+            "registerDefaultAlgorithms",
+        )
+        invokeStaticNoArg(
+            "org.apache.xml.security.utils.resolver.ResourceResolver",
+            "registerDefaultResolvers",
+        )
+        invokeStaticNoArg(
+            "org.apache.xml.security.keys.keyresolver.KeyResolver",
+            "registerDefaultResolvers",
+        )
+        try {
+            invokeStaticNoArg(
+                "org.apache.xml.security.utils.ElementProxy",
+                "registerDefaultPrefixes",
+            )
+        } catch (_: Throwable) {
+            // Prefixes may already be registered; this is harmless.
+        }
+
         val signatureAlgorithmClass =
             Class.forName("org.apache.xml.security.algorithms.SignatureAlgorithm")
         try {
