@@ -129,7 +129,8 @@ class MainActivity : FlutterFragmentActivity() {
                     "signEsfXmlWithP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
                         val password = call.argument<String>("password") ?: ""
-                        startP12Signing(call.method, payload, password, result)
+                        val saveKey = call.argument<Boolean>("saveKey") ?: false
+                        startP12Signing(call.method, payload, password, saveKey, result)
                     }
                     else -> result.notImplemented()
                 }
@@ -169,6 +170,7 @@ class MainActivity : FlutterFragmentActivity() {
         method: String,
         payload: String,
         password: String,
+        saveKey: Boolean,
         result: MethodChannel.Result,
     ) {
         val capabilities = KalkanJwsSigner.capabilities()
@@ -205,6 +207,7 @@ class MainActivity : FlutterFragmentActivity() {
         pendingSigningPayload = payload
         pendingSigningPassword = password.toCharArray()
         pendingSigningMethod = method
+        pendingSaveKey = saveKey
 
         try {
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
