@@ -4,7 +4,19 @@ class MobileP12Signer {
   static const MethodChannel _channel =
       MethodChannel('com.nikabusiness.app/signing');
 
-  static Future<Map<String, dynamic>> capabilities() async {\n    final result = await _channel.invokeMethod<dynamic>('getSigningCapabilities');\n    if (result is Map) {\n      return Map<String, dynamic>.from(result);\n    }\n    throw PlatformException(\n      code: 'INVALID_CAPABILITIES',\n      message: 'Android не вернул состояние криптомодуля',\n    );\n  }\n  static Future<Map<String, dynamic>> signAlatauJws({
+  static Future<Map<String, dynamic>> capabilities() async {
+    final result =
+        await _channel.invokeMethod<dynamic>('getSigningCapabilities');
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    throw PlatformException(
+      code: 'INVALID_CAPABILITIES',
+      message: 'Android не вернул состояние криптомодуля',
+    );
+  }
+
+  static Future<Map<String, dynamic>> signAlatauJws({
     required String payload,
     required String password,
   }) =>
@@ -52,7 +64,6 @@ class MobileP12Signer {
         return Map<String, dynamic>.from(result);
       }
 
-      // PlatformException is not a const class.
       throw PlatformException(
         code: 'INVALID_SIGN_RESULT',
         message: 'Android вернул некорректный результат подписи',
