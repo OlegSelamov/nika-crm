@@ -45,17 +45,18 @@ class MobileP12Signer {
 
   static Future<Map<String, dynamic>> signAlatauWithSavedKey({
     required String payload,
-  }) async {
-    final result = await _channel.invokeMethod<dynamic>(
-      'signAlatauJwsWithSavedP12',
-      {'payload': payload},
-    );
-    if (result is Map) return Map<String, dynamic>.from(result);
-    throw PlatformException(
-      code: 'INVALID_SIGN_RESULT',
-      message: 'Android вернул некорректный результат подписи',
-    );
-  }
+  }) =>
+      _invokeSaved('signAlatauJwsWithSavedP12', payload);
+
+  static Future<Map<String, dynamic>> signEsfRawWithSavedKey({
+    required String payload,
+  }) =>
+      _invokeSaved('signEsfRawWithSavedP12', payload);
+
+  static Future<Map<String, dynamic>> signEsfXmlWithSavedKey({
+    required String payload,
+  }) =>
+      _invokeSaved('signEsfXmlWithSavedP12', payload);
 
   static Future<Map<String, dynamic>> signAlatauJws({
     required String payload,
@@ -88,6 +89,21 @@ class MobileP12Signer {
         payload: payload,
         password: password,
       );
+
+  static Future<Map<String, dynamic>> _invokeSaved(
+    String method,
+    String payload,
+  ) async {
+    final result = await _channel.invokeMethod<dynamic>(
+      method,
+      {'payload': payload},
+    );
+    if (result is Map) return Map<String, dynamic>.from(result);
+    throw PlatformException(
+      code: 'INVALID_SIGN_RESULT',
+      message: 'Android вернул некорректный результат подписи',
+    );
+  }
 
   static Future<Map<String, dynamic>> _invoke(
     String method, {
