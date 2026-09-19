@@ -264,12 +264,28 @@ object KalkanJwsSigner {
         try {
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
-            factory.isXIncludeAware = false
+
+            // Android's built-in JAXP implementation can throw exactly:
+            // "This parser does not support specification \"Unknown\" version \"0.0\""
+            // when setXIncludeAware(...) is called. That exception was previously
+            // caught below and mislabeled as INVALID_XML, although the ESF ticket
+            // itself was not the problem. We do not use XInclude here, so do not
+            // call setXIncludeAware at all.
             factory.isExpandEntityReferences = false
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+
+            // Keep XXE protections, but tolerate parser implementations that do
+            // not expose one of these optional features.
+            fun safeFeature(name: String, value: Boolean) {
+                try {
+                    factory.setFeature(name, value)
+                } catch (_: Throwable) {
+                    // Unsupported optional hardening flag on this Android parser.
+                }
+            }
+            safeFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            safeFeature("http://xml.org/sax/features/external-general-entities", false)
+            safeFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            safeFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
 
             val source = InputSource(StringReader(xml))
             return factory.newDocumentBuilder().parse(source)
