@@ -6,7 +6,8 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import org.w3c.dom.Document
-import java.io.ByteArrayInputStream
+import org.xml.sax.InputSource
+import java.io.StringReader
 import java.io.StringWriter
 import java.nio.charset.StandardCharsets
 import java.security.Key
@@ -241,17 +242,40 @@ object KalkanJwsSigner {
     }
 
     private fun parseXml(payload: String): Document {
+        // authTicketXml приходит из SOAP уже как Java/Kotlin String. Нельзя снова
+        // превращать его в UTF-8 bytes: XML-декларация тикета может содержать
+        // другое encoding (в SDK ИС ЭСФ встречаются такие ответы), и тогда
+        // DocumentBuilder пытается декодировать уже UTF-8 bytes как указанную
+        // кодировку и падает с INVALID_XML. Character stream сохраняет ровно те
+        // символы, которые уже вернула ИС ЭСФ, как это делает NCALayer в браузере.
+        val xml = payload.trimStart('\uFEFF', '\u200B').trim()
+        if (xml.isEmpty()) {
+            throw SigningException("EMPTY_XML", "ИС ЭСФ вернула пустой XML тикета авторизации")
+        }
+
         try {
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
+            factory.isXIncludeAware = false
+            factory.isExpandEntityReferences = false
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
             factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
             factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            return factory.newDocumentBuilder().parse(
-                ByteArrayInputStream(payload.toByteArray(StandardCharsets.UTF_8))
-            )
+            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+
+            val source = InputSource(StringReader(xml))
+            return factory.newDocumentBuilder().parse(source)
         } catch (error: Exception) {
-            throw SigningException("INVALID_XML", "ИС ЭСФ передала некорректный XML для подписи", error)
+            val parserMessage = error.message
+                ?.replace(Regex("\\s+"), " ")
+                ?.trim()
+                ?.take(220)
+            val message = if (parserMessage.isNullOrBlank()) {
+                "ИС ЭСФ передала XML тикета, который не удалось разобрать"
+            } else {
+                "Не удалось разобрать XML тикета ИС ЭСФ: $parserMessage"
+            }
+            throw SigningException("INVALID_XML", message, error)
         }
     }
 
