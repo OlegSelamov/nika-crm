@@ -242,13 +242,19 @@ object KalkanJwsSigner {
     }
 
     private fun parseXml(payload: String): Document {
-        // authTicketXml приходит из SOAP уже как Java/Kotlin String. Нельзя снова
-        // превращать его в UTF-8 bytes: XML-декларация тикета может содержать
-        // другое encoding (в SDK ИС ЭСФ встречаются такие ответы), и тогда
-        // DocumentBuilder пытается декодировать уже UTF-8 bytes как указанную
-        // кодировку и падает с INVALID_XML. Character stream сохраняет ровно те
-        // символы, которые уже вернула ИС ЭСФ, как это делает NCALayer в браузере.
-        val xml = payload.trimStart('\uFEFF', '\u200B').trim()
+        // В браузере NCALayer получает authTicketXml как строку и сам разбирает XML.
+        // Android DocumentBuilder строже: ИС ЭСФ иногда присылает декларацию вроде
+        // <?xml version="0.0" ...?>, которую NCALayer принимает, а Xerces отклоняет
+        // с "Unknown version 0.0". XML-декларация не входит в canonicalized
+        // SignedInfo, поэтому безопасно убрать её перед DOM-разбором. При сериализации
+        // Transformer сам вернёт корректную декларацию XML 1.0 / UTF-8.
+        val xml = payload
+            .trimStart('\uFEFF', '\u200B')
+            .trim()
+            .replaceFirst(
+                Regex("""^<\?xml[^>]*\?>\s*""", RegexOption.IGNORE_CASE),
+                "",
+            )
         if (xml.isEmpty()) {
             throw SigningException("EMPTY_XML", "ИС ЭСФ вернула пустой XML тикета авторизации")
         }
