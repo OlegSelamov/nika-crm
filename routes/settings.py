@@ -1,4 +1,6 @@
+import base64
 import hashlib
+import json
 import re
 import secrets
 import time
@@ -1214,6 +1216,62 @@ def alatau_payment_draft():
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
 
 
+def _alatau_b64url_encode(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _alatau_contractor_signed_content(content):
+    """Normalize a locally produced compact JWS to Alatau contractor format.
+
+    Alatau's current contractor signed-payment example uses content as
+    base64url(JSON JWS serialization):
+      {"payload":"...","signatures":[{"protected":"...","signature":"..."}]}
+
+    The installed desktop NCALayer module and our Android signer both expose a
+    compact JWS (protected.payload.signature). No cryptographic data changes
+    here: we only put the exact three compact parts into the JSON serialization
+    envelope required by the contractor endpoint and base64url-encode it.
+    """
+    value = (content or "").strip()
+    parts = value.split(".")
+    if len(parts) == 3 and all(parts):
+        protected, payload, signature = parts
+        envelope = {
+            "payload": payload,
+            "signatures": [{
+                "protected": protected,
+                "signature": signature,
+            }],
+        }
+        canonical = json.dumps(
+            envelope,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return _alatau_b64url_encode(canonical), "jws-json-b64url"
+
+    try:
+        padded = value + ("=" * ((4 - len(value) % 4) % 4))
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
+        envelope = json.loads(decoded.decode("utf-8"))
+        signatures = envelope.get("signatures") if isinstance(envelope, dict) else None
+        payload = envelope.get("payload") if isinstance(envelope, dict) else None
+        if (
+            isinstance(payload, str)
+            and payload
+            and isinstance(signatures, list)
+            and signatures
+            and isinstance(signatures[0], dict)
+            and signatures[0].get("protected")
+            and signatures[0].get("signature")
+        ):
+            return value, "jws-json-b64url"
+    except Exception:
+        pass
+
+    raise ValueError("Некорректная JWS-подпись платежа")
+
+
 @settings_bp.route("/api/integrations/alatau/payments/signed", methods=["POST"])
 def alatau_signed_payment():
     company_id, error = _alatau_current_company()
@@ -1226,14 +1284,23 @@ def alatau_signed_payment():
     payment_meta = data.get("payment") if isinstance(data.get("payment"), dict) else {}
     if environment != "production":
         return jsonify({"success": False, "error": "Подписанные платежи разрешены только в Production"}), 400
-    if not content or content.count(".") != 2:
-        return jsonify({"success": False, "error": "NCALayer не передал корректный JWS"}), 400
+    if not content:
+        return jsonify({"success": False, "error": "Модуль подписи не передал JWS"}), 400
+
+    try:
+        bank_content, signature_format = _alatau_contractor_signed_content(content)
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
 
     try:
         client, access_token, bank_company_id, environment = _alatau_live_session(
             company_id, environment
         )
-        result = client.send_signed_payment(access_token, bank_company_id, content)
+        result = client.send_signed_payment(
+            access_token,
+            bank_company_id,
+            bank_content,
+        )
         _alatau_touch(
             company_id,
             environment,
@@ -1252,6 +1319,7 @@ def alatau_signed_payment():
             "success": True,
             "environment": environment,
             "company_id": bank_company_id,
+            "signature_format": signature_format,
             "payment": result,
         })
     except AlatauError as exc:
