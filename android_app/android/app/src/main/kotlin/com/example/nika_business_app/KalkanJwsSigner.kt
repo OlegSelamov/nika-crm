@@ -60,8 +60,14 @@ object KalkanJwsSigner {
             }
         }
 
-        val xmlAvailable = try {
+        val xmlSecurityAvailable = try {
             Class.forName("org.apache.xml.security.signature.XMLSignature")
+            true
+        } catch (_: Throwable) {
+            false
+        }
+        val kalkanXmlDsigAvailable = try {
+            Class.forName("kz.gov.pki.kalkan.xmldsig.DsigConstants")
             true
         } catch (_: Throwable) {
             false
@@ -70,10 +76,11 @@ object KalkanJwsSigner {
         return mapOf(
             "kalkanInstalled" to (providerClass != null),
             "providerClass" to providerClass,
-            "xmlSignatureInstalled" to xmlAvailable,
+            "xmlSecurityInstalled" to xmlSecurityAvailable,
+            "kalkanXmlDsigInstalled" to kalkanXmlDsigAvailable,
             "readyForAlatau" to (providerClass != null),
             "readyForEsfRaw" to (providerClass != null),
-            "readyForEsfXml" to (providerClass != null && xmlAvailable),
+            "readyForEsfXml" to (providerClass != null && xmlSecurityAvailable && kalkanXmlDsigAvailable),
         )
     }
 
