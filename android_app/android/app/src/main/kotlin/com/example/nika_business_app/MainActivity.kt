@@ -106,6 +106,24 @@ class MainActivity : FlutterFragmentActivity() {
                         SecureSigningPasswordStore.clear(this)
                         result.success(null)
                     }
+                    "getSavedP12KeyInfo" -> {
+                        result.success(
+                            mapOf(
+                                "hasKey" to SecureSigningKeyStore.hasSavedKey(this),
+                                "name" to SecureSigningKeyStore.displayName(this),
+                                "hasPassword" to !SecureSigningPasswordStore.load(this).isNullOrEmpty(),
+                            )
+                        )
+                    }
+                    "clearSavedP12Key" -> {
+                        SecureSigningKeyStore.clear(this)
+                        SecureSigningPasswordStore.clear(this)
+                        result.success(null)
+                    }
+                    "signAlatauJwsWithSavedP12" -> {
+                        val payload = call.argument<String>("payload") ?: ""
+                        startSavedP12Signing(payload, result)
+                    }
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
                     "signEsfXmlWithP12" -> {
