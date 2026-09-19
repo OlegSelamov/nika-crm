@@ -79,6 +79,9 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, signingChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "getSigningCapabilities" -> {
+                        result.success(KalkanJwsSigner.capabilities())
+                    }
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
                     "signEsfXmlWithP12" -> {
