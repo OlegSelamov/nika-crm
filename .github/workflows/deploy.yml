@@ -75,6 +75,29 @@ jobs:
             pip install -r requirements.txt --quiet
           fi
 
+          # ESF/Bank integrations may legitimately keep a worker waiting for an
+          # upstream government/bank service longer than Gunicorn's 30s default.
+          # Keep the origin alive long enough for the app request to finish.
+          sudo mkdir -p /etc/systemd/system/nika-crm.service.d
+          printf '%s\n' \
+            '[Service]' \
+            'Environment="GUNICORN_CMD_ARGS=--timeout 90 --graceful-timeout 30"' \
+            | sudo tee /etc/systemd/system/nika-crm.service.d/20-upstream-timeouts.conf >/dev/null
+          sudo systemctl daemon-reload
+
+          # Nginx must wait longer than the ESF client timeout (60s), otherwise
+          # Cloudflare sees the origin connection disappear and returns 502.
+          printf '%s\n' \
+            'proxy_connect_timeout 15s;' \
+            'proxy_send_timeout 90s;' \
+            'proxy_read_timeout 90s;' \
+            | sudo tee /etc/nginx/conf.d/nika-upstream-timeouts.conf >/dev/null
+          sudo nginx -t
+          sudo systemctl reload nginx
+
+          echo "nika-crm Gunicorn settings:"
+          sudo systemctl show nika-crm -p ExecStart -p Environment --no-pager || true
+
           sudo systemctl restart nika-crm
           sleep 4
 
