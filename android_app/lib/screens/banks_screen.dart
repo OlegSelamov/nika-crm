@@ -1528,6 +1528,8 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
           payload: jsonEncode(payload),
           receiverName: receiverName.text.trim(),
           amount: amount.text.trim(),
+          signingTimestampMs:
+              int.tryParse('${prepared['signing_ts_ms'] ?? ''}'),
         ),
       );
       if (signed == null) return;
@@ -1660,11 +1662,13 @@ class _P12SigningDialog extends StatefulWidget {
   final String payload;
   final String receiverName;
   final String amount;
+  final int? signingTimestampMs;
 
   const _P12SigningDialog({
     required this.payload,
     required this.receiverName,
     required this.amount,
+    this.signingTimestampMs,
   });
 
   @override
@@ -1675,62 +1679,36 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
   final password = TextEditingController();
   bool loading = true;
   bool signing = false;
-  bool rememberPassword = false;
-  bool rememberKey = false;
-  bool hidePassword = true;
-  bool hasSavedKey = false;
-  bool hasSavedPassword = false;
-  String savedKeyName = '';
+  bool savedReady = false;
   String? error;
 
   @override
   void initState() {
     super.initState();
-    _loadSigningState();
+    _load();
   }
 
-  Future<void> _loadSigningState() async {
+  Future<void> _load() async {
     try {
       final info = await MobileP12Signer.savedKeyInfo();
-      final savedPassword = await MobileP12Signer.loadSavedPassword();
-      if (!mounted) return;
-      setState(() {
-        hasSavedKey = info['hasKey'] == true;
-        hasSavedPassword = info['hasPassword'] == true;
-        savedKeyName = '${info['name'] ?? ''}';
-        if (savedPassword != null && savedPassword.isNotEmpty) {
-          password.text = savedPassword;
-          rememberPassword = true;
-        }
-        rememberKey = hasSavedKey;
-      });
-    } catch (_) {
-      // Ручной режим подписи остаётся доступен.
+      savedReady = info['hasKey'] == true && info['hasPassword'] == true;
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
 
-  @override
-  void dispose() {
-    password.clear();
-    password.dispose();
-    super.dispose();
-  }
-
-  Future<void> _signWithSavedKey() async {
+  Future<void> _saved() async {
     if (signing) return;
     setState(() {
       signing = true;
       error = null;
     });
-
     try {
-      final signed = await MobileP12Signer.signAlatauWithSavedKey(
+      final result = await MobileP12Signer.signAlatauWithSavedKey(
         payload: widget.payload,
+        signingTimestampMs: widget.signingTimestampMs,
       );
-      if (!mounted) return;
-      Navigator.pop(context, signed);
+      if (mounted) Navigator.pop(context, result);
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
@@ -1738,7 +1716,7 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
     }
   }
 
-  Future<void> _signWithSelectedKey() async {
+  Future<void> _manual() async {
     if (signing) return;
     if (password.text.isEmpty) {
       setState(() => error = 'Введите пароль ЭЦП');
@@ -1749,22 +1727,15 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
       signing = true;
       error = null;
     });
-
     try {
-      final signed = await MobileP12Signer.signAlatauJws(
+      final result = await MobileP12Signer.signAlatauJws(
         payload: widget.payload,
         password: password.text,
-        saveKey: rememberKey,
+        saveKey: true,
+        signingTimestampMs: widget.signingTimestampMs,
       );
-
-      if (rememberPassword) {
-        await MobileP12Signer.savePassword(password.text);
-      } else {
-        await MobileP12Signer.clearSavedPassword();
-      }
-
-      if (!mounted) return;
-      Navigator.pop(context, signed);
+      await MobileP12Signer.savePassword(password.text);
+      if (mounted) Navigator.pop(context, result);
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
@@ -1772,21 +1743,11 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
     }
   }
 
-  Future<void> _forgetSavedKey() async {
-    try {
-      await MobileP12Signer.clearSavedKey();
-      if (!mounted) return;
-      setState(() {
-        hasSavedKey = false;
-        hasSavedPassword = false;
-        savedKeyName = '';
-        rememberKey = false;
-        rememberPassword = false;
-        password.clear();
-      });
-    } catch (e) {
-      if (mounted) setState(() => error = e.toString());
-    }
+  @override
+  void dispose() {
+    password.clear();
+    password.dispose();
+    super.dispose();
   }
 
   @override
@@ -1794,166 +1755,64 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
     final receiver = widget.receiverName.isEmpty
         ? 'Получатель не указан'
         : widget.receiverName;
-    final canUseBiometric = hasSavedKey && hasSavedPassword;
 
     return AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.verified_user_outlined),
-          SizedBox(width: 10),
-          Expanded(child: Text('Подписание платежа')),
-        ],
-      ),
-      content: SizedBox(
-        width: 430,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(receiver, style: const TextStyle(fontWeight: FontWeight.w900)),
-              if (widget.amount.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(
-                  '${widget.amount} KZT',
-                  style: const TextStyle(color: AppColors.muted),
-                ),
-              ],
-              if (canUseBiometric) ...[
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(.45),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.fingerprint_rounded, size: 28),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              savedKeyName.isEmpty ? 'Сохранённая ЭЦП' : savedKeyName,
-                              style: const TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: signing ? null : _signWithSavedKey,
-                          icon: const Icon(Icons.fingerprint_rounded),
-                          label: const Text('Подписать по биометрии'),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: signing ? null : _forgetSavedKey,
-                          child: const Text('Удалить сохранённый ключ'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const Row(
-                  children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 10),
-                      child: Text('или другой ключ', style: TextStyle(color: AppColors.muted)),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 14),
-              TextField(
-                controller: password,
-                enabled: !loading && !signing,
-                obscureText: hidePassword,
-                enableSuggestions: false,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: 'Пароль ЭЦП',
-                  prefixIcon: const Icon(Icons.key_rounded),
-                  suffixIcon: IconButton(
-                    onPressed: () => setState(() => hidePassword = !hidePassword),
-                    icon: Icon(
-                      hidePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                  ),
-                ),
-              ),
-              CheckboxListTile(
-                value: rememberPassword,
-                onChanged: signing
-                    ? null
-                    : (value) => setState(() => rememberPassword = value ?? false),
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text(
-                  'Сохранить пароль на этом телефоне',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              CheckboxListTile(
-                value: rememberKey,
-                onChanged: signing
-                    ? null
-                    : (value) => setState(() => rememberKey = value ?? false),
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text(
-                  'Сохранить файл ключа на этом телефоне',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: const Text(
-                  'Ключ хранится только внутри Nika Business и не отправляется на сервер.',
-                ),
-              ),
-              if (rememberKey && !rememberPassword)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'Для подписи по отпечатку или биометрии сохраните также пароль.',
-                    style: TextStyle(color: AppColors.warning, fontSize: 12),
-                  ),
-                ),
-              if (error != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withOpacity(.10),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    error!,
-                    style: const TextStyle(
-                      color: AppColors.danger,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 10),
-              const Text(
-                'При ручной подписи откроется выбор файла .p12.',
-                style: TextStyle(color: AppColors.muted, fontSize: 12),
+      title: const Text('Подписание платежа'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(receiver, style: const TextStyle(fontWeight: FontWeight.w900)),
+            if (widget.amount.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text(
+                '${widget.amount} KZT',
+                style: const TextStyle(color: AppColors.muted),
               ),
             ],
-          ),
+            const SizedBox(height: 14),
+            if (loading)
+              const LinearProgressIndicator()
+            else if (savedReady)
+              const Text(
+                'ЭЦП уже сохранена на этом телефоне. Подтвердите подпись биометрией.',
+                style: TextStyle(color: AppColors.muted),
+              )
+            else ...[
+              const Text(
+                'При первом подписании выберите файл .p12 и введите пароль ЭЦП. '
+                'Nika Business сохранит ключ и пароль на этом телефоне, '
+                'а следующие платежи будут подтверждаться биометрией.',
+                style: TextStyle(color: AppColors.muted),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: password,
+                obscureText: true,
+                enabled: !signing,
+                decoration: const InputDecoration(labelText: 'Пароль ЭЦП'),
+              ),
+            ],
+            if (error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                error!,
+                style: const TextStyle(
+                  color: AppColors.danger,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'JWS-подпись формируется локально на телефоне. '
+                'Ключ и пароль не отправляются в Nika.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+            ),
+          ],
         ),
       ),
       actions: [
@@ -1962,15 +1821,17 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton.icon(
-          onPressed: loading || signing ? null : _signWithSelectedKey,
-          icon: signing
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.folder_open_outlined),
-          label: Text(signing ? 'Подписываем…' : 'Выбрать ключ и подписать'),
+          onPressed: loading || signing
+              ? null
+              : (savedReady ? _saved : _manual),
+          icon: Icon(savedReady ? Icons.fingerprint : Icons.key),
+          label: Text(
+            signing
+                ? 'Подписываем…'
+                : (savedReady
+                    ? 'Подписать по биометрии'
+                    : 'Выбрать .p12 и подписать'),
+          ),
         ),
       ],
     );

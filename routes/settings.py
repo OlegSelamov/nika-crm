@@ -1,6 +1,7 @@
 import hashlib
 import re
 import secrets
+import time
 from datetime import date, timedelta
 
 from flask import Blueprint, jsonify, render_template, request, session, redirect
@@ -1160,6 +1161,10 @@ def alatau_payment_draft():
             "environment": environment,
             "payment_type": payment_type,
             "payload": payload,
+            # The bank validates the JWS header timestamp against its current
+            # banking date. Use server time so a wrong phone clock/timezone
+            # cannot make an otherwise valid signature look stale.
+            "signing_ts_ms": int(time.time() * 1000),
         })
 
     try:

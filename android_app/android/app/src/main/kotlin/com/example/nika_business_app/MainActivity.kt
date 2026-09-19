@@ -29,6 +29,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingSigningPayload: String? = null
     private var pendingSigningPassword: CharArray? = null
     private var pendingSigningMethod: String? = null
+    private var pendingSigningTimestampMs: Long? = null
     private var pendingSaveKey: Boolean = false
     private var updateDownloadId: Long = -1
     private var receiverRegistered = false
@@ -149,15 +150,22 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "signAlatauJwsWithSavedP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
-                        startSavedP12Signing("signAlatauJwsWithP12", payload, result)
+                        val signingTimestampMs =
+                            call.argument<Number>("signingTimestampMs")?.toLong()
+                        startSavedP12Signing(
+                            "signAlatauJwsWithP12",
+                            payload,
+                            signingTimestampMs,
+                            result,
+                        )
                     }
                     "signEsfRawWithSavedP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
-                        startSavedP12Signing("signEsfRawWithP12", payload, result)
+                        startSavedP12Signing("signEsfRawWithP12", payload, null, result)
                     }
                     "signEsfXmlWithSavedP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
-                        startSavedP12Signing("signEsfXmlWithP12", payload, result)
+                        startSavedP12Signing("signEsfXmlWithP12", payload, null, result)
                     }
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
@@ -165,7 +173,16 @@ class MainActivity : FlutterFragmentActivity() {
                         val payload = call.argument<String>("payload") ?: ""
                         val password = call.argument<String>("password") ?: ""
                         val saveKey = call.argument<Boolean>("saveKey") ?: false
-                        startP12Signing(call.method, payload, password, saveKey, result)
+                        val signingTimestampMs =
+                            call.argument<Number>("signingTimestampMs")?.toLong()
+                        startP12Signing(
+                            call.method,
+                            payload,
+                            password,
+                            saveKey,
+                            signingTimestampMs,
+                            result,
+                        )
                     }
                     else -> result.notImplemented()
                 }
@@ -206,6 +223,7 @@ class MainActivity : FlutterFragmentActivity() {
         payload: String,
         password: String,
         saveKey: Boolean,
+        signingTimestampMs: Long?,
         result: MethodChannel.Result,
     ) {
         val capabilities = KalkanJwsSigner.capabilities()
@@ -242,6 +260,7 @@ class MainActivity : FlutterFragmentActivity() {
         pendingSigningPayload = payload
         pendingSigningPassword = password.toCharArray()
         pendingSigningMethod = method
+        pendingSigningTimestampMs = signingTimestampMs
         pendingSaveKey = saveKey
 
         try {
@@ -271,6 +290,7 @@ class MainActivity : FlutterFragmentActivity() {
     private fun startSavedP12Signing(
         method: String,
         payload: String,
+        signingTimestampMs: Long?,
         result: MethodChannel.Result,
     ) {
         if (payload.isBlank()) {
@@ -316,6 +336,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 keyUri = keyUri,
                                 passwordChars = password.toCharArray(),
                                 payload = payload,
+                                signingTimestampMs = signingTimestampMs,
                             )
                             "signEsfRawWithP12" -> KalkanJwsSigner.signEsfRaw(
                                 context = this@MainActivity,
@@ -394,6 +415,7 @@ class MainActivity : FlutterFragmentActivity() {
         val payload = pendingSigningPayload
         val password = pendingSigningPassword
         val method = pendingSigningMethod
+        val signingTimestampMs = pendingSigningTimestampMs
 
         if (callback == null || payload == null || password == null || method == null) {
             clearPendingSigning()
@@ -414,6 +436,7 @@ class MainActivity : FlutterFragmentActivity() {
                     keyUri = uri,
                     passwordChars = password,
                     payload = payload,
+                    signingTimestampMs = signingTimestampMs,
                 )
                 "signEsfRawWithP12" -> KalkanJwsSigner.signEsfRaw(
                     context = this,
@@ -461,6 +484,7 @@ class MainActivity : FlutterFragmentActivity() {
         pendingSigningPassword = null
         pendingSigningPayload = null
         pendingSigningMethod = null
+        pendingSigningTimestampMs = null
         pendingSaveKey = false
         pendingSigningResult = null
     }

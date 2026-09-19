@@ -94,11 +94,18 @@ object KalkanJwsSigner {
         keyUri: Uri,
         passwordChars: CharArray,
         payload: String,
+        signingTimestampMs: Long? = null,
     ): Map<String, Any?> {
         if (payload.isBlank()) throw SigningException("EMPTY_PAYLOAD", "Нет данных платежа для подписи")
         val material = loadKeyMaterial(context, keyUri, passwordChars)
         try {
-            val encodedHeader = base64Url(buildHeader(material.certificate).toByteArray(StandardCharsets.UTF_8))
+            val timestamp = signingTimestampMs
+                ?.takeIf { it > 0L }
+                ?: System.currentTimeMillis()
+            val encodedHeader = base64Url(
+                buildHeader(material.certificate, timestamp)
+                    .toByteArray(StandardCharsets.UTF_8)
+            )
             val encodedPayload = base64Url(payload.toByteArray(StandardCharsets.UTF_8))
             val signingInput = "$encodedHeader.$encodedPayload".toByteArray(StandardCharsets.US_ASCII)
             val signatureBytes = signBytes(material, signingInput)
@@ -113,6 +120,7 @@ object KalkanJwsSigner {
             return certificateResult(material.certificate) + mapOf(
                 "content" to "$encodedHeader.$encodedPayload.${base64Url(signatureBytes)}",
                 "algorithm" to HEADER_ALG,
+                "signingTimestampMs" to timestamp,
             )
         } finally {
             Arrays.fill(passwordChars, '\u0000')
@@ -538,13 +546,16 @@ object KalkanJwsSigner {
         return fallback
     }
 
-    private fun buildHeader(certificate: X509Certificate): String {
+    private fun buildHeader(
+        certificate: X509Certificate,
+        signingTimestampMs: Long,
+    ): String {
         val header = JSONObject()
         header.put("spanid", randomHex(32))
         header.put("cty", "application/json")
         header.put("typ", "JOSE")
         header.put("alg", HEADER_ALG)
-        header.put("ts", System.currentTimeMillis().toString())
+        header.put("ts", signingTimestampMs.toString())
         header.put(
             "x5c",
             JSONArray().put(Base64.encodeToString(certificate.encoded, Base64.NO_WRAP)),

@@ -71,8 +71,13 @@ class MobileP12Signer {
 
   static Future<Map<String, dynamic>> signAlatauWithSavedKey({
     required String payload,
+    int? signingTimestampMs,
   }) =>
-      _invokeSaved('signAlatauJwsWithSavedP12', payload);
+      _invokeSaved(
+        'signAlatauJwsWithSavedP12',
+        payload,
+        signingTimestampMs: signingTimestampMs,
+      );
 
   static Future<Map<String, dynamic>> signEsfRawWithSavedKey({
     required String payload,
@@ -88,12 +93,14 @@ class MobileP12Signer {
     required String payload,
     required String password,
     bool saveKey = false,
+    int? signingTimestampMs,
   }) =>
       _invoke(
         'signAlatauJwsWithP12',
         payload: payload,
         password: password,
         saveKey: saveKey,
+        signingTimestampMs: signingTimestampMs,
       );
 
   static Future<Map<String, dynamic>> signEsfRaw({
@@ -122,11 +129,16 @@ class MobileP12Signer {
 
   static Future<Map<String, dynamic>> _invokeSaved(
     String method,
-    String payload,
-  ) async {
+    String payload, {
+    int? signingTimestampMs,
+  }) async {
     final result = await _channel.invokeMethod<dynamic>(
       method,
-      {'payload': payload},
+      {
+        'payload': payload,
+        if (signingTimestampMs != null)
+          'signingTimestampMs': signingTimestampMs,
+      },
     );
     if (result is Map) return Map<String, dynamic>.from(result);
     throw PlatformException(
@@ -140,6 +152,7 @@ class MobileP12Signer {
     required String payload,
     required String password,
     bool saveKey = false,
+    int? signingTimestampMs,
   }) async {
     try {
       final result = await _channel.invokeMethod<dynamic>(
@@ -148,6 +161,8 @@ class MobileP12Signer {
           'payload': payload,
           'password': password,
           'saveKey': saveKey,
+          if (signingTimestampMs != null)
+            'signingTimestampMs': signingTimestampMs,
         },
       );
 
