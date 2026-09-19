@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../services/mobile_p12_signer.dart';
 import '../services/supplier_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_widgets.dart';
 
 class BanksScreen extends StatefulWidget {
   const BanksScreen({super.key});
