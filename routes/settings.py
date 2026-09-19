@@ -2022,7 +2022,7 @@ def alatau_statements():
             "environment": environment,
             "statement": statement,
         }
-        if (request.args.get("smart", "").strip().lower() in ("1", "true", "yes"):
+        if request.args.get("smart", "").strip().lower() in ("1", "true", "yes"):
             operations = [
                 _normalize_statement_operation(row, iban)
                 for row in _statement_rows(statement)

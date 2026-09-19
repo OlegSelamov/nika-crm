@@ -75,6 +75,9 @@ jobs:
             pip install -r requirements.txt --quiet
           fi
 
+          echo "Checking Python syntax before restart..."
+          python -m py_compile app.py routes/settings.py services/alatau_client.py
+
           # ESF/Bank integrations may legitimately keep a worker waiting for an
           # upstream government/bank service longer than Gunicorn's 30s default.
           # Keep the origin alive long enough for the app request to finish.
