@@ -82,6 +82,26 @@ class MainActivity : FlutterActivity() {
                     "getSigningCapabilities" -> {
                         result.success(KalkanJwsSigner.capabilities())
                     }
+                    "loadSavedP12Password" -> {
+                        result.success(SecureSigningPasswordStore.load(this))
+                    }
+                    "saveP12Password" -> {
+                        val password = call.argument<String>("password") ?: ""
+                        try {
+                            SecureSigningPasswordStore.save(this, password)
+                            result.success(null)
+                        } catch (error: Exception) {
+                            result.error(
+                                "PASSWORD_SAVE_FAILED",
+                                error.message ?: "Не удалось сохранить пароль ЭЦП",
+                                null,
+                            )
+                        }
+                    }
+                    "clearSavedP12Password" -> {
+                        SecureSigningPasswordStore.clear(this)
+                        result.success(null)
+                    }
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
                     "signEsfXmlWithP12" -> {
