@@ -51,30 +51,26 @@ object KalkanJwsSigner {
         Exception(message, cause)
 
     fun capabilities(): Map<String, Any?> {
+        val loader = KalkanJwsSigner::class.java.classLoader
+        fun classAvailable(name: String): Boolean = try {
+            Class.forName(name, false, loader)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+
         val providerClass = listOf(
             "kz.gov.pki.kalkan.jce.provider.KalkanProvider",
             "kz.gov.pki.kalkan.provider.KalkanProvider",
-        ).firstOrNull { className ->
-            try {
-                Class.forName(className)
-                true
-            } catch (_: Throwable) {
-                false
-            }
-        }
+        ).firstOrNull(::classAvailable)
 
-        val xmlSecurityAvailable = try {
-            Class.forName("org.apache.xml.security.signature.XMLSignature")
-            true
-        } catch (_: Throwable) {
-            false
-        }
-        val kalkanXmlDsigAvailable = try {
-            Class.forName("kz.gov.pki.kalkan.xmldsig.DsigConstants")
-            true
-        } catch (_: Throwable) {
-            false
-        }
+        // Do not initialize Santuario merely to report capabilities. If XMLSecurity
+        // gets initialized before KncaXS sets the Kalkan config, Init.init() becomes
+        // a no-op later and the GOST XML algorithms remain unregistered.
+        val xmlSecurityAvailable =
+            classAvailable("org.apache.xml.security.signature.XMLSignature")
+        val kalkanXmlDsigAvailable =
+            classAvailable("kz.gov.pki.kalkan.xmldsig.DsigConstants")
 
         return mapOf(
             "kalkanInstalled" to (providerClass != null),
@@ -307,23 +303,17 @@ object KalkanJwsSigner {
 
     private fun initializeXmlSecurity(provider: Provider) {
         try {
-            // Это официальный способ инициализации Kalkan XMLDSig. Он не только
-            // запускает Apache Santuario, но и регистрирует казахстанские GOST URI
-            // (SignatureMethod/DigestMethod) в xmlsec. Простого Init.init() +
-            // JCEMapper.setProviderId(...) недостаточно: тогда Santuario видит URI,
-            // но отвечает algorithms.NoSuchAlgorithmNoEx.
+            // Official Kalkan initialization.
             val kncaXsClass = Class.forName("kz.gov.pki.kalkan.xmldsig.KncaXS")
             kncaXsClass.getMethod("loadXMLSecurity").invoke(null)
 
-            // Явно оставляем Kalkan JCE provider выбранным для JCE-вызовов.
-            val mapperClass = Class.forName("org.apache.xml.security.algorithms.JCEMapper")
-            try {
-                mapperClass.getMethod("setProviderId", String::class.java)
-                    .invoke(null, provider.name)
-            } catch (_: Throwable) {
-                // В разных версиях Santuario этого метода может не быть.
-                // KncaXS.loadXMLSecurity() уже выполнил основную регистрацию.
-            }
+            // Android can reach Santuario Init earlier than expected (including via
+            // capability probes or another library). Santuario Init is one-shot:
+            // once alreadyInitialized=true, KncaXS cannot reload pkigovkz.xml.
+            // Therefore explicitly ensure the two Kazakhstan GOST mappings that
+            // ESF auth XMLDSig needs. Register calls are idempotent here: an
+            // "already registered" error is harmless and intentionally ignored.
+            ensureKalkanGostXmlAlgorithms(provider)
         } catch (error: Throwable) {
             var root: Throwable = error
             val visited = HashSet<Throwable>()
@@ -336,10 +326,70 @@ object KalkanJwsSigner {
                 ?.take(220)
             throw SigningException(
                 "KALKAN_XMLDSIG_INIT_FAILED",
-                "Не удалось инициализировать Kalkan XMLDSig через KncaXS.loadXMLSecurity()" +
+                "Не удалось инициализировать Kalkan XMLDSig" +
                     if (detail.isNullOrBlank()) "" else ": $detail",
                 error,
             )
+        }
+    }
+
+    private fun ensureKalkanGostXmlAlgorithms(provider: Provider) {
+        // Resource bundle is useful for meaningful xmlsec errors even if the
+        // Kalkan config file was only partially loaded on Android.
+        try {
+            val i18nClass = Class.forName("org.apache.xml.security.utils.I18n")
+            i18nClass.getMethod("init", String::class.java, String::class.java)
+                .invoke(null, "en", "US")
+        } catch (_: Throwable) {
+        }
+
+        val signatureAlgorithmClass =
+            Class.forName("org.apache.xml.security.algorithms.SignatureAlgorithm")
+        try {
+            signatureAlgorithmClass
+                .getMethod("register", String::class.java, String::class.java)
+                .invoke(
+                    null,
+                    XML_SIGNATURE_URI,
+                    "kz.gov.pki.kalkan.xmldsig.algorithms.implementations." +
+                        "SignatureBaseGost\$GostR34102015GostR34112015_512",
+                )
+        } catch (error: Throwable) {
+            val causeName = generateSequence(error) { it.cause }
+                .map { it.javaClass.simpleName }
+                .firstOrNull { it.contains("AlreadyRegistered", ignoreCase = true) }
+            if (causeName == null) throw error
+        }
+
+        val jceMapperClass = Class.forName("org.apache.xml.security.algorithms.JCEMapper")
+        val algorithmClass =
+            Class.forName("org.apache.xml.security.algorithms.JCEMapper\$Algorithm")
+        val constructor = algorithmClass.getConstructor(
+            String::class.java,
+            String::class.java,
+            String::class.java,
+        )
+        val registerMethod =
+            jceMapperClass.getMethod("register", String::class.java, algorithmClass)
+
+        val digestMapping = constructor.newInstance(
+            "",
+            "GOST3411-2015-512",
+            "MessageDigest",
+        )
+        registerMethod.invoke(null, XML_DIGEST_URI, digestMapping)
+
+        val signatureMapping = constructor.newInstance(
+            "",
+            SIGNING_ALGORITHM,
+            "Signature",
+        )
+        registerMethod.invoke(null, XML_SIGNATURE_URI, signatureMapping)
+
+        try {
+            jceMapperClass.getMethod("setProviderId", String::class.java)
+                .invoke(null, provider.name)
+        } catch (_: Throwable) {
         }
     }
 
