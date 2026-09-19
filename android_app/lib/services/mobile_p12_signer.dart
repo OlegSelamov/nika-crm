@@ -16,6 +16,23 @@ class MobileP12Signer {
     );
   }
 
+  static Future<String?> loadSavedPassword() async {
+    final result = await _channel.invokeMethod<dynamic>('loadSavedP12Password');
+    if (result == null) return null;
+    return result.toString();
+  }
+
+  static Future<void> savePassword(String password) async {
+    await _channel.invokeMethod<void>(
+      'saveP12Password',
+      {'password': password},
+    );
+  }
+
+  static Future<void> clearSavedPassword() async {
+    await _channel.invokeMethod<void>('clearSavedP12Password');
+  }
+
   static Future<Map<String, dynamic>> signAlatauJws({
     required String payload,
     required String password,
