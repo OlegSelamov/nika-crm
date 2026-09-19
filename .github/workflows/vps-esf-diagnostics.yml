@@ -1,4 +1,4 @@
-name: VPS ESF Diagnostics
+name: VPS Integration Diagnostics
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   diagnose:
-    name: Collect VPS ESF diagnostics
+    name: Collect VPS integration diagnostics
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -57,7 +57,10 @@ jobs:
           sudo systemctl show nika-crm -p ExecStart -p Environment --no-pager
 
           echo "=== NIKA JOURNAL LAST 30 MIN ==="
-          sudo journalctl -u nika-crm --since "30 minutes ago" --no-pager | tail -n 400
+          sudo journalctl -u nika-crm --since "30 minutes ago" --no-pager | tail -n 500
+
+          echo "=== ALATAU TRACE ==="
+          sudo journalctl -u nika-crm --since "30 minutes ago" --no-pager | tail -n 500
 
           echo "=== NGINX ERROR LOG LAST 200 ==="
           sudo tail -n 200 /var/log/nginx/error.log
