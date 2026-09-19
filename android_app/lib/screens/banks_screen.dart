@@ -429,10 +429,9 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
   final amount = TextEditingController();
   final documentNumber = TextEditingController();
   final purpose = TextEditingController();
-  final p12Password = TextEditingController();
-
   bool loadingChoices = true;
   bool sending = false;
+  String? formError;
   List<Map<String, dynamic>> suppliers = [];
   List<Map<String, dynamic>> templates = [];
   String selectedChoice = '';
@@ -455,7 +454,6 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
       amount,
       documentNumber,
       purpose,
-      p12Password,
     ]) {
       controller.dispose();
     }
@@ -525,35 +523,44 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
 
   Future<void> _send() async {
     if (sending) return;
-    if (p12Password.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Введите пароль ЭЦП .p12')));
-      return;
-    }
 
-    setState(() => sending = true);
+    setState(() {
+      sending = true;
+      formError = null;
+    });
+
     try {
       final capabilities = await MobileP12Signer.capabilities();
       if (capabilities['readyForAlatau'] != true) {
         throw const ApiException(
           'В этой сборке Nika Business нет KalkanCrypt НУЦ РК. '
-          'Подпись .p12 пока недоступна: установите сборку с официальным Kalkan SDK.',
+          'Установите сборку с официальным Kalkan SDK.',
         );
       }
 
       final payment = _paymentData();
       final prepared = await ApiService.prepareBankPayment(payment);
       final payload = prepared['payload'];
-      if (payload is! Map) throw const ApiException('Сервер не вернул данные платежа для подписи');
+      if (payload is! Map) {
+        throw const ApiException('Сервер не вернул данные платежа для подписи');
+      }
 
-      final canonicalPayload = jsonEncode(payload);
-      final signed = await MobileP12Signer.signAlatauJws(
-        payload: canonicalPayload,
-        password: p12Password.text,
+      if (!mounted) return;
+      final signed = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _P12SigningDialog(
+          payload: jsonEncode(payload),
+          receiverName: receiverName.text.trim(),
+          amount: amount.text.trim(),
+        ),
       );
-      p12Password.clear();
+      if (signed == null) return;
 
       final content = '${signed['content'] ?? ''}';
-      if (content.isEmpty) throw const ApiException('Не удалось получить JWS-подпись');
+      if (content.isEmpty) {
+        throw const ApiException('Не удалось получить JWS-подпись');
+      }
 
       final result = await ApiService.sendSignedBankPayment(
         content: content,
@@ -562,14 +569,15 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
       if (!mounted) return;
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${result['message'] ?? 'Платёж передан в Alatau City Bank'}')),
+        SnackBar(
+          content: Text(
+            '${result['message'] ?? 'Платёж передан в Alatau City Bank'}',
+          ),
+        ),
       );
     } catch (e) {
-      p12Password.clear();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.danger),
-        );
+        setState(() => formError = e.toString());
       }
     } finally {
       if (mounted) setState(() => sending = false);
@@ -632,32 +640,250 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
             ]),
             const SizedBox(height: 10),
             TextField(controller: purpose, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'Назначение платежа')),
-            const SizedBox(height: 14),
-            TextField(
-              controller: p12Password,
-              obscureText: true,
-              enableSuggestions: false,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: 'Пароль ЭЦП .p12',
-                helperText: 'Файл и пароль используются только локально на телефоне',
-                prefixIcon: Icon(Icons.key_rounded),
-              ),
-            ),
             const SizedBox(height: 16),
+            if (formError != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.danger.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.danger.withOpacity(.30)),
+                ),
+                child: Text(
+                  formError!,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: sending ? null : _send,
                 icon: sending
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.verified_user_outlined),
-                label: Text(sending ? 'Подписываем…' : 'Выбрать .p12, подписать и отправить'),
+                label: Text(sending ? 'Подготавливаем…' : 'Подписать'),
               ),
             ),
           ]),
         ),
       ),
+    );
+  }
+}
+
+class _P12SigningDialog extends StatefulWidget {
+  final String payload;
+  final String receiverName;
+  final String amount;
+
+  const _P12SigningDialog({
+    required this.payload,
+    required this.receiverName,
+    required this.amount,
+  });
+
+  @override
+  State<_P12SigningDialog> createState() => _P12SigningDialogState();
+}
+
+class _P12SigningDialogState extends State<_P12SigningDialog> {
+  final password = TextEditingController();
+  bool loading = true;
+  bool signing = false;
+  bool rememberPassword = false;
+  bool hidePassword = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedPassword();
+  }
+
+  Future<void> _loadSavedPassword() async {
+    try {
+      final saved = await MobileP12Signer.loadSavedPassword();
+      if (!mounted) return;
+      if (saved != null && saved.isNotEmpty) {
+        password.text = saved;
+        rememberPassword = true;
+      }
+    } catch (_) {
+      // Подпись остаётся доступной даже если сохранённый пароль прочитать нельзя.
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    password.clear();
+    password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sign() async {
+    if (signing) return;
+    if (password.text.isEmpty) {
+      setState(() => error = 'Введите пароль ЭЦП');
+      return;
+    }
+
+    setState(() {
+      signing = true;
+      error = null;
+    });
+
+    try {
+      final signed = await MobileP12Signer.signAlatauJws(
+        payload: widget.payload,
+        password: password.text,
+      );
+
+      if (rememberPassword) {
+        await MobileP12Signer.savePassword(password.text);
+      } else {
+        await MobileP12Signer.clearSavedPassword();
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context, signed);
+    } catch (e) {
+      if (mounted) {
+        setState(() => error = e.toString());
+      }
+    } finally {
+      if (mounted) setState(() => signing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final receiver = widget.receiverName.isEmpty
+        ? 'Получатель не указан'
+        : widget.receiverName;
+
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.verified_user_outlined),
+          SizedBox(width: 10),
+          Expanded(child: Text('Подписание платежа')),
+        ],
+      ),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                receiver,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              if (widget.amount.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  '${widget.amount} KZT',
+                  style: const TextStyle(color: AppColors.muted),
+                ),
+              ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: password,
+                enabled: !loading && !signing,
+                obscureText: hidePassword,
+                enableSuggestions: false,
+                autocorrect: false,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Пароль ЭЦП',
+                  prefixIcon: const Icon(Icons.key_rounded),
+                  suffixIcon: IconButton(
+                    onPressed: () =>
+                        setState(() => hidePassword = !hidePassword),
+                    icon: Icon(
+                      hidePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                  ),
+                ),
+                onSubmitted: (_) => _sign(),
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                value: rememberPassword,
+                onChanged: signing
+                    ? null
+                    : (value) => setState(
+                          () => rememberPassword = value ?? false,
+                        ),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text(
+                  'Сохранить пароль на этом телефоне',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text(
+                  'Пароль хранится зашифрованно через Android Keystore и не отправляется на сервер.',
+                ),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.danger.withOpacity(.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    error!,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              const Text(
+                'После нажатия откроется выбор файла .p12.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: signing ? null : () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton.icon(
+          onPressed: loading || signing ? null : _sign,
+          icon: signing
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.folder_open_outlined),
+          label: Text(signing ? 'Подписываем…' : 'Выбрать ключ и подписать'),
+        ),
+      ],
     );
   }
 }
