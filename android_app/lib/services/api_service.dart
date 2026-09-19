@@ -757,6 +757,79 @@ class ApiService {
         },
       ));
 
+  static Future<Map<String, dynamic>> getSaleEsf(int saleId) async =>
+      Map<String, dynamic>.from(
+        await _request('GET', '/api/sales/$saleId/esf'),
+      );
+
+  static Future<Map<String, dynamic>> saveSaleEsfDraft(
+    int saleId,
+    Map<String, dynamic> payload,
+  ) async =>
+      Map<String, dynamic>.from(
+        await _request(
+          'POST',
+          '/api/sales/$saleId/esf/draft',
+          timeout: const Duration(seconds: 60),
+          body: {'payload': payload},
+        ),
+      );
+
+  static Future<Map<String, dynamic>> saveSaleEsfSignature(
+    int saleId, {
+    required String signature,
+    required String certificate,
+    required String payloadHash,
+    String certificateSubject = '',
+  }) async =>
+      Map<String, dynamic>.from(
+        await _request(
+          'POST',
+          '/api/sales/$saleId/esf/signature',
+          timeout: const Duration(seconds: 60),
+          body: {
+            'signature': signature,
+            'certificate': certificate,
+            'certificate_subject': certificateSubject,
+            'payload_hash': payloadHash,
+          },
+        ),
+      );
+
+  static Future<Map<String, dynamic>> getSaleEsfAuthTicket(
+    int saleId, {
+    required String iin,
+  }) async =>
+      Map<String, dynamic>.from(
+        await _request(
+          'POST',
+          '/api/sales/$saleId/esf/auth-ticket',
+          timeout: const Duration(seconds: 60),
+          body: {'iin': iin},
+        ),
+      );
+
+  static Future<Map<String, dynamic>> sendSaleEsf(
+    int saleId, {
+    required String iin,
+    required String password,
+    required String signedAuthTicket,
+    required String profileType,
+  }) async =>
+      Map<String, dynamic>.from(
+        await _request(
+          'POST',
+          '/api/sales/$saleId/esf/send',
+          timeout: const Duration(seconds: 120),
+          body: {
+            'iin': iin,
+            'password': password,
+            'signed_auth_ticket': signedAuthTicket,
+            'profile_type': profileType,
+          },
+        ),
+      );
+
   static Future<Map<String, dynamic>> notifications() async =>
       Map<String, dynamic>.from(
         await _request('GET', '/api/notifications'),
