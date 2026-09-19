@@ -2046,16 +2046,18 @@ def alatau_statements():
 
         return jsonify(response_payload)
     except AlatauError as exc:
+        # HTTP 412 in Alatau is a generic "edge scenario" status. Do not replace
+        # the bank's payload with a guessed cause: the response code/details are
+        # much more useful for diagnosing the exact precondition that failed.
         error_message = str(exc)
-        if exc.status_code == 412:
-            error_message = (
-                "Alatau City Bank вернул HTTP 412 — нарушение предусловий для выписки. "
-                "По спецификации выписка v3 доступна только для счетов с типом ACCOUNT. "
-                "Также проверьте, что у Production-приложения Business API включён доступ "
-                "«Выгрузка выписки»; после изменения прав банк требует новые Client ID / Client Secret."
-            )
+        if exc.status_code == 412 and "HTTP 412" not in error_message:
+            error_message = f"HTTP 412. {error_message}"
         _alatau_touch(company_id, environment, error=error_message[:500])
-        return jsonify({"success": False, "error": error_message}), exc.status_code
+        return jsonify({
+            "success": False,
+            "error": error_message,
+            "code": "alatau_statement_precondition" if exc.status_code == 412 else None,
+        }), exc.status_code
 
 
 

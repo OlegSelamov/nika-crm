@@ -118,14 +118,26 @@ class AlatauClient:
             if isinstance(error, dict):
                 description = error.get("description") or error.get("message")
                 code = error.get("code")
-                if description:
-                    prefix = f"{code}: " if code else ""
-                    return f"HTTP {response.status_code}. {prefix}{description}"[:500]
                 details = error.get("details")
+                first_detail = None
                 if isinstance(details, list) and details:
                     first = details[0]
-                    if isinstance(first, dict) and first.get("message"):
-                        return f"HTTP {response.status_code}. {first['message']}"[:500]
+                    if isinstance(first, dict):
+                        detail_message = first.get("message") or first.get("description")
+                        detail_code = first.get("code")
+                        if detail_message:
+                            first_detail = (
+                                f"{detail_code}: {detail_message}"
+                                if detail_code else str(detail_message)
+                            )
+                if description:
+                    prefix = f"{code}: " if code else ""
+                    suffix = f" · {first_detail}" if first_detail else ""
+                    return (
+                        f"HTTP {response.status_code}. {prefix}{description}{suffix}"
+                    )[:500]
+                if first_detail:
+                    return f"HTTP {response.status_code}. {first_detail}"[:500]
             message = (
                 payload.get("message")
                 or payload.get("description")

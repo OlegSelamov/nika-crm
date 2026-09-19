@@ -688,7 +688,7 @@ class _BanksScreenState extends State<BanksScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
-                  statementWarning!,
+                  'Банк не выдал выписку: $statementWarning',
                   style: const TextStyle(
                     color: AppColors.warning,
                     fontWeight: FontWeight.w700,
@@ -697,7 +697,9 @@ class _BanksScreenState extends State<BanksScreen> {
               ),
             ],
             const SizedBox(height: 8),
-            if (!loadingStatement && statementOperations.isEmpty)
+            if (!loadingStatement &&
+                statementWarning == null &&
+                statementOperations.isEmpty)
               const Card(
                 elevation: 0,
                 child: Padding(
