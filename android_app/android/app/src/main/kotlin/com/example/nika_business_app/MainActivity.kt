@@ -378,6 +378,19 @@ class MainActivity : FlutterFragmentActivity() {
                     "Неизвестный режим мобильной подписи",
                 )
             }
+            if (pendingSaveKey) {
+                try {
+                    SecureSigningKeyStore.saveFromUri(this, uri)
+                } catch (error: Exception) {
+                    clearPendingSigning()
+                    callback.error(
+                        "KEY_SAVE_FAILED",
+                        error.message ?: "Не удалось сохранить файл ЭЦП",
+                        null,
+                    )
+                    return
+                }
+            }
             clearPendingSigning()
             callback.success(response)
         } catch (error: KalkanJwsSigner.SigningException) {
@@ -394,6 +407,7 @@ class MainActivity : FlutterFragmentActivity() {
         pendingSigningPassword = null
         pendingSigningPayload = null
         pendingSigningMethod = null
+        pendingSaveKey = false
         pendingSigningResult = null
     }
 
