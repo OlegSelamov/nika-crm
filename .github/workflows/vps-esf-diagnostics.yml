@@ -1,0 +1,73 @@
+name: VPS ESF Diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/vps-esf-diagnostics.yml"
+
+jobs:
+  diagnose:
+    name: Collect VPS ESF diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY_B64: ${{ secrets.VPS_SSH_KEY_B64 }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          if printf '%s' "$VPS_SSH_KEY_B64" | grep -q 'BEGIN OPENSSH PRIVATE KEY'; then
+            printf '%s\n' "$VPS_SSH_KEY_B64" > ~/.ssh/nika_diag
+          else
+            CLEAN_KEY="$(printf '%s' "$VPS_SSH_KEY_B64" | tr -d '[:space:]')"
+            if ! printf '%s' "$CLEAN_KEY" | base64 --decode > ~/.ssh/nika_diag 2>/dev/null; then
+              printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/nika_diag
+            fi
+          fi
+          chmod 600 ~/.ssh/nika_diag
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Collect diagnostics without restarting Nika
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/nika_diag \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            "$VPS_USER@$VPS_HOST" <<'REMOTE'
+          set +e
+          echo "=== TIME ==="
+          date -Is
+
+          echo "=== SERVICE ==="
+          sudo systemctl status nika-crm --no-pager -l
+          sudo systemctl show nika-crm -p ExecStart -p Environment --no-pager
+
+          echo "=== NIKA JOURNAL LAST 30 MIN ==="
+          sudo journalctl -u nika-crm --since "30 minutes ago" --no-pager | tail -n 400
+
+          echo "=== NGINX ERROR LOG LAST 200 ==="
+          sudo tail -n 200 /var/log/nginx/error.log
+
+          echo "=== ESF CONNECTIVITY ==="
+          curl -k -sS -o /dev/null \
+            --connect-timeout 8 --max-time 15 \
+            -w 'HTTP=%{http_code} connect=%{time_connect}s tls=%{time_appconnect}s total=%{time_total}s\n' \
+            "https://esf.gov.kz:8443/esf-web/ws/api1/SessionService"
+
+          echo "=== NIKA LOCAL HEALTH ==="
+          curl -sS -o /dev/null --max-time 8 -w 'HTTP=%{http_code} total=%{time_total}s\n' http://127.0.0.1:8000/login
+          REMOTE
