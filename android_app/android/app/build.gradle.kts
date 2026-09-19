@@ -66,6 +66,7 @@ dependencies {
         "dir" to "libs",
         "include" to listOf("*.jar", "*.aar")
     )))
+    implementation("org.apache.santuario:xmlsec:3.0.3")
 }
 
 flutter {
