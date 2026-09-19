@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import logging
 import re
 import secrets
 import time
@@ -15,6 +16,7 @@ from services.alatau_client import AlatauClient, AlatauError, AlatauSecretCipher
 import routes.stock_consistency  # noqa: F401
 
 settings_bp = Blueprint("settings", __name__)
+logger = logging.getLogger(__name__)
 
 
 def _alatau_current_company():
@@ -1216,60 +1218,46 @@ def alatau_payment_draft():
         return jsonify({"success": False, "error": str(exc)}), exc.status_code
 
 
-def _alatau_b64url_encode(raw):
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
-
-
-def _alatau_contractor_signed_content(content):
-    """Normalize a locally produced compact JWS to Alatau contractor format.
-
-    Alatau's current contractor signed-payment example uses content as
-    base64url(JSON JWS serialization):
-      {"payload":"...","signatures":[{"protected":"...","signature":"..."}]}
-
-    The installed desktop NCALayer module and our Android signer both expose a
-    compact JWS (protected.payload.signature). No cryptographic data changes
-    here: we only put the exact three compact parts into the JSON serialization
-    envelope required by the contractor endpoint and base64url-encode it.
-    """
+def _alatau_jws_debug(content):
+    """Return non-secret metadata from a compact JWS for diagnostics."""
     value = (content or "").strip()
     parts = value.split(".")
-    if len(parts) == 3 and all(parts):
-        protected, payload, signature = parts
-        envelope = {
-            "payload": payload,
-            "signatures": [{
-                "protected": protected,
-                "signature": signature,
-            }],
-        }
-        canonical = json.dumps(
-            envelope,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        return _alatau_b64url_encode(canonical), "jws-json-b64url"
+    if len(parts) != 3 or not all(parts):
+        raise ValueError("Модуль подписи передал некорректный compact JWS")
+
+    def decode_segment(segment):
+        padded = segment + ("=" * ((4 - len(segment) % 4) % 4))
+        return base64.urlsafe_b64decode(padded.encode("ascii"))
 
     try:
-        padded = value + ("=" * ((4 - len(value) % 4) % 4))
-        decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
-        envelope = json.loads(decoded.decode("utf-8"))
-        signatures = envelope.get("signatures") if isinstance(envelope, dict) else None
-        payload = envelope.get("payload") if isinstance(envelope, dict) else None
-        if (
-            isinstance(payload, str)
-            and payload
-            and isinstance(signatures, list)
-            and signatures
-            and isinstance(signatures[0], dict)
-            and signatures[0].get("protected")
-            and signatures[0].get("signature")
-        ):
-            return value, "jws-json-b64url"
-    except Exception:
-        pass
+        protected = json.loads(decode_segment(parts[0]).decode("utf-8"))
+        signature_bytes = decode_segment(parts[2])
+    except Exception as exc:
+        raise ValueError("Не удалось разобрать JWS, сформированный модулем подписи") from exc
 
-    raise ValueError("Некорректная JWS-подпись платежа")
+    ts_raw = protected.get("ts") if isinstance(protected, dict) else None
+    try:
+        ts_ms = int(str(ts_raw))
+    except (TypeError, ValueError):
+        ts_ms = None
+
+    now_ms = int(time.time() * 1000)
+    delta_seconds = (
+        round((now_ms - ts_ms) / 1000.0, 3)
+        if ts_ms is not None
+        else None
+    )
+    x5c = protected.get("x5c") if isinstance(protected, dict) else None
+    return {
+        "alg": protected.get("alg") if isinstance(protected, dict) else None,
+        "typ": protected.get("typ") if isinstance(protected, dict) else None,
+        "cty": protected.get("cty") if isinstance(protected, dict) else None,
+        "ts": str(ts_raw) if ts_raw is not None else None,
+        "delta_seconds": delta_seconds,
+        "signature_bytes": len(signature_bytes),
+        "x5c_count": len(x5c) if isinstance(x5c, list) else 0,
+        "payload_bytes": len(decode_segment(parts[1])),
+    }
 
 
 @settings_bp.route("/api/integrations/alatau/payments/signed", methods=["POST"])
@@ -1288,9 +1276,30 @@ def alatau_signed_payment():
         return jsonify({"success": False, "error": "Модуль подписи не передал JWS"}), 400
 
     try:
-        bank_content, signature_format = _alatau_contractor_signed_content(content)
+        signature_debug = _alatau_jws_debug(content)
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
+
+    # The bank's own NCALayer instruction explicitly requires the compact
+    # [header].[payload].[signature] JWS string in POST /signed-payments.
+    # Reject a stale timestamp locally so a bank-side "dated today" error
+    # cannot be caused by Nika's clock handling.
+    delta_seconds = signature_debug.get("delta_seconds")
+    if delta_seconds is None or abs(delta_seconds) > 300:
+        return jsonify({
+            "success": False,
+            "error": (
+                "Временная метка JWS некорректна или устарела. "
+                "Подпишите платёж заново."
+            ),
+            "signature_debug": signature_debug,
+        }), 400
+
+    logger.warning(
+        "Alatau signed payment JWS meta company_id=%s meta=%s",
+        company_id,
+        signature_debug,
+    )
 
     try:
         client, access_token, bank_company_id, environment = _alatau_live_session(
@@ -1299,7 +1308,7 @@ def alatau_signed_payment():
         result = client.send_signed_payment(
             access_token,
             bank_company_id,
-            bank_content,
+            content,
         )
         _alatau_touch(
             company_id,
@@ -1319,10 +1328,16 @@ def alatau_signed_payment():
             "success": True,
             "environment": environment,
             "company_id": bank_company_id,
-            "signature_format": signature_format,
             "payment": result,
         })
     except AlatauError as exc:
+        logger.warning(
+            "Alatau signed payment rejected company_id=%s status=%s meta=%s error=%s",
+            company_id,
+            exc.status_code,
+            signature_debug,
+            str(exc),
+        )
         _alatau_touch(company_id, environment, error=str(exc)[:500])
         _alatau_store_payment(
             company_id,
@@ -1332,7 +1347,11 @@ def alatau_signed_payment():
             fallback_status="ERROR",
             fallback_message=str(exc),
         )
-        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "signature_debug": signature_debug,
+        }), exc.status_code
 
 
 @settings_bp.route("/api/integrations/alatau/payments/history")
