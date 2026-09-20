@@ -675,7 +675,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             Container(
               width: 38,
               height: 38,
-              decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark ? AppColors.darkPrimarySoft : AppColors.primarySoft, borderRadius: BorderRadius.circular(12)),
               child: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 10),
@@ -1154,7 +1154,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: AppColors.primarySoft,
+                color: Theme.of(context).brightness == Brightness.dark ? AppColors.darkPrimarySoft : AppColors.primarySoft,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(
@@ -1440,7 +1440,7 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
             child: Container(
               width: 44,
               height: 5,
-              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(8)),
             ),
           ),
           Flexible(
@@ -1466,7 +1466,7 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                   ),
@@ -1485,14 +1485,14 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16)),
                     child: const Text('Документы пока не сформированы', style: TextStyle(color: AppColors.muted)),
                   )
                 else
                   ...widget.documents.map((doc) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Material(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
                       child: InkWell(
                         onTap: () => _openDocument(doc),
@@ -1508,7 +1508,7 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: AppColors.primarySoft,
+                                color: Theme.of(context).brightness == Brightness.dark ? AppColors.darkPrimarySoft : AppColors.primarySoft,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(doc.icon, color: AppColors.primary, size: 20),
