@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
@@ -31,6 +32,7 @@ class _BanksScreenState extends State<BanksScreen> {
   Map<String, dynamic>? selectedAccount;
   Map<String, dynamic> bank = const {};
   Map<String, dynamic> company = const {};
+  Timer? _paymentStatusTimer;
 
   @override
   void initState() {
@@ -38,6 +40,37 @@ class _BanksScreenState extends State<BanksScreen> {
     statementTo = _previousBankingDay(DateTime.now());
     statementFrom = statementTo.subtract(const Duration(days: 30));
     _load();
+    _paymentStatusTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) {
+        if (!mounted || bankView != 'payments' || !_hasPendingPayments()) return;
+        _refreshPayments(silent: true);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _paymentStatusTimer?.cancel();
+    super.dispose();
+  }
+
+  bool _hasPendingPayments() {
+    const finalStatuses = {
+      'EXECUTED',
+      'COMPLETED',
+      'SUCCESS',
+      'ACCEPTED',
+      'REJECTED',
+      'FAILED',
+      'ERROR',
+      'CANCELLED',
+      'CANCELED',
+    };
+    return payments.any((payment) {
+      final status = _text(payment['statusCode']).toUpperCase();
+      return status.isNotEmpty && !finalStatuses.contains(status);
+    });
   }
 
   DateTime _previousBankingDay(DateTime now) {
@@ -151,7 +184,7 @@ class _BanksScreenState extends State<BanksScreen> {
     return '${_money(raw)} ${currency.isEmpty ? 'KZT' : currency}';
   }
 
-  Future<void> _refreshPayments() async {
+  Future<void> _refreshPayments({bool silent = false}) async {
     if (refreshingPayments) return;
     setState(() => refreshingPayments = true);
     try {
@@ -163,14 +196,16 @@ class _BanksScreenState extends State<BanksScreen> {
       if (!mounted) return;
       setState(() => payments = next);
       final warning = _text(result['refresh_warning']);
-      if (warning.isNotEmpty) {
+      if (warning.isNotEmpty && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Статусы загружены частично: $warning')),
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
       }
     } finally {
       if (mounted) setState(() => refreshingPayments = false);
@@ -1477,10 +1512,13 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
   List<Map<String, dynamic>> suppliers = [];
   List<Map<String, dynamic>> templates = [];
   String selectedChoice = '';
+  late final String requestId;
 
   @override
   void initState() {
     super.initState();
+    requestId =
+        'nika-${DateTime.now().microsecondsSinceEpoch}-${widget.hashCode.abs()}';
     _applyInitialPayment();
     if (widget.mode == 'invoice') {
       final now = DateTime.now();
@@ -1680,6 +1718,7 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
       final result = await ApiService.sendSignedBankPayment(
         content: content,
         payment: payment,
+        requestId: requestId,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -1841,12 +1880,15 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
   List<Map<String, dynamic>> kbkItems = [];
   Map<String, dynamic>? selectedKbk;
   String taxPaymentKind = 'MAIN';
+  late final String requestId;
   int selectedTaxMonth = DateTime.now().month;
   int selectedTaxYear = DateTime.now().year;
 
   @override
   void initState() {
     super.initState();
+    requestId =
+        'nika-tax-${DateTime.now().microsecondsSinceEpoch}-${widget.hashCode.abs()}';
     final now = DateTime.now();
     selectedTaxMonth = now.month;
     selectedTaxYear = now.year;
@@ -2259,6 +2301,7 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
       final result = await ApiService.sendSignedBankPayment(
         content: content,
         payment: payment,
+        requestId: requestId,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
