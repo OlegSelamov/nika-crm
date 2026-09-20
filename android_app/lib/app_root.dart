@@ -37,7 +37,7 @@ class _NikaModalRouteObserver extends NavigatorObserver {
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
     if (_isModal(route)) {
-      _modalDepth = (_modalDepth - 1).clamp(0, 999);
+      _modalDepth = (_modalDepth - 1).clamp(0, 999).toInt();
       _sync();
     }
   }
