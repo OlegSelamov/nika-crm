@@ -72,6 +72,7 @@ dependencies {
     )))
     implementation("androidx.biometric:biometric:1.1.0")
 
+
     // Kalkan XMLDSig 0.5.x / JSR-105 1.2.1 use Apache Santuario 3.0.2.
     // Keep it non-transitive on Android to avoid pulling desktop StAX/Woodstox deps.
     implementation("org.apache.santuario:xmlsec:3.0.2") {
