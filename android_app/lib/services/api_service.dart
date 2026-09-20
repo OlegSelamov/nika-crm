@@ -818,6 +818,7 @@ class ApiService {
   static Future<Map<String, dynamic>> sendSignedBankPayment({
     required String content,
     required Map<String, dynamic> payment,
+    required String requestId,
   }) async =>
       Map<String, dynamic>.from(await _request(
         'POST',
@@ -827,6 +828,7 @@ class ApiService {
           'environment': 'production',
           'content': content,
           'payment': payment,
+          'requestId': requestId,
         },
       ));
 

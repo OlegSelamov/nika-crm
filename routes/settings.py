@@ -165,6 +165,115 @@ def _ensure_alatau_payment_history_table(cur):
     """)
 
 
+def _ensure_alatau_payment_requests_table(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS alatau_payment_requests (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            environment TEXT NOT NULL DEFAULT 'production',
+            request_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'SENDING',
+            operation_id TEXT,
+            error_message TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(company_id, environment, request_id)
+        )
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_alatau_payment_requests_company
+        ON alatau_payment_requests(company_id, environment, updated_at DESC)
+    """)
+
+
+def _alatau_claim_payment_request(company_id, environment, request_id):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_alatau_payment_requests_table(cur)
+        cur.execute("""
+            INSERT INTO alatau_payment_requests (
+                company_id, environment, request_id, status,
+                created_at, updated_at
+            )
+            VALUES (%s, %s, %s, 'SENDING', NOW(), NOW())
+            ON CONFLICT (company_id, environment, request_id) DO NOTHING
+            RETURNING id
+        """, (company_id, environment, request_id))
+        row = cur.fetchone()
+        if row:
+            conn.commit()
+            return True, None
+
+        cur.execute("""
+            SELECT status, operation_id, error_message, updated_at
+            FROM alatau_payment_requests
+            WHERE company_id = %s AND environment = %s AND request_id = %s
+            LIMIT 1
+        """, (company_id, environment, request_id))
+        existing = cur.fetchone()
+        existing_map = dict(existing) if existing else {}
+        if existing_map.get("status") == "ERROR_RETRYABLE":
+            cur.execute("""
+                UPDATE alatau_payment_requests
+                SET status = 'SENDING',
+                    error_message = NULL,
+                    updated_at = NOW()
+                WHERE company_id = %s
+                  AND environment = %s
+                  AND request_id = %s
+                  AND status = 'ERROR_RETRYABLE'
+                RETURNING id
+            """, (company_id, environment, request_id))
+            retried = cur.fetchone()
+            conn.commit()
+            if retried:
+                return True, None
+        else:
+            conn.commit()
+        return False, existing_map
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+def _alatau_finish_payment_request(
+    company_id,
+    environment,
+    request_id,
+    *,
+    status,
+    operation_id=None,
+    error_message=None,
+):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        _ensure_alatau_payment_requests_table(cur)
+        cur.execute("""
+            UPDATE alatau_payment_requests
+            SET status = %s,
+                operation_id = COALESCE(%s, operation_id),
+                error_message = %s,
+                updated_at = NOW()
+            WHERE company_id = %s AND environment = %s AND request_id = %s
+        """, (
+            status,
+            operation_id,
+            (error_message or "")[:500] or None,
+            company_id,
+            environment,
+            request_id,
+        ))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        pool.putconn(conn)
+
+
 def _alatau_payment_result_fields(result):
     payload = result if isinstance(result, dict) else {}
     payment = payload.get("payment") if isinstance(payload.get("payment"), dict) else payload
@@ -1480,10 +1589,18 @@ def alatau_signed_payment():
     environment = (data.get("environment") or "production").strip().lower()
     content = (data.get("content") or "").strip()
     payment_meta = data.get("payment") if isinstance(data.get("payment"), dict) else {}
+    request_id = str(data.get("requestId") or "").strip()
+    if not request_id and content:
+        request_id = "jws-" + hashlib.sha256(content.encode("utf-8")).hexdigest()
     if environment != "production":
         return jsonify({"success": False, "error": "Подписанные платежи разрешены только в Production"}), 400
     if not content:
         return jsonify({"success": False, "error": "Модуль подписи не передал JWS"}), 400
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{12,120}", request_id):
+        return jsonify({
+            "success": False,
+            "error": "Некорректный идентификатор отправки платежа",
+        }), 400
 
     try:
         signature_debug = _alatau_jws_debug(content)
@@ -1511,6 +1628,31 @@ def alatau_signed_payment():
         signature_debug,
     )
 
+    claimed, previous = _alatau_claim_payment_request(
+        company_id, environment, request_id
+    )
+    if not claimed:
+        previous = previous or {}
+        previous_status = str(previous.get("status") or "SENDING")
+        previous_operation = previous.get("operation_id")
+        if previous_status in ("SENT", "EXECUTED", "COMPLETED", "SUCCESS", "ACCEPTED"):
+            return jsonify({
+                "success": True,
+                "duplicate": True,
+                "message": "Этот платёж уже был передан в банк",
+                "operationId": previous_operation,
+            })
+        return jsonify({
+            "success": False,
+            "duplicate": True,
+            "error": (
+                "Повторная отправка заблокирована. "
+                "Предыдущая попытка этого платежа уже обрабатывается или завершилась ошибкой."
+            ),
+            "request_status": previous_status,
+            "operationId": previous_operation,
+        }), 409
+
     try:
         client, access_token, bank_company_id, environment = _alatau_live_session(
             company_id, environment
@@ -1533,6 +1675,14 @@ def alatau_signed_payment():
             result,
             fallback_status="SENT",
             fallback_message="Платёж подписан и передан в Alatau",
+        )
+        operation_id, status_code, _, _ = _alatau_payment_result_fields(result)
+        _alatau_finish_payment_request(
+            company_id,
+            environment,
+            request_id,
+            status=status_code or "SENT",
+            operation_id=operation_id,
         )
         return jsonify({
             "success": True,
@@ -1557,6 +1707,19 @@ def alatau_signed_payment():
             fallback_status="ERROR",
             fallback_message=str(exc),
         )
+        retryable_statuses = {400, 401, 403, 404, 412, 424, 429}
+        request_status = (
+            "ERROR_RETRYABLE"
+            if exc.status_code in retryable_statuses
+            else "UNKNOWN"
+        )
+        _alatau_finish_payment_request(
+            company_id,
+            environment,
+            request_id,
+            status=request_status,
+            error_message=str(exc),
+        )
         return jsonify({
             "success": False,
             "error": str(exc),
@@ -1578,6 +1741,7 @@ def alatau_payment_history():
     try:
         cur = conn.cursor()
         _ensure_alatau_payment_history_table(cur)
+        _ensure_alatau_payment_requests_table(cur)
         conn.commit()
 
         if refresh:
@@ -1591,6 +1755,10 @@ def alatau_payment_history():
                     WHERE company_id = %s
                       AND environment = %s
                       AND operation_id IS NOT NULL
+                      AND UPPER(COALESCE(status_code, '')) NOT IN (
+                          'EXECUTED', 'COMPLETED', 'SUCCESS', 'ACCEPTED',
+                          'REJECTED', 'FAILED', 'ERROR', 'CANCELLED', 'CANCELED'
+                      )
                     ORDER BY created_at DESC
                     LIMIT 40
                 """, (company_id, environment))
@@ -1630,6 +1798,19 @@ def alatau_payment_history():
                             status_message[:500] or None,
                             status_timestamp or None,
                             row.get("id"),
+                        ))
+                        cur.execute("""
+                            UPDATE alatau_payment_requests
+                            SET status = %s,
+                                updated_at = NOW()
+                            WHERE company_id = %s
+                              AND environment = %s
+                              AND operation_id = %s
+                        """, (
+                            status_code[:120],
+                            company_id,
+                            environment,
+                            operation_id,
                         ))
                     except AlatauError as status_exc:
                         if status_exc.status_code not in (400, 404):

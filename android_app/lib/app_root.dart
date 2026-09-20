@@ -8,6 +8,62 @@ import 'services/nika_assistant_controller.dart';
 import 'theme/app_theme.dart';
 import 'widgets/nika_voice_overlay.dart';
 
+final _nikaModalRouteObserver = _NikaModalRouteObserver(
+  NikaAssistantController.instance,
+);
+
+class _NikaModalRouteObserver extends NavigatorObserver {
+  final NikaAssistantController controller;
+  int _modalDepth = 0;
+
+  _NikaModalRouteObserver(this.controller);
+
+  bool _isModal(Route<dynamic>? route) => route is PopupRoute;
+
+  void _sync() {
+    controller.setOverlaySuppressed(_modalDepth > 0);
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    if (_isModal(route)) {
+      _modalDepth++;
+      _sync();
+    }
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    if (_isModal(route)) {
+      _modalDepth = (_modalDepth - 1).clamp(0, 999).toInt();
+      _sync();
+    }
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    if (_isModal(route)) {
+      _modalDepth = (_modalDepth - 1).clamp(0, 999).toInt();
+      _sync();
+    }
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    if (_isModal(oldRoute)) {
+      _modalDepth = (_modalDepth - 1).clamp(0, 999).toInt();
+    }
+    if (_isModal(newRoute)) {
+      _modalDepth++;
+    }
+    _sync();
+  }
+}
+
 class NikaBusinessApp extends StatelessWidget {
   const NikaBusinessApp({super.key});
 
@@ -33,6 +89,7 @@ class NikaBusinessApp extends StatelessWidget {
         theme: AppTheme.light(),
         darkTheme: AppTheme.darkBlue(),
         themeMode: darkBlue ? ThemeMode.dark : ThemeMode.light,
+        navigatorObservers: [_nikaModalRouteObserver],
         builder: (context, child) => NikaVoiceOverlay(
           controller: NikaAssistantController.instance,
           child: child ?? const SizedBox.shrink(),
