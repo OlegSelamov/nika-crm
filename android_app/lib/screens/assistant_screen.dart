@@ -126,7 +126,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       width: double.infinity,
-      color: active ? AppColors.navy : AppColors.primarySoft,
+      color: active
+          ? AppColors.navy
+          : (Theme.of(context).brightness == Brightness.dark
+              ? AppColors.darkPrimarySoft
+              : AppColors.primarySoft),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       child: Row(
         children: [
@@ -137,7 +141,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
               shape: BoxShape.circle,
               color: active
                   ? Colors.white.withOpacity(.12)
-                  : Colors.white.withOpacity(.8),
+                  : Theme.of(context).colorScheme.surface.withOpacity(.85),
             ),
             child: Icon(
               listening
@@ -160,7 +164,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 Text(
                   active ? nika.statusTitle : 'Голосовой режим активен',
                   style: TextStyle(
-                    color: active ? Colors.white : AppColors.text,
+                    color: active
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -172,7 +178,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: active ? Colors.white70 : AppColors.muted,
+                    color: active
+                        ? Colors.white70
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 12,
                   ),
                 ),
@@ -211,7 +219,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
         const Text(
           'Можно написать или нажать на микрофон. Nika ответит голосом и сможет открыть нужный раздел.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.muted, height: 1.45),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            height: 1.45,
+          ),
         ),
         const SizedBox(height: 24),
         for (final prompt in const [
@@ -244,19 +255,25 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ? AppColors.primary
               : isError
                   ? const Color(0xFFFFE8E9)
-                  : Colors.white,
+                  : Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.darkSurfaceRaised
+                      : Colors.white,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
             bottomLeft: Radius.circular(mine ? 18 : 5),
             bottomRight: Radius.circular(mine ? 5 : 18),
           ),
-          border: mine ? null : Border.all(color: AppColors.border),
+          border: mine
+              ? null
+              : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         ),
         child: Text(
           '${item['content'] ?? ''}',
           style: TextStyle(
-            color: mine ? Colors.white : AppColors.text,
+            color: mine
+                ? Colors.white
+                : Theme.of(context).colorScheme.onSurface,
             height: 1.4,
           ),
         ),
@@ -270,9 +287,15 @@ class _AssistantScreenState extends State<AssistantScreen> {
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7E2),
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF3A2D12)
+            : const Color(0xFFFFF7E2),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF9D97B)),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF715A22)
+              : const Color(0xFFF9D97B),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,7 +309,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
           const SizedBox(height: 5),
           const Text(
             'Можно также сказать «подтверждаю» или «отмена».',
-            style: TextStyle(color: AppColors.muted, fontSize: 12),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -317,9 +343,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppColors.border)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
