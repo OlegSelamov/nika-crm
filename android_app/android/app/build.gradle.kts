@@ -72,6 +72,12 @@ dependencies {
     )))
     implementation("androidx.biometric:biometric:1.1.0")
 
+    // НУЦ РК fork of Auth0 java-jwt with GG2015 support.
+    // Kalkan itself is already packaged in app/libs, so do not pull a second provider.
+    implementation("kz.gov.pki:java-jwt:4.4.0") {
+        exclude(group = "kz.gov.pki.kalkan", module = "knca_provider_jce_kalkan")
+    }
+
     // Kalkan XMLDSig 0.5.x / JSR-105 1.2.1 use Apache Santuario 3.0.2.
     // Keep it non-transitive on Android to avoid pulling desktop StAX/Woodstox deps.
     implementation("org.apache.santuario:xmlsec:3.0.2") {
