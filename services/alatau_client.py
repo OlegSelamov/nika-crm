@@ -109,6 +109,21 @@ class AlatauClient:
     @classmethod
     def _error_message(cls, response, fallback):
         payload = cls._json(response)
+        raw_text = ""
+        try:
+            raw_text = (response.text or "").strip()
+        except Exception:
+            raw_text = ""
+
+        business_day_markers = (
+            "Payment can be executed only on business day",
+            "payment.validation.error",
+        )
+        if any(marker.lower() in raw_text.lower() for marker in business_day_markers):
+            return (
+                "Банк проводит этот платёж только в банковский рабочий день. "
+                "Повторите операцию в ближайший рабочий день."
+            )
         if isinstance(payload, dict):
             error = payload.get("error")
             if isinstance(error, str) and error:
