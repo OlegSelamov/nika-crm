@@ -1028,7 +1028,9 @@ class _BankPaymentDetailsSheet extends StatelessWidget {
                     child: Text(
                       _text(payment['paymentType']).toUpperCase() == 'TAX'
                           ? 'Налоговый платёж'
-                          : 'Банковский платёж',
+                          : _text(payment['paymentType']).toUpperCase() == 'INVOICE'
+                              ? 'Оплата по счёту'
+                              : 'Банковский платёж',
                       style: const TextStyle(
                         fontSize: 21,
                         fontWeight: FontWeight.w900,
@@ -1571,7 +1573,9 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
         receiverBic.text = '${item['bic'] ?? ''}';
         kbe.text = '${item['kbe'] ?? ''}';
         knp.text = '${item['knp'] ?? ''}';
-        purpose.text = '${item['payment_purpose'] ?? ''}';
+        if (widget.mode != 'invoice') {
+          purpose.text = '${item['payment_purpose'] ?? ''}';
+        }
       }
       return;
     }
@@ -1585,12 +1589,15 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
         receiverBic.text = '${item['bic'] ?? ''}';
         kbe.text = '${item['kbe'] ?? ''}';
         knp.text = '${item['knp'] ?? ''}';
-        purpose.text = '${item['purpose'] ?? ''}';
+        if (widget.mode != 'invoice') {
+          purpose.text = '${item['purpose'] ?? ''}';
+        }
       }
     }
   }
 
   Map<String, dynamic> _paymentData() => {
+        'paymentType': widget.mode == 'invoice' ? 'INVOICE' : 'CONTRACTOR',
         'accountIban': widget.payerIban,
         'receiverName': receiverName.text.trim(),
         'receiverIinBin': receiverIin.text.replaceAll(RegExp(r'\D'), ''),
@@ -1809,7 +1816,7 @@ class _BankTaxPaymentSheet extends StatefulWidget {
 }
 
 class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
-  final knp = TextEditingController(text: '911');
+  final knp = TextEditingController();
   final kbk = TextEditingController();
   final periodStart = TextEditingController();
   final periodEnd = TextEditingController();
