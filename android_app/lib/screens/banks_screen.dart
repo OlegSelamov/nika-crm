@@ -1450,13 +1450,8 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
   final invoiceDate = TextEditingController();
   final purpose = TextEditingController();
   bool loadingChoices = true;
-  bool loadingDictionaries = true;
   bool sending = false;
   String? formError;
-  List<Map<String, dynamic>> kbkItems = [];
-  List<Map<String, dynamic>> knpItems = [];
-  Map<String, dynamic>? selectedKbk;
-  Map<String, dynamic>? selectedKnp;
   List<Map<String, dynamic>> suppliers = [];
   List<Map<String, dynamic>> templates = [];
   String selectedChoice = '';
@@ -1820,8 +1815,13 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
   final vin = TextEditingController();
   final protocolNumber = TextEditingController();
 
+  bool loadingDictionaries = true;
   bool sending = false;
   String? formError;
+  List<Map<String, dynamic>> kbkItems = [];
+  List<Map<String, dynamic>> knpItems = [];
+  Map<String, dynamic>? selectedKbk;
+  Map<String, dynamic>? selectedKnp;
 
   @override
   void initState() {
