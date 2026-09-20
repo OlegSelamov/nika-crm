@@ -143,40 +143,119 @@ def _soap_call(service, request_element, *, username=None, password=None):
     config = configuration()
     payload = _soap_envelope(request_element, username=username, password=password)
     url = f"{config.base_url}/{service}"
+
+    # Keep every outbound call comfortably below the app/origin proxy timeout.
+    # requests' single numeric timeout may be spent once on connect and again on
+    # reading, so use explicit connect/read limits instead.
+    connect_timeout = min(5, config.timeout)
+    read_timeout = min(25, config.timeout)
+    request_timeout = (connect_timeout, read_timeout)
+    transient_gateway_statuses = {
+        502, 503, 504,
+        520, 521, 522, 523, 524, 525, 526,
+    }
+    max_attempts = 2
+    last_transport_error = None
+
     started = time.monotonic()
     logger.warning(
-        "ESF SOAP start service=%s env=%s url=%s timeout=%ss payload_bytes=%s auth=%s",
+        "ESF SOAP start service=%s env=%s url=%s timeout=%s/%ss payload_bytes=%s auth=%s attempts=%s",
         service,
         config.environment,
         url,
-        config.timeout,
+        connect_timeout,
+        read_timeout,
         len(payload),
         bool(username),
+        max_attempts,
     )
-    try:
-        response = requests.post(
-            url,
-            data=payload,
-            headers={"Content-Type": "text/xml; charset=UTF-8", "SOAPAction": ""},
-            timeout=config.timeout,
-            verify=config.verify_tls,
-        )
-    except requests.Timeout as exc:
-        raise EsfApiError("ИС ЭСФ не ответила вовремя. Повторите попытку.") from exc
-    except requests.RequestException as exc:
-        raise EsfApiError(f"Не удалось подключиться к ИС ЭСФ: {exc}") from exc
 
-    elapsed = time.monotonic() - started
-    logger.warning(
-        "ESF SOAP response service=%s status=%s elapsed=%.3fs content_type=%s server=%s cf_ray=%s bytes=%s",
-        service,
-        response.status_code,
-        elapsed,
-        response.headers.get("Content-Type", ""),
-        response.headers.get("Server", ""),
-        response.headers.get("CF-RAY", ""),
-        len(response.content or b""),
-    )
+    response = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.post(
+                url,
+                data=payload,
+                headers={"Content-Type": "text/xml; charset=UTF-8", "SOAPAction": ""},
+                timeout=request_timeout,
+                verify=config.verify_tls,
+            )
+        except requests.Timeout as exc:
+            last_transport_error = exc
+            logger.warning(
+                "ESF SOAP timeout service=%s attempt=%s/%s elapsed=%.3fs",
+                service,
+                attempt,
+                max_attempts,
+                time.monotonic() - started,
+            )
+            if attempt < max_attempts:
+                time.sleep(1.0)
+                continue
+            raise EsfApiError(
+                "ИС ЭСФ не ответила вовремя. Повторите попытку через несколько секунд."
+            ) from exc
+        except requests.ConnectionError as exc:
+            last_transport_error = exc
+            logger.warning(
+                "ESF SOAP connection error service=%s attempt=%s/%s elapsed=%.3fs error=%s",
+                service,
+                attempt,
+                max_attempts,
+                time.monotonic() - started,
+                str(exc)[:240],
+            )
+            if attempt < max_attempts:
+                time.sleep(1.0)
+                continue
+            raise EsfApiError(
+                "Сейчас нет устойчивого соединения с ИС ЭСФ. Повторите попытку."
+            ) from exc
+        except requests.RequestException as exc:
+            raise EsfApiError(
+                "Не удалось подключиться к ИС ЭСФ. Повторите попытку."
+            ) from exc
+
+        elapsed = time.monotonic() - started
+        logger.warning(
+            "ESF SOAP response service=%s attempt=%s/%s status=%s elapsed=%.3fs content_type=%s server=%s cf_ray=%s bytes=%s",
+            service,
+            attempt,
+            max_attempts,
+            response.status_code,
+            elapsed,
+            response.headers.get("Content-Type", ""),
+            response.headers.get("Server", ""),
+            response.headers.get("CF-RAY", ""),
+            len(response.content or b""),
+        )
+
+        if response.status_code in transient_gateway_statuses:
+            preview = (response.text or "").replace("\n", " ").replace("\r", " ")[:300]
+            logger.warning(
+                "ESF SOAP transient gateway response service=%s attempt=%s/%s status=%s body_preview=%r",
+                service,
+                attempt,
+                max_attempts,
+                response.status_code,
+                preview,
+            )
+            if attempt < max_attempts:
+                time.sleep(1.0)
+                continue
+            raise EsfApiError(
+                (
+                    "ИС ЭСФ временно недоступна на стороне сервиса "
+                    f"(HTTP {response.status_code}). Повторите попытку через несколько секунд."
+                ),
+                status_code=response.status_code,
+            )
+        break
+
+    if response is None:
+        raise EsfApiError(
+            "Не удалось получить ответ от ИС ЭСФ. Повторите попытку."
+        ) from last_transport_error
 
     try:
         root = ET.fromstring(response.content)
@@ -192,7 +271,7 @@ def _soap_call(service, request_element, *, username=None, password=None):
             preview,
         )
         raise EsfApiError(
-            f"ИС ЭСФ вернула ответ в неизвестном формате (HTTP {response.status_code}).",
+            f"ИС ЭСФ вернула некорректный ответ (HTTP {response.status_code}). Повторите попытку.",
             status_code=response.status_code,
         ) from exc
 
