@@ -43,6 +43,35 @@ class MobileP12Signer {
     await _channel.invokeMethod<void>('clearSavedP12Key');
   }
 
+  static Future<String?> loadSavedBankPassword() async {
+    final result =
+        await _channel.invokeMethod<dynamic>('loadSavedBankP12Password');
+    if (result == null) return null;
+    return result.toString();
+  }
+
+  static Future<void> saveBankPassword(String password) async {
+    await _channel.invokeMethod<void>(
+      'saveBankP12Password',
+      {'password': password},
+    );
+  }
+
+  static Future<void> clearSavedBankPassword() async {
+    await _channel.invokeMethod<void>('clearSavedBankP12Password');
+  }
+
+  static Future<Map<String, dynamic>> savedBankKeyInfo() async {
+    final result =
+        await _channel.invokeMethod<dynamic>('getSavedBankP12KeyInfo');
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return <String, dynamic>{};
+  }
+
+  static Future<void> clearSavedBankKey() async {
+    await _channel.invokeMethod<void>('clearSavedBankP12Key');
+  }
+
   static Future<Map<String, dynamic>?> loadSavedEsfAuth() async {
     final result = await _channel.invokeMethod<dynamic>('loadSavedEsfAuth');
     if (result == null) return null;
