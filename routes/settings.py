@@ -1032,10 +1032,17 @@ def alatau_tax_payment_draft():
     data = request.get_json(silent=True) or {}
     environment = (data.get("environment") or "production").strip().lower()
     account_iban = (data.get("accountIban") or "").replace(" ", "").upper()
-    knp = re.sub(r"\D", "", str(data.get("knp") or ""))[:3]
     kbk = re.sub(r"\D", "", str(data.get("kbk") or ""))[:6]
-    period_start = str(data.get("periodStart") or "").strip()
-    period_end = str(data.get("periodEnd") or "").strip()
+    tax_payment_kind = str(data.get("taxPaymentKind") or "MAIN").strip().upper()
+    knp_by_kind = {
+        "MAIN": "911",
+        "PENALTY": "912",
+        "FINE": "913",
+    }
+    knp = knp_by_kind.get(tax_payment_kind)
+    period = str(data.get("period") or "").strip()
+    period_start = period
+    period_end = period
     document_number = str(data.get("documentNumber") or "").strip()
     purpose = str(data.get("purpose") or "").strip()
     vin = re.sub(r"[^A-Za-z0-9]", "", str(data.get("vin") or "")).upper()[:17]
@@ -1048,19 +1055,17 @@ def alatau_tax_payment_draft():
 
     if not re.fullmatch(r"KZ[A-Z0-9]{18}", account_iban):
         return jsonify({"success": False, "error": "Неверный счёт списания"}), 400
-    if len(knp) != 3:
-        return jsonify({"success": False, "error": "КНП должен содержать 3 цифры"}), 400
+    if not knp:
+        return jsonify({
+            "success": False,
+            "error": "Неверный тип налогового платежа",
+        }), 400
     if len(kbk) != 6:
         return jsonify({"success": False, "error": "КБК должен содержать 6 цифр"}), 400
-    if not _alatau_valid_tax_period(period_start) or not _alatau_valid_tax_period(period_end):
+    if not _alatau_valid_tax_period(period):
         return jsonify({
             "success": False,
-            "error": "Налоговый период укажите в формате ГГГГ-ММ",
-        }), 400
-    if period_start > period_end:
-        return jsonify({
-            "success": False,
-            "error": "Начало налогового периода не может быть позже окончания",
+            "error": "Выберите месяц налогового платежа",
         }), 400
     if amount <= 0:
         return jsonify({"success": False, "error": "Сумма должна быть больше 0"}), 400
@@ -1154,7 +1159,9 @@ def alatau_tax_payment_draft():
             "payload": payload,
             "resolved": {
                 "kbkName": kbk_name,
+                "knp": knp,
                 "knpName": knp_name,
+                "period": period,
                 "purpose": description,
             },
             "signing_ts_ms": int(time.time() * 1000),
