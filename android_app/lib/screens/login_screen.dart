@@ -119,9 +119,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 TextField(
                   controller: usernameController,
+                  style: const TextStyle(
+                    color: Color(0xFF172033),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  cursorColor: const Color(0xFF7257FF),
                   decoration: InputDecoration(
                     labelText: "Логин",
-                    prefixIcon: const Icon(Icons.person_outline),
+                    prefixIcon: const Icon(
+                      Icons.person_outline,
+                      color: Color(0xFF708096),
+                    ),
+                    labelStyle: const TextStyle(color: Color(0xFF708096)),
+                    floatingLabelStyle: const TextStyle(color: Color(0xFF7257FF)),
                     filled: true,
                     fillColor: const Color(0xFFF4F7FB),
                     border: OutlineInputBorder(
@@ -136,14 +146,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: passwordController,
                   obscureText: !showPassword,
+                  style: const TextStyle(
+                    color: Color(0xFF172033),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  cursorColor: const Color(0xFF7257FF),
                   decoration: InputDecoration(
                     labelText: "Пароль",
-                    prefixIcon: const Icon(Icons.lock_outline),
+                    prefixIcon: const Icon(
+                      Icons.lock_outline,
+                      color: Color(0xFF708096),
+                    ),
+                    labelStyle: const TextStyle(color: Color(0xFF708096)),
+                    floatingLabelStyle: const TextStyle(color: Color(0xFF7257FF)),
                     suffixIcon: IconButton(
                       icon: Icon(
                         showPassword
                             ? Icons.visibility_off
                             : Icons.visibility,
+                        color: const Color(0xFF708096),
                       ),
                       onPressed: () {
                         setState(() {
