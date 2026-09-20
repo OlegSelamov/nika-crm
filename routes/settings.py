@@ -1608,19 +1608,9 @@ def alatau_signed_payment():
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
-    # Validate the compact JWS produced by the signer.
-    # Alatau's working NCALayer module returns compact header.payload.signature.
-    # Reject a stale timestamp locally before talking to the bank.
-    delta_seconds = signature_debug.get("delta_seconds")
-    if delta_seconds is None or abs(delta_seconds) > 300:
-        return jsonify({
-            "success": False,
-            "error": (
-                "Временная метка JWS некорректна или устарела. "
-                "Подпишите платёж заново."
-            ),
-            "signature_debug": signature_debug,
-        }), 400
+    # Do not rewrite or gate the bank signature by the VPS clock. The Android
+    # signer timestamps the protected JWS header at the actual signing moment.
+    # Keep delta_seconds only as diagnostics for bank-side validation errors.
 
     logger.warning(
         "Alatau signed payment JWS meta company_id=%s meta=%s format=%s",
