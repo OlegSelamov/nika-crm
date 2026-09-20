@@ -33,7 +33,8 @@ import javax.xml.transform.stream.StreamResult
  */
 object KalkanJwsSigner {
     private const val HEADER_ALG = "ECGOST3410-2015-512"
-    private const val SIGNING_ALGORITHM = "ECGOST3410-2015"
+    private const val ESF_SIGNING_ALGORITHM = "ECGOST3410-2015-512"
+    private const val BANK_SIGNING_ALGORITHM = "ECGOST3410-2015"
     private const val SIGNING_OID = "1.2.398.3.10.1.1.2.3.2"
     private const val SIGNING_EKU_OID = "1.3.6.1.5.5.7.3.4"
     private const val AUTH_EKU_OID = "1.3.6.1.5.5.7.3.2"
@@ -103,7 +104,12 @@ object KalkanJwsSigner {
         signingTimestampMs: Long? = null,
     ): Map<String, Any?> {
         if (payload.isBlank()) throw SigningException("EMPTY_PAYLOAD", "Нет данных платежа для подписи")
-        val material = loadKeyMaterial(context, keyUri, passwordChars)
+        val material = loadKeyMaterial(
+            context,
+            keyUri,
+            passwordChars,
+            bankSigningOnly = true,
+        )
         try {
             val timestamp = signingTimestampMs
                 ?.takeIf { it > 0L }
@@ -114,7 +120,7 @@ object KalkanJwsSigner {
             )
             val encodedPayload = base64Url(payload.toByteArray(StandardCharsets.UTF_8))
             val signingInput = "$encodedHeader.$encodedPayload".toByteArray(StandardCharsets.US_ASCII)
-            val signatureBytes = signBytes(material, signingInput)
+            val signatureBytes = signBankBytes(material, signingInput)
 
             if (signatureBytes.size != 128) {
                 throw SigningException(
@@ -126,7 +132,7 @@ object KalkanJwsSigner {
             // Do not send a JWS that our own Kalkan provider cannot verify.
             // This catches a wrong key/certificate alias or provider-format issue
             // before Alatau turns it into the misleading generic HTTP 424 error.
-            val verifier = createSignature(material.provider)
+            val verifier = createBankSignature(material.provider)
             val locallyValid = try {
                 verifier.initVerify(material.certificate.publicKey)
                 verifier.update(signingInput)
@@ -175,7 +181,7 @@ object KalkanJwsSigner {
             return certificateResult(material.certificate) + mapOf(
                 "signature" to signature,
                 "certificate" to certificate,
-                "algorithm" to SIGNING_ALGORITHM,
+                "algorithm" to ESF_SIGNING_ALGORITHM,
             )
         } finally {
             Arrays.fill(passwordChars, '\u0000')
@@ -216,6 +222,7 @@ object KalkanJwsSigner {
         context: Context,
         keyUri: Uri,
         passwordChars: CharArray,
+        bankSigningOnly: Boolean = false,
     ): KeyMaterial {
         if (passwordChars.isEmpty()) throw SigningException("EMPTY_PASSWORD", "Введите пароль ЭЦП")
         val provider = loadKalkanProvider()
@@ -235,11 +242,21 @@ object KalkanJwsSigner {
             }
         }
 
-        val alias = findSigningAlias(keyStore)
-            ?: throw SigningException(
-                "P12_NO_SIGNING_KEY",
+        val alias = if (bankSigningOnly) {
+            findBankSigningAlias(keyStore)
+        } else {
+            findSigningAlias(keyStore)
+        } ?: if (bankSigningOnly) {
+            throw SigningException(
+                "P12_NO_BANK_SIGNING_KEY",
                 "В выбранной ЭЦП нет сертификата подписи, подходящего для банковского платежа",
             )
+        } else {
+            throw SigningException(
+                "P12_NO_KEY",
+                "В файле ЭЦП не найден закрытый ключ",
+            )
+        }
 
         val privateKey = try {
             keyStore.getKey(alias, passwordChars) as? PrivateKey
@@ -268,13 +285,28 @@ object KalkanJwsSigner {
     }
 
     private fun signBytes(material: KeyMaterial, bytes: ByteArray): ByteArray {
-        val signature = createSignature(material.provider)
+        val signature = createEsfSignature(material.provider)
         try {
             signature.initSign(material.privateKey)
             signature.update(bytes)
             return signature.sign()
         } catch (error: Exception) {
             throw SigningException("SIGN_FAILED", "Не удалось сформировать ЭЦП", error)
+        }
+    }
+
+    private fun signBankBytes(material: KeyMaterial, bytes: ByteArray): ByteArray {
+        val signature = createBankSignature(material.provider)
+        try {
+            signature.initSign(material.privateKey)
+            signature.update(bytes)
+            return signature.sign()
+        } catch (error: Exception) {
+            throw SigningException(
+                "BANK_SIGN_FAILED",
+                "Не удалось сформировать банковскую ЭЦП",
+                error,
+            )
         }
     }
 
@@ -461,7 +493,7 @@ object KalkanJwsSigner {
 
         val signatureMapping = constructor.newInstance(
             "",
-            SIGNING_ALGORITHM,
+            ESF_SIGNING_ALGORITHM,
             "Signature",
         )
         registerMethod.invoke(null, XML_SIGNATURE_URI, signatureMapping)
@@ -588,7 +620,6 @@ object KalkanJwsSigner {
             val keyUsage = cert.keyUsage
             val digitalSignature =
                 keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])
-            if (!digitalSignature) continue
 
             val eku = try {
                 cert.extendedKeyUsage ?: emptyList()
@@ -596,8 +627,44 @@ object KalkanJwsSigner {
                 emptyList()
             }
 
-            // Bank payments must use the EDS signing certificate. Do not silently
-            // fall back to an authentication-only key from the same PKCS#12.
+            var score = 0
+            if (digitalSignature) score += 20
+            if (SIGNING_EKU_OID in eku) score += 200
+            if (AUTH_EKU_OID in eku && SIGNING_EKU_OID !in eku) score -= 200
+
+            when {
+                ORG_HEAD_EKU_OID in eku -> score += 60
+                ORG_TRUSTED_EKU_OID in eku -> score += 50
+                ORG_EMPLOYEE_EKU_OID in eku -> score += 30
+                ORG_EKU_OID in eku -> score += 20
+            }
+
+            candidates += Candidate(alias, score)
+        }
+
+        return candidates.maxByOrNull { it.score }?.alias
+    }
+
+    private fun findBankSigningAlias(keyStore: KeyStore): String? {
+        data class Candidate(val alias: String, val score: Int)
+
+        val aliases = keyStore.aliases()
+        val candidates = mutableListOf<Candidate>()
+        while (aliases.hasMoreElements()) {
+            val alias = aliases.nextElement()
+            if (!keyStore.isKeyEntry(alias)) continue
+            val cert = keyStore.getCertificate(alias) as? X509Certificate ?: continue
+
+            val keyUsage = cert.keyUsage
+            val digitalSignature =
+                keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])
+            if (!digitalSignature) continue
+
+            val eku = try {
+                cert.extendedKeyUsage ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
             if (SIGNING_EKU_OID !in eku) continue
 
             var score = 200
@@ -631,11 +698,9 @@ object KalkanJwsSigner {
         return header.toString()
     }
 
-    private fun createSignature(provider: Provider): Signature {
+    private fun createEsfSignature(provider: Provider): Signature {
         val names = listOf(
-            // Same JCA algorithm name used by the official NCA java-jwt GG2015 implementation.
-            SIGNING_ALGORITHM,
-            "ECGOST3410-2015-512",
+            ESF_SIGNING_ALGORITHM,
             "GOST3411-2015withECGOST3410-2015-512",
             SIGNING_OID,
         )
@@ -649,7 +714,29 @@ object KalkanJwsSigner {
         }
         throw SigningException(
             "GOST2015_NOT_AVAILABLE",
-            "В KalkanCrypt не найден алгоритм ECGOST3410-2015",
+            "В KalkanCrypt не найден алгоритм ECGOST3410-2015-512",
+            lastError,
+        )
+    }
+
+    private fun createBankSignature(provider: Provider): Signature {
+        val names = listOf(
+            BANK_SIGNING_ALGORITHM,
+            ESF_SIGNING_ALGORITHM,
+            "GOST3411-2015withECGOST3410-2015-512",
+            SIGNING_OID,
+        )
+        var lastError: Exception? = null
+        for (name in names) {
+            try {
+                return Signature.getInstance(name, provider)
+            } catch (error: Exception) {
+                lastError = error
+            }
+        }
+        throw SigningException(
+            "BANK_GOST2015_NOT_AVAILABLE",
+            "В KalkanCrypt не найден алгоритм ECGOST3410-2015 для банковской подписи",
             lastError,
         )
     }
