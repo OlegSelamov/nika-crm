@@ -648,22 +648,43 @@ object KalkanJwsSigner {
     }
 
     private fun findBankSigningAlias(keyStore: KeyStore): String? {
-        // This mirrors the alias selection used by the native build that
-        // successfully sent a real Alatau payment from Android.
+        data class Candidate(val alias: String, val score: Int)
+
         val aliases = keyStore.aliases()
-        var fallback: String? = null
+        val candidates = mutableListOf<Candidate>()
         while (aliases.hasMoreElements()) {
             val alias = aliases.nextElement()
             if (!keyStore.isKeyEntry(alias)) continue
-            if (fallback == null) fallback = alias
-
             val cert = keyStore.getCertificate(alias) as? X509Certificate ?: continue
+
             val keyUsage = cert.keyUsage
-            if (keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])) {
-                return alias
+            val digitalSignature =
+                keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])
+            if (!digitalSignature) continue
+
+            val eku = try {
+                cert.extendedKeyUsage ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
             }
+
+            // NCA signing certificates used for legally significant signatures
+            // carry the signing EKU. Never fall back to an authentication-only
+            // certificate for a bank payment.
+            if (SIGNING_EKU_OID !in eku) continue
+            if (AUTH_EKU_OID in eku && SIGNING_EKU_OID !in eku) continue
+
+            var score = 200
+            when {
+                ORG_HEAD_EKU_OID in eku -> score += 60
+                ORG_TRUSTED_EKU_OID in eku -> score += 50
+                ORG_EMPLOYEE_EKU_OID in eku -> score += 30
+                ORG_EKU_OID in eku -> score += 20
+            }
+            candidates += Candidate(alias, score)
         }
-        return fallback
+
+        return candidates.maxByOrNull { it.score }?.alias
     }
 
     private fun buildHeader(
