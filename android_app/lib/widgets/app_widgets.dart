@@ -356,7 +356,13 @@ class AppActionButton extends StatelessWidget {
                 ),
               )
             : Icon(icon, size: 20),
-        label: Text(loading ? (loadingLabel ?? label) : label),
+        label: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            loading ? (loadingLabel ?? label) : label,
+            maxLines: 1,
+          ),
+        ),
       ),
     );
   }
