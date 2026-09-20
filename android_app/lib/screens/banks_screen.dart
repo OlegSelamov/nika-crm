@@ -2592,7 +2592,7 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
 
   Future<void> _load() async {
     try {
-      final info = await MobileP12Signer.savedKeyInfo();
+      final info = await MobileP12Signer.savedBankKeyInfo();
       savedReady = info['hasKey'] == true && info['hasPassword'] == true;
     } finally {
       if (mounted) setState(() => loading = false);
@@ -2636,7 +2636,7 @@ class _P12SigningDialogState extends State<_P12SigningDialog> {
         saveKey: true,
         signingTimestampMs: widget.signingTimestampMs,
       );
-      await MobileP12Signer.savePassword(password.text);
+      await MobileP12Signer.saveBankPassword(password.text);
       if (mounted) Navigator.pop(context, result);
     } catch (e) {
       if (mounted) setState(() => error = e.toString());

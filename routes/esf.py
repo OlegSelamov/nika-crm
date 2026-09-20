@@ -192,6 +192,33 @@ def _api_error_json(error):
     return jsonify(payload), 502
 
 
+def _create_signed_session_with_profile_fallback(auth):
+    """Open an ESF session and recover from a stale saved mobile profile.
+
+    The mobile app can remember the last selected IS ESF profile. A legal
+    entity may later be sent with ENTREPRENEUR, in which case IS ESF returns
+    ENTERPRISE_NOT_FOUND_FOR_USER even though the credentials and signature are
+    valid. Retry the exact same signed ticket once as ADMIN_ENTERPRISE.
+    """
+    try:
+        return create_signed_session(**auth), auth.get("profile_type")
+    except EsfApiError as error:
+        if (
+            str(error).strip() == "ENTERPRISE_NOT_FOUND_FOR_USER"
+            and auth.get("profile_type") != "ADMIN_ENTERPRISE"
+        ):
+            retry_auth = dict(auth)
+            retry_auth["profile_type"] = "ADMIN_ENTERPRISE"
+            logger.warning(
+                "ESF profile fallback %s -> ADMIN_ENTERPRISE tin=%s iin=%s",
+                auth.get("profile_type"),
+                auth.get("tin"),
+                auth.get("iin"),
+            )
+            return create_signed_session(**retry_auth), "ADMIN_ENTERPRISE"
+        raise
+
+
 
 _ESF_UNIT_NOMENCLATURE = {
     # МКЕИ / классификатор единиц измерения, используемый ИС ЭСФ.
@@ -815,10 +842,11 @@ def open_sale_esf_session(sale_id):
                 auth.get("tin"),
                 auth.get("profile_type"),
             )
-            api_session_id = create_signed_session(**auth)
+            api_session_id, resolved_profile = _create_signed_session_with_profile_fallback(auth)
             logger.warning(
-                "ESF session route success sale_id=%s elapsed=%.3fs",
+                "ESF session route success sale_id=%s profile=%s elapsed=%.3fs",
                 sale_id,
+                resolved_profile,
                 time.monotonic() - started,
             )
         except EsfApiError as error:
@@ -841,6 +869,7 @@ def open_sale_esf_session(sale_id):
         return jsonify({
             "success": True,
             "session_id": api_session_id,
+            "profile_type": resolved_profile,
             "api_environment": esf_api_configuration().environment,
             "message": "Сессия ИС ЭСФ открыта.",
         })
@@ -882,7 +911,7 @@ def check_sale_esf_auth(sale_id):
 
         config = esf_api_configuration()
         try:
-            api_session_id = create_signed_session(**api_auth)
+            api_session_id, _resolved_profile = _create_signed_session_with_profile_fallback(api_auth)
         except EsfApiError as error:
             return _api_error_json(error)
 
@@ -953,7 +982,10 @@ def send_sale_esf(sale_id):
         conn.commit()
 
         try:
-            api_session_id = provided_session_id or create_signed_session(**auth)
+            if provided_session_id:
+                api_session_id = provided_session_id
+            else:
+                api_session_id, _resolved_profile = _create_signed_session_with_profile_fallback(auth)
             result = send_invoice(
                 session_id=api_session_id,
                 invoice_xml=row["invoice_xml"],
@@ -1127,7 +1159,7 @@ def revoke_sale_esf(sale_id):
         )
         conn.commit()
         try:
-            api_session_id = create_signed_session(**auth)
+            api_session_id, _resolved_profile = _create_signed_session_with_profile_fallback(auth)
             result = revoke_invoice(
                 session_id=api_session_id,
                 invoice_id=row["external_id"],

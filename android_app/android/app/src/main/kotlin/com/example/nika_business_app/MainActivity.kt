@@ -121,6 +121,40 @@ class MainActivity : FlutterFragmentActivity() {
                         SecureSigningPasswordStore.clear(this)
                         result.success(null)
                     }
+                    "loadSavedBankP12Password" -> {
+                        result.success(SecureBankSigningPasswordStore.load(this))
+                    }
+                    "saveBankP12Password" -> {
+                        val password = call.argument<String>("password") ?: ""
+                        try {
+                            SecureBankSigningPasswordStore.save(this, password)
+                            result.success(null)
+                        } catch (error: Exception) {
+                            result.error(
+                                "BANK_PASSWORD_SAVE_FAILED",
+                                error.message ?: "Не удалось сохранить пароль банковской ЭЦП",
+                                null,
+                            )
+                        }
+                    }
+                    "clearSavedBankP12Password" -> {
+                        SecureBankSigningPasswordStore.clear(this)
+                        result.success(null)
+                    }
+                    "getSavedBankP12KeyInfo" -> {
+                        result.success(
+                            mapOf(
+                                "hasKey" to SecureBankSigningKeyStore.hasSavedKey(this),
+                                "name" to SecureBankSigningKeyStore.displayName(this),
+                                "hasPassword" to !SecureBankSigningPasswordStore.load(this).isNullOrEmpty(),
+                            )
+                        )
+                    }
+                    "clearSavedBankP12Key" -> {
+                        SecureBankSigningKeyStore.clear(this)
+                        SecureBankSigningPasswordStore.clear(this)
+                        result.success(null)
+                    }
                     "loadSavedEsfAuth" -> {
                         result.success(SecureEsfAuthStore.load(this))
                     }
@@ -297,8 +331,17 @@ class MainActivity : FlutterFragmentActivity() {
             result.error("EMPTY_PAYLOAD", "Нет данных для подписи", null)
             return
         }
-        val keyUri = SecureSigningKeyStore.savedUri(this)
-        val password = SecureSigningPasswordStore.load(this)
+        val isBankSigning = method == "signAlatauJwsWithP12"
+        val keyUri = if (isBankSigning) {
+            SecureBankSigningKeyStore.savedUri(this)
+        } else {
+            SecureSigningKeyStore.savedUri(this)
+        }
+        val password = if (isBankSigning) {
+            SecureBankSigningPasswordStore.load(this)
+        } else {
+            SecureSigningPasswordStore.load(this)
+        }
         if (keyUri == null || password.isNullOrEmpty()) {
             result.error(
                 "SAVED_KEY_UNAVAILABLE",
@@ -457,7 +500,11 @@ class MainActivity : FlutterFragmentActivity() {
             }
             if (pendingSaveKey) {
                 try {
-                    SecureSigningKeyStore.saveFromUri(this, uri)
+                    if (method == "signAlatauJwsWithP12") {
+                        SecureBankSigningKeyStore.saveFromUri(this, uri)
+                    } else {
+                        SecureSigningKeyStore.saveFromUri(this, uri)
+                    }
                 } catch (error: Exception) {
                     clearPendingSigning()
                     callback.error(
