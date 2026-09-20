@@ -1048,12 +1048,8 @@ class _BankPaymentDetailsSheet extends StatelessWidget {
               _row('КБЕ', _text(payment['kbe'])),
               _row('КНП', _text(payment['knp'])),
               _row('КБК', _text(payment['kbk'])),
-              if (_text(payment['periodStart']).isNotEmpty ||
-                  _text(payment['periodEnd']).isNotEmpty)
-                _row(
-                  'Период',
-                  '${_text(payment['periodStart'])} — ${_text(payment['periodEnd'])}',
-                ),
+              if (_text(payment['periodStart']).isNotEmpty)
+                _row('За месяц', _text(payment['periodStart'])),
               _row('№ документа', _text(payment['documentNumber'])),
               _row('Дата', date),
               _row('Назначение', _text(payment['purpose'])),
@@ -1805,10 +1801,9 @@ class _BankTaxPaymentSheet extends StatefulWidget {
 }
 
 class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
-  final knp = TextEditingController();
+  final knp = TextEditingController(text: '911');
   final kbk = TextEditingController();
-  final periodStart = TextEditingController();
-  final periodEnd = TextEditingController();
+  final period = TextEditingController();
   final amount = TextEditingController();
   final documentNumber = TextEditingController();
   final purpose = TextEditingController();
@@ -1819,9 +1814,8 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
   bool sending = false;
   String? formError;
   List<Map<String, dynamic>> kbkItems = [];
-  List<Map<String, dynamic>> knpItems = [];
   Map<String, dynamic>? selectedKbk;
-  Map<String, dynamic>? selectedKnp;
+  String taxPaymentKind = 'MAIN';
 
   @override
   void initState() {
@@ -1829,8 +1823,7 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
     final now = DateTime.now();
     final month =
         '${now.year}-${now.month.toString().padLeft(2, '0')}';
-    periodStart.text = month;
-    periodEnd.text = month;
+    period.text = month;
     documentNumber.text =
         'TAX-${now.day.toString().padLeft(2, '0')}${now.month.toString().padLeft(2, '0')}${now.year}';
     _loadDictionaries();
@@ -1862,14 +1855,10 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
 
   Future<void> _loadDictionaries() async {
     try {
-      final results = await Future.wait([
-        ApiService.bankDictionary('KBK'),
-        ApiService.bankDictionary('KNP'),
-      ]);
+      final result = await ApiService.bankDictionary('KBK');
       if (!mounted) return;
       setState(() {
-        kbkItems = _dictionaryRows(results[0]['values']);
-        knpItems = _dictionaryRows(results[1]['values']);
+        kbkItems = _dictionaryRows(result['values']);
         loadingDictionaries = false;
       });
     } catch (e) {
@@ -1980,25 +1969,13 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
     });
   }
 
-  Future<void> _chooseKnp() async {
-    final value = await _pickDictionary(
-      title: 'Выберите назначение платежа / КНП',
-      items: knpItems,
-    );
-    if (value == null || !mounted) return;
-    setState(() {
-      selectedKnp = value;
-      knp.text = _dictCode(value);
-    });
-  }
 
   @override
   void dispose() {
     for (final controller in [
       knp,
       kbk,
-      periodStart,
-      periodEnd,
+      period,
       amount,
       documentNumber,
       purpose,
@@ -2019,10 +1996,10 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
         'receiverIban': 'KZ24070105KSN0000000',
         'receiverBic': 'KKMFKZ2A',
         'kbe': '11',
+        'taxPaymentKind': taxPaymentKind,
         'knp': knp.text.replaceAll(RegExp(r'\D'), ''),
         'kbk': kbk.text.replaceAll(RegExp(r'\D'), ''),
-        'periodStart': periodStart.text.trim(),
-        'periodEnd': periodEnd.text.trim(),
+        'period': period.text.trim(),
         'amount': double.tryParse(
               amount.text.replaceAll(' ', '').replaceAll(',', '.'),
             ) ??
@@ -2052,10 +2029,6 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
       if (selectedKbk == null || kbk.text.isEmpty) {
         throw const ApiException('Выберите вид налога');
       }
-      if (selectedKnp == null || knp.text.isEmpty) {
-        throw const ApiException('Выберите назначение платежа');
-      }
-
       final payment = _paymentData();
       final prepared = await ApiService.prepareBankTaxPayment(payment);
       final payload = prepared['payload'];
@@ -2070,6 +2043,10 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
         final resolvedPurpose = '${resolved['purpose'] ?? ''}'.trim();
         if (resolvedPurpose.isNotEmpty) {
           payment['purpose'] = resolvedPurpose;
+        }
+        final resolvedKnp = '${resolved['knp'] ?? ''}'.trim();
+        if (resolvedKnp.isNotEmpty) {
+          payment['knp'] = resolvedKnp;
         }
       }
 
@@ -2195,68 +2172,54 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                InkWell(
-                  onTap: knpItems.isEmpty ? null : _chooseKnp,
-                  borderRadius: BorderRadius.circular(16),
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Назначение платежа',
-                      prefixIcon: Icon(Icons.account_tree_outlined),
-                      suffixIcon: Icon(Icons.chevron_right_rounded),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'MAIN',
+                      label: Text('Налог'),
                     ),
-                    child: Text(
-                      selectedKnp == null
-                          ? 'Выберите КНП'
-                          : _dictName(selectedKnp!),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: selectedKnp == null
-                            ? Theme.of(context).hintColor
-                            : null,
-                      ),
+                    ButtonSegment(
+                      value: 'PENALTY',
+                      label: Text('Пеня'),
                     ),
-                  ),
+                    ButtonSegment(
+                      value: 'FINE',
+                      label: Text('Штраф'),
+                    ),
+                  ],
+                  selected: {taxPaymentKind},
+                  onSelectionChanged: (values) {
+                    if (values.isEmpty) return;
+                    setState(() {
+                      taxPaymentKind = values.first;
+                      knp.text = switch (taxPaymentKind) {
+                        'PENALTY' => '912',
+                        'FINE' => '913',
+                        _ => '911',
+                      };
+                    });
+                  },
                 ),
                 const SizedBox(height: 6),
-                if (selectedKbk != null || selectedKnp != null)
-                  Text(
-                    [
-                      if (selectedKbk != null) 'КБК ${kbk.text}',
-                      if (selectedKnp != null) 'КНП ${knp.text}',
-                    ].join(' · '),
-                    style: const TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                    ),
+                Text(
+                  selectedKbk == null
+                      ? 'КНП подставится автоматически'
+                      : 'КБК ${kbk.text} · КНП ${knp.text} подставлен автоматически',
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
                   ),
+                ),
               ],
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: periodStart,
-                      keyboardType: TextInputType.datetime,
-                      decoration: const InputDecoration(
-                        labelText: 'Период с',
-                        hintText: 'ГГГГ-ММ',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: periodEnd,
-                      keyboardType: TextInputType.datetime,
-                      decoration: const InputDecoration(
-                        labelText: 'Период по',
-                        hintText: 'ГГГГ-ММ',
-                      ),
-                    ),
-                  ),
-                ],
+              TextField(
+                controller: period,
+                keyboardType: TextInputType.datetime,
+                decoration: const InputDecoration(
+                  labelText: 'За какой месяц',
+                  hintText: 'ГГГГ-ММ',
+                  prefixIcon: Icon(Icons.calendar_month_outlined),
+                ),
               ),
               const SizedBox(height: 10),
               Row(
