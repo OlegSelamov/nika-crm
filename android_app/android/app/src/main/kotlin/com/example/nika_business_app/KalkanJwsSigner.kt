@@ -33,7 +33,7 @@ import javax.xml.transform.stream.StreamResult
  */
 object KalkanJwsSigner {
     private const val HEADER_ALG = "ECGOST3410-2015-512"
-    private const val SIGNING_ALGORITHM = "ECGOST3410-2015-512"
+    private const val SIGNING_ALGORITHM = "ECGOST3410-2015"
     private const val SIGNING_OID = "1.2.398.3.10.1.1.2.3.2"
     private const val SIGNING_EKU_OID = "1.3.6.1.5.5.7.3.4"
     private const val AUTH_EKU_OID = "1.3.6.1.5.5.7.3.2"
@@ -236,7 +236,10 @@ object KalkanJwsSigner {
         }
 
         val alias = findSigningAlias(keyStore)
-            ?: throw SigningException("P12_NO_KEY", "В файле ЭЦП не найден закрытый ключ")
+            ?: throw SigningException(
+                "P12_NO_SIGNING_KEY",
+                "В выбранной ЭЦП нет сертификата подписи, подходящего для банковского платежа",
+            )
 
         val privateKey = try {
             keyStore.getKey(alias, passwordChars) as? PrivateKey
@@ -585,6 +588,7 @@ object KalkanJwsSigner {
             val keyUsage = cert.keyUsage
             val digitalSignature =
                 keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])
+            if (!digitalSignature) continue
 
             val eku = try {
                 cert.extendedKeyUsage ?: emptyList()
@@ -592,18 +596,11 @@ object KalkanJwsSigner {
                 emptyList()
             }
 
-            var score = 0
-            if (digitalSignature) score += 20
+            // Bank payments must use the EDS signing certificate. Do not silently
+            // fall back to an authentication-only key from the same PKCS#12.
+            if (SIGNING_EKU_OID !in eku) continue
 
-            // NCALayer uses 1.3.6.1.5.5.7.3.4 specifically for an EDS signing
-            // certificate. Authentication certificates use ...3.2 and must not
-            // be preferred for a bank payment.
-            if (SIGNING_EKU_OID in eku) score += 200
-            if (AUTH_EKU_OID in eku && SIGNING_EKU_OID !in eku) score -= 200
-
-            // For a legal entity, prefer the director / authorised signatory
-            // certificate exactly as the Alatau NCALayer module does in its
-            // signing-key selector.
+            var score = 200
             when {
                 ORG_HEAD_EKU_OID in eku -> score += 60
                 ORG_TRUSTED_EKU_OID in eku -> score += 50
@@ -636,7 +633,9 @@ object KalkanJwsSigner {
 
     private fun createSignature(provider: Provider): Signature {
         val names = listOf(
+            // Same JCA algorithm name used by the official NCA java-jwt GG2015 implementation.
             SIGNING_ALGORITHM,
+            "ECGOST3410-2015-512",
             "GOST3411-2015withECGOST3410-2015-512",
             SIGNING_OID,
         )
@@ -650,7 +649,7 @@ object KalkanJwsSigner {
         }
         throw SigningException(
             "GOST2015_NOT_AVAILABLE",
-            "В KalkanCrypt не найден алгоритм ECGOST3410-2015-512",
+            "В KalkanCrypt не найден алгоритм ECGOST3410-2015",
             lastError,
         )
     }
