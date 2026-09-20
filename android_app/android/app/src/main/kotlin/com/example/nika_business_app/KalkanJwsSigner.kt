@@ -34,7 +34,7 @@ import javax.xml.transform.stream.StreamResult
 object KalkanJwsSigner {
     private const val HEADER_ALG = "ECGOST3410-2015-512"
     private const val ESF_SIGNING_ALGORITHM = "ECGOST3410-2015-512"
-    private const val BANK_SIGNING_ALGORITHM = "ECGOST3410-2015"
+    private const val BANK_SIGNING_ALGORITHM = "ECGOST3410-2015-512"
     private const val SIGNING_OID = "1.2.398.3.10.1.1.2.3.2"
     private const val SIGNING_EKU_OID = "1.3.6.1.5.5.7.3.4"
     private const val AUTH_EKU_OID = "1.3.6.1.5.5.7.3.2"
@@ -111,9 +111,11 @@ object KalkanJwsSigner {
             bankSigningOnly = true,
         )
         try {
-            val timestamp = signingTimestampMs
-                ?.takeIf { it > 0L }
-                ?: System.currentTimeMillis()
+            // Keep Alatau bank JWS identical to the native flow that was
+            // confirmed working in Production: timestamp the signature on the
+            // Android device at the actual moment the user signs. Do not inject
+            // a server-provided timestamp into the protected JWS header.
+            val timestamp = System.currentTimeMillis()
             val encodedHeader = base64Url(
                 buildHeader(material.certificate, timestamp)
                     .toByteArray(StandardCharsets.UTF_8)
@@ -646,39 +648,22 @@ object KalkanJwsSigner {
     }
 
     private fun findBankSigningAlias(keyStore: KeyStore): String? {
-        data class Candidate(val alias: String, val score: Int)
-
+        // This mirrors the alias selection used by the native build that
+        // successfully sent a real Alatau payment from Android.
         val aliases = keyStore.aliases()
-        val candidates = mutableListOf<Candidate>()
+        var fallback: String? = null
         while (aliases.hasMoreElements()) {
             val alias = aliases.nextElement()
             if (!keyStore.isKeyEntry(alias)) continue
+            if (fallback == null) fallback = alias
+
             val cert = keyStore.getCertificate(alias) as? X509Certificate ?: continue
-
             val keyUsage = cert.keyUsage
-            val digitalSignature =
-                keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])
-            if (!digitalSignature) continue
-
-            val eku = try {
-                cert.extendedKeyUsage ?: emptyList()
-            } catch (_: Exception) {
-                emptyList()
+            if (keyUsage == null || (keyUsage.isNotEmpty() && keyUsage[0])) {
+                return alias
             }
-            if (SIGNING_EKU_OID !in eku) continue
-
-            var score = 200
-            when {
-                ORG_HEAD_EKU_OID in eku -> score += 60
-                ORG_TRUSTED_EKU_OID in eku -> score += 50
-                ORG_EMPLOYEE_EKU_OID in eku -> score += 30
-                ORG_EKU_OID in eku -> score += 20
-            }
-
-            candidates += Candidate(alias, score)
         }
-
-        return candidates.maxByOrNull { it.score }?.alias
+        return fallback
     }
 
     private fun buildHeader(
@@ -722,7 +707,6 @@ object KalkanJwsSigner {
     private fun createBankSignature(provider: Provider): Signature {
         val names = listOf(
             BANK_SIGNING_ALGORITHM,
-            ESF_SIGNING_ALGORITHM,
             "GOST3411-2015withECGOST3410-2015-512",
             SIGNING_OID,
         )
@@ -736,7 +720,7 @@ object KalkanJwsSigner {
         }
         throw SigningException(
             "BANK_GOST2015_NOT_AVAILABLE",
-            "В KalkanCrypt не найден алгоритм ECGOST3410-2015 для банковской подписи",
+            "В KalkanCrypt не найден алгоритм ECGOST3410-2015-512 для банковской подписи",
             lastError,
         )
     }
