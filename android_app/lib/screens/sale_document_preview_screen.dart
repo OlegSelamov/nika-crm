@@ -92,7 +92,7 @@ class _SaleDocumentPreviewScreenState extends State<SaleDocumentPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F6FB),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: Text(widget.title)),
       body: FutureBuilder<Uint8List>(
         future: _pdf,
@@ -124,41 +124,33 @@ class _SaleDocumentPreviewScreenState extends State<SaleDocumentPreviewScreen> {
                   loadingWidget: const Center(child: CircularProgressIndicator()),
                 ),
               ),
-              SafeArea(
-                top: false,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(top: BorderSide(color: AppColors.border)),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _save(bytes),
-                          icon: const Icon(Icons.download_rounded),
-                          label: const Text('Сохранить'),
-                        ),
+              AppBottomActionBar(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: AppActionButton(
+                        icon: Icons.download_rounded,
+                        label: 'Сохранить',
+                        onPressed: () => _save(bytes),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _share(bytes),
-                          icon: const Icon(Icons.share_rounded),
-                          label: const Text('Поделиться'),
-                        ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppActionButton(
+                        icon: Icons.share_rounded,
+                        label: 'Поделиться',
+                        onPressed: () => _share(bytes),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => _print(bytes),
-                          icon: const Icon(Icons.print_rounded),
-                          label: const Text('Печать'),
-                        ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppActionButton(
+                        icon: Icons.print_rounded,
+                        label: 'Печать',
+                        onPressed: () => _print(bytes),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ],

@@ -279,3 +279,91 @@ class StatusPill extends StatelessWidget {
     );
   }
 }
+
+
+class AppBottomActionBar extends StatelessWidget {
+  final Widget child;
+
+  const AppBottomActionBar({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class AppActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool loading;
+  final String? loadingLabel;
+
+  const AppActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.loading = false,
+    this.loadingLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 54,
+      child: FilledButton.icon(
+        onPressed: loading ? null : onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          disabledBackgroundColor: scheme.primary.withOpacity(.35),
+          disabledForegroundColor: scheme.onPrimary.withOpacity(.78),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        icon: loading
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: scheme.onPrimary,
+                ),
+              )
+            : Icon(icon, size: 20),
+        label: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            loading ? (loadingLabel ?? label) : label,
+            maxLines: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -152,33 +152,13 @@ class _RefundCheckScreenState extends State<RefundCheckScreen> {
           ],
         ),
       ),
-      Material(
-        color: AppColors.surface,
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: printing ? null : printReceipt,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.danger,
-                ),
-                icon: printing
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.print_rounded),
-                label: Text(printing ? 'Печатаем…' : 'Печатать чек возврата'),
-              ),
-            ),
-          ),
+      AppBottomActionBar(
+        child: AppActionButton(
+          icon: Icons.print_rounded,
+          label: 'Печатать чек возврата',
+          loading: printing,
+          loadingLabel: 'Печатаем…',
+          onPressed: printReceipt,
         ),
       ),
     ]);

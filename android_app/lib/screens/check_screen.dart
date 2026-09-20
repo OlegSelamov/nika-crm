@@ -398,91 +398,49 @@ class _CheckScreenState extends State<CheckScreen> {
                   ),
                 ),
 				
-				const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-				Row(
-				  children: [
-
-					Expanded(
-					  child: ElevatedButton.icon(
-						onPressed: () async {
- 
-						  final ok = await PrinterService.printSaleReceipt(sale!);
-
-						  if (!mounted) return;
-
-						  ScaffoldMessenger.of(context)
-							  .showSnackBar(
-							SnackBar(
-							  content: Text(
-								ok
-									? "Чек отправлен на печать"
-									: "Ошибка печати",
-							  ),
-							),
-						  );
-						},
-						icon: const Icon(Icons.print),
-						label: const Text("Печать"),
-						style: ElevatedButton.styleFrom(
-						  minimumSize: const Size(0, 52),
-						  shape: RoundedRectangleBorder(
-							borderRadius: BorderRadius.circular(12),
-						  ),
-						),
-					  ),
-					),
-
-					const SizedBox(width: 8),
-
-					Expanded(
-					  child: ElevatedButton.icon(
-						onPressed: () {
-						  // pdf
-						},
-						icon: const Icon(
-						  Icons.picture_as_pdf,
-						),
-						label: const Text("PDF"),
-						style: ElevatedButton.styleFrom(
-						  minimumSize: const Size(
-							0,
-							52,
-						  ),
-						  shape: RoundedRectangleBorder(
-							borderRadius:
-								BorderRadius.circular(12),
-						  ),
-						),
-					  ),
-					),
-				  ],
-				),
-
-				const SizedBox(height: 8),
-
-				SizedBox(
-				  width: double.infinity,
-				  child: ElevatedButton.icon(
-					onPressed: () {
-					  // отправить
-					},
-					icon: const Icon(Icons.share),
-					label: const Text(
-					  "Отправить чек",
-					),
-					style: ElevatedButton.styleFrom(
-					  minimumSize: const Size(
-						0,
-						52,
-					  ),
-					  shape: RoundedRectangleBorder(
-						borderRadius:
-							BorderRadius.circular(12),
-					  ),
-					),
-				  ),
-				),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppActionButton(
+                        icon: Icons.print_rounded,
+                        label: 'Печать',
+                        onPressed: () async {
+                          final ok = await PrinterService.printSaleReceipt(sale!);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ok
+                                    ? 'Чек отправлен на печать'
+                                    : 'Ошибка печати',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AppActionButton(
+                        icon: Icons.picture_as_pdf_rounded,
+                        label: 'PDF',
+                        onPressed: () {
+                          // PDF export will use the same action style.
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                AppActionButton(
+                  icon: Icons.share_rounded,
+                  label: 'Отправить чек',
+                  onPressed: () {
+                    // Share action will use the same action style.
+                  },
+                ),
               ],
             ),
           ),
