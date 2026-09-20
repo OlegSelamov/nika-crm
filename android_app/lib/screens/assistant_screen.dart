@@ -216,7 +216,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Можно написать или нажать на микрофон. Nika ответит голосом и сможет открыть нужный раздел.',
           textAlign: TextAlign.center,
           style: TextStyle(
@@ -254,7 +254,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
           color: mine
               ? AppColors.primary
               : isError
-                  ? const Color(0xFFFFE8E9)
+                  ? (Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF4A2026)
+                      : const Color(0xFFFFE8E9))
                   : Theme.of(context).brightness == Brightness.dark
                       ? AppColors.darkSurfaceRaised
                       : Colors.white,
@@ -307,7 +309,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
           const SizedBox(height: 5),
           Text('${confirmation?['summary'] ?? 'Выполнить действие?'}'),
           const SizedBox(height: 5),
-          const Text(
+          Text(
             'Можно также сказать «подтверждаю» или «отмена».',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
