@@ -1580,6 +1580,41 @@ def _alatau_jws_debug(content):
 
 
 
+def _alatau_signed_content_for_payment(content, payment_type):
+    """Return the transport format required by Alatau for the payment type.
+
+    Current Business API examples use:
+      * TAX: compact JWS (protected.payload.signature)
+      * contractor/invoice payments: base64url(JSON JWS serialization)
+        with payload + signatures[].protected/signature
+    The cryptographic signature itself is not changed.
+    """
+    value = (content or "").strip()
+    parts = value.split(".")
+    if len(parts) != 3 or not all(parts):
+        raise ValueError("Модуль подписи передал некорректный compact JWS")
+
+    kind = str(payment_type or "").strip().upper()
+    if kind == "TAX":
+        return value, "compact-jws"
+
+    protected, payload, signature = parts
+    envelope = {
+        "payload": payload,
+        "signatures": [{
+            "protected": protected,
+            "signature": signature,
+        }],
+    }
+    raw = json.dumps(
+        envelope,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    return encoded, "jws-json-b64url"
+
+
 @settings_bp.route("/api/integrations/alatau/payments/signed", methods=["POST"])
 def alatau_signed_payment():
     company_id, error = _alatau_current_company()
@@ -1612,11 +1647,21 @@ def alatau_signed_payment():
     # signer timestamps the protected JWS header at the actual signing moment.
     # Keep delta_seconds only as diagnostics for bank-side validation errors.
 
+    payment_type = str(payment_meta.get("paymentType") or "").strip().upper()
+    try:
+        bank_content, signature_format = _alatau_signed_content_for_payment(
+            content,
+            payment_type,
+        )
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
     logger.warning(
-        "Alatau signed payment JWS meta company_id=%s meta=%s format=%s",
+        "Alatau signed payment JWS meta company_id=%s payment_type=%s meta=%s format=%s",
         company_id,
+        payment_type or "UNKNOWN",
         signature_debug,
-        "compact-jws",
+        signature_format,
     )
 
     claimed, previous = _alatau_claim_payment_request(
@@ -1651,7 +1696,7 @@ def alatau_signed_payment():
         result = client.send_signed_payment(
             access_token,
             bank_company_id,
-            content,
+            bank_content,
         )
         _alatau_touch(
             company_id,
@@ -1679,6 +1724,7 @@ def alatau_signed_payment():
             "success": True,
             "environment": environment,
             "company_id": bank_company_id,
+            "signature_format": signature_format,
             "payment": result,
         })
     except AlatauError as exc:
