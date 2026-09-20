@@ -2,9 +2,6 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven {
-            url = uri("https://pkgs.dev.azure.com/as1an/public/_packaging/repo/maven/v1")
-        }
     }
 }
 
