@@ -212,8 +212,26 @@ def _alatau_claim_payment_request(company_id, environment, request_id):
             LIMIT 1
         """, (company_id, environment, request_id))
         existing = cur.fetchone()
-        conn.commit()
-        return False, (dict(existing) if existing else {})
+        existing_map = dict(existing) if existing else {}
+        if existing_map.get("status") == "ERROR_RETRYABLE":
+            cur.execute("""
+                UPDATE alatau_payment_requests
+                SET status = 'SENDING',
+                    error_message = NULL,
+                    updated_at = NOW()
+                WHERE company_id = %s
+                  AND environment = %s
+                  AND request_id = %s
+                  AND status = 'ERROR_RETRYABLE'
+                RETURNING id
+            """, (company_id, environment, request_id))
+            retried = cur.fetchone()
+            conn.commit()
+            if retried:
+                return True, None
+        else:
+            conn.commit()
+        return False, existing_map
     except Exception:
         conn.rollback()
         raise
@@ -1687,11 +1705,17 @@ def alatau_signed_payment():
             fallback_status="ERROR",
             fallback_message=str(exc),
         )
+        retryable_statuses = {400, 401, 403, 404, 412, 424, 429}
+        request_status = (
+            "ERROR_RETRYABLE"
+            if exc.status_code in retryable_statuses
+            else "UNKNOWN"
+        )
         _alatau_finish_payment_request(
             company_id,
             environment,
             request_id,
-            status="ERROR",
+            status=request_status,
             error_message=str(exc),
         )
         return jsonify({
@@ -1771,6 +1795,19 @@ def alatau_payment_history():
                             status_message[:500] or None,
                             status_timestamp or None,
                             row.get("id"),
+                        ))
+                        cur.execute("""
+                            UPDATE alatau_payment_requests
+                            SET status = %s,
+                                updated_at = NOW()
+                            WHERE company_id = %s
+                              AND environment = %s
+                              AND operation_id = %s
+                        """, (
+                            status_code[:120],
+                            company_id,
+                            environment,
+                            operation_id,
                         ))
                     except AlatauError as status_exc:
                         if status_exc.status_code not in (400, 404):
