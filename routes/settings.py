@@ -5,6 +5,8 @@ import logging
 import re
 import secrets
 import time
+from cryptography import x509
+from cryptography.x509.oid import ExtensionOID
 from datetime import date, timedelta
 
 from flask import Blueprint, jsonify, render_template, request, session, redirect
@@ -1567,6 +1569,25 @@ def _alatau_jws_debug(content):
         else None
     )
     x5c = protected.get("x5c") if isinstance(protected, dict) else None
+    certificate_subject = None
+    certificate_serial = None
+    certificate_eku = []
+    if isinstance(x5c, list) and x5c and isinstance(x5c[0], str):
+        try:
+            cert_der = base64.b64decode(x5c[0])
+            certificate = x509.load_der_x509_certificate(cert_der)
+            certificate_subject = certificate.subject.rfc4514_string()
+            certificate_serial = format(certificate.serial_number, "X")
+            try:
+                eku_ext = certificate.extensions.get_extension_for_oid(
+                    ExtensionOID.EXTENDED_KEY_USAGE
+                )
+                certificate_eku = [oid.dotted_string for oid in eku_ext.value]
+            except x509.ExtensionNotFound:
+                certificate_eku = []
+        except Exception:
+            certificate_subject = "unparsed"
+
     return {
         "alg": protected.get("alg") if isinstance(protected, dict) else None,
         "typ": protected.get("typ") if isinstance(protected, dict) else None,
@@ -1575,6 +1596,9 @@ def _alatau_jws_debug(content):
         "delta_seconds": delta_seconds,
         "signature_bytes": len(signature_bytes),
         "x5c_count": len(x5c) if isinstance(x5c, list) else 0,
+        "certificate_subject": certificate_subject,
+        "certificate_serial": certificate_serial,
+        "certificate_eku": certificate_eku,
         "payload_bytes": len(decode_segment(parts[1])),
     }
 
