@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
@@ -956,6 +957,28 @@ class _BankPaymentDetailsSheet extends StatelessWidget {
     return number.toStringAsFixed(2);
   }
 
+  String _periodLabel(String value) {
+    final match = RegExp(r'^(\\d{4})-(\\d{2})$').firstMatch(value.trim());
+    if (match == null) return value;
+    final month = int.tryParse(match.group(2) ?? '');
+    if (month == null || month < 1 || month > 12) return value;
+    const months = [
+      'Январь',
+      'Февраль',
+      'Март',
+      'Апрель',
+      'Май',
+      'Июнь',
+      'Июль',
+      'Август',
+      'Сентябрь',
+      'Октябрь',
+      'Ноябрь',
+      'Декабрь',
+    ];
+    return '${months[month - 1]} ${match.group(1)}';
+  }
+
   Widget _row(String label, String value) {
     if (value.trim().isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -1049,7 +1072,10 @@ class _BankPaymentDetailsSheet extends StatelessWidget {
               _row('КНП', _text(payment['knp'])),
               _row('КБК', _text(payment['kbk'])),
               if (_text(payment['periodStart']).isNotEmpty)
-                _row('За месяц', _text(payment['periodStart'])),
+                _row(
+                  'За месяц',
+                  _periodLabel(_text(payment['periodStart'])),
+                ),
               _row('№ документа', _text(payment['documentNumber'])),
               _row('Дата', date),
               _row('Назначение', _text(payment['purpose'])),
@@ -1803,7 +1829,6 @@ class _BankTaxPaymentSheet extends StatefulWidget {
 class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
   final knp = TextEditingController(text: '911');
   final kbk = TextEditingController();
-  final period = TextEditingController();
   final amount = TextEditingController();
   final documentNumber = TextEditingController();
   final purpose = TextEditingController();
@@ -1816,14 +1841,15 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
   List<Map<String, dynamic>> kbkItems = [];
   Map<String, dynamic>? selectedKbk;
   String taxPaymentKind = 'MAIN';
+  int selectedTaxMonth = DateTime.now().month;
+  int selectedTaxYear = DateTime.now().year;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    final month =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}';
-    period.text = month;
+    selectedTaxMonth = now.month;
+    selectedTaxYear = now.year;
     documentNumber.text =
         'TAX-${now.day.toString().padLeft(2, '0')}${now.month.toString().padLeft(2, '0')}${now.year}';
     _loadDictionaries();
@@ -1970,12 +1996,173 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
   }
 
 
+  static const List<String> _ruMonths = [
+    'Январь',
+    'Февраль',
+    'Март',
+    'Апрель',
+    'Май',
+    'Июнь',
+    'Июль',
+    'Август',
+    'Сентябрь',
+    'Октябрь',
+    'Ноябрь',
+    'Декабрь',
+  ];
+
+  String get _periodValue =>
+      '$selectedTaxYear-${selectedTaxMonth.toString().padLeft(2, '0')}';
+
+  String get _periodLabel =>
+      '${_ruMonths[selectedTaxMonth - 1]} $selectedTaxYear';
+
+  Future<void> _pickTaxPeriod() async {
+    var draftMonth = selectedTaxMonth;
+    var draftYear = selectedTaxYear;
+    const firstYear = 2000;
+    final lastYear = DateTime.now().year + 1;
+    final years = List<int>.generate(
+      lastYear - firstYear + 1,
+      (index) => firstYear + index,
+    );
+
+    final monthController = FixedExtentScrollController(
+      initialItem: draftMonth - 1,
+    );
+    final yearController = FixedExtentScrollController(
+      initialItem: years.indexOf(draftYear).clamp(0, years.length - 1),
+    );
+
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final scheme = Theme.of(context).colorScheme;
+          return Container(
+            color: scheme.surface,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: scheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'За какой месяц оплачиваем?',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${_ruMonths[draftMonth - 1]} $draftYear',
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 190,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: CupertinoPicker(
+                          scrollController: monthController,
+                          itemExtent: 44,
+                          useMagnifier: true,
+                          magnification: 1.08,
+                          selectionOverlay:
+                              const CupertinoPickerDefaultSelectionOverlay(),
+                          onSelectedItemChanged: (index) {
+                            setSheetState(() => draftMonth = index + 1);
+                          },
+                          children: _ruMonths
+                              .map(
+                                (month) => Center(
+                                  child: Text(
+                                    month,
+                                    style: const TextStyle(fontSize: 18),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: CupertinoPicker(
+                          scrollController: yearController,
+                          itemExtent: 44,
+                          useMagnifier: true,
+                          magnification: 1.08,
+                          selectionOverlay:
+                              const CupertinoPickerDefaultSelectionOverlay(),
+                          onSelectedItemChanged: (index) {
+                            setSheetState(() => draftYear = years[index]);
+                          },
+                          children: years
+                              .map(
+                                (year) => Center(
+                                  child: Text(
+                                    '$year',
+                                    style: const TextStyle(fontSize: 18),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(sheetContext, true),
+                    child: const Text('Выбрать период'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    monthController.dispose();
+    yearController.dispose();
+
+    if (applied == true && mounted) {
+      setState(() {
+        selectedTaxMonth = draftMonth;
+        selectedTaxYear = draftYear;
+      });
+    }
+  }
+
   @override
   void dispose() {
     for (final controller in [
       knp,
       kbk,
-      period,
       amount,
       documentNumber,
       purpose,
@@ -1999,7 +2186,7 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
         'taxPaymentKind': taxPaymentKind,
         'knp': knp.text.replaceAll(RegExp(r'\D'), ''),
         'kbk': kbk.text.replaceAll(RegExp(r'\D'), ''),
-        'period': period.text.trim(),
+        'period': _periodValue,
         'amount': double.tryParse(
               amount.text.replaceAll(' ', '').replaceAll(',', '.'),
             ) ??
@@ -2212,13 +2399,22 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
                 ),
               ],
               const SizedBox(height: 10),
-              TextField(
-                controller: period,
-                keyboardType: TextInputType.datetime,
-                decoration: const InputDecoration(
-                  labelText: 'За какой месяц',
-                  hintText: 'ГГГГ-ММ',
-                  prefixIcon: Icon(Icons.calendar_month_outlined),
+              InkWell(
+                onTap: sending ? null : _pickTaxPeriod,
+                borderRadius: BorderRadius.circular(16),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'За какой месяц',
+                    prefixIcon: Icon(Icons.calendar_month_outlined),
+                    suffixIcon: Icon(Icons.expand_more_rounded),
+                  ),
+                  child: Text(
+                    _periodLabel,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
