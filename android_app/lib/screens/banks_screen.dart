@@ -369,7 +369,10 @@ class _BanksScreenState extends State<BanksScreen> {
         ),
       );
 
-  Future<void> _newPayment([Map<String, dynamic>? initialPayment]) async {
+  Future<void> _newPayment([
+    Map<String, dynamic>? initialPayment,
+    String mode = 'regular',
+  ]) async {
     if (_selectedIban.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Сначала выберите банковский счёт')),
@@ -385,9 +388,58 @@ class _BanksScreenState extends State<BanksScreen> {
       builder: (_) => _BankPaymentSheet(
         payerIban: _selectedIban,
         initialPayment: initialPayment,
+        mode: mode,
       ),
     );
     if (changed == true) await _refreshPayments();
+  }
+
+  Future<void> _newTaxPayment() async {
+    if (_selectedIban.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала выберите банковский счёт')),
+      );
+      return;
+    }
+
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BankTaxPaymentSheet(payerIban: _selectedIban),
+    );
+    if (changed == true) await _refreshPayments();
+  }
+
+  Future<void> _showPaymentCancelInfo(Map<String, dynamic> payment) async {
+    final status = _paymentStatus(payment);
+    final executed = status == 'Исполнен';
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        icon: Icon(
+          executed ? Icons.info_outline_rounded : Icons.cancel_outlined,
+          color: executed ? AppColors.primary : AppColors.warning,
+        ),
+        title: Text(executed ? 'Платёж уже исполнен' : 'Отмена платежа'),
+        content: Text(
+          executed
+              ? 'Исполненный банковский платёж нельзя просто удалить из Nika: '
+                'деньги уже проведены банком. Для возврата нужно оформить обратный '
+                'платёж или возврат по правилам банка.'
+              : 'В подключённом Business API Alatau нет отдельного метода '
+                'отзыва платежа. Если операция ещё не исполнена, отмените её '
+                'в интернет-банке Alatau, затем нажмите «Обновить статусы» в Nika.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Понятно'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openPaymentDetails(Map<String, dynamic> payment) async {
@@ -404,6 +456,7 @@ class _BanksScreenState extends State<BanksScreen> {
           Navigator.pop(sheetContext);
           Future.microtask(() => _newPayment(payment));
         },
+        onCancelInfo: () => _showPaymentCancelInfo(payment),
       ),
     );
   }
@@ -548,6 +601,26 @@ class _BanksScreenState extends State<BanksScreen> {
                 onPressed: _selectedIban.isEmpty ? null : _newPayment,
                 icon: const Icon(Icons.add_card_rounded),
                 label: const Text('Новый платёж'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: _selectedIban.isEmpty
+                    ? null
+                    : () => _newPayment(null, 'invoice'),
+                icon: const Icon(Icons.request_quote_outlined),
+                label: const Text('Оплатить счёт'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: _selectedIban.isEmpty ? null : _newTaxPayment,
+                icon: const Icon(Icons.account_balance_outlined),
+                label: const Text('Налоги'),
               ),
             ),
           ]),
@@ -875,12 +948,14 @@ class _BankPaymentDetailsSheet extends StatelessWidget {
   final String statusLabel;
   final Color statusColor;
   final VoidCallback onRepeat;
+  final VoidCallback onCancelInfo;
 
   const _BankPaymentDetailsSheet({
     required this.payment,
     required this.statusLabel,
     required this.statusColor,
     required this.onRepeat,
+    required this.onCancelInfo,
   });
 
   String _text(dynamic value) => value == null ? '' : '$value';
@@ -983,13 +1058,24 @@ class _BankPaymentDetailsSheet extends StatelessWidget {
               if (_text(payment['statusMessage']).isNotEmpty)
                 _row('Статус банка', _text(payment['statusMessage'])),
               const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onRepeat,
-                  icon: const Icon(Icons.replay_rounded),
-                  label: const Text('Повторить платёж'),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: onRepeat,
+                      icon: const Icon(Icons.replay_rounded),
+                      label: const Text('Повторить'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onCancelInfo,
+                      icon: const Icon(Icons.cancel_outlined),
+                      label: const Text('Отмена'),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
               const Text(
@@ -1337,10 +1423,12 @@ class _BankStatementOperationSheetState
 class _BankPaymentSheet extends StatefulWidget {
   final String payerIban;
   final Map<String, dynamic>? initialPayment;
+  final String mode;
 
   const _BankPaymentSheet({
     required this.payerIban,
     this.initialPayment,
+    this.mode = 'regular',
   });
 
   @override
@@ -1356,6 +1444,7 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
   final knp = TextEditingController();
   final amount = TextEditingController();
   final documentNumber = TextEditingController();
+  final invoiceDate = TextEditingController();
   final purpose = TextEditingController();
   bool loadingChoices = true;
   bool sending = false;
@@ -1368,6 +1457,11 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
   void initState() {
     super.initState();
     _applyInitialPayment();
+    if (widget.mode == 'invoice') {
+      final now = DateTime.now();
+      invoiceDate.text =
+          '${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}';
+    }
     _loadChoices();
   }
 
@@ -1427,6 +1521,7 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
       knp,
       amount,
       documentNumber,
+      invoiceDate,
       purpose,
     ]) {
       controller.dispose();
@@ -1513,6 +1608,19 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
         );
       }
 
+      if (widget.mode == 'invoice') {
+        if (documentNumber.text.trim().isEmpty) {
+          throw const ApiException('Укажите номер счёта');
+        }
+        if (invoiceDate.text.trim().isEmpty) {
+          throw const ApiException('Укажите дату счёта');
+        }
+        if (purpose.text.trim().isEmpty) {
+          purpose.text =
+              'Оплата по счёту №${documentNumber.text.trim()} от ${invoiceDate.text.trim()}';
+        }
+      }
+
       final payment = _paymentData();
       final prepared = await ApiService.prepareBankPayment(payment);
       final payload = prepared['payload'];
@@ -1576,7 +1684,10 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Center(child: Container(width: 42, height: 5, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(8)))),
             const SizedBox(height: 16),
-            const Text('Новый платёж', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            Text(
+              widget.mode == 'invoice' ? 'Оплата по счёту' : 'Новый платёж',
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 4),
             Text('Счёт списания: ${widget.payerIban}', style: const TextStyle(color: AppColors.muted)),
             const SizedBox(height: 16),
@@ -1613,8 +1724,25 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
             Row(children: [
               Expanded(child: TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Сумма'))),
               const SizedBox(width: 10),
-              Expanded(child: TextField(controller: documentNumber, decoration: const InputDecoration(labelText: '№ документа'))),
+              Expanded(child: TextField(
+                controller: documentNumber,
+                decoration: InputDecoration(
+                  labelText: widget.mode == 'invoice' ? '№ счёта' : '№ документа',
+                ),
+              )),
             ]),
+            if (widget.mode == 'invoice') ...[
+              const SizedBox(height: 10),
+              TextField(
+                controller: invoiceDate,
+                keyboardType: TextInputType.datetime,
+                decoration: const InputDecoration(
+                  labelText: 'Дата счёта',
+                  hintText: 'ДД.ММ.ГГГГ',
+                  prefixIcon: Icon(Icons.calendar_month_outlined),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             TextField(controller: purpose, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'Назначение платежа')),
             const SizedBox(height: 16),
