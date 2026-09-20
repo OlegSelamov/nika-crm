@@ -777,6 +777,17 @@ class ApiService {
         .toList();
   }
 
+  static Future<Map<String, dynamic>> bankDictionary(String code) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET',
+        '/api/integrations/alatau/dictionaries',
+        timeout: const Duration(seconds: 60),
+        query: {
+          'environment': 'production',
+          'code': code.toUpperCase(),
+        },
+      ));
+
   static Future<Map<String, dynamic>> prepareBankTaxPayment(
     Map<String, dynamic> payment,
   ) async =>

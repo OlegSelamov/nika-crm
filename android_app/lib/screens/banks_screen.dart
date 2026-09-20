@@ -605,25 +605,14 @@ class _BanksScreenState extends State<BanksScreen> {
             ),
           ]),
           const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: _selectedIban.isEmpty
-                    ? null
-                    : () => _newPayment(null, 'invoice'),
-                icon: const Icon(Icons.request_quote_outlined),
-                label: const Text('Оплатить счёт'),
-              ),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              onPressed: _selectedIban.isEmpty ? null : _newTaxPayment,
+              icon: const Icon(Icons.account_balance_outlined),
+              label: const Text('Налоги и платежи в бюджет'),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: _selectedIban.isEmpty ? null : _newTaxPayment,
-                icon: const Icon(Icons.account_balance_outlined),
-                label: const Text('Налоги'),
-              ),
-            ),
-          ]),
+          ),
           const SizedBox(height: 22),
           SizedBox(
             width: double.infinity,
@@ -1826,8 +1815,13 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
   final vin = TextEditingController();
   final protocolNumber = TextEditingController();
 
+  bool loadingDictionaries = true;
   bool sending = false;
   String? formError;
+  List<Map<String, dynamic>> kbkItems = [];
+  List<Map<String, dynamic>> knpItems = [];
+  Map<String, dynamic>? selectedKbk;
+  Map<String, dynamic>? selectedKnp;
 
   @override
   void initState() {
@@ -1839,6 +1833,163 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
     periodEnd.text = month;
     documentNumber.text =
         'TAX-${now.day.toString().padLeft(2, '0')}${now.month.toString().padLeft(2, '0')}${now.year}';
+    _loadDictionaries();
+  }
+
+  List<Map<String, dynamic>> _dictionaryRows(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (value is Map) {
+      final map = Map<String, dynamic>.from(value);
+      for (final key in const ['content', 'items', 'data', 'values', 'results']) {
+        final rows = _dictionaryRows(map[key]);
+        if (rows.isNotEmpty) return rows;
+      }
+    }
+    return [];
+  }
+
+  String _dictCode(Map<String, dynamic> row) =>
+      '${row['code'] ?? row['value'] ?? row['id'] ?? ''}'.trim();
+
+  String _dictName(Map<String, dynamic> row) =>
+      '${row['name'] ?? row['title'] ?? row['description'] ?? _dictCode(row)}'
+          .trim();
+
+  Future<void> _loadDictionaries() async {
+    try {
+      final results = await Future.wait([
+        ApiService.bankDictionary('KBK'),
+        ApiService.bankDictionary('KNP'),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        kbkItems = _dictionaryRows(results[0]['values']);
+        knpItems = _dictionaryRows(results[1]['values']);
+        loadingDictionaries = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        loadingDictionaries = false;
+        formError = 'Не удалось загрузить справочники налогов: $e';
+      });
+    }
+  }
+
+  Future<Map<String, dynamic>?> _pickDictionary({
+    required String title,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final search = TextEditingController();
+    List<Map<String, dynamic>> filtered = List.of(items);
+
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return SizedBox(
+            height: MediaQuery.sizeOf(context).height * .84,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: search,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search_rounded),
+                          hintText: 'Поиск по названию или коду',
+                        ),
+                        onChanged: (value) {
+                          final q = value.trim().toLowerCase();
+                          setSheetState(() {
+                            filtered = items.where((row) {
+                              final code = _dictCode(row).toLowerCase();
+                              final name = _dictName(row).toLowerCase();
+                              return q.isEmpty ||
+                                  code.contains(q) ||
+                                  name.contains(q);
+                            }).toList();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? const Center(child: Text('Ничего не найдено'))
+                      : ListView.separated(
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, index) {
+                            final row = filtered[index];
+                            return ListTile(
+                              title: Text(
+                                _dictName(row),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: Text(_dictCode(row)),
+                              trailing:
+                                  const Icon(Icons.chevron_right_rounded),
+                              onTap: () => Navigator.pop(sheetContext, row),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    search.dispose();
+    return result;
+  }
+
+  Future<void> _chooseKbk() async {
+    final value = await _pickDictionary(
+      title: 'Выберите налог / КБК',
+      items: kbkItems,
+    );
+    if (value == null || !mounted) return;
+    setState(() {
+      selectedKbk = value;
+      kbk.text = _dictCode(value);
+    });
+  }
+
+  Future<void> _chooseKnp() async {
+    final value = await _pickDictionary(
+      title: 'Выберите назначение платежа / КНП',
+      items: knpItems,
+    );
+    if (value == null || !mounted) return;
+    setState(() {
+      selectedKnp = value;
+      knp.text = _dictCode(value);
+    });
   }
 
   @override
@@ -1896,6 +2047,13 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
           'В этой сборке Nika Business нет KalkanCrypt НУЦ РК. '
           'Установите сборку с официальным Kalkan SDK.',
         );
+      }
+
+      if (selectedKbk == null || kbk.text.isEmpty) {
+        throw const ApiException('Выберите вид налога');
+      }
+      if (selectedKnp == null || knp.text.isEmpty) {
+        throw const ApiException('Выберите назначение платежа');
       }
 
       final payment = _paymentData();
@@ -2009,34 +2167,71 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
                 style: const TextStyle(color: AppColors.muted),
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: kbk,
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      decoration: const InputDecoration(
-                        labelText: 'КБК',
-                        hintText: '6 цифр',
-                        counterText: '',
+              if (loadingDictionaries)
+                const LinearProgressIndicator()
+              else ...[
+                InkWell(
+                  onTap: kbkItems.isEmpty ? null : _chooseKbk,
+                  borderRadius: BorderRadius.circular(16),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Вид налога',
+                      prefixIcon: Icon(Icons.receipt_long_outlined),
+                      suffixIcon: Icon(Icons.chevron_right_rounded),
+                    ),
+                    child: Text(
+                      selectedKbk == null
+                          ? 'Выберите налог'
+                          : _dictName(selectedKbk!),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: selectedKbk == null
+                            ? Theme.of(context).hintColor
+                            : null,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: knp,
-                      keyboardType: TextInputType.number,
-                      maxLength: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'КНП',
-                        counterText: '',
+                ),
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: knpItems.isEmpty ? null : _chooseKnp,
+                  borderRadius: BorderRadius.circular(16),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Назначение платежа',
+                      prefixIcon: Icon(Icons.account_tree_outlined),
+                      suffixIcon: Icon(Icons.chevron_right_rounded),
+                    ),
+                    child: Text(
+                      selectedKnp == null
+                          ? 'Выберите КНП'
+                          : _dictName(selectedKnp!),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: selectedKnp == null
+                            ? Theme.of(context).hintColor
+                            : null,
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 6),
+                if (selectedKbk != null || selectedKnp != null)
+                  Text(
+                    [
+                      if (selectedKbk != null) 'КБК ${kbk.text}',
+                      if (selectedKnp != null) 'КНП ${knp.text}',
+                    ].join(' · '),
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -2095,36 +2290,27 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
                       'Можно оставить пустым — Nika подставит название КБК и КНП',
                 ),
               ),
-              const SizedBox(height: 14),
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                title: const Text(
-                  'Дополнительные реквизиты',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-                subtitle: const Text(
-                  'VIN и номер протокола — только когда они требуются для выбранного КБК',
-                  style: TextStyle(fontSize: 12),
-                ),
-                children: [
-                  TextField(
-                    controller: vin,
-                    textCapitalization: TextCapitalization.characters,
-                    maxLength: 17,
-                    decoration: const InputDecoration(
-                      labelText: 'VIN',
-                      counterText: '',
-                    ),
+              if (kbk.text == '104401' || kbk.text == '104402') ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: vin,
+                  textCapitalization: TextCapitalization.characters,
+                  maxLength: 17,
+                  decoration: const InputDecoration(
+                    labelText: 'VIN автомобиля',
+                    counterText: '',
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: protocolNumber,
-                    decoration:
-                        const InputDecoration(labelText: '№ протокола'),
+                ),
+              ],
+              if (kbk.text.startsWith('204')) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: protocolNumber,
+                  decoration: const InputDecoration(
+                    labelText: '№ протокола',
                   ),
-                  const SizedBox(height: 4),
-                ],
-              ),
+                ),
+              ],
               if (formError != null) ...[
                 const SizedBox(height: 10),
                 Container(
