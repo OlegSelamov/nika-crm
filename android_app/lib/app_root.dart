@@ -46,7 +46,7 @@ class _NikaModalRouteObserver extends NavigatorObserver {
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didRemove(route, previousRoute);
     if (_isModal(route)) {
-      _modalDepth = (_modalDepth - 1).clamp(0, 999);
+      _modalDepth = (_modalDepth - 1).clamp(0, 999).toInt();
       _sync();
     }
   }
@@ -55,7 +55,7 @@ class _NikaModalRouteObserver extends NavigatorObserver {
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
     if (_isModal(oldRoute)) {
-      _modalDepth = (_modalDepth - 1).clamp(0, 999);
+      _modalDepth = (_modalDepth - 1).clamp(0, 999).toInt();
     }
     if (_isModal(newRoute)) {
       _modalDepth++;
