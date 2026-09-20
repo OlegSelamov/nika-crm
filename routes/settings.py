@@ -1579,6 +1579,30 @@ def _alatau_jws_debug(content):
     }
 
 
+
+def _alatau_signed_content(content):
+    """Wrap compact JWS in the base64url JWS JSON form shown by Business API."""
+    value = (content or "").strip()
+    parts = value.split(".")
+    if len(parts) != 3 or not all(parts):
+        raise ValueError("Модуль подписи передал некорректный compact JWS")
+
+    protected, payload, signature = parts
+    envelope = {
+        "payload": payload,
+        "signatures": [{
+            "protected": protected,
+            "signature": signature,
+        }],
+    }
+    raw = json.dumps(
+        envelope,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
 @settings_bp.route("/api/integrations/alatau/payments/signed", methods=["POST"])
 def alatau_signed_payment():
     company_id, error = _alatau_current_company()
@@ -1607,10 +1631,10 @@ def alatau_signed_payment():
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
-    # The bank's own NCALayer instruction explicitly requires the compact
-    # [header].[payload].[signature] JWS string in POST /signed-payments.
-    # Reject a stale timestamp locally so a bank-side "dated today" error
-    # cannot be caused by Nika's clock handling.
+    # Validate the compact JWS produced by the mobile signer, then wrap it
+    # into the base64url JWS JSON serialization shown by the current
+    # Alatau Business API signed-payments examples.
+    # Reject a stale timestamp locally before talking to the bank.
     delta_seconds = signature_debug.get("delta_seconds")
     if delta_seconds is None or abs(delta_seconds) > 300:
         return jsonify({
@@ -1622,10 +1646,16 @@ def alatau_signed_payment():
             "signature_debug": signature_debug,
         }), 400
 
+    try:
+        bank_content = _alatau_signed_content(content)
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
     logger.warning(
-        "Alatau signed payment JWS meta company_id=%s meta=%s",
+        "Alatau signed payment JWS meta company_id=%s meta=%s format=%s",
         company_id,
         signature_debug,
+        "jws-json-b64url",
     )
 
     claimed, previous = _alatau_claim_payment_request(
@@ -1660,7 +1690,7 @@ def alatau_signed_payment():
         result = client.send_signed_payment(
             access_token,
             bank_company_id,
-            content,
+            bank_content,
         )
         _alatau_touch(
             company_id,
