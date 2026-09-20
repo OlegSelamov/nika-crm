@@ -777,6 +777,19 @@ class ApiService {
         .toList();
   }
 
+  static Future<Map<String, dynamic>> prepareBankTaxPayment(
+    Map<String, dynamic> payment,
+  ) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST',
+        '/api/integrations/alatau/payments/tax/draft',
+        timeout: const Duration(seconds: 60),
+        body: {
+          ...payment,
+          'environment': 'production',
+        },
+      ));
+
   static Future<Map<String, dynamic>> prepareBankPayment(
     Map<String, dynamic> payment,
   ) async =>

@@ -136,6 +136,9 @@ def _ensure_alatau_payment_history_table(cur):
             receiver_bic TEXT,
             kbe TEXT,
             knp TEXT,
+            kbk TEXT,
+            period_start TEXT,
+            period_end TEXT,
             amount NUMERIC(18,2),
             currency TEXT NOT NULL DEFAULT 'KZT',
             document_number TEXT,
@@ -149,6 +152,9 @@ def _ensure_alatau_payment_history_table(cur):
     """)
     cur.execute("ALTER TABLE alatau_payment_history ADD COLUMN IF NOT EXISTS kbe TEXT")
     cur.execute("ALTER TABLE alatau_payment_history ADD COLUMN IF NOT EXISTS knp TEXT")
+    cur.execute("ALTER TABLE alatau_payment_history ADD COLUMN IF NOT EXISTS kbk TEXT")
+    cur.execute("ALTER TABLE alatau_payment_history ADD COLUMN IF NOT EXISTS period_start TEXT")
+    cur.execute("ALTER TABLE alatau_payment_history ADD COLUMN IF NOT EXISTS period_end TEXT")
     cur.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS uq_alatau_payment_history_operation
         ON alatau_payment_history(company_id, environment, operation_id)
@@ -205,12 +211,13 @@ def _alatau_store_payment(company_id, environment, meta, result=None, *,
             INSERT INTO alatau_payment_history (
                 company_id, environment, operation_id, payment_type,
                 payer_iban, receiver_name, receiver_iin_bin,
-                receiver_iban, receiver_bic, kbe, knp, amount, currency,
-                document_number, purpose, status_code, status_message,
+                receiver_iban, receiver_bic, kbe, knp, kbk, period_start,
+                period_end, amount, currency, document_number, purpose,
+                status_code, status_message,
                 bank_status_timestamp, created_at, updated_at
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'KZT',
-                %s, %s, %s, %s, %s, NOW(), NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, 'KZT', %s, %s, %s, %s, %s, NOW(), NOW()
             )
             ON CONFLICT (company_id, environment, operation_id) DO UPDATE SET
                 payment_type = COALESCE(EXCLUDED.payment_type, alatau_payment_history.payment_type),
@@ -221,6 +228,9 @@ def _alatau_store_payment(company_id, environment, meta, result=None, *,
                 receiver_bic = COALESCE(EXCLUDED.receiver_bic, alatau_payment_history.receiver_bic),
                 kbe = COALESCE(EXCLUDED.kbe, alatau_payment_history.kbe),
                 knp = COALESCE(EXCLUDED.knp, alatau_payment_history.knp),
+                kbk = COALESCE(EXCLUDED.kbk, alatau_payment_history.kbk),
+                period_start = COALESCE(EXCLUDED.period_start, alatau_payment_history.period_start),
+                period_end = COALESCE(EXCLUDED.period_end, alatau_payment_history.period_end),
                 amount = COALESCE(EXCLUDED.amount, alatau_payment_history.amount),
                 document_number = COALESCE(EXCLUDED.document_number, alatau_payment_history.document_number),
                 purpose = COALESCE(EXCLUDED.purpose, alatau_payment_history.purpose),
@@ -241,6 +251,9 @@ def _alatau_store_payment(company_id, environment, meta, result=None, *,
             meta.get("receiverBic"),
             meta.get("kbe"),
             meta.get("knp"),
+            meta.get("kbk"),
+            meta.get("periodStart"),
+            meta.get("periodEnd"),
             amount,
             meta.get("documentNumber"),
             meta.get("purpose"),
@@ -961,6 +974,196 @@ def alatau_delete_payment_template(template_id):
         pool.putconn(conn)
 
 
+
+def _alatau_dictionary_rows(payload):
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    if not isinstance(payload, dict):
+        return []
+    for key in ("content", "items", "data", "values", "results"):
+        nested = payload.get(key)
+        if isinstance(nested, list):
+            return [row for row in nested if isinstance(row, dict)]
+        if isinstance(nested, dict):
+            rows = _alatau_dictionary_rows(nested)
+            if rows:
+                return rows
+    return []
+
+
+def _alatau_dictionary_name(client, access_token, dictionary_code, value):
+    rows = _alatau_dictionary_rows(
+        client.get_dictionary(access_token, dictionary_code)
+    )
+    value = str(value or "").strip()
+    for row in rows:
+        row_code = str(
+            row.get("code")
+            or row.get("value")
+            or row.get("id")
+            or ""
+        ).strip()
+        if row_code != value:
+            continue
+        return str(
+            row.get("name")
+            or row.get("title")
+            or row.get("description")
+            or ""
+        ).strip()
+    return ""
+
+
+def _alatau_valid_tax_period(value):
+    value = str(value or "").strip()
+    match = re.fullmatch(r"(\d{4})-(\d{2})", value)
+    if not match:
+        return False
+    month = int(match.group(2))
+    return 1 <= month <= 12
+
+
+@settings_bp.route("/api/integrations/alatau/payments/tax/draft", methods=["POST"])
+def alatau_tax_payment_draft():
+    company_id, error = _alatau_current_company()
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    environment = (data.get("environment") or "production").strip().lower()
+    account_iban = (data.get("accountIban") or "").replace(" ", "").upper()
+    knp = re.sub(r"\D", "", str(data.get("knp") or ""))[:3]
+    kbk = re.sub(r"\D", "", str(data.get("kbk") or ""))[:6]
+    period_start = str(data.get("periodStart") or "").strip()
+    period_end = str(data.get("periodEnd") or "").strip()
+    document_number = str(data.get("documentNumber") or "").strip()
+    purpose = str(data.get("purpose") or "").strip()
+    vin = re.sub(r"[^A-Za-z0-9]", "", str(data.get("vin") or "")).upper()[:17]
+    protocol_number = str(data.get("protocolNumber") or "").strip()[:80]
+
+    try:
+        amount = round(float(data.get("amount")), 2)
+    except (TypeError, ValueError):
+        amount = 0
+
+    if not re.fullmatch(r"KZ[A-Z0-9]{18}", account_iban):
+        return jsonify({"success": False, "error": "Неверный счёт списания"}), 400
+    if len(knp) != 3:
+        return jsonify({"success": False, "error": "КНП должен содержать 3 цифры"}), 400
+    if len(kbk) != 6:
+        return jsonify({"success": False, "error": "КБК должен содержать 6 цифр"}), 400
+    if not _alatau_valid_tax_period(period_start) or not _alatau_valid_tax_period(period_end):
+        return jsonify({
+            "success": False,
+            "error": "Налоговый период укажите в формате ГГГГ-ММ",
+        }), 400
+    if period_start > period_end:
+        return jsonify({
+            "success": False,
+            "error": "Начало налогового периода не может быть позже окончания",
+        }), 400
+    if amount <= 0:
+        return jsonify({"success": False, "error": "Сумма должна быть больше 0"}), 400
+    if not document_number:
+        return jsonify({"success": False, "error": "Укажите номер документа"}), 400
+    if kbk in ("104401", "104402") and not vin:
+        return jsonify({
+            "success": False,
+            "error": "Для КБК 104401/104402 необходимо указать VIN",
+        }), 400
+    if kbk.startswith("204") and not protocol_number:
+        return jsonify({
+            "success": False,
+            "error": "Для КБК 204*** необходимо указать номер протокола",
+        }), 400
+
+    try:
+        client, access_token, bank_company_id, environment = _alatau_live_session(
+            company_id, environment
+        )
+        kbk_name = _alatau_dictionary_name(client, access_token, "KBK", kbk)
+        knp_name = _alatau_dictionary_name(client, access_token, "KNP", knp)
+        if not kbk_name:
+            return jsonify({
+                "success": False,
+                "error": f"КБК {kbk} не найден в справочнике Alatau",
+            }), 400
+
+        description = purpose or ". ".join(
+            value for value in (kbk_name, knp_name) if value
+        )
+        description = description[:480]
+
+        tax = {
+            "periodStart": period_start,
+            "periodEnd": period_end,
+        }
+        if vin:
+            tax["vin"] = vin
+        if protocol_number:
+            tax["protocolNumber"] = protocol_number
+
+        payload = {
+            "type": "TAX",
+            "category": "DOMESTIC",
+            "paymentRecipient": {
+                "iinOrBin": "141040004756",
+                "name": 'РГУ "Комитет государственных доходов Министерства финансов"',
+                "recipientAccount": {
+                    "iban": "KZ24070105KSN0000000",
+                    "bankName": 'РГУ "Комитет казначейства Министерства финансов РК"',
+                    "bic": "KKMFKZ2A",
+                },
+                "kbe": {
+                    "code": "11",
+                },
+            },
+            "details": {
+                "knp": {
+                    "code": knp,
+                    "name": knp_name or None,
+                },
+                "kbk": {
+                    "code": kbk,
+                    "name": kbk_name,
+                },
+                "description": description,
+                "tax": tax,
+                "paymentAmount": {
+                    "amount": amount,
+                    "currency": "KZT",
+                },
+                "urgent": False,
+                "payerIban": account_iban,
+                "documentId": document_number,
+                "factualSender": None,
+            },
+        }
+
+        _alatau_touch(
+            company_id,
+            environment,
+            bank_company_id=bank_company_id,
+            error=None,
+        )
+        return jsonify({
+            "success": True,
+            "environment": environment,
+            "company_id": bank_company_id,
+            "payment_type": "TAX",
+            "payload": payload,
+            "resolved": {
+                "kbkName": kbk_name,
+                "knpName": knp_name,
+                "purpose": description,
+            },
+            "signing_ts_ms": int(time.time() * 1000),
+        })
+    except AlatauError as exc:
+        _alatau_touch(company_id, environment, error=str(exc)[:500])
+        return jsonify({"success": False, "error": str(exc)}), exc.status_code
+
+
 @settings_bp.route("/api/integrations/alatau/payments/draft", methods=["POST"])
 def alatau_payment_draft():
     company_id, error = _alatau_current_company()
@@ -1431,7 +1634,8 @@ def alatau_payment_history():
         cur.execute("""
             SELECT id, operation_id, payment_type, payer_iban,
                    receiver_name, receiver_iin_bin, receiver_iban, receiver_bic,
-                   kbe, knp, amount, currency, document_number, purpose,
+                   kbe, knp, kbk, period_start, period_end, amount, currency,
+                   document_number, purpose,
                    status_code, status_message, bank_status_timestamp,
                    created_at, updated_at
             FROM alatau_payment_history
@@ -1455,6 +1659,9 @@ def alatau_payment_history():
                 "receiverBic": row.get("receiver_bic"),
                 "kbe": row.get("kbe"),
                 "knp": row.get("knp"),
+                "kbk": row.get("kbk"),
+                "periodStart": row.get("period_start"),
+                "periodEnd": row.get("period_end"),
                 "amount": float(row.get("amount")) if row.get("amount") is not None else None,
                 "currency": row.get("currency") or "KZT",
                 "documentNumber": row.get("document_number"),
