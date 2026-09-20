@@ -2,6 +2,12 @@ name: VPS Integration Diagnostics
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/vps-esf-diagnostics.yml"
+      - ".github/diag-trigger.txt"
   push:
     branches:
       - main
@@ -52,6 +58,18 @@ jobs:
           echo "=== TIME ==="
           date -Is
 
+          echo "=== DEPLOYED GIT ==="
+          cd /home/ubuntu/nika-crm
+          printf 'HEAD='
+          git rev-parse HEAD
+          printf 'SHORT='
+          git rev-parse --short HEAD
+          printf 'BRANCH='
+          git branch --show-current
+          printf 'ORIGIN_MAIN='
+          git rev-parse origin/main 2>/dev/null || true
+          git status --short --branch
+
           echo "=== SERVICE ==="
           sudo systemctl status nika-crm --no-pager -l
           sudo systemctl show nika-crm -p ExecStart -p Environment --no-pager
@@ -59,8 +77,8 @@ jobs:
           echo "=== NIKA JOURNAL LAST 30 MIN ==="
           sudo journalctl -u nika-crm --since "30 minutes ago" --no-pager | tail -n 500
 
-          echo "=== ALATAU TRACE ==="
-          sudo journalctl -u nika-crm --since "30 minutes ago" --no-pager | tail -n 500
+          echo "=== ALATAU / ESF TRACE ==="
+          sudo journalctl -u nika-crm --since "45 minutes ago" --no-pager             | grep -Ei "Alatau|signed payment|signature|JWS|ESF|SOAP|SessionService|AuthService|WORKER TIMEOUT|Traceback|ERROR|Exception|Timeout|Connection"             | tail -n 600 || true
 
           echo "=== NGINX ERROR LOG LAST 200 ==="
           sudo tail -n 200 /var/log/nginx/error.log
