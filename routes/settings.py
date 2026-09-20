@@ -1590,6 +1590,8 @@ def alatau_signed_payment():
     content = (data.get("content") or "").strip()
     payment_meta = data.get("payment") if isinstance(data.get("payment"), dict) else {}
     request_id = str(data.get("requestId") or "").strip()
+    if not request_id and content:
+        request_id = "jws-" + hashlib.sha256(content.encode("utf-8")).hexdigest()
     if environment != "production":
         return jsonify({"success": False, "error": "Подписанные платежи разрешены только в Production"}), 400
     if not content:
@@ -1739,6 +1741,7 @@ def alatau_payment_history():
     try:
         cur = conn.cursor()
         _ensure_alatau_payment_history_table(cur)
+        _ensure_alatau_payment_requests_table(cur)
         conn.commit()
 
         if refresh:
