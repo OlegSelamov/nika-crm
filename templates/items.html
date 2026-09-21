@@ -339,7 +339,8 @@
         <form class="catalog-modal__form" id="itemForm" method="post" action="/items/add" enctype="multipart/form-data">
             <div class="catalog-modal__body">
             <div class="catalog-form-grid">
-                <div class="catalog-type-switch">
+                <div class="catalog-type-switch" data-business-mode="{{ business_mode|default('universal') }}">
+                    {% if business_mode != 'foodservice' %}
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="product" id="itemTypeProduct" checked onchange="applyItemType('product')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/product.png" alt=""></span><span class="catalog-type-card__text"><strong>Товар</strong><small>Учитывается на складе</small></span></span>
@@ -348,6 +349,8 @@
                         <input type="radio" name="item_type" value="service" id="itemTypeService" onchange="applyItemType('service')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/service.png" alt=""></span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
                     </label>
+                    {% endif %}
+                    {% if business_mode != 'retail' %}
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="dish" id="itemTypeDish" onchange="applyItemType('dish')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon">🍽</span><span class="catalog-type-card__text"><strong>Блюдо</strong><small>Списывает ингредиенты</small></span></span>
@@ -356,6 +359,7 @@
                         <input type="radio" name="item_type" value="ingredient" id="itemTypeIngredient" onchange="applyItemType('ingredient')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon">🥬</span><span class="catalog-type-card__text"><strong>Ингредиент</strong><small>Сырьё для техкарт</small></span></span>
                     </label>
+                    {% endif %}
                 </div>
 
                 <div class="catalog-dish-note" id="catalogDishNote" hidden>
