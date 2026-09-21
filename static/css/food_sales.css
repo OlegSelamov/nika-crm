@@ -556,3 +556,31 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 @media (min-width: 1500px) {
     .food-menu-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
+
+
+/* Food POS v3 — denser menu cards and single total */
+@media (min-width: 901px) {
+    .food-menu-grid {
+        grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+        gap: 7px;
+    }
+    .food-menu-card { min-height: 112px; }
+    .food-menu-image { height: 58px; padding: 3px; }
+    .food-menu-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center;
+    }
+    .food-menu-info { gap: 3px; padding: 6px 8px 7px; }
+    .food-menu-name { min-height: 27px; font-size: 11.5px; line-height: 1.15; }
+    .food-menu-price { font-size: 14px; line-height: 1.1; }
+    .food-order-total { display: none; }
+}
+
+@media (min-width: 1280px) {
+    .food-menu-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1500px) {
+    .food-menu-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
