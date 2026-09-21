@@ -41,7 +41,8 @@
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('product', this)">Товары</button>
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>{% endif %}
             {% if business_mode != 'retail' %}<button type="button" class="catalog-type-tab {{ 'is-active' if initial_catalog_type=='dish' else '' }}" onclick="setCatalogTypeFilter('dish', this)">Блюда</button>
-            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('ingredient', this)">Ингредиенты</button>{% endif %}
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('ingredient', this)">Ингредиенты</button>
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('semi_finished', this)">Полуфабрикаты</button>{% endif %}
         </div>
 
         <div class="catalog-toolbar">
@@ -358,6 +359,10 @@
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="ingredient" id="itemTypeIngredient" onchange="applyItemType('ingredient')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon">🥬</span><span class="catalog-type-card__text"><strong>Ингредиент</strong><small>Сырьё для техкарт</small></span></span>
+                    </label>
+                    <label class="catalog-type-option">
+                        <input type="radio" name="item_type" value="semi_finished" id="itemTypeSemiFinished" onchange="applyItemType('semi_finished')">
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon">🥣</span><span class="catalog-type-card__text"><strong>Полуфабрикат</strong><small>Заготовка со своей техкартой</small></span></span>
                     </label>
                     {% endif %}
                 </div>
