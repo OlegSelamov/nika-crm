@@ -428,3 +428,7 @@ body.catalog-label-modal-open{overflow:hidden}
 .catalog-recipe-modal.is-open{display:flex!important}
 .catalog-recipe-modal__backdrop{position:fixed!important;inset:0!important;z-index:0!important}
 .catalog-recipe-modal__dialog{position:relative!important;z-index:1!important;margin:auto!important;width:min(720px,calc(100vw - 24px))!important;max-height:calc(100dvh - 24px)!important}
+
+body>.catalog-recipe-modal{position:fixed!important;inset:0!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100dvh!important;z-index:2147483647!important}
+body>.catalog-recipe-modal.is-open{display:flex!important;align-items:center!important;justify-content:center!important}
+body>.catalog-recipe-modal .catalog-recipe-modal__dialog{position:relative!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;transform:none!important;margin:auto!important}
