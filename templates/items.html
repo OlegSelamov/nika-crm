@@ -108,6 +108,9 @@
                                 <button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку"
                                     onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'>▥</button>
                                 {% endif %}
+                                {% if item_type == 'dish' %}
+                                <button class="catalog-icon-btn catalog-recipe-btn" type="button" title="Техкарта" onclick="openRecipeModal({{ i.id }}, {{ (i.name or '')|tojson }})">ТК</button>
+                                {% endif %}
                                 <button class="catalog-icon-btn" type="button" title="Редактировать"
                                     onclick='openEditItemModal({{ {
                                         "id": i.id,
@@ -161,6 +164,7 @@
                 </div>
                 <div class="catalog-mobile-card__actions">
                     {% if item_type == 'product' %}<button type="button" class="catalog-mobile-label-btn" onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-barcode"></use></svg><span>Этикетка</span></button>{% endif %}
+                    {% if item_type == 'dish' %}<button type="button" class="catalog-mobile-recipe-btn" onclick="openRecipeModal({{ i.id }}, {{ (i.name or '')|tojson }})">Техкарта</button>{% endif %}
                     <button type="button" onclick='openEditItemModal({{ {
                         "id": i.id,
                         "name": i.name or "",
@@ -530,6 +534,20 @@
     </div>
 </div>
 
+
+<div class="catalog-recipe-modal" id="recipeModal" aria-hidden="true">
+  <div class="catalog-recipe-modal__backdrop" onclick="closeRecipeModal()"></div>
+  <div class="catalog-recipe-modal__dialog" role="dialog" aria-modal="true">
+    <div class="catalog-modal__head"><div><h3>Техкарта</h3><p id="recipeModalDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeRecipeModal()">×</button></div>
+    <div class="catalog-recipe-modal__body">
+      <div class="catalog-recipe-head"><div><strong>Состав блюда</strong><small>Норма ингредиентов на 1 порцию</small></div><button type="button" class="catalog-secondary-btn" onclick="addRecipeIngredient()">+ Ингредиент</button></div>
+      <div id="recipeModalRows"></div>
+      <div class="catalog-recipe-summary"><span>Себестоимость порции</span><strong id="recipeModalCost">0 ₸</strong></div>
+      <div class="catalog-recipe-status" id="recipeModalStatus"></div>
+    </div>
+    <div class="catalog-modal__footer"><button type="button" class="catalog-secondary-btn" onclick="closeRecipeModal()">Закрыть</button><button type="button" class="catalog-primary-btn" onclick="saveRecipeFromModal()">Сохранить техкарту</button></div>
+  </div>
+</div>
 
 <div class="category-manager" id="categoryManager" aria-hidden="true">
     <div class="category-manager__dialog" role="dialog" aria-modal="true">
