@@ -47,7 +47,7 @@
 
     async function fetchFoodItemsPage(page) {
         const response = await fetch(
-            `/api/catalog/items?type=product&limit=${PAGE_SIZE}&page=${page}`
+            `/api/catalog/items?type=dish&limit=${PAGE_SIZE}&page=${page}`
         );
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
