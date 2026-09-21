@@ -2123,6 +2123,51 @@ def catalog_enrichment_apply():
         pool.putconn(conn)
 
 
+@items_bp.route("/api/items/<int:item_id>/modifiers", methods=["GET", "PUT"])
+def api_item_modifiers(item_id):
+    company_id=session.get("company_id"); conn=get_db(); cur=conn.cursor()
+    try:
+        cur.execute("SELECT id,name FROM items WHERE id=%s AND company_id=%s AND item_type='dish'",(item_id,company_id))
+        dish=cur.fetchone()
+        if not dish: return jsonify({"success":False,"message":"Блюдо не найдено"}),404
+        if request.method=="GET":
+            cur.execute("""SELECT g.id group_id,g.name group_name,g.min_select,g.max_select,
+                          m.id,m.name,m.price_delta,m.ingredient_item_id,m.ingredient_quantity,
+                          i.name ingredient_name,i.unit ingredient_unit
+                          FROM dish_modifier_groups g LEFT JOIN dish_modifiers m ON m.group_id=g.id AND m.active=TRUE
+                          LEFT JOIN items i ON i.id=m.ingredient_item_id
+                          WHERE g.company_id=%s AND g.dish_item_id=%s ORDER BY g.sort_order,g.id,m.sort_order,m.id""",(company_id,item_id))
+            groups=[]
+            for row in cur.fetchall():
+                group=next((x for x in groups if x["id"]==row["group_id"]),None)
+                if not group:
+                    group={"id":row["group_id"],"name":row["group_name"],"min_select":row["min_select"],"max_select":row["max_select"],"options":[]}; groups.append(group)
+                if row["id"]:
+                    group["options"].append({"id":row["id"],"name":row["name"],"price_delta":float(row["price_delta"] or 0),"ingredient_item_id":row["ingredient_item_id"],"ingredient_quantity":float(row["ingredient_quantity"] or 0),"ingredient_name":row["ingredient_name"],"ingredient_unit":row["ingredient_unit"]})
+            return jsonify({"success":True,"item":dict(dish),"groups":groups})
+        payload=request.get_json(silent=True) or {}; groups=payload.get("groups") or []
+        cur.execute("DELETE FROM dish_modifier_groups WHERE company_id=%s AND dish_item_id=%s",(company_id,item_id))
+        for gi,g in enumerate(groups):
+            name=str(g.get("name") or "").strip()
+            if not name: continue
+            min_s=max(0,int(g.get("min_select") or 0)); max_s=max(1,int(g.get("max_select") or 1))
+            cur.execute("INSERT INTO dish_modifier_groups(company_id,dish_item_id,name,min_select,max_select,sort_order) VALUES(%s,%s,%s,%s,%s,%s) RETURNING id",(company_id,item_id,name,min_s,max_s,gi)); gid=cur.fetchone()["id"]
+            for oi,o in enumerate(g.get("options") or []):
+                oname=str(o.get("name") or "").strip()
+                if not oname: continue
+                price=Decimal(str(o.get("price_delta") or 0)); ing=o.get("ingredient_item_id") or None; qty=Decimal(str(o.get("ingredient_quantity") or 0))
+                if ing:
+                    cur.execute("SELECT id FROM items WHERE id=%s AND company_id=%s AND item_type IN ('ingredient','semi_finished')",(int(ing),company_id))
+                    if not cur.fetchone(): return jsonify({"success":False,"message":"Ингредиент модификатора не найден"}),400
+                cur.execute("""INSERT INTO dish_modifiers(company_id,group_id,name,price_delta,ingredient_item_id,ingredient_quantity,sort_order)
+                               VALUES(%s,%s,%s,%s,%s,%s,%s)""",(company_id,gid,oname,price,ing,qty,oi))
+        conn.commit(); return jsonify({"success":True})
+    except Exception:
+        conn.rollback(); raise
+    finally:
+        cur.close(); pool.putconn(conn)
+
+
 @items_bp.route("/api/items/<int:item_id>/recipe", methods=["GET", "PUT"])
 def api_item_recipe(item_id):
     company_id = session.get("company_id")
