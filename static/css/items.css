@@ -381,3 +381,19 @@ body.catalog-label-modal-open{overflow:hidden}
 
 /* Dish editor */
 .catalog-dish-note{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #ddd6fe;background:#f5f3ff;border-radius:10px;color:#5b21b6;font-size:12px}.catalog-dish-note[hidden]{display:none}.catalog-dish-note strong{white-space:nowrap;font-size:13px}.catalog-item-type--dish{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
+
+
+/* Dish tech card */
+.catalog-type-switch{grid-template-columns:repeat(3,minmax(0,1fr))}
+.catalog-recipe-editor{grid-column:1/-1;border:1px solid #e2e7ef;border-radius:16px;padding:16px;background:#fafbfc}
+.catalog-recipe-editor[hidden]{display:none!important}
+.catalog-recipe-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.catalog-recipe-head strong{display:block;font-size:15px}.catalog-recipe-head small{display:block;color:#7c8495;margin-top:3px}
+.catalog-recipe-row{display:grid;grid-template-columns:minmax(190px,1.5fr) minmax(130px,.7fr) minmax(150px,.8fr) 34px;gap:9px;align-items:center;padding:9px 0;border-bottom:1px solid #edf0f4}
+.catalog-recipe-row select,.catalog-recipe-row input{width:100%;box-sizing:border-box;border:1px solid #dfe3eb;border-radius:10px;padding:9px;background:#fff}
+.catalog-recipe-qty{display:flex;align-items:center;gap:7px}.catalog-recipe-qty span{font-size:12px;font-weight:800;min-width:28px}
+.catalog-recipe-price small,.catalog-recipe-price strong{display:block}.catalog-recipe-price small{color:#7d8493;font-size:10px}.catalog-recipe-price strong{margin-top:3px;font-size:13px}
+.catalog-recipe-remove{border:0;background:#fff0f0;color:#bd4545;border-radius:9px;width:32px;height:32px;font-size:20px;cursor:pointer}
+.catalog-recipe-summary{display:flex;justify-content:space-between;align-items:center;padding:13px 0;font-size:14px}.catalog-recipe-summary strong{font-size:18px}
+.catalog-recipe-empty{padding:18px;text-align:center;color:#858c9b;background:#fff;border-radius:12px}.catalog-recipe-status{font-size:12px;margin:0 0 10px}.catalog-recipe-status.is-success{color:#168c56}.catalog-recipe-status.is-error{color:#b43e3e}
+@media(max-width:700px){.catalog-type-switch{grid-template-columns:1fr}.catalog-recipe-row{grid-template-columns:1fr}.catalog-recipe-remove{width:100%}}
