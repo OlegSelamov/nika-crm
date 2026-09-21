@@ -472,6 +472,14 @@ function applyItemType(type) {
     if (purchaseLabel) purchaseLabel.textContent = type === "service" ? "Закупочная стоимость, ₸" : "Закупочная цена, ₸";
     var purchasePriceField = document.getElementById("itemPurchasePriceField");
     var purchasePriceInput = document.getElementById("itemPurchasePrice");
+    var retailPriceField = document.getElementById("itemRetailPriceField");
+    var retailPriceInput = document.getElementById("itemRetailPrice");
+    if (retailPriceField) retailPriceField.hidden = type === "ingredient";
+    if (retailPriceInput) {
+        retailPriceInput.disabled = type === "ingredient";
+        retailPriceInput.required = type !== "ingredient";
+        if (type === "ingredient") retailPriceInput.value = "0";
+    }
     if (purchasePriceField) purchasePriceField.hidden = type === "dish";
     if (purchasePriceInput) {
         purchasePriceInput.disabled = type === "dish";
