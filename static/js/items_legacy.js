@@ -1,25 +1,44 @@
+var itemUnitMasterOptions = null;
+
 function updateUnitOptionsForItemType(type) {
     var select = document.getElementById('itemUnit');
     if (!select) return;
+
+    if (!itemUnitMasterOptions) {
+        itemUnitMasterOptions = Array.from(select.options).map(function(option) {
+            return { value: option.value, text: option.textContent, group: option.parentElement && option.parentElement.tagName === 'OPTGROUP' ? option.parentElement.label : '' };
+        });
+    }
+
     var allowed = type === 'dish' ? ['порция','шт']
         : type === 'ingredient' ? ['шт','кг','мг','л','мл']
         : type === 'service' ? ['услуга','час','день','неделя','месяц','год','смена','человек','место','пассажир','рейс','тур']
         : ['шт','пар','компл','набор','упак','пач','кор','бут','кан','рул','кг','г','мг','т','л','мл','м','см','мм','м²','м³'];
-    Array.from(select.options).forEach(function(option) {
-        var visible = allowed.indexOf(option.value) !== -1;
-        option.hidden = !visible;
-        option.disabled = !visible;
-        option.style.display = visible ? '' : 'none';
+
+    var previous = select.value;
+    select.innerHTML = '';
+    var groups = Object.create(null);
+
+    itemUnitMasterOptions.forEach(function(item) {
+        if (allowed.indexOf(item.value) === -1) return;
+        var parent = select;
+        if (item.group) {
+            if (!groups[item.group]) {
+                groups[item.group] = document.createElement('optgroup');
+                groups[item.group].label = item.group;
+                select.appendChild(groups[item.group]);
+            }
+            parent = groups[item.group];
+        }
+        var option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.text;
+        parent.appendChild(option);
     });
-    Array.from(select.querySelectorAll('optgroup')).forEach(function(group) {
-        var hasVisible = Array.from(group.querySelectorAll('option')).some(function(option) {
-            return allowed.indexOf(option.value) !== -1;
-        });
-        group.hidden = !hasVisible;
-        group.disabled = !hasVisible;
-        group.style.display = hasVisible ? '' : 'none';
-    });
-    if (allowed.indexOf(select.value) === -1) {
+
+    if (allowed.indexOf(previous) !== -1) {
+        select.value = previous;
+    } else {
         select.value = type === 'dish' ? 'порция' : (type === 'ingredient' ? 'кг' : (type === 'service' ? 'услуга' : 'шт'));
     }
 }
