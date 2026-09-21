@@ -833,7 +833,7 @@ def users():
                 "salary_type": row.get("salary_type") or "fixed",
                 "bank_iban": row.get("bank_iban") or "",
                 "salary": str(profile.get("salary") or 0),
-                "employee_tax_active": bool(profile.get("is_active")) if profile else False,
+                "employee_tax_active": bool(profile.get("is_active")) if profile else True,
                 "use_standard_deduction": bool(profile.get("use_standard_deduction")) if profile else True,
                 "is_pensioner": bool(profile.get("is_pensioner")) if profile else False,
                 "is_exempt_vosms": bool(profile.get("is_exempt_vosms")) if profile else False,
