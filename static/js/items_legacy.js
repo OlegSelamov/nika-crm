@@ -467,6 +467,13 @@ function applyItemType(type) {
             : "Описание будет показано клиенту в карточке товара на онлайн-витрине.";
     }
     if (purchaseLabel) purchaseLabel.textContent = type === "service" ? "Закупочная стоимость, ₸" : "Закупочная цена, ₸";
+    var purchasePriceField = document.getElementById("itemPurchasePriceField");
+    var purchasePriceInput = document.getElementById("itemPurchasePrice");
+    if (purchasePriceField) purchasePriceField.hidden = type === "dish";
+    if (purchasePriceInput) {
+        purchasePriceInput.disabled = type === "dish";
+        if (type === "dish") purchasePriceInput.value = "0";
+    }
     if (retailLabel) retailLabel.textContent = type === "service" ? "Цена услуги, ₸ *" : (type === "dish" ? "Цена блюда, ₸ *" : "Розничная цена, ₸ *");
     if (subtitle) subtitle.textContent = type === "service" ? "Основные данные услуги, цена и штрихкод" : (type === "dish" ? "Позиция меню общепита; ингредиенты настраиваются в техкарте" : "Основные данные товара и идентификаторы маркировки");
     if (submitButton) submitButton.textContent = type === "service" ? "Сохранить услугу" : (type === "dish" ? "Сохранить блюдо" : "Сохранить товар");
