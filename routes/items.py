@@ -81,7 +81,7 @@ def _ensure_item_images_main(cur):
 
 def _item_barcode(cur, value, item_type="product"):
     barcode = str(value or "").strip()
-    if barcode or item_type == "service":
+    if barcode or item_type in {"service", "dish", "ingredient"}:
         return barcode
     return _generate_internal_barcode(cur)
 
@@ -230,7 +230,7 @@ def api_catalog_items():
     where = ["items.company_id = %s"]
     params = [company_id]
 
-    if item_type in ("product", "service", "dish"):
+    if item_type in ("product", "service", "dish", "ingredient"):
         where.append("COALESCE(items.item_type, 'product') = %s")
         params.append(item_type)
 
@@ -446,7 +446,7 @@ def add_item():
     if request.method == "POST":
 
         company_id = session.get("company_id")
-        item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish"} else "product"
+        item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish", "ingredient"} else "product"
         barcode = _item_barcode(cur, request.form.get("barcode"), item_type)
 
         cur.execute("""
@@ -543,7 +543,7 @@ def edit_item(item_id):
     cur = conn.cursor()
 
     if request.method == "POST":
-        item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish"} else "product"
+        item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish", "ingredient"} else "product"
         barcode = _item_barcode(cur, request.form.get("barcode"), item_type)
         cur.execute("""
             UPDATE items
@@ -2118,7 +2118,7 @@ def api_item_recipe(item_id):
 
         if normalized:
             ids = [value[0] for value in normalized]
-            cur.execute("SELECT id FROM items WHERE company_id = %s AND id = ANY(%s)", (company_id, ids))
+            cur.execute("SELECT id FROM items WHERE company_id = %s AND COALESCE(item_type, 'product') = 'ingredient' AND id = ANY(%s)", (company_id, ids))
             existing = {row["id"] for row in cur.fetchall()}
             if existing != set(ids):
                 return jsonify({"success": False, "message": "Один из ингредиентов не найден"}), 400
