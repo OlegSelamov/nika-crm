@@ -110,8 +110,8 @@
                                     onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'>▥</button>
                                 {% endif %}
                                 {% if item_type == 'dish' %}
-                                <button class="catalog-icon-btn catalog-recipe-btn" type="button" title="Техкарта" onclick="openRecipeModal({{ i.id }}, {{ (i.name or '')|tojson }})">ТК</button>
-                                <button class="catalog-icon-btn catalog-modifier-btn" type="button" title="Модификаторы" onclick="openModifierManager({{ i.id }}, {{ (i.name or '')|tojson }})">М</button>
+                                <button class="catalog-icon-btn catalog-recipe-btn" type="button" title="Техкарта" data-catalog-recipe-direct="{{ i.id }}" data-item-name="{{ i.name|e }}">ТК</button>
+                                <button class="catalog-icon-btn catalog-modifier-btn" type="button" title="Модификаторы" data-catalog-modifier-direct="{{ i.id }}" data-item-name="{{ i.name|e }}">М</button>
                                 {% endif %}
                                 <button class="catalog-icon-btn" type="button" title="Редактировать"
                                     onclick='openEditItemModal({{ {
@@ -697,5 +697,13 @@
 
 {% block page_js %}
 
-<script charset="UTF-8" src="{{ url_for('static', filename='js/items.js') }}?v=20260922-modifiers-2"></script>
+<script>
+document.addEventListener('click', function(e){
+  var recipe=e.target.closest('[data-catalog-recipe-direct]');
+  if(recipe){e.preventDefault();e.stopPropagation();if(typeof window.openRecipeModal==='function')window.openRecipeModal(recipe.dataset.catalogRecipeDirect,recipe.dataset.itemName||'Блюдо');return;}
+  var modifier=e.target.closest('[data-catalog-modifier-direct]');
+  if(modifier){e.preventDefault();e.stopPropagation();if(typeof window.openModifierManager==='function')window.openModifierManager(modifier.dataset.catalogModifierDirect,modifier.dataset.itemName||'Блюдо');}
+});
+</script>
+<script charset="UTF-8" src="{{ url_for('static', filename='js/items.js') }}?v=20260922-actions-fix-4"></script>
 {% endblock %}
