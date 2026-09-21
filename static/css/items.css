@@ -377,3 +377,7 @@ body.catalog-label-modal-open{overflow:hidden}
 .nika-data-modal__close .nika-ui-icon,.catalog-label-modal .nika-data-modal__close .nika-ui-icon{width:18px;height:18px}
 .catalog-mobile-label-btn{display:inline-flex!important;align-items:center;justify-content:center;gap:7px}.catalog-mobile-label-btn .nika-ui-icon{width:16px;height:16px}
 .catalog-label-footer .nika-data-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px}.catalog-label-footer .nika-ui-icon{width:17px;height:17px}
+
+
+/* Dish editor */
+.catalog-dish-note{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #ddd6fe;background:#f5f3ff;border-radius:10px;color:#5b21b6;font-size:12px}.catalog-dish-note[hidden]{display:none}.catalog-dish-note strong{white-space:nowrap;font-size:13px}.catalog-item-type--dish{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
