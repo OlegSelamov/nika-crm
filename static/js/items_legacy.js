@@ -424,10 +424,10 @@ function filterItemCategoryOptions(type) {
 }
 
 function applyItemType(type) {
-    type = type === "service" ? "service" : "product";
+    type = ["product", "service", "dish"].includes(type) ? type : "product";
     var modal = document.getElementById("itemModal");
     var productRadio = document.getElementById("itemTypeProduct");
-    var serviceRadio = document.getElementById("itemTypeService");
+    var serviceRadio = document.getElementById("itemTypeService");\n    var dishRadio = document.getElementById("itemTypeDish");
     var subtitle = document.getElementById("itemModalSubtitle");
     var nameLabel = document.getElementById("itemNameLabel");
     var nameInput = document.getElementById("itemName");
@@ -435,9 +435,9 @@ function applyItemType(type) {
     var retailLabel = document.getElementById("itemRetailPriceLabel");
     var submitButton = document.getElementById("itemSubmitButton");
     if (productRadio) productRadio.checked = type === "product";
-    if (serviceRadio) serviceRadio.checked = type === "service";
-    if (modal) modal.classList.toggle("is-service", type === "service");
-    filterItemCategoryOptions(type);
+    if (serviceRadio) serviceRadio.checked = type === "service";\n    if (dishRadio) dishRadio.checked = type === "dish";
+    if (modal) modal.classList.toggle("is-service", type === "service");\n    if (modal) modal.classList.toggle("is-dish", type === "dish");
+    filterItemCategoryOptions(type === "dish" ? "product" : type);
 
     var unitSelect = document.getElementById("itemUnit");
     if (unitSelect) {
@@ -445,7 +445,7 @@ function applyItemType(type) {
         if (type === "product" && unitSelect.value === "услуга") unitSelect.value = "шт";
     }
 
-    if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : "Название товара *";
+    if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : (type === "dish" ? "Название блюда *" : "Название товара *");
     if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : "Например: Молоко 3,2%";
     var descriptionLabel = document.getElementById("itemDescriptionLabel");
     var descriptionInput = document.getElementById("itemDescription");
@@ -462,9 +462,9 @@ function applyItemType(type) {
             : "Описание будет показано клиенту в карточке товара на онлайн-витрине.";
     }
     if (purchaseLabel) purchaseLabel.textContent = type === "service" ? "Закупочная стоимость, ₸" : "Закупочная цена, ₸";
-    if (retailLabel) retailLabel.textContent = type === "service" ? "Цена услуги, ₸ *" : "Розничная цена, ₸ *";
-    if (subtitle) subtitle.textContent = type === "service" ? "Основные данные услуги, цена и штрихкод" : "Основные данные товара и идентификаторы маркировки";
-    if (submitButton) submitButton.textContent = type === "service" ? "Сохранить услугу" : "Сохранить товар";
+    if (retailLabel) retailLabel.textContent = type === "service" ? "Цена услуги, ₸ *" : (type === "dish" ? "Цена блюда, ₸ *" : "Розничная цена, ₸ *");
+    if (subtitle) subtitle.textContent = type === "service" ? "Основные данные услуги, цена и штрихкод" : (type === "dish" ? "Позиция меню общепита; ингредиенты настраиваются в техкарте" : "Основные данные товара и идентификаторы маркировки");
+    if (submitButton) submitButton.textContent = type === "service" ? "Сохранить услугу" : (type === "dish" ? "Сохранить блюдо" : "Сохранить товар");
 
     var barcodeButton = document.getElementById("barcodeSearchButton");
     if (barcodeButton) {
