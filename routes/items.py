@@ -489,6 +489,47 @@ def add_item():
 
         item_id = cur.fetchone()["id"]
 
+        if item_type == "ingredient":
+            opening_quantity = Decimal(str(request.form.get("opening_quantity") or 0))
+            purchase_price = Decimal(str(request.form.get("purchase_price") or 0))
+            if opening_quantity > 0:
+                cur.execute("UPDATE items SET quantity = %s WHERE id = %s AND company_id = %s", (opening_quantity, item_id, company_id))
+                _record_opening_balance(
+                    cur,
+                    company_id=company_id,
+                    user_id=session.get("user_id"),
+                    item_id=item_id,
+                    item_name=request.form.get("name", ""),
+                    quantity=opening_quantity,
+                    purchase_price=purchase_price,
+                    payment_method=request.form.get("opening_payment_method") or "Другое",
+                )
+
+        if item_type == "dish":
+            try:
+                recipe_values = json.loads(request.form.get("recipe_json") or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                recipe_values = []
+            seen_recipe_ids = set()
+            for value in recipe_values:
+                try:
+                    ingredient_id = int(value.get("item_id"))
+                    recipe_quantity = Decimal(str(value.get("quantity") or 0))
+                except (TypeError, ValueError, InvalidOperation):
+                    continue
+                if ingredient_id in seen_recipe_ids or recipe_quantity <= 0:
+                    continue
+                cur.execute("SELECT id FROM items WHERE id=%s AND company_id=%s AND COALESCE(item_type,'product')='ingredient'", (ingredient_id, company_id))
+                if not cur.fetchone():
+                    continue
+                seen_recipe_ids.add(ingredient_id)
+                cur.execute("""
+                    INSERT INTO item_recipes (company_id, item_id, ingredient_item_id, quantity)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (company_id, item_id, ingredient_item_id)
+                    DO UPDATE SET quantity = EXCLUDED.quantity
+                """, (company_id, item_id, ingredient_id, recipe_quantity))
+
         # Медиа хранится через единый сервис: R2 в production,
         # локальный диск остаётся безопасным fallback до настройки ключей.
         _ensure_item_images_main(cur)
