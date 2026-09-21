@@ -6,6 +6,7 @@
 {% endblock %}
 
 {% block content %}
+<script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};</script>
 
 <div class="sales-page">
 <section class="shift-strip" id="shiftStrip" aria-label="Смена reKassa">
@@ -23,10 +24,14 @@
 		<button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" title="Обновить смену" aria-label="Обновить смену">↻</button>
 	</div>
 </section>
+{% if business_mode == 'universal' %}
 <div class="sales-mode-switch" role="tablist" aria-label="Режим продаж">
 	<button type="button" id="salesModeRetail" class="active" role="tab" aria-selected="true">Розница</button>
 	<button type="button" id="salesModeFood" role="tab" aria-selected="false">Общепит</button>
 </div>
+{% else %}
+<div hidden id="salesBusinessMode" data-mode="{{ business_mode }}"></div>
+{% endif %}
 
 <div class="sales-grid">
 
