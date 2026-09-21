@@ -397,3 +397,6 @@ body.catalog-label-modal-open{overflow:hidden}
 .catalog-recipe-summary{display:flex;justify-content:space-between;align-items:center;padding:13px 0;font-size:14px}.catalog-recipe-summary strong{font-size:18px}
 .catalog-recipe-empty{padding:18px;text-align:center;color:#858c9b;background:#fff;border-radius:12px}.catalog-recipe-status{font-size:12px;margin:0 0 10px}.catalog-recipe-status.is-success{color:#168c56}.catalog-recipe-status.is-error{color:#b43e3e}
 @media(max-width:700px){.catalog-type-switch{grid-template-columns:1fr}.catalog-recipe-row{grid-template-columns:1fr}.catalog-recipe-remove{width:100%}}
+
+#itemPurchasePriceField[hidden]{display:none!important}
+.catalog-modal.is-dish #itemPurchasePriceField{display:none!important}
