@@ -104,7 +104,7 @@
                         <td><span class="catalog-unit">{{ i.unit or 'шт' }}</span></td>
                         <td>
                             <div class="catalog-actions">
-                                {% if item_type == 'product' %}
+                                {% if item_type in ['product', 'dish'] %}
                                 <button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку"
                                     onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'>▥</button>
                                 {% endif %}
@@ -163,7 +163,7 @@
                     <div><small>NTIN</small>{{ i.ntin or '—' }}</div>
                 </div>
                 <div class="catalog-mobile-card__actions">
-                    {% if item_type == 'product' %}<button type="button" class="catalog-mobile-label-btn" onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-barcode"></use></svg><span>Этикетка</span></button>{% endif %}
+                    {% if item_type in ['product', 'dish'] %}<button type="button" class="catalog-mobile-label-btn" onclick='openQuickLabel({{ {"id": i.id, "name": i.name or "", "barcode": i.barcode or "", "retail_price": i.retail_price or 0, "unit": i.unit or "шт", "item_type": item_type}|tojson }})'><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-barcode"></use></svg><span>Этикетка</span></button>{% endif %}
                     {% if item_type == 'dish' %}<button type="button" class="catalog-mobile-recipe-btn" onclick="openRecipeModal({{ i.id }}, {{ (i.name or '')|tojson }})">Техкарта</button>{% endif %}
                     <button type="button" onclick='openEditItemModal({{ {
                         "id": i.id,
