@@ -454,6 +454,8 @@ function applyItemType(type) {
     filterItemCategoryOptions(type === "dish" ? "product" : type);
     var dishNote = document.getElementById("catalogDishNote");
     if (dishNote) dishNote.hidden = type !== "dish";
+    var ingredientOpening = document.getElementById("catalogIngredientOpening");
+    if (ingredientOpening) ingredientOpening.hidden = type !== "ingredient";
 
     var unitSelect = document.getElementById("itemUnit");
     if (unitSelect) {
@@ -701,6 +703,9 @@ document.addEventListener('DOMContentLoaded', function () {
 function openAddItemModal() {
     activeRecipeDishId = null;
     recipeIngredients = [];
+    recipeProductOptions = [];
+    var recipeJson = document.getElementById('itemRecipeJson');
+    if (recipeJson) recipeJson.value = '[]';
     setRecipeEditorVisible(false);
     var form = document.getElementById('itemForm');
     form.reset();
@@ -2074,3 +2079,37 @@ renderRecipeRows=function(){ _nikaRecipeRenderRows(); renderRecipeModalRows(); }
 var _nikaRecipeUpdateCost=updateRecipeCost;
 updateRecipeCost=function(){ _nikaRecipeUpdateCost(); var cost=document.getElementById('recipeCost'), modalCost=document.getElementById('recipeModalCost'); if(cost&&modalCost)modalCost.textContent=cost.textContent; };
 async function saveRecipeFromModal(){ await saveItemRecipe(); var src=document.getElementById('recipeStatus'), dst=document.getElementById('recipeModalStatus'); if(src&&dst)dst.textContent=src.textContent; }
+
+async function openDraftRecipeModal() {
+    activeRecipeDishId = null;
+    recipeIngredients = recipeIngredients || [];
+    var modal=document.getElementById('recipeModal'), name=document.getElementById('recipeModalDishName');
+    if(name) name.textContent=(document.getElementById('itemName')||{}).value || 'Новое блюдо';
+    if(modal){modal.classList.add('is-open');modal.setAttribute('aria-hidden','false');}
+    try {
+        var response=await fetch('/api/catalog/items?type=ingredient&page=1&limit=100',{headers:{'Accept':'application/json'}});
+        var data=await response.json();
+        recipeProductOptions=Array.isArray(data.items)?data.items:[];
+        renderRecipeRows();
+    } catch(error) {
+        var status=document.getElementById('recipeModalStatus');
+        if(status) status.textContent='Не удалось загрузить ингредиенты';
+    }
+}
+function syncDraftRecipeJson(){
+    var field=document.getElementById('itemRecipeJson');
+    if(field) field.value=JSON.stringify(recipeIngredients.filter(function(row){return Number(row.item_id)>0&&Number(row.quantity)>0;}).map(function(row){return {item_id:Number(row.item_id),quantity:Number(row.quantity)};}));
+}
+var _nikaAddRecipeIngredient=addRecipeIngredient;
+addRecipeIngredient=function(){ if(activeRecipeDishId){_nikaAddRecipeIngredient();return;} recipeIngredients.push({item_id:0,name:'',unit:'шт',quantity:1,purchase_price:0}); renderRecipeRows(); syncDraftRecipeJson(); };
+var _nikaRemoveRecipeIngredient=removeRecipeIngredient;
+removeRecipeIngredient=function(index){_nikaRemoveRecipeIngredient(index);syncDraftRecipeJson();};
+var _nikaUpdateRecipeIngredient=updateRecipeIngredient;
+updateRecipeIngredient=function(index,itemId){_nikaUpdateRecipeIngredient(index,itemId);syncDraftRecipeJson();};
+var _nikaUpdateRecipeQuantity=updateRecipeQuantity;
+updateRecipeQuantity=function(index,value){_nikaUpdateRecipeQuantity(index,value);syncDraftRecipeJson();};
+var _nikaSaveRecipeFromModal=saveRecipeFromModal;
+saveRecipeFromModal=async function(){
+    if(!activeRecipeDishId){syncDraftRecipeJson();var status=document.getElementById('recipeModalStatus');if(status)status.textContent='Техкарта подготовлена — сохранится вместе с блюдом';setTimeout(closeRecipeModal,450);return;}
+    await _nikaSaveRecipeFromModal();
+};
