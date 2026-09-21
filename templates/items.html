@@ -37,9 +37,9 @@
              data-total="{{ catalog_total|default(items|length) }}"
              data-page-size="{{ catalog_page_size|default(50) }}">
         <div class="catalog-type-tabs" data-business-mode="{{ business_mode|default('universal') }}" data-initial-type="{{ initial_catalog_type|default('all') }}">
-            {% if business_mode != 'foodservice' %}<button type="button" class="catalog-type-tab {{ 'is-active' if initial_catalog_type=='all' else '' }}" onclick="setCatalogTypeFilter('all', this)">Все</button>
+            <button type="button" class="catalog-type-tab {{ 'is-active' if initial_catalog_type=='all' else '' }}" onclick="setCatalogTypeFilter('all', this)">Все</button>
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('product', this)">Товары</button>
-            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>{% endif %}
+            {% if business_mode != 'foodservice' %}<button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>{% endif %}
             {% if business_mode != 'retail' %}<button type="button" class="catalog-type-tab {{ 'is-active' if initial_catalog_type=='dish' else '' }}" onclick="setCatalogTypeFilter('dish', this)">Блюда</button>
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('ingredient', this)">Ингредиенты</button>
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('semi_finished', this)">Полуфабрикаты</button>{% endif %}
@@ -342,11 +342,11 @@
             <div class="catalog-modal__body">
             <div class="catalog-form-grid">
                 <div class="catalog-type-switch" data-business-mode="{{ business_mode|default('universal') }}">
-                    {% if business_mode != 'foodservice' %}
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="product" id="itemTypeProduct" checked onchange="applyItemType('product')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/product.png" alt=""></span><span class="catalog-type-card__text"><strong>Товар</strong><small>Учитывается на складе</small></span></span>
                     </label>
+                    {% if business_mode != 'foodservice' %}
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="service" id="itemTypeService" onchange="applyItemType('service')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/service.png" alt=""></span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
