@@ -400,3 +400,5 @@ body.catalog-label-modal-open{overflow:hidden}
 
 #itemPurchasePriceField[hidden]{display:none!important}
 .catalog-modal.is-dish #itemPurchasePriceField{display:none!important}
+
+.catalog-modal.is-dish .catalog-dish-hide{display:none!important}
