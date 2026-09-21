@@ -837,6 +837,12 @@ def _ensure_tax_tables(cur):
             UNIQUE(company_id, user_id)
         )
     """)
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS iin TEXT")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS hire_date DATE")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS dismissal_date DATE")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS employment_type TEXT DEFAULT 'full_time'")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS salary_type TEXT DEFAULT 'fixed'")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS bank_iban TEXT")
     cur.execute("ALTER TABLE accounting_debts ADD COLUMN IF NOT EXISTS tax_key TEXT")
     cur.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_debts_tax_key
@@ -906,12 +912,23 @@ def _calculate_taxes(cur, company_id, period):
     owner_opvr = owner_base * float(settings['employer_opvr_rate'] or 0) / 100 if settings['include_owner_opvr'] else 0
 
     cur.execute("""
-        SELECT p.*, COALESCE(u.full_name,u.username) AS employee_name
+        SELECT
+            p.*,
+            COALESCE(u.full_name,u.username) AS employee_name,
+            u.hire_date,
+            u.dismissal_date,
+            u.employment_type,
+            u.salary_type,
+            u.iin,
+            u.bank_iban
         FROM employee_tax_profiles p
         JOIN users u ON u.id=p.user_id
-        WHERE p.company_id=%s AND p.is_active=TRUE
+        WHERE p.company_id=%s
+          AND p.is_active=TRUE
+          AND (u.hire_date IS NULL OR u.hire_date <= %s)
+          AND (u.dismissal_date IS NULL OR u.dismissal_date >= %s)
         ORDER BY employee_name
-    """, (company_id,))
+    """, (company_id, end, start))
     employees=[]
     totals={'opv':0,'vosms':0,'ipn':0,'so':0,'osms':0,'opvr':0,'salary':0}
     for row in cur.fetchall():
@@ -923,7 +940,24 @@ def _calculate_taxes(cur, company_id, period):
         so=salary*float(settings['employer_so_rate'] or 0)/100
         osms=0 if row['is_exempt_vosms'] else salary*float(settings['employer_osms_rate'] or 0)/100
         opvr=0 if row['is_pensioner'] else salary*float(settings['employer_opvr_rate'] or 0)/100
-        item={'user_id':row['user_id'],'name':row['employee_name'],'salary':salary,'opv':opv,'vosms':vosms,'ipn':ipn,'so':so,'osms':osms,'opvr':opvr,'net_salary':salary-opv-vosms-ipn}
+        item={
+            'user_id':row['user_id'],
+            'name':row['employee_name'],
+            'iin':row.get('iin') or '',
+            'employment_type':row.get('employment_type') or 'full_time',
+            'salary_type':row.get('salary_type') or 'fixed',
+            'bank_iban':row.get('bank_iban') or '',
+            'hire_date':row.get('hire_date'),
+            'dismissal_date':row.get('dismissal_date'),
+            'salary':salary,
+            'opv':opv,
+            'vosms':vosms,
+            'ipn':ipn,
+            'so':so,
+            'osms':osms,
+            'opvr':opvr,
+            'net_salary':salary-opv-vosms-ipn
+        }
         employees.append(item)
         for k in totals: totals[k]+=item.get(k,0)
 

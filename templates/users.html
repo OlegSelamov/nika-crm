@@ -505,6 +505,116 @@
                     </select>
                 </label>
 
+                <section class="employee-accounting-card user-field--wide">
+                    <div class="employee-accounting-card__head">
+                        <div>
+                            <strong>Кадры и расчёты</strong>
+                            <small>Эти данные используются в зарплате, налогах и бухгалтерии</small>
+                        </div>
+                    </div>
+
+                    <div class="employee-accounting-grid">
+                        <label class="user-field">
+                            <span>ИИН сотрудника</span>
+                            <input name="iin"
+                                   inputmode="numeric"
+                                   maxlength="12"
+                                   placeholder="12 цифр">
+                        </label>
+
+                        <label class="user-field">
+                            <span>Дата приёма</span>
+                            <input name="hire_date" type="date">
+                        </label>
+
+                        <label class="user-field">
+                            <span>Дата увольнения</span>
+                            <input name="dismissal_date" type="date">
+                        </label>
+
+                        <label class="user-field">
+                            <span>Тип занятости</span>
+                            <select name="employment_type">
+                                <option value="full_time">Основное место работы</option>
+                                <option value="part_time">Совместительство</option>
+                                <option value="civil_contract">Договор ГПХ</option>
+                                <option value="intern">Стажировка</option>
+                            </select>
+                        </label>
+
+                        <label class="user-field">
+                            <span>Схема оплаты</span>
+                            <select name="salary_type">
+                                <option value="fixed">Оклад</option>
+                                <option value="hourly">Почасовая</option>
+                                <option value="percent">Процент</option>
+                                <option value="mixed">Оклад + процент</option>
+                            </select>
+                        </label>
+
+                        <label class="user-field">
+                            <span>Оклад / база, ₸</span>
+                            <input name="salary"
+                                   type="number"
+                                   min="0"
+                                   step="0.01"
+                                   placeholder="0">
+                        </label>
+
+                        <label class="user-field user-field--wide">
+                            <span>IBAN сотрудника</span>
+                            <input name="bank_iban"
+                                   maxlength="20"
+                                   placeholder="KZ..."
+                                   autocomplete="off">
+                        </label>
+                    </div>
+
+                    <div class="employee-tax-flags">
+                        <label class="user-checkbox">
+                            <input type="checkbox"
+                                   name="employee_tax_active"
+                                   value="1"
+                                   checked>
+                            <span>
+                                <strong>Учитывать в зарплате и налогах</strong>
+                                <small>Сотрудник попадёт в расчёт бухгалтерии</small>
+                            </span>
+                        </label>
+
+                        <label class="user-checkbox">
+                            <input type="checkbox"
+                                   name="use_standard_deduction"
+                                   value="1"
+                                   checked>
+                            <span>
+                                <strong>Стандартный вычет ИПН</strong>
+                                <small>Применять вычет при расчёте ИПН</small>
+                            </span>
+                        </label>
+
+                        <label class="user-checkbox">
+                            <input type="checkbox"
+                                   name="is_pensioner"
+                                   value="1">
+                            <span>
+                                <strong>Пенсионер</strong>
+                                <small>Учитывать льготы по пенсионным платежам</small>
+                            </span>
+                        </label>
+
+                        <label class="user-checkbox">
+                            <input type="checkbox"
+                                   name="is_exempt_vosms"
+                                   value="1">
+                            <span>
+                                <strong>Освобождён от ОСМС/ВОСМС</strong>
+                                <small>Не начислять соответствующие взносы</small>
+                            </span>
+                        </label>
+                    </div>
+                </section>
+
                 {% if can_choose_company %}
                 <label class="user-field">
                     <span>Компания</span>
@@ -1106,7 +1216,7 @@
 .user-modal__dialog {
     position:relative;
     z-index:1;
-    width:min(650px,100%);
+    width:min(820px,100%);
     max-height:calc(100dvh - 40px);
     display:flex;
     flex-direction:column;
@@ -1171,6 +1281,49 @@
 
 .user-field--wide {
     grid-column:1 / -1;
+}
+
+.employee-accounting-card {
+    display:grid;
+    gap:14px;
+    padding:16px;
+    border:1px solid var(--u-border);
+    border-radius:14px;
+    background:#fafafe;
+}
+
+.employee-accounting-card__head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+}
+
+.employee-accounting-card__head > div {
+    display:grid;
+    gap:3px;
+}
+
+.employee-accounting-card__head strong {
+    color:var(--u-text);
+    font-size:13px;
+}
+
+.employee-accounting-card__head small {
+    color:var(--u-muted);
+    font-size:10px;
+}
+
+.employee-accounting-grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+}
+
+.employee-tax-flags {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
 }
 
 .user-field > span {
@@ -1441,6 +1594,11 @@ body.user-modal-open {
 }
 
 @media(max-width:750px) {
+    .employee-accounting-grid,
+    .employee-tax-flags {
+        grid-template-columns:1fr;
+    }
+
     .users-header {
         align-items:stretch;
         flex-direction:column;
@@ -1701,6 +1859,18 @@ function openEditUserModal(userId) {
     form.elements.full_name.value = user.full_name || '';
     form.elements.phone.value = user.phone || '';
     form.elements.percent_rate.value = user.percent_rate || 0;
+    form.elements.iin.value = user.iin || '';
+    form.elements.hire_date.value = user.hire_date || '';
+    form.elements.dismissal_date.value = user.dismissal_date || '';
+    form.elements.employment_type.value = user.employment_type || 'full_time';
+    form.elements.salary_type.value = user.salary_type || 'fixed';
+    form.elements.salary.value = user.salary || 0;
+    form.elements.bank_iban.value = user.bank_iban || '';
+    form.elements.employee_tax_active.checked = Boolean(user.employee_tax_active);
+    form.elements.use_standard_deduction.checked =
+        user.use_standard_deduction !== false;
+    form.elements.is_pensioner.checked = Boolean(user.is_pensioner);
+    form.elements.is_exempt_vosms.checked = Boolean(user.is_exempt_vosms);
     form.elements.role.value = user.role || 'employee';
     form.elements.position.value = user.position || '';
 
