@@ -49,9 +49,9 @@
         }
     }
 
-    async function fetchFoodItemsPage(page) {
+    async function fetchFoodItemsPage(type, page) {
         const response = await fetch(
-            `/api/catalog/items?type=dish&limit=${PAGE_SIZE}&page=${page}`
+            `/api/catalog/items?type=${encodeURIComponent(type)}&limit=${PAGE_SIZE}&page=${page}`
         );
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -73,15 +73,16 @@
 
         try {
             const loaded = [];
-            let page = 1;
-            let hasMore = true;
-
-            while (hasMore && page <= MAX_MENU_PAGES) {
-                const data = await fetchFoodItemsPage(page);
-                const pageItems = Array.isArray(data.items) ? data.items : [];
-                loaded.push(...pageItems);
-                hasMore = Boolean(data.has_more);
-                page += 1;
+            for (const type of ["dish", "product"]) {
+                let page = 1;
+                let hasMore = true;
+                while (hasMore && page <= MAX_MENU_PAGES) {
+                    const data = await fetchFoodItemsPage(type, page);
+                    const pageItems = Array.isArray(data.items) ? data.items : [];
+                    loaded.push(...pageItems);
+                    hasMore = Boolean(data.has_more);
+                    page += 1;
+                }
             }
 
             foodItems = loaded;
@@ -181,6 +182,11 @@
     let pendingModifierGroups = [];
 
     async function addFoodItem(item) {
+        if ((item.item_type || "product") === "product") {
+            selectItemForSale(Number(item.id), item.name || "Товар", Number(item.retail_price || 0), item.unit || "шт", item.gtin || "", item.ntin || "");
+            renderFoodCart();
+            return;
+        }
         try {
             const response = await fetch('/api/items/' + encodeURIComponent(item.id) + '/modifiers', {headers:{Accept:'application/json'}});
             const data = response.ok ? await response.json() : null;
