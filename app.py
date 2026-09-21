@@ -169,6 +169,25 @@ try:
     """)
     _media_schema_cur.execute("CREATE INDEX IF NOT EXISTS idx_item_recipes_item ON item_recipes(company_id, item_id)")
     _media_schema_cur.execute("""
+        CREATE TABLE IF NOT EXISTS dish_modifier_groups (
+            id BIGSERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
+            dish_item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            name TEXT NOT NULL, min_select INTEGER NOT NULL DEFAULT 0,
+            max_select INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    _media_schema_cur.execute("""
+        CREATE TABLE IF NOT EXISTS dish_modifiers (
+            id BIGSERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
+            group_id BIGINT NOT NULL REFERENCES dish_modifier_groups(id) ON DELETE CASCADE,
+            name TEXT NOT NULL, price_delta NUMERIC(12,2) NOT NULL DEFAULT 0,
+            ingredient_item_id INTEGER REFERENCES items(id),
+            ingredient_quantity NUMERIC(14,4) NOT NULL DEFAULT 0,
+            active BOOLEAN NOT NULL DEFAULT TRUE, sort_order INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    _media_schema_cur.execute("ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS modifiers JSONB NOT NULL DEFAULT '[]'::jsonb")
+    _media_schema_cur.execute("""
         CREATE TABLE IF NOT EXISTS school_students (
             id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
             class_id INTEGER NOT NULL REFERENCES school_classes(id) ON DELETE CASCADE,
