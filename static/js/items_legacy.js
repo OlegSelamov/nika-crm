@@ -673,6 +673,9 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 function openAddItemModal() {
+    activeRecipeDishId = null;
+    recipeIngredients = [];
+    setRecipeEditorVisible(false);
     var form = document.getElementById('itemForm');
     form.reset();
     resetItemMedia();
@@ -893,6 +896,95 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
+var activeRecipeDishId = null;
+var recipeIngredients = [];
+var recipeProductOptions = [];
+
+function setRecipeEditorVisible(visible) {
+    var editor = document.getElementById('catalogRecipeEditor');
+    if (editor) editor.hidden = !visible;
+}
+
+async function loadItemRecipe(itemId) {
+    activeRecipeDishId = Number(itemId);
+    recipeIngredients = [];
+    setRecipeEditorVisible(true);
+    var rows = document.getElementById('recipeRows');
+    if (rows) rows.innerHTML = '<div class="catalog-recipe-empty">Загружаем техкарту…</div>';
+    try {
+        var responses = await Promise.all([
+            fetch('/api/items/' + encodeURIComponent(itemId) + '/recipe', {headers:{'Accept':'application/json'}}),
+            fetch('/api/catalog/items?type=product&page=1&limit=500', {headers:{'Accept':'application/json'}})
+        ]);
+        var recipe = await responses[0].json();
+        var catalog = await responses[1].json();
+        if (!responses[0].ok || !recipe.success) throw new Error(recipe.message || 'Не удалось загрузить техкарту');
+        recipeProductOptions = Array.isArray(catalog.items) ? catalog.items : [];
+        recipeIngredients = Array.isArray(recipe.ingredients) ? recipe.ingredients.map(function(row){ return {item_id:Number(row.item_id), name:row.name, unit:row.unit || 'шт', quantity:Number(row.quantity)||0, purchase_price:Number(row.purchase_price)||0}; }) : [];
+        renderRecipeRows();
+    } catch (error) {
+        if (rows) rows.innerHTML = '<div class="catalog-recipe-empty">' + escapeCatalogHtml(error.message) + '</div>';
+    }
+}
+
+function addRecipeIngredient() {
+    if (!activeRecipeDishId) return;
+    recipeIngredients.push({item_id:0,name:'',unit:'шт',quantity:1,purchase_price:0});
+    renderRecipeRows();
+}
+
+function removeRecipeIngredient(index) {
+    recipeIngredients.splice(index,1);
+    renderRecipeRows();
+}
+
+function updateRecipeIngredient(index, itemId) {
+    var item = recipeProductOptions.find(function(row){ return Number(row.id) === Number(itemId); });
+    if (!item) return;
+    recipeIngredients[index].item_id = Number(item.id);
+    recipeIngredients[index].name = item.name || '';
+    recipeIngredients[index].unit = item.unit || 'шт';
+    recipeIngredients[index].purchase_price = Number(item.purchase_price) || 0;
+    renderRecipeRows();
+}
+
+function updateRecipeQuantity(index, value) {
+    recipeIngredients[index].quantity = Math.max(0, Number(String(value).replace(',','.')) || 0);
+    updateRecipeCost();
+}
+
+function updateRecipeCost() {
+    var total = recipeIngredients.reduce(function(sum,row){ return sum + (Number(row.quantity)||0)*(Number(row.purchase_price)||0); },0);
+    var el = document.getElementById('recipeCost');
+    if (el) el.textContent = new Intl.NumberFormat('ru-KZ',{maximumFractionDigits:2}).format(total) + ' ₸';
+    document.querySelectorAll('[data-recipe-row-cost]').forEach(function(el){ var i=Number(el.dataset.recipeRowCost); var row=recipeIngredients[i]; el.textContent=new Intl.NumberFormat('ru-KZ',{maximumFractionDigits:2}).format((Number(row.quantity)||0)*(Number(row.purchase_price)||0))+' ₸'; });
+}
+
+function renderRecipeRows() {
+    var box = document.getElementById('recipeRows');
+    if (!box) return;
+    if (!recipeIngredients.length) { box.innerHTML='<div class="catalog-recipe-empty">Ингредиенты ещё не добавлены. Нажмите «+ Ингредиент».</div>'; updateRecipeCost(); return; }
+    box.innerHTML = recipeIngredients.map(function(row,index){
+        var options='<option value="">Выберите ингредиент</option>'+recipeProductOptions.map(function(item){ return '<option value="'+Number(item.id)+'" '+(Number(item.id)===Number(row.item_id)?'selected':'')+'>'+escapeCatalogHtml(item.name || '')+' · '+escapeCatalogHtml(item.unit || 'шт')+'</option>'; }).join('');
+        return '<div class="catalog-recipe-row"><select onchange="updateRecipeIngredient('+index+',this.value)">'+options+'</select><div class="catalog-recipe-qty"><input type="number" min="0.0001" step="0.001" value="'+(row.quantity || '')+'" oninput="updateRecipeQuantity('+index+',this.value)"><span>'+escapeCatalogHtml(row.unit || 'шт')+'</span></div><div class="catalog-recipe-price"><small>Закуп: '+new Intl.NumberFormat('ru-KZ',{maximumFractionDigits:2}).format(Number(row.purchase_price)||0)+' ₸/'+escapeCatalogHtml(row.unit || 'шт')+'</small><strong data-recipe-row-cost="'+index+'">0 ₸</strong></div><button type="button" class="catalog-recipe-remove" onclick="removeRecipeIngredient('+index+')">×</button></div>';
+    }).join('');
+    updateRecipeCost();
+}
+
+async function saveItemRecipe() {
+    if (!activeRecipeDishId) return;
+    var invalid = recipeIngredients.some(function(row){ return !row.item_id || !(Number(row.quantity)>0); });
+    var status=document.getElementById('recipeStatus');
+    if (invalid) { if(status){status.textContent='Выберите ингредиенты и укажите норму больше нуля.';status.className='catalog-recipe-status is-error';} return; }
+    var button=document.getElementById('saveRecipeButton'); if(button) button.disabled=true;
+    try {
+        var response=await fetch('/api/items/'+encodeURIComponent(activeRecipeDishId)+'/recipe',{method:'PUT',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({ingredients:recipeIngredients.map(function(row){return {item_id:row.item_id,quantity:row.quantity};})})});
+        var data=await response.json(); if(!response.ok || !data.success) throw new Error(data.message || 'Не удалось сохранить техкарту');
+        if(status){status.textContent='Техкарта сохранена. При продаже ингредиенты будут списываться автоматически.';status.className='catalog-recipe-status is-success';}
+    } catch(error) { if(status){status.textContent=error.message;status.className='catalog-recipe-status is-error';} }
+    finally { if(button) button.disabled=false; }
+}
+
 function openEditItemModal(item) {
     var form = document.getElementById('itemForm');
     form.reset();
@@ -916,6 +1008,7 @@ function openEditItemModal(item) {
     priceCalculationSource = 'purchase';
     syncCategoryName(true);
     loadItemMedia(item.id);
+    if (item.item_type === 'dish') loadItemRecipe(item.id); else { activeRecipeDishId = null; setRecipeEditorVisible(false); }
 
     openItemModal();
 }
