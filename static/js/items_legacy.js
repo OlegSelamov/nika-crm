@@ -440,7 +440,9 @@ function applyItemType(type) {
     if (dishRadio) dishRadio.checked = type === "dish";
     if (modal) modal.classList.toggle("is-service", type === "service");
     if (modal) modal.classList.toggle("is-dish", type === "dish");
-    filterItemCategoryOptions(type === "dish" ? "product" : type);\n    var dishNote = document.getElementById("catalogDishNote");\n    if (dishNote) dishNote.hidden = type !== "dish";
+    filterItemCategoryOptions(type === "dish" ? "product" : type);
+    var dishNote = document.getElementById("catalogDishNote");
+    if (dishNote) dishNote.hidden = type !== "dish";
 
     var unitSelect = document.getElementById("itemUnit");
     if (unitSelect) {
