@@ -39,7 +39,8 @@
         <div class="catalog-type-tabs">
             <button type="button" class="catalog-type-tab is-active" onclick="setCatalogTypeFilter('all', this)">Все</button>
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('product', this)">Товары</button>
-            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>\n            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('dish', this)">Блюда</button>
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('dish', this)">Блюда</button>
         </div>
 
         <div class="catalog-toolbar">
@@ -84,7 +85,7 @@
                             <div class="catalog-product">
                                 {% if session.get('show_catalog_images', true) %}<img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">{% endif %}
                                 <div class="catalog-product__info">
-                                    <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else "Товар" }}</span></strong>
+                                    <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else ("Блюдо" if item_type == "dish" else "Товар") }}</span></strong>
                                     <small>
                                         {% if i.gtin %}GTIN: {{ i.gtin }}{% elif i.ntin %}NTIN: {{ i.ntin }}{% else %}ID: {{ i.id }}{% endif %}
                                     </small>
@@ -145,7 +146,7 @@
                     <div class="catalog-product">
                         {% if session.get('show_catalog_images', true) %}<img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">{% endif %}
                         <div class="catalog-product__info">
-                            <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else "Товар" }}</span></strong>
+                            <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else ("Блюдо" if item_type == "dish" else "Товар") }}</span></strong>
                             <small>{{ category_name }}</small>
                         </div>
                     </div>
@@ -344,7 +345,10 @@
                     </label>
                 </div>
 
-
+                <div class="catalog-dish-note" id="catalogDishNote" hidden>
+                    <strong>Блюдо для меню общепита</strong>
+                    <span>После сохранения настройте техкарту: ингредиенты, нормы списания и себестоимость.</span>
+                </div>
 
                 <div class="catalog-service-mode" id="catalogServiceMode">
                     <span>Как клиент получает услугу?</span>
