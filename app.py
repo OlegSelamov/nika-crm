@@ -44,6 +44,7 @@ from routes.ai import ai_bp
 from routes.voice import voice_bp
 from routes.auth import auth_bp
 from routes.stock import stock_bp
+from routes.production import production_bp
 from routes.suppliers import suppliers_bp
 from routes.webkassa import webkassa_bp
 from routes.settings import settings_bp
@@ -256,6 +257,7 @@ app.register_blueprint(ai_bp)
 app.register_blueprint(voice_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(stock_bp)
+app.register_blueprint(production_bp)
 app.register_blueprint(suppliers_bp)
 app.register_blueprint(webkassa_bp)
 app.register_blueprint(settings_bp)
