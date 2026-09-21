@@ -1,6 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, session, flash
-from db import get_db, pool
+from models import get_db, pool
 from utils.timezone import now_kz
 
 production_bp = Blueprint("production", __name__)
