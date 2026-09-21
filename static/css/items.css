@@ -409,3 +409,11 @@ body.catalog-label-modal-open{overflow:hidden}
 
 #itemRetailPriceField[hidden]{display:none!important}
 .catalog-modal.is-ingredient #itemRetailPriceField{display:none!important}
+
+.catalog-recipe-btn{font-size:10px;font-weight:900;letter-spacing:.02em}
+.catalog-recipe-modal{position:fixed;z-index:2147483100;inset:0;display:none;align-items:center;justify-content:center;padding:12px}
+.catalog-recipe-modal.is-open{display:flex}
+.catalog-recipe-modal__backdrop{position:absolute;inset:0;background:rgba(45,42,69,.42);backdrop-filter:blur(6px)}
+.catalog-recipe-modal__dialog{position:relative;z-index:1;width:min(720px,100%);max-height:calc(100dvh - 24px);display:flex;flex-direction:column;background:#fff;border:1px solid var(--cat-border);border-radius:20px;box-shadow:0 28px 80px rgba(43,39,78,.28);overflow:hidden}
+.catalog-recipe-modal__body{padding:20px;overflow:auto;min-height:0}
+.catalog-mobile-recipe-btn{font-weight:800}
