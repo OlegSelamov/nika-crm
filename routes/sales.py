@@ -146,10 +146,23 @@ def sales():
             cur.close()
             pool.putconn(conn)
 
+    business_mode = "universal"
+    if company_id:
+        mode_conn = get_db()
+        mode_cur = mode_conn.cursor()
+        try:
+            mode_cur.execute("SELECT COALESCE(business_mode, 'universal') AS business_mode FROM companies WHERE id = %s", (company_id,))
+            mode_row = mode_cur.fetchone()
+            business_mode = (mode_row["business_mode"] if mode_row else "universal") or "universal"
+        finally:
+            mode_cur.close()
+            pool.putconn(mode_conn)
+
     return render_template(
         "sales.html",
         imported_order=imported_order,
         import_error=import_error,
+        business_mode=business_mode,
     )
 
 
