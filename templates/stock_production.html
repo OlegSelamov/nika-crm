@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="stock-page">
+<header class="stock-header"><div><h1>Приготовление полуфабрикатов</h1><p>Сырьё списывается по техкарте, готовая заготовка приходуется на склад.</p></div><div class="stock-header-actions"><a href="/stock" class="stock-btn stock-btn--light">Остатки</a></div></header>
+<section class="stock-value-panel">
+<form method="post" style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(140px,1fr) auto;gap:12px;align-items:end;width:100%">
+<label><span>Полуфабрикат</span><select name="item_id" required style="width:100%;padding:12px"><option value="">Выберите заготовку</option>{% for item in items %}<option value="{{ item.id }}" {% if not item.has_recipe %}disabled{% endif %}>{{ item.name }} · остаток {{ item.quantity }} {{ item.unit }}{% if not item.has_recipe %} · нет техкарты{% endif %}</option>{% endfor %}</select></label>
+<label><span>Приготовлено</span><input name="quantity" type="number" min="0.0001" step="0.001" required placeholder="0" style="width:100%;padding:12px"></label>
+<button class="stock-btn stock-btn--primary" type="submit">Оприходовать</button>
+</form></section>
+<section class="stock-table-card"><div class="stock-table-card__header"><div><h2>Последние приготовления</h2><p>Производственные приходы полуфабрикатов</p></div></div>
+<div class="stock-table-wrap"><table class="stock-table"><thead><tr><th>Дата</th><th>Полуфабрикат</th><th>Количество</th><th>Себестоимость</th></tr></thead><tbody>{% for row in history %}<tr><td>{{ row.created_at.strftime('%d.%m.%Y %H:%M') if row.created_at else '—' }}</td><td><strong>{{ row.item_name }}</strong></td><td>{{ row.quantity }} {{ row.unit }}</td><td>{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸</td></tr>{% else %}<tr><td colspan="4">Приготовлений пока нет</td></tr>{% endfor %}</tbody></table></div></section>
+</div>
+{% endblock %}
