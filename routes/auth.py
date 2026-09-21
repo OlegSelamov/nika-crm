@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for, jsonify
 from models import get_db, pool
 from utils.timezone import now_kz
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -16,6 +16,42 @@ REGISTRATION_PLANS = {
     "pro": {"name": "Профи", "price": 29900},
 }
 DEFAULT_REGISTRATION_PLAN = "business"
+
+
+def _ensure_employee_accounting_schema(cur):
+    """Fields entered in Users become the single source for payroll/accounting."""
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS iin TEXT")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS hire_date DATE")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS dismissal_date DATE")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS employment_type TEXT DEFAULT 'full_time'")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS salary_type TEXT DEFAULT 'fixed'")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS bank_iban TEXT")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS employee_tax_profiles (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            salary NUMERIC(14,2) NOT NULL DEFAULT 0,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            use_standard_deduction BOOLEAN NOT NULL DEFAULT TRUE,
+            is_pensioner BOOLEAN NOT NULL DEFAULT FALSE,
+            is_exempt_vosms BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP NOT NULL,
+            updated_at TIMESTAMP,
+            UNIQUE(company_id, user_id)
+        )
+    """)
+
+
+def _form_date(value, field_label):
+    value = str(value or "").strip()
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError(f"Некорректная дата: {field_label}") from exc
+
 
 
 def normalize_registration_plan(value):
@@ -340,6 +376,9 @@ def users():
     cur = conn.cursor()
 
     try:
+        _ensure_employee_accounting_schema(cur)
+        conn.commit()
+
         if request.method == "POST":
             user_id_raw = request.form.get("user_id", "").strip()
             editing_user_id = int(user_id_raw) if user_id_raw.isdigit() else None
@@ -351,6 +390,37 @@ def users():
             full_name = request.form.get("full_name", "").strip()
             phone = request.form.get("phone", "").strip()
             percent_rate = request.form.get("percent_rate") or 0
+
+            iin = "".join(ch for ch in request.form.get("iin", "") if ch.isdigit())
+            hire_date = _form_date(request.form.get("hire_date"), "дата приёма")
+            dismissal_date = _form_date(request.form.get("dismissal_date"), "дата увольнения")
+            employment_type = request.form.get("employment_type", "full_time").strip()
+            salary_type = request.form.get("salary_type", "fixed").strip()
+            bank_iban = request.form.get("bank_iban", "").replace(" ", "").upper()
+
+            salary_raw = request.form.get("salary", "0").replace(" ", "").replace(",", ".")
+            try:
+                salary = max(float(salary_raw or 0), 0)
+            except (TypeError, ValueError):
+                return "Некорректный оклад сотрудника", 400
+
+            employee_tax_active = request.form.get("employee_tax_active") == "1"
+            use_standard_deduction = request.form.get("use_standard_deduction") == "1"
+            is_pensioner = request.form.get("is_pensioner") == "1"
+            is_exempt_vosms = request.form.get("is_exempt_vosms") == "1"
+
+            if iin and len(iin) != 12:
+                return "ИИН сотрудника должен содержать 12 цифр", 400
+            if dismissal_date and hire_date and dismissal_date < hire_date:
+                return "Дата увольнения не может быть раньше даты приёма", 400
+            if bank_iban and (len(bank_iban) != 20 or not bank_iban.startswith("KZ")):
+                return "IBAN сотрудника должен быть казахстанским счётом KZ из 20 символов", 400
+
+            if employment_type not in {"full_time", "part_time", "civil_contract", "intern"}:
+                employment_type = "full_time"
+            if salary_type not in {"fixed", "hourly", "percent", "mixed"}:
+                salary_type = "fixed"
+
             selected_module_ids = set(request.form.getlist("module_ids"))
 
             if not username:
@@ -464,7 +534,13 @@ def users():
                             full_name = %s,
                             phone = %s,
                             percent_rate = %s,
-                            is_super_admin = %s
+                            is_super_admin = %s,
+                            iin = %s,
+                            hire_date = %s,
+                            dismissal_date = %s,
+                            employment_type = %s,
+                            salary_type = %s,
+                            bank_iban = %s
                         WHERE id = %s
                     """, (
                         username,
@@ -476,6 +552,12 @@ def users():
                         phone,
                         percent_rate,
                         new_is_super_admin,
+                        iin or None,
+                        hire_date,
+                        dismissal_date,
+                        employment_type,
+                        salary_type,
+                        bank_iban or None,
                         editing_user_id
                     ))
                 else:
@@ -488,7 +570,13 @@ def users():
                             full_name = %s,
                             phone = %s,
                             percent_rate = %s,
-                            is_super_admin = %s
+                            is_super_admin = %s,
+                            iin = %s,
+                            hire_date = %s,
+                            dismissal_date = %s,
+                            employment_type = %s,
+                            salary_type = %s,
+                            bank_iban = %s
                         WHERE id = %s
                     """, (
                         username,
@@ -499,6 +587,12 @@ def users():
                         phone,
                         percent_rate,
                         new_is_super_admin,
+                        iin or None,
+                        hire_date,
+                        dismissal_date,
+                        employment_type,
+                        salary_type,
+                        bank_iban or None,
                         editing_user_id
                     ))
 
@@ -515,9 +609,15 @@ def users():
                         phone,
                         percent_rate,
                         is_super_admin,
+                        iin,
+                        hire_date,
+                        dismissal_date,
+                        employment_type,
+                        salary_type,
+                        bank_iban,
                         created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """, (
                     username,
@@ -529,6 +629,12 @@ def users():
                     phone,
                     percent_rate,
                     new_is_super_admin,
+                    iin or None,
+                    hire_date,
+                    dismissal_date,
+                    employment_type,
+                    salary_type,
+                    bank_iban or None,
                     now_kz()
                 ))
                 employee_id = cur.fetchone()["id"]
@@ -568,6 +674,45 @@ def users():
                         int(module_id),
                         module_id in selected_module_ids
                     ))
+
+            # Keep payroll/tax data attached to the same user record.
+            # When a SUPER moves an employee to another company, stale payroll
+            # profiles from the old company must not leak into accounting.
+            if company_id:
+                cur.execute(
+                    "DELETE FROM employee_tax_profiles WHERE user_id = %s AND company_id <> %s",
+                    (employee_id, company_id)
+                )
+                cur.execute("""
+                    INSERT INTO employee_tax_profiles (
+                        company_id, user_id, salary, is_active,
+                        use_standard_deduction, is_pensioner, is_exempt_vosms,
+                        created_at, updated_at
+                    )
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT(company_id, user_id) DO UPDATE SET
+                        salary = EXCLUDED.salary,
+                        is_active = EXCLUDED.is_active,
+                        use_standard_deduction = EXCLUDED.use_standard_deduction,
+                        is_pensioner = EXCLUDED.is_pensioner,
+                        is_exempt_vosms = EXCLUDED.is_exempt_vosms,
+                        updated_at = EXCLUDED.updated_at
+                """, (
+                    company_id,
+                    employee_id,
+                    salary,
+                    employee_tax_active,
+                    use_standard_deduction,
+                    is_pensioner,
+                    is_exempt_vosms,
+                    now_kz(),
+                    now_kz(),
+                ))
+            else:
+                cur.execute(
+                    "DELETE FROM employee_tax_profiles WHERE user_id = %s",
+                    (employee_id,)
+                )
 
             conn.commit()
             return redirect("/users")
@@ -656,9 +801,24 @@ def users():
                     str(row["employee_id"]), []
                 ).append(str(row["module_id"]))
 
+        employee_profiles = {}
+        if user_ids:
+            cur.execute("""
+                SELECT *
+                FROM employee_tax_profiles
+                WHERE user_id = ANY(%s)
+            """, (user_ids,))
+            for profile in cur.fetchall():
+                employee_profiles[
+                    (str(profile["user_id"]), str(profile["company_id"]))
+                ] = dict(profile)
+
         users_edit_data = {}
         for row in users_list:
             row_dict = dict(row)
+            profile = employee_profiles.get(
+                (str(row["id"]), str(row.get("company_id") or ""))
+            ) or {}
             users_edit_data[str(row["id"])] = {
                 "id": row["id"],
                 "username": row.get("username") or "",
@@ -666,6 +826,17 @@ def users():
                 "full_name": row.get("full_name") or "",
                 "phone": row.get("phone") or "",
                 "percent_rate": str(row.get("percent_rate") or 0),
+                "iin": row.get("iin") or "",
+                "hire_date": row.get("hire_date").isoformat() if row.get("hire_date") else "",
+                "dismissal_date": row.get("dismissal_date").isoformat() if row.get("dismissal_date") else "",
+                "employment_type": row.get("employment_type") or "full_time",
+                "salary_type": row.get("salary_type") or "fixed",
+                "bank_iban": row.get("bank_iban") or "",
+                "salary": str(profile.get("salary") or 0),
+                "employee_tax_active": bool(profile.get("is_active")) if profile else False,
+                "use_standard_deduction": bool(profile.get("use_standard_deduction")) if profile else True,
+                "is_pensioner": bool(profile.get("is_pensioner")) if profile else False,
+                "is_exempt_vosms": bool(profile.get("is_exempt_vosms")) if profile else False,
                 "role": row.get("role") or "employee",
                 "position": row.get("position") or "",
                 "last_login_at": row.get("last_login_at").isoformat() if row.get("last_login_at") else "",
