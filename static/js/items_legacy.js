@@ -714,7 +714,12 @@ function openAddItemModal() {
     form.action = '/items/add';
     document.getElementById('itemModalTitle').textContent = 'Новая позиция';
     document.getElementById('itemUnit').value = 'шт';
-    applyItemType('product');
+    var typeSwitch = document.querySelector('.catalog-type-switch[data-business-mode]');
+    var businessMode = typeSwitch ? typeSwitch.dataset.businessMode : 'universal';
+    var defaultType = businessMode === 'foodservice' ? 'dish' : 'product';
+    var defaultRadio = document.querySelector('input[name="item_type"][value="' + defaultType + '"]');
+    if (defaultRadio) defaultRadio.checked = true;
+    applyItemType(defaultType);
     setServiceSaleMode('order');
     document.getElementById('itemIsMarked').checked = false;
     updateMarkedBadge();
