@@ -360,8 +360,15 @@
 
                 <div class="catalog-dish-note" id="catalogDishNote" hidden>
                     <strong>Блюдо для меню общепита</strong>
-                    <span>После сохранения настройте техкарту: ингредиенты, нормы списания и себестоимость.</span>
+                    <span>Заполните состав блюда сразу — техкарта сохранится вместе с блюдом.</span>
+                    <button type="button" class="catalog-secondary-btn" onclick="openDraftRecipeModal()">Открыть техкарту</button>
                 </div>
+                <div class="catalog-ingredient-opening" id="catalogIngredientOpening" hidden>
+                    <div><strong>Начальный остаток</strong><small>Первый приход ингредиента сразу попадёт на склад и в расходы «Закупки».</small></div>
+                    <label class="catalog-field"><span>Количество</span><input type="number" name="opening_quantity" id="itemOpeningQuantity" min="0" step="0.001" placeholder="0"></label>
+                    <label class="catalog-field"><span>Оплата</span><select name="opening_payment_method" id="itemOpeningPayment"><option value="Другое">Другое</option><option value="Наличные">Наличные</option><option value="Карта">Карта</option><option value="Kaspi">Kaspi</option></select></label>
+                </div>
+                <input type="hidden" name="recipe_json" id="itemRecipeJson" value="[]">
 
                 <div class="catalog-recipe-editor" id="catalogRecipeEditor" hidden>
                     <div class="catalog-recipe-head"><div><strong>Техкарта блюда</strong><small>Норма ингредиентов на 1 порцию</small></div><button type="button" class="catalog-secondary-btn" onclick="addRecipeIngredient()">+ Ингредиент</button></div>
