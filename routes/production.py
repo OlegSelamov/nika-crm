@@ -1,9 +1,34 @@
 from decimal import Decimal, InvalidOperation
-from flask import Blueprint, render_template, request, redirect, session, flash
+from flask import Blueprint, render_template, request, redirect, session, flash, jsonify
 from models import get_db, pool
 from utils.timezone import now_kz
 
 production_bp = Blueprint("production", __name__)
+
+def _recipe_availability(cur, company_id, item_id, output_qty=Decimal("1")):
+    cur.execute("""SELECT r.ingredient_item_id, r.quantity, i.name, i.unit,
+                  COALESCE(i.purchase_price,0) purchase_price, COALESCE(i.quantity,0) available
+                  FROM item_recipes r JOIN items i ON i.id=r.ingredient_item_id AND i.company_id=r.company_id
+                  WHERE r.company_id=%s AND r.item_id=%s ORDER BY i.name""", (company_id,item_id))
+    rows=[]; max_output=None
+    for row in cur.fetchall():
+        per_unit=Decimal(str(row["quantity"])); available=Decimal(str(row["available"] or 0)); needed=per_unit*output_qty
+        possible=(available/per_unit) if per_unit>0 else Decimal("0")
+        max_output=possible if max_output is None else min(max_output,possible)
+        rows.append({**dict(row),"needed":needed,"enough":available>=needed})
+    return rows, (max_output or Decimal("0"))
+
+@production_bp.route("/api/stock/production/<int:item_id>/availability")
+def production_availability(item_id):
+    company_id=session.get("company_id")
+    try: qty=Decimal(str(request.args.get("quantity") or 1))
+    except (InvalidOperation,TypeError,ValueError): qty=Decimal("1")
+    conn=get_db(); cur=conn.cursor()
+    try:
+        rows,max_output=_recipe_availability(cur,company_id,item_id,max(qty,Decimal("0")))
+        return jsonify({"success":True,"max_output":float(max_output),"ingredients":[{"item_id":r["ingredient_item_id"],"name":r["name"],"unit":r["unit"],"per_unit":float(r["quantity"]),"needed":float(r["needed"]),"available":float(r["available"]),"enough":r["enough"]} for r in rows]})
+    finally:
+        cur.close(); pool.putconn(conn)
 
 @production_bp.route("/stock/production", methods=["GET", "POST"])
 def production():
@@ -27,12 +52,14 @@ def production():
                 flash("Полуфабрикат не найден", "error")
                 return redirect("/stock/production")
 
-            cur.execute("""SELECT r.ingredient_item_id, r.quantity, i.name, i.unit, COALESCE(i.purchase_price,0) purchase_price
-                           FROM item_recipes r JOIN items i ON i.id=r.ingredient_item_id
-                           WHERE r.company_id=%s AND r.item_id=%s ORDER BY i.name""", (company_id,item_id))
-            recipe = cur.fetchall()
+            recipe, max_output = _recipe_availability(cur, company_id, item_id, output_qty)
             if not recipe:
                 flash("Сначала заполните техкарту полуфабриката", "error")
+                return redirect("/stock/production")
+            shortages = [row for row in recipe if not row["enough"]]
+            if shortages:
+                names = ", ".join(row["name"] for row in shortages[:3])
+                flash(f"Недостаточно сырья: {names}. Максимально можно приготовить {max_output:.3f} {item['unit']}", "error")
                 return redirect("/stock/production")
 
             total_cost = Decimal("0")
