@@ -1081,8 +1081,8 @@ def rekassa_sell(conn, sale_id):
             "quantity": int(round(float(item["quantity"] or 0) * 1000)),
             "price": {"bills": str(int(round(float(item["price"] or 0)))), "coins": 0},
             "sum": {"bills": str(amount), "coins": 0},
-            "measureUnitCode": "796",
-            "auxiliary": [{"key": "UNIT_TYPE", "value": "PIECE"}]
+            "measureUnitCode": rekassa_unit(item.get("unit"), item.get("item_type"))[0],
+            "auxiliary": [{"key": "UNIT_TYPE", "value": rekassa_unit(item.get("unit"), item.get("item_type"))[1]}]
         }
         if item.get("gtin"):
             commodity["barcode"] = str(item.get("gtin"))
@@ -1318,13 +1318,8 @@ def rekassa_refund(conn, sale_id):
                 "bills": str(amount),
                 "coins": 0
             },
-            "measureUnitCode": "796",
-            "auxiliary": [
-                {
-                    "key": "UNIT_TYPE",
-                    "value": "PIECE"
-                }
-            ]
+            "measureUnitCode": rekassa_unit(item.get("unit"), item.get("item_type"))[0],
+            "auxiliary": [{"key": "UNIT_TYPE", "value": rekassa_unit(item.get("unit"), item.get("item_type"))[1]}]
         }
 
         if item.get("gtin"):
