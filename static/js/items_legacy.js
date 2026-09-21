@@ -433,6 +433,8 @@ function filterItemCategoryOptions(type) {
 }
 
 function applyItemType(type) {
+    updateUnitOptionsForItemType(type);
+
     type = ["product", "service", "dish", "ingredient"].includes(type) ? type : "product";
     var modal = document.getElementById("itemModal");
     var productRadio = document.getElementById("itemTypeProduct");
@@ -2125,3 +2127,19 @@ saveRecipeFromModal=async function(){
     if(!activeRecipeDishId){syncDraftRecipeJson();var status=document.getElementById('recipeModalStatus');if(status)status.textContent='Техкарта подготовлена — сохранится вместе с блюдом';setTimeout(closeRecipeModal,450);return;}
     await _nikaSaveRecipeFromModal();
 };
+
+function updateUnitOptionsForItemType(type) {
+    var select = document.getElementById('itemUnit');
+    if (!select) return;
+    var allowed = type === 'dish' ? ['шт']
+        : type === 'ingredient' ? ['шт','кг','г','л','мл']
+        : type === 'service' ? ['услуга','час','день','месяц','шт']
+        : null;
+    Array.from(select.options).forEach(function(option){
+        option.hidden = !!allowed && allowed.indexOf(option.value) === -1;
+        option.disabled = !!allowed && allowed.indexOf(option.value) === -1;
+    });
+    if (allowed && allowed.indexOf(select.value) === -1) {
+        select.value = type === 'ingredient' ? 'кг' : (type === 'service' ? 'услуга' : 'шт');
+    }
+}
