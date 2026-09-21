@@ -1058,36 +1058,54 @@ def process_sale(conn, sale_id):
         ))
 
         if item_type == "product":
-
+            # If the sold item has a recipe, consume its ingredients instead of
+            # reducing the finished dish itself. A recipe quantity is expressed
+            # in the ingredient's own unit (kg, l, pcs, etc.) per one dish.
             cur.execute("""
-                UPDATE items
-                SET quantity = COALESCE(quantity, 0) - %s
-                WHERE id = %s
-            """, (
-                item["quantity"],
-                item["item_id"]
-            ))
+                SELECT r.ingredient_item_id, r.quantity,
+                       COALESCE(i.purchase_price, 0) AS purchase_price
+                FROM item_recipes r
+                JOIN items i ON i.id = r.ingredient_item_id
+                WHERE r.company_id = %s AND r.item_id = %s
+                ORDER BY r.id
+            """, (sale["company_id"], item["item_id"]))
+            recipe_rows = cur.fetchall()
 
-            cur.execute("""
-                INSERT INTO stock_movements (
-                    company_id,
-                    item_id,
-                    movement_type,
-                    quantity,
-                    price,
-                    total,
-                    created_at
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (
-                sale["company_id"],
-                item["item_id"],
-                "sale",
-                item["quantity"],
-                item["price"],
-                item["total"],
-                now_kz().isoformat()
-            ))
+            if recipe_rows:
+                for recipe in recipe_rows:
+                    ingredient_qty = recipe["quantity"] * item["quantity"]
+                    ingredient_price = recipe["purchase_price"] or 0
+                    cur.execute("""
+                        UPDATE items
+                        SET quantity = COALESCE(quantity, 0) - %s
+                        WHERE id = %s AND company_id = %s
+                    """, (ingredient_qty, recipe["ingredient_item_id"], sale["company_id"]))
+                    cur.execute("""
+                        INSERT INTO stock_movements (
+                            company_id, item_id, movement_type, quantity,
+                            price, total, comment, created_at, sale_id
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        sale["company_id"], recipe["ingredient_item_id"], "sale",
+                        ingredient_qty, ingredient_price, ingredient_qty * ingredient_price,
+                        "Списание по техкарте", now_kz().isoformat(), sale_id
+                    ))
+            else:
+                cur.execute("""
+                    UPDATE items
+                    SET quantity = COALESCE(quantity, 0) - %s
+                    WHERE id = %s
+                """, (item["quantity"], item["item_id"]))
+
+                cur.execute("""
+                    INSERT INTO stock_movements (
+                        company_id, item_id, movement_type, quantity,
+                        price, total, created_at, sale_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    sale["company_id"], item["item_id"], "sale", item["quantity"],
+                    item["price"], item["total"], now_kz().isoformat(), sale_id
+                ))
 
     cur.execute("""
         UPDATE sales
