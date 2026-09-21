@@ -417,3 +417,8 @@ body.catalog-label-modal-open{overflow:hidden}
 .catalog-recipe-modal__dialog{position:relative;z-index:1;width:min(720px,100%);max-height:calc(100dvh - 24px);display:flex;flex-direction:column;background:#fff;border:1px solid var(--cat-border);border-radius:20px;box-shadow:0 28px 80px rgba(43,39,78,.28);overflow:hidden}
 .catalog-recipe-modal__body{padding:20px;overflow:auto;min-height:0}
 .catalog-mobile-recipe-btn{font-weight:800}
+
+.catalog-ingredient-opening{grid-column:1/-1;display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px;align-items:end;padding:14px;border:1px solid #dce7df;border-radius:16px;background:#f7fbf8}
+.catalog-ingredient-opening[hidden]{display:none!important}
+.catalog-ingredient-opening>div{align-self:center;display:grid;gap:4px}.catalog-ingredient-opening small{color:var(--cat-muted)}
+@media(max-width:700px){.catalog-ingredient-opening{grid-template-columns:1fr}}
