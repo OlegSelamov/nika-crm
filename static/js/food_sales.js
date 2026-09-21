@@ -177,6 +177,53 @@
         return value ? value[0].toUpperCase() : "N";
     }
 
+    let pendingModifierItem = null;
+    let pendingModifierGroups = [];
+
+    async function addFoodItem(item) {
+        try {
+            const response = await fetch('/api/items/' + encodeURIComponent(item.id) + '/modifiers', {headers:{Accept:'application/json'}});
+            const data = response.ok ? await response.json() : null;
+            if (data && data.success && Array.isArray(data.groups) && data.groups.length) {
+                openFoodModifierModal(item, data.groups);
+                return;
+            }
+        } catch (error) { console.error('MODIFIER LOAD ERROR:', error); }
+        selectItemForSale(Number(item.id), item.name || 'Блюдо', Number(item.retail_price || 0), item.unit || 'шт', item.gtin || '', item.ntin || '');
+        renderFoodCart();
+    }
+
+    function openFoodModifierModal(item, groups) {
+        pendingModifierItem=item; pendingModifierGroups=groups;
+        const modal=document.getElementById('foodModifierModal'), root=document.getElementById('foodModifierGroups');
+        document.getElementById('foodModifierTitle').textContent=item.name || 'Блюдо';
+        root.innerHTML='';
+        groups.forEach(group=>{
+            const section=document.createElement('section'); section.className='food-modifier-group';
+            section.innerHTML='<div class="food-modifier-group-title"><strong>'+escapeFood(group.name)+'</strong><small>'+(group.min_select>0?'Выберите обязательно':'По желанию')+(group.max_select>1?' · до '+group.max_select:'')+'</small></div>';
+            (group.options||[]).forEach(option=>{
+                const label=document.createElement('label'); label.className='food-modifier-option';
+                const input=document.createElement('input'); input.type=group.max_select>1?'checkbox':'radio'; input.name='food-modifier-'+group.id; input.value=option.id; input.dataset.groupId=group.id;
+                input.addEventListener('change',()=>{ if(input.type==='checkbox'){const checked=section.querySelectorAll('input:checked');if(checked.length>group.max_select){input.checked=false;return;}} renderFoodModifierTotal();});
+                const text=document.createElement('span'); text.innerHTML='<b>'+escapeFood(option.name)+'</b>'+(Number(option.price_delta)?'<small>+'+money(option.price_delta)+'</small>':'');
+                label.append(input,text); section.appendChild(label);
+            }); root.appendChild(section);
+        });
+        modal.hidden=false; renderFoodModifierTotal();
+    }
+    function escapeFood(v){const d=document.createElement('div');d.textContent=String(v||'');return d.innerHTML;}
+    function selectedFoodModifiers(){const selected=[];document.querySelectorAll('#foodModifierGroups input:checked').forEach(input=>{const g=pendingModifierGroups.find(x=>String(x.id)===String(input.dataset.groupId));const o=g?.options?.find(x=>String(x.id)===String(input.value));if(o)selected.push(o)});return selected}
+    function renderFoodModifierTotal(){const extra=selectedFoodModifiers().reduce((s,o)=>s+Number(o.price_delta||0),0);const total=Number(pendingModifierItem?.retail_price||0)+extra;const n=document.getElementById('foodModifierTotal');if(n)n.textContent=money(total)}
+    function closeFoodModifierModal(){const m=document.getElementById('foodModifierModal');if(m)m.hidden=true;pendingModifierItem=null;pendingModifierGroups=[]}
+    function confirmFoodModifiers(){
+        if(!pendingModifierItem)return;
+        for(const group of pendingModifierGroups){const count=document.querySelectorAll('#foodModifierGroups input[data-group-id="'+group.id+'"]:checked').length;if(count<Number(group.min_select||0)){alert('Выберите: '+group.name);return}}
+        const mods=selectedFoodModifiers(); const price=Number(pendingModifierItem.retail_price||0)+mods.reduce((s,o)=>s+Number(o.price_delta||0),0);
+        addToCart(Number(pendingModifierItem.id), pendingModifierItem.name || 'Блюдо', price, 1, pendingModifierItem.gtin||'', pendingModifierItem.ntin||'', pendingModifierItem.unit||'шт');
+        const added=cart[cart.length-1]; if(added){added.modifiers=mods.map(o=>({id:o.id,name:o.name,price_delta:Number(o.price_delta||0)})); added.name=(pendingModifierItem.name||'Блюдо')+(mods.length?' · '+mods.map(o=>o.name).join(', '):'');}
+        closeFoodModifierModal(); renderCart(); renderFoodCart();
+    }
+
     function makeFoodCard(item) {
         const button = document.createElement("button");
         button.type = "button";
@@ -220,18 +267,7 @@
         info.append(name, price);
         button.append(media, info);
 
-        button.addEventListener("click", () => {
-            if (typeof selectItemForSale !== "function") return;
-            selectItemForSale(
-                Number(item.id),
-                item.name || "Блюдо",
-                Number(item.retail_price || 0),
-                item.unit || "шт",
-                item.gtin || "",
-                item.ntin || ""
-            );
-            renderFoodCart();
-        });
+        button.addEventListener("click", () => addFoodItem(item));
 
         return button;
     }
@@ -391,6 +427,9 @@
             window.confirmClient = wrappedConfirmClient;
         }
     }
+
+    document.addEventListener('click', function(e){ if(e.target.closest('[data-food-modifier-close]')) closeFoodModifierModal(); });
+    document.getElementById('foodModifierAdd')?.addEventListener('click', confirmFoodModifiers);
 
     function initFoodSalesMode() {
         document.getElementById("salesModeRetail")?.addEventListener("click", () => setMode("retail"));
