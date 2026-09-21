@@ -1110,10 +1110,24 @@ def save_interface_profile():
     compact_mode = request.form.get("compact_mode") == "on"
     notifications_enabled = request.form.get("notifications_enabled") == "on"
     show_catalog_images = request.form.get("show_catalog_images") == "on"
+    business_mode = (request.form.get("business_mode") or "").strip()
+    allowed_business_modes = {"retail", "foodservice", "universal"}
+
+    can_manage_business_mode = bool(
+        session.get("is_super_admin") or session.get("role") == "owner"
+    )
+    if business_mode not in allowed_business_modes:
+        business_mode = None
 
     conn = get_db()
     cur = conn.cursor()
     try:
+        if can_manage_business_mode and session.get("company_id") and business_mode:
+            cur.execute(
+                "UPDATE companies SET business_mode = %s WHERE id = %s",
+                (business_mode, session["company_id"])
+            )
+            session["business_mode"] = business_mode
         cur.execute("""
             UPDATE users
             SET start_page = %s,
