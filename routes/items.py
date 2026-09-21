@@ -2071,3 +2071,69 @@ def catalog_enrichment_apply():
         return jsonify({"success": False, "message": str(exc)}), 500
     finally:
         pool.putconn(conn)
+
+
+@items_bp.route("/api/items/<int:item_id>/recipe", methods=["GET", "PUT"])
+def api_item_recipe(item_id):
+    company_id = session.get("company_id")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, name FROM items WHERE id = %s AND company_id = %s", (item_id, company_id))
+        dish = cur.fetchone()
+        if not dish:
+            return jsonify({"success": False, "message": "Блюдо не найдено"}), 404
+
+        if request.method == "GET":
+            cur.execute("""
+                SELECT r.ingredient_item_id AS item_id, i.name, i.unit,
+                       r.quantity, COALESCE(i.purchase_price, 0) AS purchase_price
+                FROM item_recipes r
+                JOIN items i ON i.id = r.ingredient_item_id
+                WHERE r.company_id = %s AND r.item_id = %s
+                ORDER BY i.name
+            """, (company_id, item_id))
+            rows = []
+            for row in cur.fetchall():
+                data = dict(row)
+                data["quantity"] = float(data["quantity"] or 0)
+                data["purchase_price"] = float(data["purchase_price"] or 0)
+                rows.append(data)
+            return jsonify({"success": True, "item": dict(dish), "ingredients": rows})
+
+        payload = request.get_json(silent=True) or {}
+        ingredients = payload.get("ingredients") or []
+        normalized = []
+        seen = set()
+        for value in ingredients:
+            try:
+                ingredient_id = int(value.get("item_id"))
+                quantity = Decimal(str(value.get("quantity") or 0))
+            except (TypeError, ValueError, InvalidOperation):
+                return jsonify({"success": False, "message": "Некорректный состав техкарты"}), 400
+            if ingredient_id == item_id or ingredient_id in seen or quantity <= 0:
+                return jsonify({"success": False, "message": "Проверьте ингредиенты и нормы списания"}), 400
+            seen.add(ingredient_id)
+            normalized.append((ingredient_id, quantity))
+
+        if normalized:
+            ids = [value[0] for value in normalized]
+            cur.execute("SELECT id FROM items WHERE company_id = %s AND id = ANY(%s)", (company_id, ids))
+            existing = {row["id"] for row in cur.fetchall()}
+            if existing != set(ids):
+                return jsonify({"success": False, "message": "Один из ингредиентов не найден"}), 400
+
+        cur.execute("DELETE FROM item_recipes WHERE company_id = %s AND item_id = %s", (company_id, item_id))
+        for ingredient_id, quantity in normalized:
+            cur.execute("""
+                INSERT INTO item_recipes (company_id, item_id, ingredient_item_id, quantity)
+                VALUES (%s, %s, %s, %s)
+            """, (company_id, item_id, ingredient_id, quantity))
+        conn.commit()
+        return jsonify({"success": True, "count": len(normalized)})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
