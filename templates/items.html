@@ -111,6 +111,7 @@
                                 {% endif %}
                                 {% if item_type == 'dish' %}
                                 <button class="catalog-icon-btn catalog-recipe-btn" type="button" title="Техкарта" onclick="openRecipeModal({{ i.id }}, {{ (i.name or '')|tojson }})">ТК</button>
+                                <button class="catalog-icon-btn catalog-modifier-btn" type="button" title="Модификаторы" onclick="openModifierManager({{ i.id }}, {{ (i.name or '')|tojson }})">М</button>
                                 {% endif %}
                                 <button class="catalog-icon-btn" type="button" title="Редактировать"
                                     onclick='openEditItemModal({{ {
@@ -564,6 +565,18 @@
       <div class="catalog-recipe-status" id="recipeModalStatus"></div>
     </div>
     <div class="catalog-modal__footer"><button type="button" class="catalog-secondary-btn" onclick="closeRecipeModal()">Закрыть</button><button type="button" class="catalog-primary-btn" onclick="saveRecipeFromModal()">Сохранить техкарту</button></div>
+  </div>
+</div>
+
+<div class="catalog-recipe-modal" id="modifierManager" aria-hidden="true">
+  <div class="catalog-recipe-modal__backdrop" onclick="closeModifierManager()"></div>
+  <div class="catalog-recipe-modal__dialog" role="dialog" aria-modal="true">
+    <div class="catalog-modal__head"><div><h3>Модификаторы</h3><p id="modifierManagerDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeModifierManager()">×</button></div>
+    <div class="catalog-recipe-modal__body">
+      <div class="catalog-recipe-head"><div><strong>Группы выбора</strong><small>Размер, соус, добавки и другие варианты</small></div><button type="button" class="catalog-secondary-btn" onclick="addModifierGroup()">+ Группа</button></div>
+      <div id="modifierManagerGroups"></div><div class="catalog-recipe-status" id="modifierManagerStatus"></div>
+    </div>
+    <div class="catalog-modal__footer"><button type="button" class="catalog-secondary-btn" onclick="closeModifierManager()">Закрыть</button><button type="button" class="catalog-primary-btn" onclick="saveModifierManager()">Сохранить модификаторы</button></div>
   </div>
 </div>
 
