@@ -239,7 +239,7 @@ def api_catalog_items():
     where = ["items.company_id = %s"]
     params = [company_id]
 
-    if item_type in ("product", "service", "dish", "ingredient"):
+    if item_type in ("product", "service", "dish", "ingredient", "semi_finished"):
         where.append("COALESCE(items.item_type, 'product') = %s")
         params.append(item_type)
 
@@ -455,7 +455,7 @@ def add_item():
     if request.method == "POST":
 
         company_id = session.get("company_id")
-        item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish", "ingredient"} else "product"
+        item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish", "ingredient", "semi_finished"} else "product"
         barcode = _item_barcode(cur, request.form.get("barcode"), item_type)
 
         cur.execute("""
@@ -514,7 +514,7 @@ def add_item():
                     payment_method=request.form.get("opening_payment_method") or "Другое",
                 )
 
-        if item_type == "dish":
+        if item_type in {"dish", "semi_finished"}:
             try:
                 recipe_values = json.loads(request.form.get("recipe_json") or "[]")
             except (TypeError, ValueError, json.JSONDecodeError):
@@ -528,7 +528,7 @@ def add_item():
                     continue
                 if ingredient_id in seen_recipe_ids or recipe_quantity <= 0:
                     continue
-                cur.execute("SELECT id FROM items WHERE id=%s AND company_id=%s AND COALESCE(item_type,'product')='ingredient'", (ingredient_id, company_id))
+                cur.execute("SELECT id FROM items WHERE id=%s AND company_id=%s AND COALESCE(item_type,'product') IN ('ingredient','semi_finished')", (ingredient_id, company_id))
                 if not cur.fetchone():
                     continue
                 seen_recipe_ids.add(ingredient_id)
@@ -593,7 +593,7 @@ def edit_item(item_id):
     cur = conn.cursor()
 
     if request.method == "POST":
-        item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish", "ingredient"} else "product"
+        item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish", "ingredient", "semi_finished"} else "product"
         barcode = _item_barcode(cur, request.form.get("barcode"), item_type)
         cur.execute("""
             UPDATE items
@@ -2168,7 +2168,7 @@ def api_item_recipe(item_id):
 
         if normalized:
             ids = [value[0] for value in normalized]
-            cur.execute("SELECT id FROM items WHERE company_id = %s AND COALESCE(item_type, 'product') = 'ingredient' AND id = ANY(%s)", (company_id, ids))
+            cur.execute("SELECT id FROM items WHERE company_id = %s AND COALESCE(item_type, 'product') IN ('ingredient','semi_finished') AND id = ANY(%s)", (company_id, ids))
             existing = {row["id"] for row in cur.fetchall()}
             if existing != set(ids):
                 return jsonify({"success": False, "message": "Один из ингредиентов не найден"}), 400
