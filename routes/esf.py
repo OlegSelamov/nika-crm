@@ -27,6 +27,7 @@ from services.esf_service import (
     send_invoice,
 )
 from utils.timezone import now_kz
+from utils.measure_units import measure_code as canonical_measure_code
 
 
 esf_bp = Blueprint("esf", __name__)
@@ -240,20 +241,8 @@ _ESF_UNIT_NOMENCLATURE = {
 
 
 def _esf_unit_nomenclature(unit, item_type=None):
-    """Return the classifier code used by INVOICEV2 unitNomenclature.
-
-    For services, Kazakhstan's measurement classifier contains the dedicated
-    unit 'Одна услуга' with code 5114. Use it for the Nika catalog values
-    'услуга'/'услуги' and as the default when a service has no unit set.
-    The field itself remains editable in the ESF form.
-    """
-    raw = str(unit or "").strip().lower().replace("ё", "е")
-    raw = re.sub(r"\s+", " ", raw)
-    if raw in {"услуга", "услуги", "одна услуга"}:
-        return "5114"
-    if not raw and str(item_type or "").strip().lower() == "service":
-        return "5114"
-    return _ESF_UNIT_NOMENCLATURE.get(raw, "")
+    """Return the shared Kazakhstan classifier code used across Nika."""
+    return canonical_measure_code(unit, item_type)
 
 def _invoice_number(sale):
     candidate = str(sale.get("sale_number") or "")
