@@ -40,6 +40,7 @@
 
 document.addEventListener('DOMContentLoaded', function () {
     mountItemModalToBody();
+    mountRecipeModalToBody();
     mountCategoryManagerToBody();
     mountLabelManagerToBody();
     mountLabelPreviewToBody();
@@ -149,7 +150,7 @@ function catalogDesktopRow(item) {
         '<td><span class="catalog-price">' + formatCatalogPrice(data.retail_price) + '</span></td>' +
         '<td><span class="catalog-unit">' + escapeCatalogHtml(data.unit) + '</span></td>' +
         '<td><div class="catalog-actions">' +
-            (itemType === 'product' ? '<button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку" data-catalog-label-id="' + id + '">▥</button>' : '') +
+            ((itemType === 'product' || itemType === 'dish') ? '<button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку" data-catalog-label-id="' + id + '">▥</button>' : '') +
             (itemType === 'dish' ? '<button class="catalog-icon-btn catalog-recipe-btn" type="button" title="Техкарта" data-catalog-recipe-id="' + id + '">ТК</button>' : '') +
             '<button class="catalog-icon-btn" type="button" title="Редактировать" data-catalog-edit-id="' + id + '">' +
                 '<img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>' +
@@ -181,7 +182,7 @@ function catalogMobileCard(item) {
             '<div><small>GTIN</small>' + escapeCatalogHtml(data.gtin || '—') + '</div>' +
             '<div><small>NTIN</small>' + escapeCatalogHtml(data.ntin || '—') + '</div></div>' +
         '<div class="catalog-mobile-card__actions">' +
-            (itemType === 'product' ? '<button type="button" class="catalog-mobile-label-btn" data-catalog-label-id="' + id + '">Этикетка</button>' : '') +
+            ((itemType === 'product' || itemType === 'dish') ? '<button type="button" class="catalog-mobile-label-btn" data-catalog-label-id="' + id + '">Этикетка</button>' : '') +
             (itemType === 'dish' ? '<button type="button" class="catalog-mobile-recipe-btn" data-catalog-recipe-id="' + id + '">Техкарта</button>' : '') +
             '<button type="button" data-catalog-edit-id="' + id + '">Изменить</button>' +
             '<a href="/items/' + id + '/delete" data-catalog-delete-id="' + id + '">Удалить</a>' +
@@ -2057,8 +2058,14 @@ function printSelectedLabels() {
     }
 }
 
-function openRecipeModal(itemId, itemName) {
+function mountRecipeModalToBody() {
     var modal = document.getElementById('recipeModal');
+    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+    return modal;
+}
+
+function openRecipeModal(itemId, itemName) {
+    var modal = mountRecipeModalToBody();
     var name = document.getElementById('recipeModalDishName');
     if (name) name.textContent = itemName || 'Блюдо';
     if (modal) { modal.classList.add('is-open'); modal.setAttribute('aria-hidden','false'); }
@@ -2083,7 +2090,7 @@ async function saveRecipeFromModal(){ await saveItemRecipe(); var src=document.g
 async function openDraftRecipeModal() {
     activeRecipeDishId = null;
     recipeIngredients = recipeIngredients || [];
-    var modal=document.getElementById('recipeModal'), name=document.getElementById('recipeModalDishName');
+    var modal=mountRecipeModalToBody(), name=document.getElementById('recipeModalDishName');
     if(name) name.textContent=(document.getElementById('itemName')||{}).value || 'Новое блюдо';
     if(modal){modal.classList.add('is-open');modal.setAttribute('aria-hidden','false');}
     try {
