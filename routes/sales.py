@@ -299,9 +299,10 @@ def pay_sale():
                     gtin,
                     ntin,
                     excise_stamp,
-                    item_type
+                    item_type,
+                    modifiers
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 sale_id,
                 item.get("id"),
@@ -313,7 +314,8 @@ def pay_sale():
                 item.get("gtin"),
                 item.get("ntin"),
                 item.get("excise_stamp"),
-                item_type
+                item_type,
+                json.dumps(item.get("modifiers") or [], ensure_ascii=False)
             ))
 
         process_sale(conn, sale_id)
@@ -1120,6 +1122,26 @@ def process_sale(conn, sale_id):
                     ingredient_qty, ingredient_price, ingredient_qty * ingredient_price,
                     "Списание по техкарте", now_kz().isoformat()
                 ))
+
+            selected_modifiers = item.get("modifiers") or []
+            if isinstance(selected_modifiers, str):
+                try: selected_modifiers = json.loads(selected_modifiers)
+                except Exception: selected_modifiers = []
+            modifier_ids = [int(m.get("id")) for m in selected_modifiers if m.get("id")]
+            if modifier_ids:
+                cur.execute("""SELECT m.id,m.ingredient_item_id,m.ingredient_quantity,COALESCE(i.purchase_price,0) purchase_price
+                               FROM dish_modifiers m JOIN dish_modifier_groups g ON g.id=m.group_id
+                               LEFT JOIN items i ON i.id=m.ingredient_item_id
+                               WHERE g.company_id=%s AND g.dish_item_id=%s AND m.id=ANY(%s) AND m.active=TRUE""",
+                            (sale["company_id"], item["item_id"], modifier_ids))
+                for mod in cur.fetchall():
+                    if not mod["ingredient_item_id"] or not mod["ingredient_quantity"]: continue
+                    modifier_qty = mod["ingredient_quantity"] * item["quantity"]
+                    cur.execute("UPDATE items SET quantity=COALESCE(quantity,0)-%s WHERE id=%s AND company_id=%s",
+                                (modifier_qty,mod["ingredient_item_id"],sale["company_id"]))
+                    cur.execute("""INSERT INTO stock_movements(company_id,item_id,movement_type,quantity,price,total,comment,created_at)
+                                   VALUES(%s,%s,'sale',%s,%s,%s,%s,%s)""",
+                                (sale["company_id"],mod["ingredient_item_id"],modifier_qty,mod["purchase_price"],modifier_qty*mod["purchase_price"],"Списание модификатора блюда",now_kz().isoformat()))
 
     cur.execute("""
         UPDATE sales
