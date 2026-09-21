@@ -440,7 +440,7 @@ function applyItemType(type) {
     if (dishRadio) dishRadio.checked = type === "dish";
     if (modal) modal.classList.toggle("is-service", type === "service");
     if (modal) modal.classList.toggle("is-dish", type === "dish");
-    filterItemCategoryOptions(type === "dish" ? "product" : type);
+    filterItemCategoryOptions(type === "dish" ? "product" : type);\n    var dishNote = document.getElementById("catalogDishNote");\n    if (dishNote) dishNote.hidden = type !== "dish";
 
     var unitSelect = document.getElementById("itemUnit");
     if (unitSelect) {
@@ -449,7 +449,7 @@ function applyItemType(type) {
     }
 
     if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : (type === "dish" ? "Название блюда *" : "Название товара *");
-    if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : "Например: Молоко 3,2%";
+    if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : (type === "dish" ? "Например: Шаурма с курицей" : "Например: Молоко 3,2%");
     var descriptionLabel = document.getElementById("itemDescriptionLabel");
     var descriptionInput = document.getElementById("itemDescription");
     var descriptionHint = document.getElementById("itemDescriptionHint");
@@ -895,7 +895,7 @@ function openEditItemModal(item) {
     var form = document.getElementById('itemForm');
     form.reset();
     form.action = '/items/' + encodeURIComponent(item.id) + '/edit';
-    document.getElementById('itemModalTitle').textContent = item.item_type === 'service' ? 'Редактировать услугу' : 'Редактировать товар';
+    document.getElementById('itemModalTitle').textContent = item.item_type === 'service' ? 'Редактировать услугу' : (item.item_type === 'dish' ? 'Редактировать блюдо' : 'Редактировать товар');
     applyItemType(item.item_type || 'product');
     setServiceSaleMode(item.service_sale_mode || 'order');
 
