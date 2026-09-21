@@ -159,7 +159,7 @@ def items():
     cur.execute("SELECT COALESCE(business_mode, 'universal') AS business_mode FROM companies WHERE id = %s", (session.get("company_id"),))
     mode_row = cur.fetchone()
     business_mode = (mode_row["business_mode"] if mode_row else "universal") or "universal"
-    initial_type_filter = "dish" if business_mode == "foodservice" else "all"
+    initial_type_filter = "all"
     
     cur.execute("""
     SELECT 
