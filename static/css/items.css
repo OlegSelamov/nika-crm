@@ -422,3 +422,9 @@ body.catalog-label-modal-open{overflow:hidden}
 .catalog-ingredient-opening[hidden]{display:none!important}
 .catalog-ingredient-opening>div{align-self:center;display:grid;gap:4px}.catalog-ingredient-opening small{color:var(--cat-muted)}
 @media(max-width:700px){.catalog-ingredient-opening{grid-template-columns:1fr}}
+
+/* Tech card must always sit above the item modal and stay viewport-centered. */
+.catalog-recipe-modal{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;z-index:2147483647!important;align-items:center!important;justify-content:center!important;padding:12px!important;margin:0!important;transform:none!important;contain:none!important}
+.catalog-recipe-modal.is-open{display:flex!important}
+.catalog-recipe-modal__backdrop{position:fixed!important;inset:0!important;z-index:0!important}
+.catalog-recipe-modal__dialog{position:relative!important;z-index:1!important;margin:auto!important;width:min(720px,calc(100vw - 24px))!important;max-height:calc(100dvh - 24px)!important}
