@@ -16,13 +16,17 @@
     }
 
     function currentMode() {
+        const businessMode = window.NIKA_BUSINESS_MODE || "universal";
+        if (businessMode === "foodservice") return "food";
+        if (businessMode === "retail") return "retail";
         const saved = localStorage.getItem(MODE_KEY);
         return saved === "food" ? "food" : "retail";
     }
 
     function setMode(mode) {
-        const next = mode === "food" ? "food" : "retail";
-        localStorage.setItem(MODE_KEY, next);
+        const businessMode = window.NIKA_BUSINESS_MODE || "universal";
+        const next = businessMode === "foodservice" ? "food" : (businessMode === "retail" ? "retail" : (mode === "food" ? "food" : "retail"));
+        if (businessMode === "universal") localStorage.setItem(MODE_KEY, next);
 
         const retailPanel = document.getElementById("retailSalesPanel");
         const foodPanel = document.getElementById("foodSalesPanel");
