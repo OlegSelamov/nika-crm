@@ -357,7 +357,7 @@
                 <div class="catalog-recipe-editor" id="catalogRecipeEditor" hidden>
                     <div class="catalog-recipe-head"><div><strong>Техкарта блюда</strong><small>Норма ингредиентов на 1 порцию</small></div><button type="button" class="catalog-secondary-btn" onclick="addRecipeIngredient()">+ Ингредиент</button></div>
                     <div id="recipeRows"></div>
-                    <div class="catalog-recipe-summary"><span>Себестоимость порции</span><strong id="recipeCost">0 ₸</strong></div>
+                    <div class="catalog-recipe-summary"><span>Себестоимость порции по техкарте</span><strong id="recipeCost">0 ₸</strong></div>
                     <div class="catalog-recipe-status" id="recipeStatus"></div>
                     <button type="button" class="catalog-primary-btn" id="saveRecipeButton" onclick="saveItemRecipe()">Сохранить техкарту</button>
                 </div>
@@ -487,7 +487,7 @@
                     </span>
                 </label>
 
-                <label class="catalog-field">
+                <label class="catalog-field" id="itemPurchasePriceField">
                     <span id="itemPurchasePriceLabel">Закупочная цена, ₸</span>
                     <input type="number" name="purchase_price" id="itemPurchasePrice" min="0" step="1" placeholder="0">
                     <small class="catalog-service-cost-note">Оставьте 0, если услуга оказывается самостоятельно. Укажите стоимость при перепродаже или работе подрядчика.</small>
