@@ -127,8 +127,8 @@ function catalogDesktopRow(item) {
     var data = catalogItemData(item);
     var id = encodeURIComponent(data.id);
     var category = escapeCatalogHtml(data.category);
-    var itemType = data.item_type === 'service' ? 'service' : 'product';
-    var typeLabel = itemType === 'service' ? 'Услуга' : 'Товар';
+    var itemType = ['product','service','dish','ingredient'].includes(data.item_type) ? data.item_type : 'product';
+    var typeLabel = itemType === 'service' ? 'Услуга' : (itemType === 'dish' ? 'Блюдо' : (itemType === 'ingredient' ? 'Ингредиент' : 'Товар'));
     var secondary = data.gtin ? 'GTIN: ' + escapeCatalogHtml(data.gtin)
         : data.ntin ? 'NTIN: ' + escapeCatalogHtml(data.ntin)
         : 'ID: ' + escapeCatalogHtml(data.id);
@@ -424,11 +424,12 @@ function filterItemCategoryOptions(type) {
 }
 
 function applyItemType(type) {
-    type = ["product", "service", "dish"].includes(type) ? type : "product";
+    type = ["product", "service", "dish", "ingredient"].includes(type) ? type : "product";
     var modal = document.getElementById("itemModal");
     var productRadio = document.getElementById("itemTypeProduct");
     var serviceRadio = document.getElementById("itemTypeService");
     var dishRadio = document.getElementById("itemTypeDish");
+    var ingredientRadio = document.getElementById("itemTypeIngredient");
     var subtitle = document.getElementById("itemModalSubtitle");
     var nameLabel = document.getElementById("itemNameLabel");
     var nameInput = document.getElementById("itemName");
@@ -438,8 +439,10 @@ function applyItemType(type) {
     if (productRadio) productRadio.checked = type === "product";
     if (serviceRadio) serviceRadio.checked = type === "service";
     if (dishRadio) dishRadio.checked = type === "dish";
+    if (ingredientRadio) ingredientRadio.checked = type === "ingredient";
     if (modal) modal.classList.toggle("is-service", type === "service");
     if (modal) modal.classList.toggle("is-dish", type === "dish");
+    if (modal) modal.classList.toggle("is-ingredient", type === "ingredient");
     filterItemCategoryOptions(type === "dish" ? "product" : type);
     var dishNote = document.getElementById("catalogDishNote");
     if (dishNote) dishNote.hidden = type !== "dish";
@@ -450,8 +453,8 @@ function applyItemType(type) {
         if (type === "product" && unitSelect.value === "услуга") unitSelect.value = "шт";
     }
 
-    if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : (type === "dish" ? "Название блюда *" : "Название товара *");
-    if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : (type === "dish" ? "Например: Шаурма с курицей" : "Например: Молоко 3,2%");
+    if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : (type === "dish" ? "Название блюда *" : (type === "ingredient" ? "Название ингредиента *" : "Название товара *"));
+    if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : (type === "dish" ? "Например: Шаурма с курицей" : (type === "ingredient" ? "Например: Помидоры" : "Например: Молоко 3,2%"));
     var descriptionLabel = document.getElementById("itemDescriptionLabel");
     var descriptionInput = document.getElementById("itemDescription");
     var descriptionHint = document.getElementById("itemDescriptionHint");
@@ -476,7 +479,7 @@ function applyItemType(type) {
     }
     if (retailLabel) retailLabel.textContent = type === "service" ? "Цена услуги, ₸ *" : (type === "dish" ? "Цена блюда, ₸ *" : "Розничная цена, ₸ *");
     if (subtitle) subtitle.textContent = type === "service" ? "Основные данные услуги, цена и штрихкод" : (type === "dish" ? "Позиция меню общепита; ингредиенты настраиваются в техкарте" : "Основные данные товара и идентификаторы маркировки");
-    if (submitButton) submitButton.textContent = type === "service" ? "Сохранить услугу" : (type === "dish" ? "Сохранить блюдо" : "Сохранить товар");
+    if (submitButton) submitButton.textContent = type === "service" ? "Сохранить услугу" : (type === "dish" ? "Сохранить блюдо" : (type === "ingredient" ? "Сохранить ингредиент" : "Сохранить товар"));
 
     var barcodeButton = document.getElementById("barcodeSearchButton");
     if (barcodeButton) {
@@ -921,7 +924,7 @@ async function loadItemRecipe(itemId) {
     try {
         var responses = await Promise.all([
             fetch('/api/items/' + encodeURIComponent(itemId) + '/recipe', {headers:{'Accept':'application/json'}}),
-            fetch('/api/catalog/items?type=product&page=1&limit=500', {headers:{'Accept':'application/json'}})
+            fetch('/api/catalog/items?type=ingredient&page=1&limit=100', {headers:{'Accept':'application/json'}})
         ]);
         var recipe = await responses[0].json();
         var catalog = await responses[1].json();
