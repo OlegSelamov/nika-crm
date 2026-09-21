@@ -152,6 +152,18 @@ try:
     _media_schema_cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS act_number INTEGER")
     _media_schema_cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS schet_factura_number INTEGER")
     _media_schema_cur.execute("""
+        CREATE TABLE IF NOT EXISTS item_recipes (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            ingredient_item_id INTEGER NOT NULL REFERENCES items(id),
+            quantity NUMERIC(14,4) NOT NULL CHECK (quantity > 0),
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(company_id, item_id, ingredient_item_id)
+        )
+    """)
+    _media_schema_cur.execute("CREATE INDEX IF NOT EXISTS idx_item_recipes_item ON item_recipes(company_id, item_id)")
+    _media_schema_cur.execute("""
         CREATE TABLE IF NOT EXISTS school_students (
             id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
             class_id INTEGER NOT NULL REFERENCES school_classes(id) ON DELETE CASCADE,
