@@ -2131,15 +2131,15 @@ saveRecipeFromModal=async function(){
 function updateUnitOptionsForItemType(type) {
     var select = document.getElementById('itemUnit');
     if (!select) return;
-    var allowed = type === 'dish' ? ['шт']
-        : type === 'ingredient' ? ['шт','кг','г','л','мл']
-        : type === 'service' ? ['услуга','час','день','месяц','шт']
-        : null;
+    var allowed = type === 'dish' ? ['порция','шт']
+        : type === 'ingredient' ? ['шт','кг','мг','л','мл']
+        : type === 'service' ? ['услуга','час','день','неделя','месяц','год','смена','человек','место','пассажир','рейс','тур']
+        : ['шт','пар','компл','набор','упак','пач','кор','бут','кан','рул','кг','г','мг','т','л','мл','м','см','мм','м²','м³'];
     Array.from(select.options).forEach(function(option){
         option.hidden = !!allowed && allowed.indexOf(option.value) === -1;
         option.disabled = !!allowed && allowed.indexOf(option.value) === -1;
     });
     if (allowed && allowed.indexOf(select.value) === -1) {
-        select.value = type === 'ingredient' ? 'кг' : (type === 'service' ? 'услуга' : 'шт');
+        select.value = type === 'dish' ? 'порция' : (type === 'ingredient' ? 'кг' : (type === 'service' ? 'услуга' : 'шт'));
     }
 }
