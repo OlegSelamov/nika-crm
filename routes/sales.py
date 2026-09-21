@@ -1057,10 +1057,25 @@ def process_sale(conn, sale_id):
             item["id"]
         ))
 
-        if item_type in {"product", "dish"}:
-            # If the sold item has a recipe, consume its ingredients instead of
-            # reducing the finished dish itself. A recipe quantity is expressed
-            # in the ingredient's own unit (kg, l, pcs, etc.) per one dish.
+        if item_type == "product":
+            # Existing retail behavior must stay isolated from food-service recipes.
+            cur.execute("""
+                UPDATE items
+                SET quantity = COALESCE(quantity, 0) - %s
+                WHERE id = %s
+            """, (item["quantity"], item["item_id"]))
+
+            cur.execute("""
+                INSERT INTO stock_movements (
+                    company_id, item_id, movement_type, quantity,
+                    price, total, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                sale["company_id"], item["item_id"], "sale", item["quantity"],
+                item["price"], item["total"], now_kz().isoformat()
+            ))
+
+        elif item_type == "dish":
             cur.execute("""
                 SELECT r.ingredient_item_id, r.quantity,
                        COALESCE(i.purchase_price, 0) AS purchase_price
@@ -1071,43 +1086,26 @@ def process_sale(conn, sale_id):
             """, (sale["company_id"], item["item_id"]))
             recipe_rows = cur.fetchall()
 
-            if item_type == "dish" and not recipe_rows:
+            if not recipe_rows:
                 raise ValueError("Для блюда не заполнена техкарта")
 
-            if recipe_rows:
-                for recipe in recipe_rows:
-                    ingredient_qty = recipe["quantity"] * item["quantity"]
-                    ingredient_price = recipe["purchase_price"] or 0
-                    cur.execute("""
-                        UPDATE items
-                        SET quantity = COALESCE(quantity, 0) - %s
-                        WHERE id = %s AND company_id = %s
-                    """, (ingredient_qty, recipe["ingredient_item_id"], sale["company_id"]))
-                    cur.execute("""
-                        INSERT INTO stock_movements (
-                            company_id, item_id, movement_type, quantity,
-                            price, total, comment, created_at, sale_id
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        sale["company_id"], recipe["ingredient_item_id"], "sale",
-                        ingredient_qty, ingredient_price, ingredient_qty * ingredient_price,
-                        "Списание по техкарте", now_kz().isoformat(), sale_id
-                    ))
-            else:
+            for recipe in recipe_rows:
+                ingredient_qty = recipe["quantity"] * item["quantity"]
+                ingredient_price = recipe["purchase_price"] or 0
                 cur.execute("""
                     UPDATE items
                     SET quantity = COALESCE(quantity, 0) - %s
-                    WHERE id = %s
-                """, (item["quantity"], item["item_id"]))
-
+                    WHERE id = %s AND company_id = %s
+                """, (ingredient_qty, recipe["ingredient_item_id"], sale["company_id"]))
                 cur.execute("""
                     INSERT INTO stock_movements (
                         company_id, item_id, movement_type, quantity,
-                        price, total, created_at, sale_id
+                        price, total, comment, created_at
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
-                    sale["company_id"], item["item_id"], "sale", item["quantity"],
-                    item["price"], item["total"], now_kz().isoformat(), sale_id
+                    sale["company_id"], recipe["ingredient_item_id"], "sale",
+                    ingredient_qty, ingredient_price, ingredient_qty * ingredient_price,
+                    "Списание по техкарте", now_kz().isoformat()
                 ))
 
     cur.execute("""
