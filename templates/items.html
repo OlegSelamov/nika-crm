@@ -41,6 +41,7 @@
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('product', this)">Товары</button>
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('dish', this)">Блюда</button>
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('ingredient', this)">Ингредиенты</button>
         </div>
 
         <div class="catalog-toolbar">
@@ -85,7 +86,7 @@
                             <div class="catalog-product">
                                 {% if session.get('show_catalog_images', true) %}<img class="catalog-product__image" src="{{ i.image or '/static/img/no-photo.png' }}" alt="">{% endif %}
                                 <div class="catalog-product__info">
-                                    <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else ("Блюдо" if item_type == "dish" else "Товар") }}</span></strong>
+                                    <strong>{{ i.name }} <span class="catalog-item-type catalog-item-type--{{ item_type }}">{{ "Услуга" if item_type == "service" else ("Блюдо" if item_type == "dish" else ("Ингредиент" if item_type == "ingredient" else "Товар")) }}</span></strong>
                                     <small>
                                         {% if i.gtin %}GTIN: {{ i.gtin }}{% elif i.ntin %}NTIN: {{ i.ntin }}{% else %}ID: {{ i.id }}{% endif %}
                                     </small>
@@ -346,6 +347,10 @@
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="dish" id="itemTypeDish" onchange="applyItemType('dish')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon">🍽</span><span class="catalog-type-card__text"><strong>Блюдо</strong><small>Списывает ингредиенты</small></span></span>
+                    </label>
+                    <label class="catalog-type-option">
+                        <input type="radio" name="item_type" value="ingredient" id="itemTypeIngredient" onchange="applyItemType('ingredient')">
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon">🥬</span><span class="catalog-type-card__text"><strong>Ингредиент</strong><small>Сырьё для техкарт</small></span></span>
                     </label>
                 </div>
 
