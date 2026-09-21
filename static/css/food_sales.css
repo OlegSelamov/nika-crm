@@ -459,3 +459,100 @@
         max-height: 36vh;
     }
 }
+
+/* Nika Food POS — compact desktop workspace v2 */
+@media (min-width: 901px) {
+    body.food-sales-mode .sales-grid {
+        grid-template-columns: minmax(0, 80%) minmax(230px, 20%);
+        gap: 10px;
+        min-height: 0;
+        height: calc(100vh - 190px);
+    }
+
+    body.food-sales-mode .food-workspace {
+        grid-template-columns: minmax(0, 62%) minmax(300px, 38%);
+        gap: 10px;
+    }
+
+    body.food-sales-mode .payment-box {
+        min-width: 0;
+        padding: 14px 12px;
+        border-radius: 16px;
+    }
+
+    body.food-sales-mode .total-title { font-size: 12px; }
+    body.food-sales-mode .total-amount { margin: 4px 0 10px; font-size: 34px; line-height: 1; }
+    body.food-sales-mode .pay-input { min-height: 42px; padding: 9px 10px; font-size: 13px; }
+    body.food-sales-mode .pay-btn { min-height: 43px; margin-top: 8px; padding: 10px 8px; font-size: 14px; border-radius: 9px; }
+}
+
+.food-menu-panel,
+.food-order-panel { border-radius: 14px; }
+
+.food-menu-head { padding: 10px 12px 8px; gap: 10px; }
+.food-menu-title span { font-size: 10px; }
+.food-menu-title strong { font-size: 17px; }
+.food-search { width: min(390px, 58%); padding: 8px 11px; border-radius: 9px; font-size: 13px; }
+
+.food-categories {
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 0 12px 8px;
+    overflow: visible;
+    scrollbar-width: none;
+}
+.food-categories::-webkit-scrollbar { display: none; }
+.food-category-btn { padding: 6px 10px; border-radius: 9px; font-size: 12px; }
+.food-category-btn.active { border-color: #2563eb; background: #2563eb; }
+
+.food-menu-grid {
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 8px;
+    padding: 3px 12px 12px;
+}
+.food-menu-card { min-height: 132px; border-radius: 11px; }
+.food-menu-image { height: 68px; }
+.food-menu-info { gap: 5px; padding: 7px 9px 8px; }
+.food-menu-name {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    min-height: 30px;
+    font-size: 12.5px;
+    line-height: 1.18;
+}
+.food-menu-price { font-size: 15px; }
+
+.food-order-head { padding: 10px 12px 8px; }
+.food-order-head span { font-size: 9px; }
+.food-order-head strong { font-size: 17px; }
+.food-clear-btn { padding: 6px 8px; font-size: 11px; }
+.food-client-btn { margin: 8px 10px 4px; padding: 8px 9px; font-size: 12px; }
+.food-cart { padding: 4px 10px 8px; }
+.food-cart-empty { min-height: 100px; font-size: 13px; }
+.food-cart-row { padding: 8px 0; }
+.food-cart-row-name { font-size: 12.5px; }
+.food-cart-row-price { font-size: 13px; }
+.food-cart-row-bottom { margin-top: 6px; }
+.food-qty { gap: 4px; }
+.food-qty button { width: 26px; height: 26px; border: 1px solid #e2e8f0; background: #fff; }
+.food-qty span { min-width: 34px; font-size: 11px; }
+.food-remove-btn { padding: 5px 7px; background: #fff1f2; color: #be123c; font-size: 11px; }
+.food-order-total { padding: 10px 12px; }
+.food-order-total strong { font-size: 20px; }
+
+body.food-sales-mode .sales-mode-switch {
+    margin-bottom: 8px;
+    padding: 3px;
+    border-radius: 11px;
+}
+body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radius: 8px; font-size: 13px; }
+
+@media (min-width: 1280px) {
+    .food-menu-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1500px) {
+    .food-menu-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
