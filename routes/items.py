@@ -155,6 +155,10 @@ def items():
     
     cur = conn.cursor()
     _ensure_item_images_main(cur)
+    cur.execute("SELECT COALESCE(business_mode, 'universal') AS business_mode FROM companies WHERE id = %s", (session.get("company_id"),))
+    mode_row = cur.fetchone()
+    business_mode = (mode_row["business_mode"] if mode_row else "universal") or "universal"
+    initial_type_filter = "dish" if business_mode == "foodservice" else "all"
     
     cur.execute("""
     SELECT 
@@ -165,16 +169,18 @@ def items():
          LIMIT 1) as image
     FROM items
     WHERE items.company_id = %s
+      AND (%s = 'all' OR COALESCE(items.item_type, 'product') = %s)
     ORDER BY items.id DESC
     LIMIT 50
-    """, (session.get("company_id"),))
+    """, (session.get("company_id"), initial_type_filter, initial_type_filter))
     items = cur.fetchall()
 
     cur.execute("""
         SELECT COUNT(*) AS total
         FROM items
         WHERE company_id = %s
-    """, (session.get("company_id"),))
+          AND (%s = 'all' OR COALESCE(item_type, 'product') = %s)
+    """, (session.get("company_id"), initial_type_filter, initial_type_filter))
     catalog_total = cur.fetchone()["total"]
 
     cur.execute("""
@@ -192,6 +198,8 @@ def items():
         categories=categories,
         catalog_total=catalog_total,
         catalog_page_size=50,
+        business_mode=business_mode,
+        initial_catalog_type=initial_type_filter,
     )
 
 
