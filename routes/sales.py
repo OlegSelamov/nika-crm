@@ -1057,7 +1057,7 @@ def process_sale(conn, sale_id):
             item["id"]
         ))
 
-        if item_type == "product":
+        if item_type in {"product", "dish"}:
             # If the sold item has a recipe, consume its ingredients instead of
             # reducing the finished dish itself. A recipe quantity is expressed
             # in the ingredient's own unit (kg, l, pcs, etc.) per one dish.
@@ -1070,6 +1070,9 @@ def process_sale(conn, sale_id):
                 ORDER BY r.id
             """, (sale["company_id"], item["item_id"]))
             recipe_rows = cur.fetchall()
+
+            if item_type == "dish" and not recipe_rows:
+                raise ValueError("Для блюда не заполнена техкарта")
 
             if recipe_rows:
                 for recipe in recipe_rows:
