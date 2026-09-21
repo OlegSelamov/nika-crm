@@ -36,12 +36,12 @@
              id="catalogSection"
              data-total="{{ catalog_total|default(items|length) }}"
              data-page-size="{{ catalog_page_size|default(50) }}">
-        <div class="catalog-type-tabs">
-            <button type="button" class="catalog-type-tab is-active" onclick="setCatalogTypeFilter('all', this)">Все</button>
+        <div class="catalog-type-tabs" data-business-mode="{{ business_mode|default('universal') }}" data-initial-type="{{ initial_catalog_type|default('all') }}">
+            {% if business_mode != 'foodservice' %}<button type="button" class="catalog-type-tab {{ 'is-active' if initial_catalog_type=='all' else '' }}" onclick="setCatalogTypeFilter('all', this)">Все</button>
             <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('product', this)">Товары</button>
-            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>
-            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('dish', this)">Блюда</button>
-            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('ingredient', this)">Ингредиенты</button>
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('service', this)">Услуги</button>{% endif %}
+            {% if business_mode != 'retail' %}<button type="button" class="catalog-type-tab {{ 'is-active' if initial_catalog_type=='dish' else '' }}" onclick="setCatalogTypeFilter('dish', this)">Блюда</button>
+            <button type="button" class="catalog-type-tab" onclick="setCatalogTypeFilter('ingredient', this)">Ингредиенты</button>{% endif %}
         </div>
 
         <div class="catalog-toolbar">
