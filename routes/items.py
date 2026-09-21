@@ -23,6 +23,7 @@ from services.media import (
 )
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
+from utils.measure_units import normalize_unit
 from routes.expenses import (
     _ensure_expenses_table,
     _sync_expense_to_accounting,
@@ -480,7 +481,7 @@ def add_item():
         """, (
             request.form["name"],
             request.form["category"],
-            request.form.get("unit"),
+            normalize_unit(request.form.get("unit"), item_type),
             request.form.get("description"),
             0.0 if item_type == "ingredient" else float(request.form.get("retail_price") or 0),
             float(request.form.get("wholesale_price") or 0),
@@ -615,7 +616,7 @@ def edit_item(item_id):
         """, (
             request.form["name"],
             request.form["category"],
-            request.form.get("unit"),
+            normalize_unit(request.form.get("unit"), item_type),
             request.form.get("description"),
             0.0 if item_type == "ingredient" else float(request.form.get("retail_price") or 0),
             float(request.form.get("wholesale_price") or 0),
