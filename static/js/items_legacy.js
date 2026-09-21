@@ -150,6 +150,7 @@ function catalogDesktopRow(item) {
         '<td><span class="catalog-unit">' + escapeCatalogHtml(data.unit) + '</span></td>' +
         '<td><div class="catalog-actions">' +
             (itemType === 'product' ? '<button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку" data-catalog-label-id="' + id + '">▥</button>' : '') +
+            (itemType === 'dish' ? '<button class="catalog-icon-btn catalog-recipe-btn" type="button" title="Техкарта" data-catalog-recipe-id="' + id + '">ТК</button>' : '') +
             '<button class="catalog-icon-btn" type="button" title="Редактировать" data-catalog-edit-id="' + id + '">' +
                 '<img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>' +
             '<a class="catalog-danger-btn" href="/items/' + id + '/delete" title="Удалить" data-catalog-delete-id="' + id + '">' +
@@ -181,6 +182,7 @@ function catalogMobileCard(item) {
             '<div><small>NTIN</small>' + escapeCatalogHtml(data.ntin || '—') + '</div></div>' +
         '<div class="catalog-mobile-card__actions">' +
             (itemType === 'product' ? '<button type="button" class="catalog-mobile-label-btn" data-catalog-label-id="' + id + '">Этикетка</button>' : '') +
+            (itemType === 'dish' ? '<button type="button" class="catalog-mobile-recipe-btn" data-catalog-recipe-id="' + id + '">Техкарта</button>' : '') +
             '<button type="button" data-catalog-edit-id="' + id + '">Изменить</button>' +
             '<a href="/items/' + id + '/delete" data-catalog-delete-id="' + id + '">Удалить</a>' +
         '</div></article>';
@@ -191,6 +193,12 @@ function bindCatalogItemActions(root) {
         button.onclick = function () {
             var item = catalogItemsById[decodeURIComponent(button.dataset.catalogLabelId)];
             if (item) openQuickLabel(item);
+        };
+    });
+    (root || document).querySelectorAll('[data-catalog-recipe-id]').forEach(function (button) {
+        button.onclick = function () {
+            var item = catalogItemsById[decodeURIComponent(button.dataset.catalogRecipeId)];
+            if (item) openRecipeModal(item.id, item.name);
         };
     });
     (root || document).querySelectorAll('[data-catalog-edit-id]').forEach(function (button) {
@@ -2043,3 +2051,26 @@ function printSelectedLabels() {
         alert('Не удалось открыть предпросмотр: ' + (error.message || 'неизвестная ошибка'));
     }
 }
+
+function openRecipeModal(itemId, itemName) {
+    var modal = document.getElementById('recipeModal');
+    var name = document.getElementById('recipeModalDishName');
+    if (name) name.textContent = itemName || 'Блюдо';
+    if (modal) { modal.classList.add('is-open'); modal.setAttribute('aria-hidden','false'); }
+    loadItemRecipe(itemId).then(function(){ renderRecipeModalRows(); });
+}
+function closeRecipeModal() {
+    var modal=document.getElementById('recipeModal');
+    if(modal){modal.classList.remove('is-open');modal.setAttribute('aria-hidden','true');}
+}
+function renderRecipeModalRows() {
+    var source=document.getElementById('recipeRows'), target=document.getElementById('recipeModalRows');
+    if(target && source) target.innerHTML=source.innerHTML;
+    var cost=document.getElementById('recipeCost'), modalCost=document.getElementById('recipeModalCost');
+    if(cost && modalCost) modalCost.textContent=cost.textContent;
+}
+var _nikaRecipeRenderRows=renderRecipeRows;
+renderRecipeRows=function(){ _nikaRecipeRenderRows(); renderRecipeModalRows(); };
+var _nikaRecipeUpdateCost=updateRecipeCost;
+updateRecipeCost=function(){ _nikaRecipeUpdateCost(); var cost=document.getElementById('recipeCost'), modalCost=document.getElementById('recipeModalCost'); if(cost&&modalCost)modalCost.textContent=cost.textContent; };
+async function saveRecipeFromModal(){ await saveItemRecipe(); var src=document.getElementById('recipeStatus'), dst=document.getElementById('recipeModalStatus'); if(src&&dst)dst.textContent=src.textContent; }
