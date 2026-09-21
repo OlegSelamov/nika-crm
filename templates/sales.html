@@ -218,6 +218,15 @@
 		</div>
     </div>
 
+    <div class="food-modifier-modal" id="foodModifierModal" hidden>
+        <div class="food-modifier-backdrop" data-food-modifier-close></div>
+        <div class="food-modifier-dialog" role="dialog" aria-modal="true">
+            <div class="food-modifier-head"><div><small>НАСТРОЙКА БЛЮДА</small><h2 id="foodModifierTitle">Блюдо</h2></div><button type="button" data-food-modifier-close>×</button></div>
+            <div id="foodModifierGroups" class="food-modifier-groups"></div>
+            <div class="food-modifier-footer"><div><span>Итого</span><strong id="foodModifierTotal">0 ₸</strong></div><button type="button" id="foodModifierAdd">Добавить в заказ</button></div>
+        </div>
+    </div>
+
     <!-- ПРАВАЯ ЧАСТЬ: ОПЛАТА ОБЩАЯ ДЛЯ ОБОИХ РЕЖИМОВ -->
 		<div class="payment-box">
 
@@ -749,7 +758,7 @@
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
 <script src="{{ url_for('static', filename='js/sales.js', v='20260918-rekassa-skip-1') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20260921-1') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20260922-modifiers-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
 {% endblock %}
