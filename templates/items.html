@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/items.css') }}?v=20260921-dish-2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/items.css') }}?v=20260921-recipe-1">
 {% endblock %}
 
 {% block content %}
@@ -343,11 +343,23 @@
                         <input type="radio" name="item_type" value="service" id="itemTypeService" onchange="applyItemType('service')">
                         <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/service.png" alt=""></span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
                     </label>
+                    <label class="catalog-type-option">
+                        <input type="radio" name="item_type" value="dish" id="itemTypeDish" onchange="applyItemType('dish')">
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon">🍽</span><span class="catalog-type-card__text"><strong>Блюдо</strong><small>Списывает ингредиенты</small></span></span>
+                    </label>
                 </div>
 
                 <div class="catalog-dish-note" id="catalogDishNote" hidden>
                     <strong>Блюдо для меню общепита</strong>
                     <span>После сохранения настройте техкарту: ингредиенты, нормы списания и себестоимость.</span>
+                </div>
+
+                <div class="catalog-recipe-editor" id="catalogRecipeEditor" hidden>
+                    <div class="catalog-recipe-head"><div><strong>Техкарта блюда</strong><small>Норма ингредиентов на 1 порцию</small></div><button type="button" class="catalog-secondary-btn" onclick="addRecipeIngredient()">+ Ингредиент</button></div>
+                    <div id="recipeRows"></div>
+                    <div class="catalog-recipe-summary"><span>Себестоимость порции</span><strong id="recipeCost">0 ₸</strong></div>
+                    <div class="catalog-recipe-status" id="recipeStatus"></div>
+                    <button type="button" class="catalog-primary-btn" id="saveRecipeButton" onclick="saveItemRecipe()">Сохранить техкарту</button>
                 </div>
 
                 <div class="catalog-service-mode" id="catalogServiceMode">
