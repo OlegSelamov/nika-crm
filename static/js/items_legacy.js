@@ -427,7 +427,8 @@ function applyItemType(type) {
     type = ["product", "service", "dish"].includes(type) ? type : "product";
     var modal = document.getElementById("itemModal");
     var productRadio = document.getElementById("itemTypeProduct");
-    var serviceRadio = document.getElementById("itemTypeService");\n    var dishRadio = document.getElementById("itemTypeDish");
+    var serviceRadio = document.getElementById("itemTypeService");
+    var dishRadio = document.getElementById("itemTypeDish");
     var subtitle = document.getElementById("itemModalSubtitle");
     var nameLabel = document.getElementById("itemNameLabel");
     var nameInput = document.getElementById("itemName");
@@ -435,8 +436,10 @@ function applyItemType(type) {
     var retailLabel = document.getElementById("itemRetailPriceLabel");
     var submitButton = document.getElementById("itemSubmitButton");
     if (productRadio) productRadio.checked = type === "product";
-    if (serviceRadio) serviceRadio.checked = type === "service";\n    if (dishRadio) dishRadio.checked = type === "dish";
-    if (modal) modal.classList.toggle("is-service", type === "service");\n    if (modal) modal.classList.toggle("is-dish", type === "dish");
+    if (serviceRadio) serviceRadio.checked = type === "service";
+    if (dishRadio) dishRadio.checked = type === "dish";
+    if (modal) modal.classList.toggle("is-service", type === "service");
+    if (modal) modal.classList.toggle("is-dish", type === "dish");
     filterItemCategoryOptions(type === "dish" ? "product" : type);
 
     var unitSelect = document.getElementById("itemUnit");
