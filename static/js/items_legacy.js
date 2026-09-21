@@ -197,6 +197,7 @@ function catalogDesktopRow(item) {
         '<td><div class="catalog-actions">' +
             ((itemType === 'product' || itemType === 'dish') ? '<button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку" data-catalog-label-id="' + id + '">▥</button>' : '') +
             ((itemType === 'dish' || itemType === 'semi_finished') ? '<button class="catalog-icon-btn catalog-recipe-btn" type="button" title="Техкарта" data-catalog-recipe-id="' + id + '">ТК</button>' : '') +
+            (itemType === 'dish' ? '<button class="catalog-icon-btn catalog-modifier-btn" type="button" title="Модификаторы" data-catalog-modifier-id="' + id + '">М</button>' : '') +
             '<button class="catalog-icon-btn" type="button" title="Редактировать" data-catalog-edit-id="' + id + '">' +
                 '<img src="/static/icons/edit.png" class="catalog-action-icon" alt=""></button>' +
             '<a class="catalog-danger-btn" href="/items/' + id + '/delete" title="Удалить" data-catalog-delete-id="' + id + '">' +
@@ -246,6 +247,9 @@ function bindCatalogItemActions(root) {
             var item = catalogItemsById[decodeURIComponent(button.dataset.catalogRecipeId)];
             if (item) openRecipeModal(item.id, item.name);
         };
+    });
+    (root || document).querySelectorAll('[data-catalog-modifier-id]').forEach(function (button) {
+        button.onclick = function () { var item=catalogItemsById[decodeURIComponent(button.dataset.catalogModifierId)]; if(item) openModifierManager(item.id,item.name); };
     });
     (root || document).querySelectorAll('[data-catalog-edit-id]').forEach(function (button) {
         button.onclick = function () {
@@ -2191,4 +2195,36 @@ function updateUnitOptionsForItemType(type) {
     if (allowed && allowed.indexOf(select.value) === -1) {
         select.value = type === 'dish' ? 'порция' : (type === 'ingredient' ? 'кг' : (type === 'service' ? 'услуга' : 'шт'));
     }
+}
+
+var activeModifierDishId=null, modifierGroups=[], modifierIngredients=[];
+async function loadModifierIngredients(){
+  if(modifierIngredients.length)return;
+  var all=[];
+  for(const type of ['ingredient','semi_finished']){try{var r=await fetch('/api/catalog/items?type='+type+'&page=1&limit=100',{headers:{Accept:'application/json'}});var d=await r.json();all=all.concat(d.items||[])}catch(e){}}
+  modifierIngredients=all;
+}
+async function openModifierManager(itemId,itemName){
+  activeModifierDishId=itemId; var modal=document.getElementById('modifierManager'); if(modal.parentElement!==document.body)document.body.appendChild(modal);
+  document.getElementById('modifierManagerDishName').textContent=itemName||'Блюдо'; document.getElementById('modifierManagerStatus').textContent='Загрузка…';
+  modal.classList.add('is-open');modal.setAttribute('aria-hidden','false');
+  try{await loadModifierIngredients();var r=await fetch('/api/items/'+itemId+'/modifiers',{headers:{Accept:'application/json'}});var d=await r.json();modifierGroups=d.groups||[];renderModifierManager();document.getElementById('modifierManagerStatus').textContent='';}catch(e){document.getElementById('modifierManagerStatus').textContent='Не удалось загрузить модификаторы';}
+}
+function closeModifierManager(){var m=document.getElementById('modifierManager');if(m){m.classList.remove('is-open');m.setAttribute('aria-hidden','true')}}
+function addModifierGroup(){modifierGroups.push({name:'',min_select:0,max_select:1,options:[]});renderModifierManager()}
+function addModifierOption(g){modifierGroups[g].options.push({name:'',price_delta:0,ingredient_item_id:null,ingredient_quantity:0});renderModifierManager()}
+function removeModifierGroup(g){modifierGroups.splice(g,1);renderModifierManager()}
+function removeModifierOption(g,o){modifierGroups[g].options.splice(o,1);renderModifierManager()}
+function modifierEsc(v){var d=document.createElement('div');d.textContent=String(v||'');return d.innerHTML}
+function modifierIngredientOptions(selected){return '<option value="">Без списания</option>'+modifierIngredients.map(i=>'<option value="'+i.id+'" '+(String(i.id)===String(selected)?'selected':'')+'>'+modifierEsc(i.name)+' ('+modifierEsc(i.unit||'шт')+')</option>').join('')}
+function renderModifierManager(){
+ var root=document.getElementById('modifierManagerGroups');if(!root)return;
+ root.innerHTML=modifierGroups.length?'':'<div class="catalog-modifier-empty">У блюда пока нет модификаторов. Добавьте первую группу.</div>';
+ modifierGroups.forEach((g,gi)=>{var box=document.createElement('section');box.className='catalog-modifier-group';
+ box.innerHTML='<div class="catalog-modifier-group-head"><input placeholder="Название группы, например Добавки" value="'+modifierEsc(g.name)+'" oninput="modifierGroups['+gi+'].name=this.value"><div><label>Мин. <input type="number" min="0" value="'+Number(g.min_select||0)+'" oninput="modifierGroups['+gi+'].min_select=Number(this.value)"></label><label>Макс. <input type="number" min="1" value="'+Number(g.max_select||1)+'" oninput="modifierGroups['+gi+'].max_select=Number(this.value)"></label><button type="button" onclick="removeModifierGroup('+gi+')">Удалить</button></div></div><div class="catalog-modifier-options"></div><button type="button" class="catalog-secondary-btn" onclick="addModifierOption('+gi+')">+ Вариант</button>';
+ var list=box.querySelector('.catalog-modifier-options');(g.options||[]).forEach((o,oi)=>{var row=document.createElement('div');row.className='catalog-modifier-option-row';row.innerHTML='<input placeholder="Название" value="'+modifierEsc(o.name)+'" oninput="modifierGroups['+gi+'].options['+oi+'].name=this.value"><label>+ к цене ₸<input type="number" step="0.01" value="'+Number(o.price_delta||0)+'" oninput="modifierGroups['+gi+'].options['+oi+'].price_delta=Number(this.value)"></label><select onchange="modifierGroups['+gi+'].options['+oi+'].ingredient_item_id=this.value?Number(this.value):null">'+modifierIngredientOptions(o.ingredient_item_id)+'</select><label>Списание<input type="number" min="0" step="0.001" value="'+Number(o.ingredient_quantity||0)+'" oninput="modifierGroups['+gi+'].options['+oi+'].ingredient_quantity=Number(this.value)"></label><button type="button" onclick="removeModifierOption('+gi+','+oi+')">×</button>';list.appendChild(row)});root.appendChild(box)})
+}
+async function saveModifierManager(){
+ var status=document.getElementById('modifierManagerStatus');status.textContent='Сохраняем…';
+ try{var r=await fetch('/api/items/'+activeModifierDishId+'/modifiers',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({groups:modifierGroups})});var d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Ошибка');status.textContent='Модификаторы сохранены';}catch(e){status.textContent=e.message||'Не удалось сохранить'}
 }
