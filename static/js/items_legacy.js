@@ -86,6 +86,7 @@ function updateUnitOptionsForItemType(type) {
 document.addEventListener('DOMContentLoaded', function () {
     mountItemModalToBody();
     mountRecipeModalToBody();
+    var modifierModal=document.getElementById('modifierManager'); if(modifierModal&&modifierModal.parentElement!==document.body)document.body.appendChild(modifierModal);
     mountCategoryManagerToBody();
     mountLabelManagerToBody();
     mountLabelPreviewToBody();
@@ -107,6 +108,14 @@ document.addEventListener('DOMContentLoaded', function () {
     var section = document.getElementById('catalogSection');
     var body = document.getElementById('catalogTableBody');
     catalogLoadedCount = body ? body.querySelectorAll('.catalog-item').length : 0;
+    document.querySelectorAll('#catalogTableBody .catalog-item, #catalogMobileList .catalog-item').forEach(function(row){
+        var id=row.querySelector('[data-catalog-edit-id]')?.dataset.catalogEditId;
+        if(id && !catalogItemsById[decodeURIComponent(id)]) {
+            var edit=row.querySelector('[data-catalog-edit-id]');
+        }
+    });
+    bindCatalogItemActions(document.getElementById('catalogTableBody'));
+    bindCatalogItemActions(document.getElementById('catalogMobileList'));
     updateCatalogPagination(
         Number(section ? section.dataset.total : catalogLoadedCount) || 0,
         catalogLoadedCount < (Number(section ? section.dataset.total : 0) || 0)
@@ -208,8 +217,8 @@ function catalogDesktopRow(item) {
 function catalogMobileCard(item) {
     var data = catalogItemData(item);
     var id = encodeURIComponent(data.id);
-    var itemType = data.item_type === 'service' ? 'service' : 'product';
-    var typeLabel = itemType === 'service' ? 'Услуга' : 'Товар';
+    var itemType = ['product','service','dish','ingredient','semi_finished'].includes(data.item_type) ? data.item_type : 'product';
+    var typeLabel = itemType === 'service' ? 'Услуга' : (itemType === 'dish' ? 'Блюдо' : (itemType === 'ingredient' ? 'Ингредиент' : (itemType === 'semi_finished' ? 'Полуфабрикат' : 'Товар')));
     var image = escapeCatalogHtml(data.image || '/static/img/no-photo.png');
     var imageHtml = window.NIKA_SHOW_CATALOG_IMAGES === false
         ? ''
@@ -230,6 +239,7 @@ function catalogMobileCard(item) {
         '<div class="catalog-mobile-card__actions">' +
             ((itemType === 'product' || itemType === 'dish') ? '<button type="button" class="catalog-mobile-label-btn" data-catalog-label-id="' + id + '">Этикетка</button>' : '') +
             ((itemType === 'dish' || itemType === 'semi_finished') ? '<button type="button" class="catalog-mobile-recipe-btn" data-catalog-recipe-id="' + id + '">Техкарта</button>' : '') +
+            (itemType === 'dish' ? '<button type="button" class="catalog-mobile-recipe-btn" data-catalog-modifier-id="' + id + '">Модификаторы</button>' : '') +
             '<button type="button" data-catalog-edit-id="' + id + '">Изменить</button>' +
             '<a href="/items/' + id + '/delete" data-catalog-delete-id="' + id + '">Удалить</a>' +
         '</div></article>';
