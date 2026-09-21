@@ -2,6 +2,7 @@
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20260914-cash-change-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-1') }}">
 {% endblock %}
 
 {% block content %}
@@ -22,10 +23,15 @@
 		<button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" title="Обновить смену" aria-label="Обновить смену">↻</button>
 	</div>
 </section>
+<div class="sales-mode-switch" role="tablist" aria-label="Режим продаж">
+	<button type="button" id="salesModeRetail" class="active" role="tab" aria-selected="true">Розница</button>
+	<button type="button" id="salesModeFood" role="tab" aria-selected="false">Общепит</button>
+</div>
+
 <div class="sales-grid">
 
-    <!-- ЛЕВАЯ ЧАСТЬ -->
-    <div class="left-side">
+    <!-- ЛЕВАЯ ЧАСТЬ: ОБЫЧНАЯ КАССА -->
+    <div class="left-side" id="retailSalesPanel">
 
         <!-- ПОИСК -->
 		<div class="top-bar">
@@ -169,7 +175,45 @@
 
     </div>
 
-    <!-- ПРАВАЯ ЧАСТЬ -->
+    <!-- ЛЕВАЯ ЧАСТЬ: ОБЩЕПИТ -->
+    <div class="food-side" id="foodSalesPanel" hidden>
+		<div class="food-workspace">
+			<section class="food-menu-panel">
+				<div class="food-menu-head">
+					<div class="food-menu-title">
+						<span>Общепит</span>
+						<strong>Меню</strong>
+					</div>
+					<input id="foodSearch" class="food-search" type="search" placeholder="Найти блюдо или товар..." autocomplete="off">
+				</div>
+				<div id="foodCategories" class="food-categories" aria-label="Категории меню"></div>
+				<div id="foodMenuGrid" class="food-menu-grid">
+					<div class="food-menu-loading">Загружаем меню…</div>
+				</div>
+			</section>
+
+			<aside class="food-order-panel">
+				<div class="food-order-head">
+					<div>
+						<span>Текущий заказ</span>
+						<strong>Корзина</strong>
+					</div>
+					<button type="button" class="food-clear-btn" id="foodClearCart">Очистить</button>
+				</div>
+				<button type="button" class="food-client-btn" id="foodClientButton">
+					<span>Клиент:</span>
+					<span id="foodClientLabel">Частное лицо</span>
+				</button>
+				<div id="foodCart" class="food-cart"></div>
+				<div class="food-order-total">
+					<span>Итого</span>
+					<strong id="foodOrderTotal">0 ₸</strong>
+				</div>
+			</aside>
+		</div>
+    </div>
+
+    <!-- ПРАВАЯ ЧАСТЬ: ОПЛАТА ОБЩАЯ ДЛЯ ОБОИХ РЕЖИМОВ -->
 		<div class="payment-box">
 
 			<div class="total-title">ИТОГО</div>
@@ -700,6 +744,7 @@
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
 <script src="{{ url_for('static', filename='js/sales.js', v='20260918-rekassa-skip-1') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20260921-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
 {% endblock %}
