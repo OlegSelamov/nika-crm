@@ -406,3 +406,6 @@ body.catalog-label-modal-open{overflow:hidden}
 .catalog-item-type--ingredient{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
 .catalog-type-switch{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:700px){.catalog-type-switch{grid-template-columns:1fr}}
+
+#itemRetailPriceField[hidden]{display:none!important}
+.catalog-modal.is-ingredient #itemRetailPriceField{display:none!important}
