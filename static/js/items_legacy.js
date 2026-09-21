@@ -1,3 +1,29 @@
+function updateUnitOptionsForItemType(type) {
+    var select = document.getElementById('itemUnit');
+    if (!select) return;
+    var allowed = type === 'dish' ? ['порция','шт']
+        : type === 'ingredient' ? ['шт','кг','мг','л','мл']
+        : type === 'service' ? ['услуга','час','день','неделя','месяц','год','смена','человек','место','пассажир','рейс','тур']
+        : ['шт','пар','компл','набор','упак','пач','кор','бут','кан','рул','кг','г','мг','т','л','мл','м','см','мм','м²','м³'];
+    Array.from(select.options).forEach(function(option) {
+        var visible = allowed.indexOf(option.value) !== -1;
+        option.hidden = !visible;
+        option.disabled = !visible;
+        option.style.display = visible ? '' : 'none';
+    });
+    Array.from(select.querySelectorAll('optgroup')).forEach(function(group) {
+        var hasVisible = Array.from(group.querySelectorAll('option')).some(function(option) {
+            return allowed.indexOf(option.value) !== -1;
+        });
+        group.hidden = !hasVisible;
+        group.disabled = !hasVisible;
+        group.style.display = hasVisible ? '' : 'none';
+    });
+    if (allowed.indexOf(select.value) === -1) {
+        select.value = type === 'dish' ? 'порция' : (type === 'ingredient' ? 'кг' : (type === 'service' ? 'услуга' : 'шт'));
+    }
+}
+
 (function () {
     document.addEventListener('DOMContentLoaded', function () {
         var input = document.getElementById('catalogSearch');
