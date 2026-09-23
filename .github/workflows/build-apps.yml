@@ -226,6 +226,9 @@ jobs:
       - name: Get Flutter dependencies
         working-directory: android_app
         run: flutter pub get
+      - name: Generate launcher icons
+        working-directory: android_app
+        run: dart run flutter_launcher_icons
       - name: Build signed APK
         working-directory: android_app
         run: flutter build apk --release --build-name "${{ steps.version.outputs.version }}" --build-number "${{ steps.version.outputs.build_number }}"
