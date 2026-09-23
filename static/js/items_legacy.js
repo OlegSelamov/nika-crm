@@ -39,7 +39,7 @@ function updateUnitOptionsForItemType(type) {
     if (allowed.indexOf(previous) !== -1) {
         select.value = previous;
     } else {
-        select.value = type === 'dish' ? 'порция' : (type === 'ingredient' ? 'кг' : (type === 'service' ? 'услуга' : 'шт'));
+        select.value = type === 'dish' ? 'порция' : ((type === 'ingredient' || type === 'semi_finished') ? 'кг' : (type === 'service' ? 'услуга' : 'шт'));
     }
 }
 
@@ -510,7 +510,7 @@ function applyItemType(type) {
     if (productRadio) productRadio.checked = type === "product";
     if (serviceRadio) serviceRadio.checked = type === "service";
     if (dishRadio) dishRadio.checked = type === "dish";
-    if (ingredientRadio) ingredientRadio.checked = (type === "ingredient" || type === "semi_finished");
+    if (ingredientRadio) ingredientRadio.checked = type === "ingredient";
     if (semiFinishedRadio) semiFinishedRadio.checked = type === "semi_finished";
     if (modal) modal.classList.toggle("is-service", type === "service");
     if (modal) modal.classList.toggle("is-dish", type === "dish");
@@ -527,7 +527,7 @@ function applyItemType(type) {
         if (type === "product" && unitSelect.value === "услуга") unitSelect.value = "шт";
     }
 
-    if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : (type === "dish" ? "Название блюда *" : ((type === "ingredient" || type === "semi_finished") ? "Название ингредиента *" : "Название товара *"));
+    if (nameLabel) nameLabel.textContent = type === "service" ? "Наименование услуги *" : (type === "dish" ? "Название блюда *" : (type === "semi_finished" ? "Название полуфабриката *" : (type === "ingredient" ? "Название ингредиента *" : "Название товара *")));
     if (nameInput) nameInput.placeholder = type === "service" ? "Например: Установка кассы" : (type === "dish" ? "Например: Шаурма с курицей" : ((type === "ingredient" || type === "semi_finished") ? "Например: Помидоры" : "Например: Молоко 3,2%"));
     var descriptionLabel = document.getElementById("itemDescriptionLabel");
     var descriptionInput = document.getElementById("itemDescription");
@@ -561,7 +561,7 @@ function applyItemType(type) {
     }
     if (retailLabel) retailLabel.textContent = type === "service" ? "Цена услуги, ₸ *" : (type === "dish" ? "Цена блюда, ₸ *" : "Розничная цена, ₸ *");
     if (subtitle) subtitle.textContent = type === "service" ? "Основные данные услуги, цена и штрихкод" : (type === "dish" ? "Позиция меню общепита; ингредиенты настраиваются в техкарте" : "Основные данные товара и идентификаторы маркировки");
-    if (submitButton) submitButton.textContent = type === "service" ? "Сохранить услугу" : (type === "dish" ? "Сохранить блюдо" : ((type === "ingredient" || type === "semi_finished") ? "Сохранить ингредиент" : "Сохранить товар"));
+    if (submitButton) submitButton.textContent = type === "service" ? "Сохранить услугу" : (type === "dish" ? "Сохранить блюдо" : (type === "semi_finished" ? "Сохранить полуфабрикат" : (type === "ingredient" ? "Сохранить ингредиент" : "Сохранить товар")));
 
     var barcodeButton = document.getElementById("barcodeSearchButton");
     if (barcodeButton) {
@@ -1110,7 +1110,7 @@ function openEditItemModal(item) {
     priceCalculationSource = 'purchase';
     syncCategoryName(true);
     loadItemMedia(item.id);
-    if (item.item_type === 'dish') loadItemRecipe(item.id); else { activeRecipeDishId = null; setRecipeEditorVisible(false); }
+    if (item.item_type === 'dish' || item.item_type === 'semi_finished') loadItemRecipe(item.id); else { activeRecipeDishId = null; setRecipeEditorVisible(false); }
 
     openItemModal();
 }
@@ -2195,7 +2195,7 @@ function updateUnitOptionsForItemType(type) {
     var select = document.getElementById('itemUnit');
     if (!select) return;
     var allowed = type === 'dish' ? ['порция','шт']
-        : type === 'ingredient' ? ['шт','кг','мг','л','мл']
+        : (type === 'ingredient' || type === 'semi_finished') ? ['шт','кг','мг','л','мл']
         : type === 'service' ? ['услуга','час','день','неделя','месяц','год','смена','человек','место','пассажир','рейс','тур']
         : ['шт','пар','компл','набор','упак','пач','кор','бут','кан','рул','кг','г','мг','т','л','мл','м','см','мм','м²','м³'];
     Array.from(select.options).forEach(function(option){
