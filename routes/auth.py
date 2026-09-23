@@ -43,6 +43,13 @@ def _ensure_employee_accounting_schema(cur):
     """)
 
 
+def _ensure_company_legal_form(cur):
+    cur.execute("""
+        ALTER TABLE companies
+        ADD COLUMN IF NOT EXISTS legal_form VARCHAR(20) NOT NULL DEFAULT 'ip'
+    """)
+
+
 def _ensure_profile_tax_settings_schema(cur):
     """Tax calculation settings edited from the company profile."""
     cur.execute("""
@@ -1417,6 +1424,9 @@ def register():
             # Компания
             name = request.form.get("name", "").strip()
             director = request.form.get("director", "").strip()
+            legal_form = request.form.get("legal_form", "ip").strip().lower()
+            if legal_form not in ("ip", "too"):
+                legal_form = "ip"
             bin = request.form.get("bin", "").strip()
             address = request.form.get("address", "").strip()
             phone = request.form.get("phone", "").strip()
@@ -1455,15 +1465,16 @@ def register():
                 )
 
             # 1. Компания
+            _ensure_company_legal_form(cur)
             cur.execute("""
                 INSERT INTO companies (
-                    name, director, bin, address, phone,
+                    name, director, legal_form, bin, address, phone,
                     iik, bik, bank, kbe, knp, tariff, is_active
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
                 RETURNING id
             """, (
-                name, director or None, bin or None, address or None, phone or None,
+                name, director or None, legal_form, bin or None, address or None, phone or None,
                 iik or None, bik or None, bank or None, kbe or None, knp or None,
                 selected_plan,
             ))
