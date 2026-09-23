@@ -119,6 +119,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                             StatusPill(owner ? 'Владелец' : item['role'] == 'admin' ? 'Администратор' : 'Сотрудник', color: owner ? AppColors.warning : AppColors.primary),
                             StatusPill(isOnline ? 'Онлайн' : 'Не в сети', color: isOnline ? AppColors.success : AppColors.muted),
                             if (asDouble(item['percent_rate']) > 0) StatusPill('${item['percent_rate']}%', color: AppColors.cyan),
+                            if (item['employee_tax_active'] == true) StatusPill('Налоги', color: AppColors.success),
                           ]),
                         ])),
                         PopupMenuButton<String>(
@@ -161,7 +162,18 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
   late final TextEditingController phone;
   late final TextEditingController position;
   late final TextEditingController rate;
+  late final TextEditingController iin;
+  late final TextEditingController hireDate;
+  late final TextEditingController dismissalDate;
+  late final TextEditingController bankIban;
+  late final TextEditingController salary;
   late String role;
+  late String employmentType;
+  late String salaryType;
+  bool employeeTaxActive = true;
+  bool useStandardDeduction = true;
+  bool isPensioner = false;
+  bool isExemptVosms = false;
   bool hidePassword = true;
 
   @override
@@ -173,12 +185,24 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
     phone = TextEditingController(text: '${widget.item?['phone'] ?? ''}');
     position = TextEditingController(text: '${widget.item?['position'] ?? ''}');
     rate = TextEditingController(text: '${widget.item?['percent_rate'] ?? 0}');
+    iin = TextEditingController(text: '${widget.item?['iin'] ?? ''}');
+    hireDate = TextEditingController(text: '${widget.item?['hire_date'] ?? ''}');
+    dismissalDate = TextEditingController(text: '${widget.item?['dismissal_date'] ?? ''}');
+    bankIban = TextEditingController(text: '${widget.item?['bank_iban'] ?? ''}');
+    salary = TextEditingController(text: '${widget.item?['salary'] ?? 0}');
     role = '${widget.item?['role'] ?? 'employee'}';
+    employmentType = '${widget.item?['employment_type'] ?? 'full_time'}';
+    salaryType = '${widget.item?['salary_type'] ?? 'fixed'}';
+    employeeTaxActive = widget.item?['employee_tax_active'] != false;
+    useStandardDeduction = widget.item?['use_standard_deduction'] != false;
+    isPensioner = widget.item?['is_pensioner'] == true;
+    isExemptVosms = widget.item?['is_exempt_vosms'] == true;
   }
 
   @override
   void dispose() {
-    fullName.dispose(); username.dispose(); password.dispose(); phone.dispose(); position.dispose(); rate.dispose(); super.dispose();
+    fullName.dispose(); username.dispose(); password.dispose(); phone.dispose(); position.dispose(); rate.dispose();
+    iin.dispose(); hireDate.dispose(); dismissalDate.dispose(); bankIban.dispose(); salary.dispose(); super.dispose();
   }
 
   @override
@@ -217,6 +241,49 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
         ),
         const SizedBox(height: 10),
         TextField(controller: rate, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Процент от продаж', suffixText: '%')),
+        const SizedBox(height: 18),
+        const Align(alignment: Alignment.centerLeft, child: Text('Бухгалтерия и налоги', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900))),
+        const SizedBox(height: 10),
+        TextField(controller: iin, keyboardType: TextInputType.number, maxLength: 12, decoration: const InputDecoration(labelText: 'ИИН сотрудника', counterText: '')),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: TextField(controller: hireDate, decoration: const InputDecoration(labelText: 'Дата приёма', hintText: 'ГГГГ-ММ-ДД'))),
+          const SizedBox(width: 10),
+          Expanded(child: TextField(controller: dismissalDate, decoration: const InputDecoration(labelText: 'Дата увольнения', hintText: 'ГГГГ-ММ-ДД'))),
+        ]),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          value: employmentType,
+          decoration: const InputDecoration(labelText: 'Тип занятости'),
+          items: const [
+            DropdownMenuItem(value: 'full_time', child: Text('Полная занятость')),
+            DropdownMenuItem(value: 'part_time', child: Text('Частичная занятость')),
+            DropdownMenuItem(value: 'civil_contract', child: Text('Договор ГПХ')),
+            DropdownMenuItem(value: 'intern', child: Text('Стажёр')),
+          ],
+          onChanged: (v) => setState(() => employmentType = v ?? 'full_time'),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          value: salaryType,
+          decoration: const InputDecoration(labelText: 'Тип оплаты'),
+          items: const [
+            DropdownMenuItem(value: 'fixed', child: Text('Оклад')),
+            DropdownMenuItem(value: 'hourly', child: Text('Почасовая')),
+            DropdownMenuItem(value: 'percent', child: Text('Процент')),
+            DropdownMenuItem(value: 'mixed', child: Text('Смешанная')),
+          ],
+          onChanged: (v) => setState(() => salaryType = v ?? 'fixed'),
+        ),
+        const SizedBox(height: 10),
+        TextField(controller: salary, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Оклад для налогового расчёта', suffixText: '₸')),
+        const SizedBox(height: 10),
+        TextField(controller: bankIban, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'IBAN сотрудника', hintText: 'KZ...')),
+        const SizedBox(height: 6),
+        SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, value: employeeTaxActive, onChanged: (v) => setState(() => employeeTaxActive = v), title: const Text('Учитывать в налоговом расчёте')),
+        SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, value: useStandardDeduction, onChanged: (v) => setState(() => useStandardDeduction = v), title: const Text('Стандартный вычет')),
+        SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, value: isPensioner, onChanged: (v) => setState(() => isPensioner = v), title: const Text('Пенсионер')),
+        SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, value: isExemptVosms, onChanged: (v) => setState(() => isExemptVosms = v), title: const Text('Освобождён от ОСМС / ВОСМС')),
       ]))),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
@@ -231,6 +298,17 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
               'position': position.text.trim(),
               'role': role,
               'percent_rate': rate.text.replaceAll(',', '.'),
+              'iin': iin.text.replaceAll(RegExp(r'\\D'), ''),
+              'hire_date': hireDate.text.trim(),
+              'dismissal_date': dismissalDate.text.trim(),
+              'employment_type': employmentType,
+              'salary_type': salaryType,
+              'bank_iban': bankIban.text.replaceAll(' ', '').toUpperCase(),
+              'salary': salary.text.replaceAll(' ', '').replaceAll(',', '.'),
+              'employee_tax_active': employeeTaxActive,
+              'use_standard_deduction': useStandardDeduction,
+              'is_pensioner': isPensioner,
+              'is_exempt_vosms': isExemptVosms,
             });
           },
           child: const Text('Сохранить'),
