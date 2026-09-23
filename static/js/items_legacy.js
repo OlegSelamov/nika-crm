@@ -84,6 +84,48 @@ function updateUnitOptionsForItemType(type) {
 })();
 
 document.addEventListener('DOMContentLoaded', function () {
+    var itemForm = document.getElementById('itemForm');
+    if (itemForm && itemForm.dataset.submitGuardBound !== '1') {
+        itemForm.dataset.submitGuardBound = '1';
+        itemForm.noValidate = true;
+        itemForm.addEventListener('submit', function (event) {
+            var nameInput = document.getElementById('itemName');
+            var selectedType = document.querySelector('input[name="item_type"]:checked');
+            var itemType = selectedType ? selectedType.value : 'product';
+            var retailInput = document.getElementById('itemRetailPrice');
+            var submitButton = document.getElementById('itemSubmitButton');
+
+            if (!nameInput || !String(nameInput.value || '').trim()) {
+                event.preventDefault();
+                if (nameInput) {
+                    nameInput.focus();
+                    nameInput.reportValidity && nameInput.reportValidity();
+                }
+                return;
+            }
+
+            if (itemType !== 'ingredient' && itemType !== 'semi_finished') {
+                var retailValue = Number(retailInput && retailInput.value);
+                if (!retailInput || retailInput.value === '' || !Number.isFinite(retailValue) || retailValue < 0) {
+                    event.preventDefault();
+                    if (retailInput) {
+                        retailInput.disabled = false;
+                        retailInput.focus();
+                    }
+                    return;
+                }
+            }
+
+            syncCategoryName(true);
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Сохраняем…';
+            }
+        });
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function () {
     mountItemModalToBody();
     mountRecipeModalToBody();
     var modifierModal=document.getElementById('modifierManager'); if(modifierModal&&modifierModal.parentElement!==document.body)document.body.appendChild(modifierModal);
@@ -551,7 +593,7 @@ function applyItemType(type) {
     if (retailPriceField) retailPriceField.hidden = (type === "ingredient" || type === "semi_finished");
     if (retailPriceInput) {
         retailPriceInput.disabled = (type === "ingredient" || type === "semi_finished");
-        retailPriceInput.required = type !== "ingredient";
+        retailPriceInput.required = (type !== "ingredient" && type !== "semi_finished");
         if ((type === "ingredient" || type === "semi_finished")) retailPriceInput.value = "0";
     }
     if (purchasePriceField) purchasePriceField.hidden = type === "dish";
