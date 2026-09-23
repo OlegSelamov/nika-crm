@@ -37,10 +37,12 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "logo.png"
+      "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": false,
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
