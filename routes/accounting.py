@@ -1532,6 +1532,38 @@ def accounting():
         today_for_tax = now_kz().date()
         tax_days_left = (tax_calculation["due_date"] - today_for_tax).days
 
+        auto_tax_calendar = [{
+            "kind": "payment",
+            "title": f"Соц. платежи за {tax_calculation['period_label']}",
+            "date": tax_calculation["due_date"],
+            "amount": monthly_social_total,
+            "status": "overdue" if tax_calculation["due_date"] < today_for_tax else "upcoming",
+        }]
+        # Ближайшие обязательные сроки отчётности 910/200 формируются автоматически.
+        year = today_for_tax.year
+        calendar_candidates = []
+        for report_year in (year - 1, year, year + 1):
+            for half in (1, 2):
+                _, _, submit_due, payment_due, label, _ = _report_period_bounds("910", report_year, half)
+                calendar_candidates.append(("report", f"910.00 · {label}", submit_due, 0))
+                calendar_candidates.append(("payment", f"Оплата 910.00 · {label}", payment_due, 0))
+            for quarter in (1, 2, 3, 4):
+                _, _, submit_due, payment_due, label, _ = _report_period_bounds("200", report_year, quarter)
+                calendar_candidates.append(("report", f"200.00 · {label}", submit_due, 0))
+                calendar_candidates.append(("payment", f"Оплата 200.00 · {label}", payment_due, 0))
+        for kind, title, due, amount in sorted(calendar_candidates, key=lambda row: row[2]):
+            if due < today_for_tax:
+                continue
+            if len(auto_tax_calendar) >= 6:
+                break
+            auto_tax_calendar.append({
+                "kind": kind,
+                "title": title,
+                "date": due,
+                "amount": amount,
+                "status": "upcoming",
+            })
+
         accounting_summary = {
             "income_total": operation_summary["income_total"] or 0,
             "expense_total": operation_summary["expense_total"] or 0,
@@ -1570,6 +1602,7 @@ def accounting():
             package_missing_kbk=package_missing_kbk,
             payroll_total=payroll_total,
             accounting_company=accounting_company,
+            auto_tax_calendar=auto_tax_calendar,
             tax_days_left=tax_days_left,
             filings=filings,
         )
