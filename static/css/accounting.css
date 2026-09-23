@@ -1820,3 +1820,32 @@ body.accounting-modal-open {
         grid-template-columns: 1fr 1fr;
     }
 }
+
+
+/* ===== Налоговый рабочий центр ===== */
+.tax-link-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.tax-deadline-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;padding:15px 17px;border:1px solid #dce8ff;border-radius:15px;background:linear-gradient(135deg,#f5f8ff,#eef4ff)}
+.tax-deadline-banner>div{display:grid;gap:4px}.tax-deadline-banner strong{font-size:13px;color:#27324b}.tax-deadline-banner span{font-size:10px;color:var(--acc-muted)}.tax-deadline-banner>b{font-size:20px;white-space:nowrap;color:#315fba}
+.tax-deadline-banner.is-soon{border-color:#f0d9a3;background:linear-gradient(135deg,#fffaf0,#fff5dc)}.tax-deadline-banner.is-soon>b{color:#a86b10}
+.tax-deadline-banner.is-overdue{border-color:#f0caca;background:linear-gradient(135deg,#fff6f6,#ffeded)}.tax-deadline-banner.is-overdue>b{color:#c94646}
+.tax-action-layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:14px;margin-top:14px}
+.tax-section-title{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:2px 0 10px}.tax-section-title h3{margin:0 0 4px;font-size:14px}.tax-section-title p{margin:0;color:var(--acc-muted);font-size:10px;line-height:1.45}
+.tax-obligations{display:grid;gap:8px}
+.tax-obligation{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 13px;border:1px solid var(--acc-border);border-radius:12px;background:#fff}
+.tax-obligation__main{min-width:0;display:grid;gap:3px}.tax-obligation__main strong{font-size:11px}.tax-obligation__main small{font-size:9px;color:var(--acc-muted)}
+.tax-obligation__group{width:max-content;padding:4px 7px;border-radius:999px;background:var(--acc-purple-soft);color:var(--acc-purple);font-size:8px;font-weight:850}
+.tax-obligation__amount{display:grid;justify-items:end;gap:5px}.tax-obligation__amount>b{font-size:13px;white-space:nowrap}
+.tax-payment-state{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;border-radius:999px;background:#f0f2f6;color:#777f91;font-size:9px;font-weight:800;white-space:nowrap}.tax-payment-state.is-paid{background:#e7f7f1;color:#16815e}
+.tax-obligation__buttons{display:flex;align-items:center;gap:6px}.tax-obligation__buttons form{margin:0}
+.tax-bank-btn,.tax-done-btn{min-height:30px;display:inline-flex;align-items:center;justify-content:center;padding:0 9px;border-radius:8px;font:inherit;font-size:9px;font-weight:850;text-decoration:none;cursor:pointer}
+.tax-bank-btn{border:0;background:#7257ff;color:#fff}.tax-done-btn{border:1px solid #c8ebdf;background:#e7f7f1;color:#16815e}
+.tax-two-columns--stacked{grid-template-columns:1fr;align-content:start}
+.tax-employees-title{margin-top:18px}
+.tax-employees-table td:first-child{min-width:190px}.tax-employees-table td:first-child strong,.tax-employees-table td:first-child small{display:block}.tax-employees-table td:first-child small{margin-top:3px;color:var(--acc-muted);font-size:8px}
+@media(max-width:1050px){.tax-action-layout{grid-template-columns:1fr}.tax-two-columns--stacked{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){
+  .tax-deadline-banner{align-items:flex-start;flex-direction:column}.tax-deadline-banner>b{font-size:18px}
+  .tax-section-title{align-items:stretch;flex-direction:column}.tax-section-title form,.tax-section-title button,.tax-section-title a{width:100%}
+  .tax-obligation{align-items:flex-start;flex-direction:column}.tax-obligation__amount{width:100%;justify-items:stretch}.tax-obligation__amount>b{text-align:left}.tax-obligation__buttons{display:grid;grid-template-columns:1fr 1fr}.tax-bank-btn,.tax-done-btn{width:100%}
+  .tax-two-columns--stacked{grid-template-columns:1fr}
+}
