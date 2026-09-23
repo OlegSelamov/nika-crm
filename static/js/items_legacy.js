@@ -2206,9 +2206,14 @@ async function openDraftRecipeModal() {
     if(name) name.textContent=(document.getElementById('itemName')||{}).value || 'Новое блюдо';
     if(modal){modal.classList.add('is-open');modal.setAttribute('aria-hidden','false');}
     try {
-        var response=await fetch('/api/catalog/items?type=ingredient&page=1&limit=100',{headers:{'Accept':'application/json'}});
-        var data=await response.json();
-        recipeProductOptions=Array.isArray(data.items)?data.items:[];
+        var responses = await Promise.all([
+            fetch('/api/catalog/items?type=ingredient&page=1&limit=100',{headers:{'Accept':'application/json'}}),
+            fetch('/api/catalog/items?type=semi_finished&page=1&limit=100',{headers:{'Accept':'application/json'}})
+        ]);
+        var ingredientData = await responses[0].json();
+        var semiFinishedData = await responses[1].json();
+        recipeProductOptions = (Array.isArray(ingredientData.items) ? ingredientData.items : [])
+            .concat(Array.isArray(semiFinishedData.items) ? semiFinishedData.items : []);
         renderRecipeRows();
     } catch(error) {
         var status=document.getElementById('recipeModalStatus');
