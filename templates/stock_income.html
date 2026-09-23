@@ -8,7 +8,7 @@
 
     <header class="income-header">
         <div>
-            <h1>Приход товара</h1>
+            <h1>Приход на склад</h1>
             <p>Быстро добавляйте поступления и контролируйте последние операции</p>
         </div>
 
@@ -59,7 +59,7 @@
             <div class="income-form-head">
                 <div>
                     <h2>Новое поступление</h2>
-                    <p>Выберите товар, укажите количество и закупочную цену</p>
+                    <p>Выберите товар или ингредиент, укажите количество и закупочную цену</p>
                 </div>
 
                 <button type="button" class="income-reset" id="incomeReset">
@@ -70,7 +70,7 @@
             <div class="income-form-grid">
 
                 <div class="income-field income-field--product">
-                    <label for="incomeProductSearch">Товар</label>
+                    <label for="incomeProductSearch">Товар или ингредиент</label>
 
                     <div class="product-picker">
                         <div class="product-search-row">
@@ -223,7 +223,7 @@
             </ol>
 
             <div class="income-help-note">
-                После сохранения остаток товара увеличится, а операция появится в движении товара.
+                После сохранения остаток позиции увеличится, а операция появится в движении товара.
             </div>
         </aside>
 
@@ -377,7 +377,7 @@
 {% endblock %}
 
 {% block page_js %}
-<script charset="UTF-8" src="{{ url_for('static', filename='js/stock_income.js') }}?v=20260914-1"></script>
+<script charset="UTF-8" src="{{ url_for('static', filename='js/stock_income.js') }}?v=20260923-1"></script>
 {% endblock %}
 
 
