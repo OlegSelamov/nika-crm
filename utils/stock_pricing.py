@@ -39,12 +39,16 @@ def calculate_retail_price(purchase_price, markup_percent):
     )
 
 
-def apply_income_pricing(cur, *, company_id, item_id, quantity, price, update_retail=False):
+def apply_income_pricing(cur, *, company_id, item_id, quantity, price, update_retail=False, allowed_item_types=("product",)):
     """
     Lock the product row and update its moving-average cost before inserting
     the new stock movement. The caller must insert the movement and commit in
     the same transaction.
     """
+    allowed_types = tuple(allowed_item_types or ("product",))
+    if not allowed_types:
+        allowed_types = ("product",)
+
     cur.execute(
         """
         SELECT
@@ -76,14 +80,14 @@ def apply_income_pricing(cur, *, company_id, item_id, quantity, price, update_re
         FROM items i
         WHERE i.id = %s
           AND i.company_id = %s
-          AND COALESCE(i.item_type, 'product') = 'product'
+          AND COALESCE(i.item_type, 'product') = ANY(%s)
         FOR UPDATE
         """,
-        (item_id, company_id),
+        (item_id, company_id, list(allowed_types)),
     )
     item = cur.fetchone()
     if not item:
-        raise ValueError("Товар не найден")
+        raise ValueError("Складская позиция не найдена")
 
     average_cost = calculate_weighted_average(
         item["current_stock"],
