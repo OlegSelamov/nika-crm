@@ -63,6 +63,21 @@ TAX_BANK_KEYS = {
     "emp_opvr": "ОПВР работодателя",
 }
 
+# Базовые реквизиты обязательных платежей. Коды проверяются банком
+# по его актуальным справочникам перед созданием/отправкой платежа.
+TAX_PAYMENT_DEFAULTS = {
+    "owner_opv":  {"kbk": "901101", "knp": "010", "kbk_name": "Обязательные пенсионные взносы", "recipient": "social"},
+    "emp_opv":    {"kbk": "901101", "knp": "010", "kbk_name": "Обязательные пенсионные взносы", "recipient": "social"},
+    "owner_so":   {"kbk": "902101", "knp": "012", "kbk_name": "Социальные отчисления", "recipient": "social"},
+    "emp_so":     {"kbk": "902101", "knp": "012", "kbk_name": "Социальные отчисления", "recipient": "social"},
+    "owner_vosms":{"kbk": "904101", "knp": "122", "kbk_name": "Взносы на ОСМС", "recipient": "social"},
+    "emp_vosms":  {"kbk": "904101", "knp": "122", "kbk_name": "Взносы на ОСМС", "recipient": "social"},
+    "emp_osms":   {"kbk": "904101", "knp": "121", "kbk_name": "Отчисления на ОСМС", "recipient": "social"},
+    "owner_opvr": {"kbk": "905101", "knp": "089", "kbk_name": "Обязательные пенсионные взносы работодателя", "recipient": "social"},
+    "emp_opvr":   {"kbk": "905101", "knp": "089", "kbk_name": "Обязательные пенсионные взносы работодателя", "recipient": "social"},
+    "emp_ipn":    {"kbk": "101201", "knp": "911", "kbk_name": "ИПН с доходов, облагаемых у источника выплаты", "recipient": "budget"},
+}
+
 
 def _require_company():
     if not session.get("user_id"):
@@ -1221,15 +1236,19 @@ def accounting_tax_package_api():
             if amount <= 0:
                 continue
             mapped = mapping.get(key) or {}
+            default = TAX_PAYMENT_DEFAULTS.get(key) or {}
             item = {
                 "tax_key": key,
                 "title": title,
                 "amount": amount,
                 "period": calc["period"],
                 "due_date": calc["due_date"].isoformat(),
-                "kbk": mapped.get("kbk") or "",
-                "kbk_name": mapped.get("kbk_name") or "",
+                "kbk": mapped.get("kbk") or default.get("kbk") or "",
+                "kbk_name": mapped.get("kbk_name") or default.get("kbk_name") or "",
+                "knp": default.get("knp") or "",
+                "recipient": default.get("recipient") or "budget",
                 "payment_kind": mapped.get("payment_kind") or "MAIN",
+                "bank_auto": bool(default.get("kbk") and default.get("knp")),
             }
             if not item["kbk"]:
                 missing.append(key)
@@ -1516,10 +1535,14 @@ def accounting():
 
         tax_kbk_map = _tax_bank_map(cur, company_id)
         for item in tax_obligations:
+            default = TAX_PAYMENT_DEFAULTS.get(item["key"]) or {}
             mapped = tax_kbk_map.get(item["key"]) or {}
-            item["kbk"] = mapped.get("kbk") or ""
-            item["kbk_name"] = mapped.get("kbk_name") or ""
+            item["kbk"] = mapped.get("kbk") or default.get("kbk") or ""
+            item["kbk_name"] = mapped.get("kbk_name") or default.get("kbk_name") or ""
+            item["knp"] = default.get("knp") or ""
+            item["recipient"] = default.get("recipient") or "budget"
             item["payment_kind"] = mapped.get("payment_kind") or "MAIN"
+            item["bank_auto"] = bool(default.get("kbk") and default.get("knp"))
 
         monthly_social_total = (
             float(tax_calculation["owner"]["total"] or 0)
