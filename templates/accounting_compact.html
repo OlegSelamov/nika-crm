@@ -53,7 +53,7 @@
   <div class="accx-main">
     <section class="accx-panel">
       <div class="accx-panel-head">
-        <div><h2>Налоговый пакет</h2><p>Все суммы считаются автоматически; КБК закрепляется один раз и дальше подставляется сам.</p></div>
+        <div><h2>Налоговый пакет</h2><p>Суммы, КБК и КНП подставляются автоматически. Перед отправкой банк проверяет реквизиты по своему справочнику.</p></div>
         <form method="get" action="/accounting">
           <input class="accx-period" type="month" name="tax_period" value="{{ tax_calculation.period }}" onchange="this.form.submit()">
         </form>
@@ -67,10 +67,10 @@
             <small>до {{ item.due_date.strftime('%d.%m.%Y') }} · {{ 'ИП' if item.group=='owner' else 'работники' }}</small>
           </div>
           <div class="accx-money">{{ "{:,.0f}".format(item.amount).replace(",", " ") }} ₸</div>
-          <button type="button" class="accx-code {{ 'missing' if not item.kbk else '' }}"
-                  onclick='openKbkModal({{ item.key|tojson }}, {{ item.title|tojson }}, {{ item.kbk|tojson }}, {{ item.kbk_name|tojson }})'>
-            <span>{{ item.kbk or 'Назначить КБК' }}</span><b>›</b>
-          </button>
+          <div class="accx-code {{ 'missing' if not item.kbk else '' }}">
+            <span>{{ item.kbk or 'КБК не определён' }}{% if item.knp %} · КНП {{ item.knp }}{% endif %}</span>
+            <b>{{ 'AUTO' if item.bank_auto else '!' }}</b>
+          </div>
           <div class="accx-status">
             {% if item.status == 'paid' %}<span class="pill ok">Оплачено</span>
             {% elif item.debt_id %}<span class="pill">К оплате</span>
@@ -84,7 +84,7 @@
 
       <div class="accx-package">
         <div>
-          <span>{{ 'Все КБК назначены' if package_ready else ('Без КБК: ' ~ package_missing_kbk|length) }}</span>
+          <span>{{ 'КБК и КНП готовы автоматически' if package_ready else ('Не определены реквизиты: ' ~ package_missing_kbk|length) }}</span>
           <strong>{{ "{:,.0f}".format(package_total).replace(",", " ") }} ₸</strong>
         </div>
         <div style="display:flex;gap:8px">
@@ -92,7 +92,7 @@
             <input type="hidden" name="period" value="{{ tax_calculation.period }}">
             <button class="accx-btn alt" type="submit">Сформировать</button>
           </form>
-          <a class="accx-btn {{ '' if package_ready else 'alt' }}" href="/banks?tax_package={{ tax_calculation.period }}" {% if not package_ready %}onclick="alert('Сначала назначьте КБК всем налогам пакета');return false"{% endif %}>Оплатить пакетом</a>
+          <a class="accx-btn {{ '' if package_ready else 'alt' }}" href="/banks?tax_package={{ tax_calculation.period }}" {% if not package_ready %}onclick="alert('Для части платежей не определены банковские реквизиты');return false"{% endif %}>Оплатить пакетом</a>
         </div>
       </div>
     </section>
@@ -131,20 +131,6 @@
   </div>
 </div>
 
-<div class="accx-modal" id="kbkModal">
-  <div class="accx-dialog">
-    <h3 id="kbkTitle">КБК</h3>
-    <p>Выберите код из банковского справочника Alatau. Он сохранится для этого вида налога.</p>
-    <div class="accx-field"><label>Поиск</label><input id="kbkSearch" type="search" placeholder="Код или название"></div>
-    <div class="accx-field"><label>КБК</label><select id="kbkSelect"><option value="">Загрузка справочника…</option></select></div>
-    <input id="kbkTaxKey" type="hidden">
-    <div class="accx-modal-actions">
-      <button class="accx-btn alt" type="button" onclick="closeKbkModal()">Отмена</button>
-      <button class="accx-btn" type="button" onclick="saveKbk()">Сохранить КБК</button>
-    </div>
-  </div>
-</div>
-
 <div class="accx-modal" id="employeeModal">
   <div class="accx-dialog">
     <h3>Подключить сотрудника к налогам</h3>
@@ -162,50 +148,6 @@
 </div>
 
 <script>
-let kbkRows=[];
-let currentKbk={key:'',title:''};
-function dictRows(payload){
-  if(Array.isArray(payload)) return payload;
-  if(!payload||typeof payload!=='object') return [];
-  for(const k of ['content','items','data','values','results']){
-    if(Array.isArray(payload[k])) return payload[k];
-    if(payload[k]&&typeof payload[k]==='object'){const x=dictRows(payload[k]);if(x.length)return x;}
-  }
-  return [];
-}
-function rowCode(row){return String(row.code||row.value||row.id||'').trim()}
-function rowName(row){return String(row.name||row.title||row.description||'').trim()}
-async function loadKbk(){
-  if(kbkRows.length)return;
-  const r=await fetch('/api/integrations/alatau/dictionaries?environment=production&code=KBK',{headers:{Accept:'application/json'}});
-  const d=await r.json();
-  if(!r.ok||!d.success)throw new Error(d.error||'Не удалось загрузить КБК');
-  kbkRows=dictRows(d.values);
-}
-function renderKbk(filter=''){
-  const q=filter.trim().toLowerCase();
-  const select=document.getElementById('kbkSelect');
-  const rows=kbkRows.filter(x=>!q||rowCode(x).includes(q)||rowName(x).toLowerCase().includes(q)).slice(0,400);
-  select.innerHTML='<option value="">Выберите КБК</option>'+rows.map(x=>'<option value="'+rowCode(x)+'" data-name="'+rowName(x).replace(/"/g,'&quot;')+'">'+rowCode(x)+' — '+rowName(x)+'</option>').join('');
-}
-async function openKbkModal(key,title,kbk,name){
-  currentKbk={key,title};
-  document.getElementById('kbkTaxKey').value=key;
-  document.getElementById('kbkTitle').textContent=title;
-  document.getElementById('kbkModal').classList.add('open');
-  try{await loadKbk();renderKbk();if(kbk)document.getElementById('kbkSelect').value=kbk}catch(e){alert(e.message);closeKbkModal()}
-}
-function closeKbkModal(){document.getElementById('kbkModal').classList.remove('open')}
-document.getElementById('kbkSearch').addEventListener('input',e=>renderKbk(e.target.value));
-async function saveKbk(){
-  const select=document.getElementById('kbkSelect');
-  const option=select.options[select.selectedIndex];
-  if(!select.value){alert('Выберите КБК');return}
-  const r=await fetch('/accounting/taxes/kbk-map',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({tax_key:currentKbk.key,kbk:select.value,kbk_name:option?.dataset?.name||'',payment_kind:'MAIN'})});
-  const d=await r.json();
-  if(!r.ok||!d.success){alert(d.error||'Не удалось сохранить КБК');return}
-  location.reload();
-}
 document.querySelectorAll('.accx-modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
 </script>
 {% endblock %}
