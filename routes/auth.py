@@ -43,6 +43,49 @@ def _ensure_employee_accounting_schema(cur):
     """)
 
 
+def _ensure_profile_tax_settings_schema(cur):
+    """Tax calculation settings edited from the company profile."""
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS accounting_tax_settings (
+            company_id INTEGER PRIMARY KEY,
+            regime VARCHAR(40) NOT NULL DEFAULT 'simplified',
+            turnover_rate NUMERIC(7,4) NOT NULL DEFAULT 4,
+            mzp NUMERIC(14,2) NOT NULL DEFAULT 85000,
+            mrp NUMERIC(14,2) NOT NULL DEFAULT 4325,
+            owner_base NUMERIC(14,2) NOT NULL DEFAULT 85000,
+            owner_opv_rate NUMERIC(7,4) NOT NULL DEFAULT 10,
+            owner_so_rate NUMERIC(7,4) NOT NULL DEFAULT 5,
+            owner_vosms_rate NUMERIC(7,4) NOT NULL DEFAULT 5,
+            employee_opv_rate NUMERIC(7,4) NOT NULL DEFAULT 10,
+            employee_vosms_rate NUMERIC(7,4) NOT NULL DEFAULT 2,
+            employee_ipn_rate NUMERIC(7,4) NOT NULL DEFAULT 10,
+            employer_so_rate NUMERIC(7,4) NOT NULL DEFAULT 5,
+            employer_osms_rate NUMERIC(7,4) NOT NULL DEFAULT 3,
+            employer_opvr_rate NUMERIC(7,4) NOT NULL DEFAULT 3.5,
+            standard_deduction NUMERIC(14,2) NOT NULL DEFAULT 0,
+            include_owner_opvr BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMP
+        )
+    """)
+
+
+def _profile_tax_settings(cur, company_id):
+    _ensure_profile_tax_settings_schema(cur)
+    cur.execute(
+        "SELECT * FROM accounting_tax_settings WHERE company_id = %s",
+        (company_id,),
+    )
+    row = cur.fetchone()
+    if row:
+        return row
+    cur.execute("""
+        INSERT INTO accounting_tax_settings(company_id, updated_at)
+        VALUES (%s, %s)
+        RETURNING *
+    """, (company_id, now_kz()))
+    return cur.fetchone()
+
+
 def _form_date(value, field_label):
     value = str(value or "").strip()
     if not value:
@@ -956,6 +999,11 @@ def profile():
         subscription = None
         active_modules = []
         document_settings = None
+        tax_settings = None
+        can_manage_company = bool(
+            session.get("is_super_admin")
+            or session.get("role") in ("owner", "admin")
+        )
         if company_id:
             cur.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
             company = cur.fetchone()
@@ -987,6 +1035,9 @@ def profile():
                     "show_signature": False,
                     "show_stamp": False,
                 }
+            if can_manage_company:
+                tax_settings = _profile_tax_settings(cur, company_id)
+                conn.commit()
 
         return render_template(
             "profile.html",
@@ -995,10 +1046,8 @@ def profile():
             subscription=subscription,
             active_modules=active_modules,
             document_settings=document_settings,
-            can_manage_company=bool(
-                session.get("is_super_admin")
-                or session.get("role") in ("owner", "admin")
-            ),
+            tax_settings=tax_settings,
+            can_manage_company=can_manage_company,
         )
     finally:
         cur.close()
@@ -1035,6 +1084,91 @@ def save_personal_profile():
         pool.putconn(conn)
 
     return redirect("/profile?tab=personal&saved=1")
+
+
+@auth_bp.route("/profile/taxes", methods=["POST"])
+def save_profile_taxes():
+    if not session.get("user_id"):
+        return redirect("/login")
+
+    company_id = session.get("company_id")
+    can_manage = bool(
+        session.get("is_super_admin")
+        or session.get("role") in ("owner", "admin")
+    )
+    if not company_id:
+        return redirect("/profile?tab=taxes")
+    if not can_manage:
+        return "Доступ запрещен", 403
+
+    numeric_fields = [
+        "turnover_rate",
+        "mzp",
+        "mrp",
+        "owner_base",
+        "owner_opv_rate",
+        "owner_so_rate",
+        "owner_vosms_rate",
+        "employee_opv_rate",
+        "employee_vosms_rate",
+        "employee_ipn_rate",
+        "employer_so_rate",
+        "employer_osms_rate",
+        "employer_opvr_rate",
+        "standard_deduction",
+    ]
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        current = _profile_tax_settings(cur, company_id)
+        values = []
+        for field in numeric_fields:
+            raw = (request.form.get(field) or "").replace(" ", "").replace(",", ".")
+            if raw == "":
+                value = float(current.get(field) or 0)
+            else:
+                try:
+                    value = float(raw)
+                except (TypeError, ValueError):
+                    return f"Некорректное значение: {field}", 400
+            values.append(max(value, 0))
+
+        regime = (request.form.get("regime") or current.get("regime") or "simplified").strip()
+        if regime not in {"simplified", "general", "retail_tax", "other"}:
+            regime = "simplified"
+
+        cur.execute(f"""
+            INSERT INTO accounting_tax_settings(
+                company_id, regime, {','.join(numeric_fields)},
+                include_owner_opvr, updated_at
+            )
+            VALUES (%s,%s,{','.join(['%s'] * len(numeric_fields))},%s,%s)
+            ON CONFLICT(company_id) DO UPDATE SET
+                regime=EXCLUDED.regime,
+                {','.join([f'{field}=EXCLUDED.{field}' for field in numeric_fields])},
+                include_owner_opvr=EXCLUDED.include_owner_opvr,
+                updated_at=EXCLUDED.updated_at
+        """, (
+            company_id,
+            regime,
+            *values,
+            request.form.get("include_owner_opvr") == "1",
+            now_kz(),
+        ))
+
+        cur.execute(
+            "UPDATE companies SET is_vat_payer = %s WHERE id = %s",
+            (request.form.get("is_vat_payer") == "on", company_id),
+        )
+        conn.commit()
+        return redirect("/profile?tab=taxes&saved=1")
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
 
 
 @auth_bp.route("/profile/documents", methods=["POST"])
