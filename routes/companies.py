@@ -145,13 +145,23 @@ def company_profile():
     conn = get_db()
     cur = conn.cursor()
     try:
+        cur.execute("""
+            ALTER TABLE companies
+            ADD COLUMN IF NOT EXISTS legal_form VARCHAR(20) NOT NULL DEFAULT 'ip'
+        """)
+        conn.commit()
         if request.method == "POST":
             if not can_manage:
                 return "Доступ запрещен", 403
 
+            legal_form = (request.form.get("legal_form") or "ip").strip().lower()
+            if legal_form not in ("ip", "too"):
+                legal_form = "ip"
+
             cur.execute("""
                 UPDATE companies
                 SET name = %s,
+                    legal_form = %s,
                     bin = %s,
                     address = %s,
                     phone = %s,
@@ -165,6 +175,7 @@ def company_profile():
                 WHERE id = %s
             """, (
                 (request.form.get("name") or "").strip(),
+                legal_form,
                 (request.form.get("bin") or "").strip(),
                 (request.form.get("address") or "").strip(),
                 (request.form.get("phone") or "").strip(),
