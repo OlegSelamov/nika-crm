@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.accx{height:calc(100vh - 110px);min-height:640px;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px;color:#202434}
+.accx-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.accx-head h1{margin:0;font-size:26px}.accx-head p{margin:4px 0 0;color:#7c8496;font-size:12px}
+.accx-actions{display:flex;gap:8px;align-items:center}.accx-btn{height:38px;display:inline-flex;align-items:center;justify-content:center;padding:0 13px;border:0;border-radius:10px;background:#7257ff;color:#fff;text-decoration:none;font-size:11px;font-weight:850;cursor:pointer}.accx-btn.alt{background:#efecff;color:#654de2;border:1px solid #dcd5ff}.accx-btn.ok{background:#15845f}.accx-btn:disabled{opacity:.5;cursor:not-allowed}
+.accx-top{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(4,minmax(145px,.7fr));gap:9px}
+.accx-company,.accx-kpi,.accx-panel{border:1px solid #e5e8ef;border-radius:14px;background:#fff;box-shadow:0 7px 22px rgba(32,36,52,.05)}
+.accx-company{padding:12px 14px;display:grid;gap:5px}.accx-company strong{font-size:14px}.accx-company span{color:#7d8494;font-size:10px}.accx-company .rows{display:flex;gap:12px;flex-wrap:wrap}.accx-company .rows b{font-size:10px;font-weight:750}
+.accx-kpi{padding:11px 12px;display:grid;align-content:center;gap:3px}.accx-kpi span{font-size:9px;color:#858c9b;text-transform:uppercase;font-weight:800}.accx-kpi strong{font-size:17px}.accx-kpi small{font-size:9px;color:#9096a5}
+.accx-main{min-height:0;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,.75fr);gap:10px}
+.accx-panel{min-height:0;padding:12px;overflow:hidden;display:flex;flex-direction:column}
+.accx-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}.accx-panel-head h2{margin:0;font-size:14px}.accx-panel-head p{margin:3px 0 0;color:#89909f;font-size:9px}
+.accx-period{height:34px;border:1px solid #dfe3eb;border-radius:9px;padding:0 9px;font:inherit;font-size:10px}
+.accx-taxlist{min-height:0;overflow:auto;display:grid;align-content:start;gap:6px;padding-right:2px}
+.accx-taxrow{display:grid;grid-template-columns:minmax(0,1fr) 88px 130px 105px;align-items:center;gap:8px;padding:9px 10px;border:1px solid #edf0f5;border-radius:10px;background:#fafbfe}
+.accx-taxrow strong{font-size:10px}.accx-taxrow small{display:block;margin-top:2px;color:#8b92a1;font-size:8px}.accx-money{font-size:11px;font-weight:900;text-align:right}.accx-code{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:8px;background:#fff;border:1px solid #e4e7ef;font-size:9px}.accx-code.missing{color:#a56614;background:#fff9ec;border-color:#f0d8a6}.accx-status{display:flex;justify-content:flex-end}.pill{min-height:23px;display:inline-flex;align-items:center;padding:0 8px;border-radius:999px;background:#eef1f5;color:#6f7787;font-size:8px;font-weight:850}.pill.ok{background:#e5f6ef;color:#167956}.pill.bad{background:#fdeaea;color:#b74343}
+.accx-package{margin-top:8px;padding-top:9px;border-top:1px solid #edf0f5;display:flex;align-items:center;justify-content:space-between;gap:10px}.accx-package div{display:grid;gap:2px}.accx-package span{font-size:9px;color:#858c9b}.accx-package strong{font-size:18px}
+.accx-sidegrid{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
+.accx-calendar{display:grid;gap:6px;min-height:0;overflow:auto}.accx-event{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border-radius:10px;background:#fafbfe;border:1px solid #edf0f5}.accx-date{width:48px;height:42px;border-radius:9px;background:#efecff;color:#674fdf;display:grid;place-content:center;text-align:center}.accx-date b{font-size:13px;line-height:1}.accx-date small{font-size:7px}.accx-event strong{font-size:9px}.accx-event span{font-size:8px;color:#8c93a2}.accx-event .sum{font-size:9px;font-weight:850}
+.accx-team{min-height:0;overflow:auto;display:grid;align-content:start;gap:6px}.accx-user{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 9px;border:1px solid #edf0f5;border-radius:9px;background:#fafbfe}.accx-user strong{font-size:9px}.accx-user small{display:block;color:#8c93a2;font-size:8px;margin-top:2px}.accx-user b{font-size:9px}
+.accx-modal{position:fixed;inset:0;z-index:99999;display:none;place-items:center;padding:14px;background:rgba(30,32,44,.34);backdrop-filter:blur(5px)}.accx-modal.open{display:grid}.accx-dialog{width:min(560px,100%);max-height:calc(100vh - 28px);overflow:auto;background:#fff;border-radius:16px;padding:16px;box-shadow:0 30px 80px #0003}.accx-dialog h3{margin:0 0 4px;font-size:16px}.accx-dialog p{margin:0 0 12px;color:#7f8797;font-size:10px}.accx-field{display:grid;gap:5px;margin-bottom:10px}.accx-field label{font-size:9px;font-weight:800;color:#687083}.accx-field select,.accx-field input{height:40px;border:1px solid #dfe3eb;border-radius:10px;padding:0 10px;font:inherit;font-size:11px}.accx-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+@media(max-width:1100px){.accx{height:auto}.accx-top{grid-template-columns:1fr 1fr}.accx-company{grid-column:1/-1}.accx-main{grid-template-columns:1fr}.accx-panel{max-height:none}.accx-sidegrid{grid-template-columns:1fr 1fr;grid-template-rows:none}.accx-taxlist,.accx-calendar,.accx-team{max-height:420px}}
+@media(max-width:680px){.accx-top,.accx-sidegrid{grid-template-columns:1fr}.accx-head{align-items:flex-start;flex-direction:column}.accx-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.accx-actions>*{width:100%}.accx-taxrow{grid-template-columns:1fr 90px}.accx-code,.accx-status{grid-column:1/-1}.accx-package{align-items:stretch;flex-direction:column}.accx-package .accx-btn{width:100%}}
+</style>
+
+<div class="accx">
+  <div class="accx-head">
+    <div><h1>Бухгалтерия</h1><p>Один экран: компания, налоги, сроки и подготовка платежей</p></div>
+    <div class="accx-actions">
+      <a class="accx-btn alt" href="/profile?tab=taxes">Настройки налогов</a>
+      <a class="accx-btn alt" href="/users">Сотрудники</a>
+    </div>
+  </div>
+
+  <div class="accx-top">
+    <section class="accx-company">
+      <strong>{{ accounting_company.name or 'Компания' }}</strong>
+      <span>{{ accounting_company.bin or 'БИН/ИИН не указан' }} · {{ accounting_company.address or 'Адрес не указан' }}</span>
+      <div class="rows">
+        <b>{{ accounting_company.bank or 'Банк не указан' }}</b>
+        <b>{{ accounting_company.iik or 'IBAN не указан' }}</b>
+        <b>{{ 'НДС' if accounting_company.is_vat_payer else 'Без НДС' }}</b>
+      </div>
+    </section>
+    <section class="accx-kpi"><span>Доход</span><strong>{{ "{:,.0f}".format(tax_calculation.taxable_income).replace(",", " ") }} ₸</strong><small>{{ tax_calculation.period_label }}</small></section>
+    <section class="accx-kpi"><span>ИП за себя</span><strong>{{ "{:,.0f}".format(tax_calculation.owner.total).replace(",", " ") }} ₸</strong><small>ОПВ + СО + ВОСМС</small></section>
+    <section class="accx-kpi"><span>Работники</span><strong>{{ "{:,.0f}".format(tax_calculation.employee_total).replace(",", " ") }} ₸</strong><small>{{ tax_calculation.employees|length }} в расчёте</small></section>
+    <section class="accx-kpi"><span>Пакет</span><strong>{{ "{:,.0f}".format(package_total).replace(",", " ") }} ₸</strong><small>{{ 'готов к оплате' if package_ready else 'нужно назначить КБК' }}</small></section>
+  </div>
+
+  <div class="accx-main">
+    <section class="accx-panel">
+      <div class="accx-panel-head">
+        <div><h2>Налоговый пакет</h2><p>Все суммы считаются автоматически; КБК закрепляется один раз и дальше подставляется сам.</p></div>
+        <form method="get" action="/accounting">
+          <input class="accx-period" type="month" name="tax_period" value="{{ tax_calculation.period }}" onchange="this.form.submit()">
+        </form>
+      </div>
+
+      <div class="accx-taxlist">
+        {% for item in tax_obligations %}
+        <div class="accx-taxrow">
+          <div>
+            <strong>{{ item.title }}</strong>
+            <small>до {{ item.due_date.strftime('%d.%m.%Y') }} · {{ 'ИП' if item.group=='owner' else 'работники' }}</small>
+          </div>
+          <div class="accx-money">{{ "{:,.0f}".format(item.amount).replace(",", " ") }} ₸</div>
+          <button type="button" class="accx-code {{ 'missing' if not item.kbk else '' }}"
+                  onclick='openKbkModal({{ item.key|tojson }}, {{ item.title|tojson }}, {{ item.kbk|tojson }}, {{ item.kbk_name|tojson }})'>
+            <span>{{ item.kbk or 'Назначить КБК' }}</span><b>›</b>
+          </button>
+          <div class="accx-status">
+            {% if item.status == 'paid' %}<span class="pill ok">Оплачено</span>
+            {% elif item.debt_id %}<span class="pill">К оплате</span>
+            {% else %}<span class="pill">Не создано</span>{% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div class="accx-user"><div><strong>Обязательств за этот месяц нет</strong><small>Проверьте период и сотрудников.</small></div></div>
+        {% endfor %}
+      </div>
+
+      <div class="accx-package">
+        <div>
+          <span>{{ 'Все КБК назначены' if package_ready else ('Без КБК: ' ~ package_missing_kbk|length) }}</span>
+          <strong>{{ "{:,.0f}".format(package_total).replace(",", " ") }} ₸</strong>
+        </div>
+        <div style="display:flex;gap:8px">
+          <form method="post" action="/accounting/taxes/create-debts">
+            <input type="hidden" name="period" value="{{ tax_calculation.period }}">
+            <button class="accx-btn alt" type="submit">Сформировать</button>
+          </form>
+          <a class="accx-btn {{ '' if package_ready else 'alt' }}" href="/banks?tax_package={{ tax_calculation.period }}" {% if not package_ready %}onclick="alert('Сначала назначьте КБК всем налогам пакета');return false"{% endif %}>Оплатить пакетом</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="accx-sidegrid">
+      <section class="accx-panel">
+        <div class="accx-panel-head"><div><h2>Налоговый календарь</h2><p>Формируется автоматически</p></div></div>
+        <div class="accx-calendar">
+          {% for event in auto_tax_calendar %}
+          <div class="accx-event">
+            <div class="accx-date"><b>{{ event.date.strftime('%d') }}</b><small>{{ event.date.strftime('%m.%Y') }}</small></div>
+            <div><strong>{{ event.title }}</strong><span>{{ 'Отчётность' if event.kind=='report' else 'Оплата' }}</span></div>
+            <div class="sum">{% if event.amount %}{{ "{:,.0f}".format(event.amount).replace(",", " ") }} ₸{% else %}—{% endif %}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="accx-panel">
+        <div class="accx-panel-head">
+          <div><h2>Сотрудники</h2><p>Оклад и участие в расчёте</p></div>
+          <button class="accx-btn alt" type="button" onclick="document.getElementById('employeeModal').classList.add('open')">Подключить</button>
+        </div>
+        <div class="accx-team">
+          {% for u in tax_users %}
+          <div class="accx-user">
+            <div><strong>{{ u.name }}</strong><small>{{ u.position or 'Сотрудник' }} · {{ 'в расчёте' if u.tax_active else 'не подключён' }}</small></div>
+            <b>{{ "{:,.0f}".format(u.salary or 0).replace(",", " ") }} ₸</b>
+          </div>
+          {% else %}
+          <div class="accx-user"><div><strong>Нет сотрудников</strong><small>Добавьте пользователей компании.</small></div></div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="accx-modal" id="kbkModal">
+  <div class="accx-dialog">
+    <h3 id="kbkTitle">КБК</h3>
+    <p>Выберите код из банковского справочника Alatau. Он сохранится для этого вида налога.</p>
+    <div class="accx-field"><label>Поиск</label><input id="kbkSearch" type="search" placeholder="Код или название"></div>
+    <div class="accx-field"><label>КБК</label><select id="kbkSelect"><option value="">Загрузка справочника…</option></select></div>
+    <input id="kbkTaxKey" type="hidden">
+    <div class="accx-modal-actions">
+      <button class="accx-btn alt" type="button" onclick="closeKbkModal()">Отмена</button>
+      <button class="accx-btn" type="button" onclick="saveKbk()">Сохранить КБК</button>
+    </div>
+  </div>
+</div>
+
+<div class="accx-modal" id="employeeModal">
+  <div class="accx-dialog">
+    <h3>Подключить сотрудника к налогам</h3>
+    <p>Используется существующий пользователь компании.</p>
+    <form method="post" action="/accounting/taxes/employee">
+      <div class="accx-field"><label>Сотрудник</label><select name="user_id" required><option value="">Выберите</option>{% for u in tax_users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}</select></div>
+      <div class="accx-field"><label>Оклад, ₸</label><input type="number" min="0" name="salary" value="85000" required></div>
+      <input type="hidden" name="is_active" value="1"><input type="hidden" name="use_standard_deduction" value="1">
+      <div class="accx-modal-actions">
+        <button class="accx-btn alt" type="button" onclick="document.getElementById('employeeModal').classList.remove('open')">Отмена</button>
+        <button class="accx-btn" type="submit">Подключить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let kbkRows=[];
+let currentKbk={key:'',title:''};
+function dictRows(payload){
+  if(Array.isArray(payload)) return payload;
+  if(!payload||typeof payload!=='object') return [];
+  for(const k of ['content','items','data','values','results']){
+    if(Array.isArray(payload[k])) return payload[k];
+    if(payload[k]&&typeof payload[k]==='object'){const x=dictRows(payload[k]);if(x.length)return x;}
+  }
+  return [];
+}
+function rowCode(row){return String(row.code||row.value||row.id||'').trim()}
+function rowName(row){return String(row.name||row.title||row.description||'').trim()}
+async function loadKbk(){
+  if(kbkRows.length)return;
+  const r=await fetch('/api/integrations/alatau/dictionaries?environment=production&code=KBK',{headers:{Accept:'application/json'}});
+  const d=await r.json();
+  if(!r.ok||!d.success)throw new Error(d.error||'Не удалось загрузить КБК');
+  kbkRows=dictRows(d.values);
+}
+function renderKbk(filter=''){
+  const q=filter.trim().toLowerCase();
+  const select=document.getElementById('kbkSelect');
+  const rows=kbkRows.filter(x=>!q||rowCode(x).includes(q)||rowName(x).toLowerCase().includes(q)).slice(0,400);
+  select.innerHTML='<option value="">Выберите КБК</option>'+rows.map(x=>'<option value="'+rowCode(x)+'" data-name="'+rowName(x).replace(/"/g,'&quot;')+'">'+rowCode(x)+' — '+rowName(x)+'</option>').join('');
+}
+async function openKbkModal(key,title,kbk,name){
+  currentKbk={key,title};
+  document.getElementById('kbkTaxKey').value=key;
+  document.getElementById('kbkTitle').textContent=title;
+  document.getElementById('kbkModal').classList.add('open');
+  try{await loadKbk();renderKbk();if(kbk)document.getElementById('kbkSelect').value=kbk}catch(e){alert(e.message);closeKbkModal()}
+}
+function closeKbkModal(){document.getElementById('kbkModal').classList.remove('open')}
+document.getElementById('kbkSearch').addEventListener('input',e=>renderKbk(e.target.value));
+async function saveKbk(){
+  const select=document.getElementById('kbkSelect');
+  const option=select.options[select.selectedIndex];
+  if(!select.value){alert('Выберите КБК');return}
+  const r=await fetch('/accounting/taxes/kbk-map',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({tax_key:currentKbk.key,kbk:select.value,kbk_name:option?.dataset?.name||'',payment_kind:'MAIN'})});
+  const d=await r.json();
+  if(!r.ok||!d.success){alert(d.error||'Не удалось сохранить КБК');return}
+  location.reload();
+}
+document.querySelectorAll('.accx-modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
+</script>
+{% endblock %}
