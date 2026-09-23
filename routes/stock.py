@@ -220,7 +220,7 @@ def stock():
                 ON i.id = sm.item_id
                AND i.company_id = sm.company_id
             WHERE i.company_id = %s
-              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient')
+              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
             GROUP BY i.id
         )
         SELECT *
@@ -248,7 +248,7 @@ def stock():
                 ON i.id = sm.item_id
                AND i.company_id = sm.company_id
             WHERE i.company_id = %s
-              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient')
+              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
             GROUP BY i.id
         )
         SELECT
@@ -266,7 +266,7 @@ def stock():
         SELECT DISTINCT category
         FROM items
         WHERE company_id = %s
-          AND COALESCE(item_type, 'product') = 'product'
+          AND COALESCE(item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
           AND NULLIF(TRIM(category), '') IS NOT NULL
         ORDER BY category
     """, (company_id,))
@@ -302,7 +302,7 @@ def stock_movements():
          AND items.company_id = stock_movements.company_id
 
         WHERE stock_movements.company_id = %s
-          AND COALESCE(items.item_type, 'product') IN ('product', 'ingredient')
+          AND COALESCE(items.item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
 
         ORDER BY stock_movements.id DESC
     """, (
@@ -336,9 +336,9 @@ def stock_writeoff():
         comment = request.form.get("comment")
         company_id = session.get("company_id")
 
-        if not is_stock_item(cur, item_id, company_id, INCOME_ITEM_TYPES):
+        if not is_stock_item(cur, item_id, company_id, STOCK_ITEM_TYPES):
             pool.putconn(conn)
-            return "Списание доступен только для товаров", 400
+            return "Списание доступно только для складских позиций", 400
 
         cur.execute("""
             SELECT
@@ -475,7 +475,7 @@ def api_stock():
                 ON i.id = sm.item_id
                AND i.company_id = sm.company_id
             WHERE i.company_id = %s
-              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient')
+              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
             GROUP BY i.id
         ), filtered_rows AS (
             SELECT *
@@ -530,7 +530,7 @@ def api_stock_movements():
          AND items.company_id = stock_movements.company_id
 
         WHERE stock_movements.company_id = %s
-          AND COALESCE(items.item_type, 'product') IN ('product', 'ingredient')
+          AND COALESCE(items.item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
 
         ORDER BY stock_movements.id DESC
     """, (
@@ -654,11 +654,11 @@ def api_stock_writeoff():
     cur = conn.cursor()
     company_id = session.get("company_id")
 
-    if not is_stock_item(cur, data.get("item_id"), company_id, INCOME_ITEM_TYPES):
+    if not is_stock_item(cur, data.get("item_id"), company_id, STOCK_ITEM_TYPES):
         pool.putconn(conn)
         return jsonify({
             "success": False,
-            "error": "Списание доступно только для товаров"
+            "error": "Списание доступно только для складских позиций"
         }), 400
 
     quantity = float(data.get("quantity", 0))
