@@ -11,7 +11,18 @@ import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 
 class BanksScreen extends StatefulWidget {
-  const BanksScreen({super.key});
+  final bool openTaxPayment;
+  final double? initialTaxAmount;
+  final String? initialTaxPeriod;
+  final String? initialTaxPurpose;
+
+  const BanksScreen({
+    super.key,
+    this.openTaxPayment = false,
+    this.initialTaxAmount,
+    this.initialTaxPeriod,
+    this.initialTaxPurpose,
+  });
 
   @override
   State<BanksScreen> createState() => _BanksScreenState();
@@ -158,6 +169,24 @@ class _BanksScreenState extends State<BanksScreen> {
         company = _asMap(accountResult['company']);
         loading = false;
       });
+      if (widget.openTaxPayment && _selectedIban.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            useSafeArea: true,
+            builder: (_) => _BankTaxPaymentSheet(
+              payerIban: _selectedIban,
+              initialAmount: widget.initialTaxAmount,
+              initialPeriod: widget.initialTaxPeriod,
+              initialPurpose: widget.initialTaxPurpose,
+            ),
+          ).then((changed) {
+            if (changed == true) _refreshPayments();
+          });
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1858,8 +1887,16 @@ class _BankPaymentSheetState extends State<_BankPaymentSheet> {
 
 class _BankTaxPaymentSheet extends StatefulWidget {
   final String payerIban;
+  final double? initialAmount;
+  final String? initialPeriod;
+  final String? initialPurpose;
 
-  const _BankTaxPaymentSheet({required this.payerIban});
+  const _BankTaxPaymentSheet({
+    required this.payerIban,
+    this.initialAmount,
+    this.initialPeriod,
+    this.initialPurpose,
+  });
 
   @override
   State<_BankTaxPaymentSheet> createState() => _BankTaxPaymentSheetState();
@@ -1892,6 +1929,15 @@ class _BankTaxPaymentSheetState extends State<_BankTaxPaymentSheet> {
     final now = DateTime.now();
     selectedTaxMonth = now.month;
     selectedTaxYear = now.year;
+    final initialPeriod = (widget.initialPeriod ?? '').split('-');
+    if (initialPeriod.length == 2) {
+      selectedTaxYear = int.tryParse(initialPeriod[0]) ?? selectedTaxYear;
+      selectedTaxMonth = int.tryParse(initialPeriod[1]) ?? selectedTaxMonth;
+    }
+    if ((widget.initialAmount ?? 0) > 0) {
+      amount.text = widget.initialAmount!.toStringAsFixed(2);
+    }
+    purpose.text = widget.initialPurpose ?? '';
     documentNumber.text =
         'TAX-${now.day.toString().padLeft(2, '0')}${now.month.toString().padLeft(2, '0')}${now.year}';
     _loadDictionaries();
