@@ -17,8 +17,8 @@ body{margin:0;min-height:100vh;font-family:'Segoe UI',Arial,sans-serif;backgroun
 h2{margin:7px 0 5px;color:#0f172a;font-size:25px}.desc{color:#64748b;font-size:14px;margin-bottom:22px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}
 label{display:block;font-size:12px;font-weight:650;color:#64748b;margin:0 0 6px}
-input{width:100%;height:45px;padding:11px 13px;border-radius:11px;border:1px solid #dbe3ef;font-size:14px;outline:none;background:#fff}
-input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+input,select{width:100%;height:45px;padding:11px 13px;border-radius:11px;border:1px solid #dbe3ef;font-size:14px;outline:none;background:#fff}
+input:focus,select:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
 .optional{font-weight:400;color:#94a3b8}
 .actions{display:flex;gap:10px;margin-top:24px}.btn{border:0;border-radius:12px;padding:13px 18px;font-weight:750;cursor:pointer;font-size:14px}.next,.submit{margin-left:auto;background:linear-gradient(135deg,#6366f1,#3b82f6);color:#fff;min-width:180px}.back{background:#eef2f7;color:#475569}
 .error{padding:11px 13px;border-radius:11px;background:#fee2e2;color:#991b1b;margin-bottom:18px;font-size:13px}
@@ -70,6 +70,7 @@ input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
         <div class="desc">Основные данные бизнеса. Они будут использоваться в документах и системе.</div>
         <div class="grid">
           <div class="full"><label>Название компании</label><input name="name" id="name" value="{{ form.name if form else '' }}" required></div>
+          <div><label>Форма бизнеса</label><select name="legal_form" id="legal_form"><option value="ip" {% if not form or form.legal_form != 'too' %}selected{% endif %}>ИП</option><option value="too" {% if form and form.legal_form == 'too' %}selected{% endif %}>ТОО</option></select></div>
           <div><label>БИН / ИИН <span class="optional">можно позже</span></label><input name="bin" id="bin" value="{{ form.bin if form else '' }}"></div>
           <div><label>Адрес <span class="optional">можно позже</span></label><input name="address" id="address" value="{{ form.address if form else '' }}"></div>
         </div>
@@ -97,6 +98,7 @@ input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
         <div class="summary">
           <div class="summary-row"><span>Владелец</span><strong id="sumDirector">—</strong></div>
           <div class="summary-row"><span>Компания</span><strong id="sumCompany">—</strong></div>
+          <div class="summary-row"><span>Форма бизнеса</span><strong id="sumLegalForm">ИП</strong></div>
           <div class="summary-row"><span>Логин</span><strong id="sumLogin">—</strong></div>
           <div class="summary-row"><span>БИН / ИИН</span><strong id="sumBin">Не указан</strong></div>
           <div class="summary-row"><span>Тариф</span><strong>{{ selected_plan_info.name }} · {{ '{:,.0f}'.format(selected_plan_info.price).replace(',', ' ') }} ₸/месяц</strong></div>
@@ -138,6 +140,7 @@ function goBack(){
 function fillSummary(){
   document.getElementById('sumDirector').textContent=document.getElementById('director').value || 'Не указан';
   document.getElementById('sumCompany').textContent=document.getElementById('name').value || '—';
+  document.getElementById('sumLegalForm').textContent=document.getElementById('legal_form').value==='too' ? 'ТОО' : 'ИП';
   document.getElementById('sumLogin').textContent=document.getElementById('username').value || '—';
   document.getElementById('sumBin').textContent=document.getElementById('bin').value || 'Не указан';
 }
