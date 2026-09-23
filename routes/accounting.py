@@ -50,6 +50,19 @@ MONTHS_RU = {
     7: "ИЮЛ", 8: "АВГ", 9: "СЕН", 10: "ОКТ", 11: "НОЯ", 12: "ДЕК",
 }
 
+TAX_BANK_KEYS = {
+    "owner_opv": "ОПВ за ИП",
+    "owner_so": "СО за ИП",
+    "owner_vosms": "ВОСМС за ИП",
+    "owner_opvr": "ОПВР за ИП",
+    "emp_opv": "ОПВ работников",
+    "emp_vosms": "ВОСМС работников",
+    "emp_ipn": "ИПН работников",
+    "emp_so": "СО работодателя",
+    "emp_osms": "ОСМС работодателя",
+    "emp_opvr": "ОПВР работодателя",
+}
+
 
 def _require_company():
     if not session.get("user_id"):
@@ -853,6 +866,34 @@ def _ensure_tax_tables(cur):
     """)
 
 
+def _ensure_tax_bank_map(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS accounting_tax_bank_map (
+            company_id INTEGER NOT NULL,
+            tax_key TEXT NOT NULL,
+            kbk TEXT NOT NULL,
+            kbk_name TEXT,
+            payment_kind TEXT NOT NULL DEFAULT 'MAIN',
+            updated_at TIMESTAMP,
+            PRIMARY KEY(company_id, tax_key)
+        )
+    """)
+
+
+def _tax_bank_map(cur, company_id):
+    _ensure_tax_bank_map(cur)
+    cur.execute("""
+        SELECT tax_key,kbk,kbk_name,payment_kind,updated_at
+        FROM accounting_tax_bank_map
+        WHERE company_id=%s
+    """, (company_id,))
+    return {
+        row["tax_key"]: dict(row)
+        for row in cur.fetchall()
+        if row.get("tax_key")
+    }
+
+
 def _month_bounds(period):
     try:
         year, month = [int(x) for x in period.split('-', 1)]
@@ -1087,6 +1128,131 @@ def create_tax_debts():
         cur.close()
         pool.putconn(conn)
 
+@accounting_bp.route("/accounting/taxes/kbk-map", methods=["POST"])
+def save_tax_kbk_map():
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Требуется вход"}), 401
+    company_id = _require_company()
+    if not company_id:
+        return jsonify({"success": False, "error": "Активная компания не выбрана"}), 400
+
+    data = request.get_json(silent=True) or request.form
+    tax_key = str(data.get("tax_key") or "").strip()
+    kbk = "".join(ch for ch in str(data.get("kbk") or "") if ch.isdigit())[:6]
+    kbk_name = str(data.get("kbk_name") or "").strip()[:300]
+    payment_kind = str(data.get("payment_kind") or "MAIN").strip().upper()
+
+    if tax_key not in TAX_BANK_KEYS:
+        return jsonify({"success": False, "error": "Неизвестный вид налога"}), 400
+    if len(kbk) != 6:
+        return jsonify({"success": False, "error": "КБК должен содержать 6 цифр"}), 400
+    if payment_kind not in {"MAIN", "PENALTY", "FINE"}:
+        payment_kind = "MAIN"
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_tax_bank_map(cur)
+        cur.execute("""
+            INSERT INTO accounting_tax_bank_map(
+                company_id,tax_key,kbk,kbk_name,payment_kind,updated_at
+            )
+            VALUES(%s,%s,%s,%s,%s,%s)
+            ON CONFLICT(company_id,tax_key) DO UPDATE SET
+                kbk=EXCLUDED.kbk,
+                kbk_name=EXCLUDED.kbk_name,
+                payment_kind=EXCLUDED.payment_kind,
+                updated_at=EXCLUDED.updated_at
+        """, (
+            company_id, tax_key, kbk, kbk_name or None,
+            payment_kind, now_kz(),
+        ))
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "tax_key": tax_key,
+            "title": TAX_BANK_KEYS[tax_key],
+            "kbk": kbk,
+            "kbk_name": kbk_name,
+            "payment_kind": payment_kind,
+        })
+    except Exception as exc:
+        conn.rollback()
+        print("SAVE TAX KBK MAP ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось сохранить КБК"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@accounting_bp.route("/api/accounting/taxes/package")
+def accounting_tax_package_api():
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Требуется вход"}), 401
+    company_id = _require_company()
+    if not company_id:
+        return jsonify({"success": False, "error": "Активная компания не выбрана"}), 400
+
+    period = request.args.get("period") or now_kz().strftime("%Y-%m")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        _ensure_tax_tables(cur)
+        _ensure_tax_bank_map(cur)
+        calc = _calculate_taxes(cur, company_id, period)
+        mapping = _tax_bank_map(cur, company_id)
+        rows = [
+            ("owner_opv", "ОПВ за ИП", calc["owner"]["opv"]),
+            ("owner_so", "СО за ИП", calc["owner"]["so"]),
+            ("owner_vosms", "ВОСМС за ИП", calc["owner"]["vosms"]),
+            ("owner_opvr", "ОПВР за ИП", calc["owner"]["opvr"]),
+            ("emp_opv", "ОПВ работников", calc["employee_totals"]["opv"]),
+            ("emp_vosms", "ВОСМС работников", calc["employee_totals"]["vosms"]),
+            ("emp_ipn", "ИПН работников", calc["employee_totals"]["ipn"]),
+            ("emp_so", "СО работодателя", calc["employee_totals"]["so"]),
+            ("emp_osms", "ОСМС работодателя", calc["employee_totals"]["osms"]),
+            ("emp_opvr", "ОПВР работодателя", calc["employee_totals"]["opvr"]),
+        ]
+        items = []
+        missing = []
+        for key, title, amount in rows:
+            amount = float(amount or 0)
+            if amount <= 0:
+                continue
+            mapped = mapping.get(key) or {}
+            item = {
+                "tax_key": key,
+                "title": title,
+                "amount": amount,
+                "period": calc["period"],
+                "due_date": calc["due_date"].isoformat(),
+                "kbk": mapped.get("kbk") or "",
+                "kbk_name": mapped.get("kbk_name") or "",
+                "payment_kind": mapped.get("payment_kind") or "MAIN",
+            }
+            if not item["kbk"]:
+                missing.append(key)
+            items.append(item)
+
+        return jsonify({
+            "success": True,
+            "period": calc["period"],
+            "due_date": calc["due_date"].isoformat(),
+            "total": sum(item["amount"] for item in items),
+            "ready": bool(items) and not missing,
+            "missing_kbk": missing,
+            "items": items,
+        })
+    except Exception as exc:
+        conn.rollback()
+        print("ACCOUNTING TAX PACKAGE API ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось подготовить налоговый пакет"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
 @accounting_bp.route("/accounting/sync", methods=["POST"])
 def sync_accounting_data():
     if not session.get("user_id"):
@@ -1130,6 +1296,7 @@ def accounting():
         # при каждом открытии страницы. Это делает загрузку быстрой.      
         _ensure_accounting_tables(cur)
         _ensure_tax_tables(cur)
+        _ensure_tax_bank_map(cur)
         conn.commit()
         
         today = now_kz().date()
@@ -1271,6 +1438,14 @@ def accounting():
         tax_calculation = _calculate_taxes(cur, company_id, selected_tax_period)
 
         cur.execute("""
+            SELECT id,name,bin,address,phone,director,iik,bik,bank,kbe,knp,
+                   COALESCE(is_vat_payer,FALSE) AS is_vat_payer
+            FROM companies
+            WHERE id=%s
+        """, (company_id,))
+        accounting_company = cur.fetchone() or {}
+
+        cur.execute("""
             SELECT
                 u.id,
                 COALESCE(u.full_name, u.username) AS name,
@@ -1339,10 +1514,21 @@ def accounting():
                 "paid_at": debt.get("paid_at"),
             })
 
+        tax_kbk_map = _tax_bank_map(cur, company_id)
+        for item in tax_obligations:
+            mapped = tax_kbk_map.get(item["key"]) or {}
+            item["kbk"] = mapped.get("kbk") or ""
+            item["kbk_name"] = mapped.get("kbk_name") or ""
+            item["payment_kind"] = mapped.get("payment_kind") or "MAIN"
+
         monthly_social_total = (
             float(tax_calculation["owner"]["total"] or 0)
             + float(tax_calculation["employee_total"] or 0)
         )
+        package_total = sum(float(item["amount"] or 0) for item in tax_obligations)
+        package_missing_kbk = [item for item in tax_obligations if not item.get("kbk")]
+        package_ready = bool(tax_obligations) and not package_missing_kbk
+        payroll_total = sum(float(row.get("salary") or 0) for row in tax_users if row.get("tax_active"))
         today_for_tax = now_kz().date()
         tax_days_left = (tax_calculation["due_date"] - today_for_tax).days
 
@@ -1366,7 +1552,7 @@ def accounting():
         }
 
         return render_template(
-            "accounting.html",
+            "accounting_compact.html",
             accounting_summary=accounting_summary,
             tax_events=tax_events,
             debts=debts,
@@ -1379,6 +1565,11 @@ def accounting():
             tax_users=tax_users,
             tax_obligations=tax_obligations,
             monthly_social_total=monthly_social_total,
+            package_total=package_total,
+            package_ready=package_ready,
+            package_missing_kbk=package_missing_kbk,
+            payroll_total=payroll_total,
+            accounting_company=accounting_company,
             tax_days_left=tax_days_left,
             filings=filings,
         )
