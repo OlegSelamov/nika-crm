@@ -82,7 +82,7 @@ def _ensure_item_images_main(cur):
 
 def _item_barcode(cur, value, item_type="product"):
     barcode = str(value or "").strip()
-    if barcode or item_type in {"service", "dish", "ingredient"}:
+    if barcode or item_type in {"service", "dish", "ingredient", "semi_finished"}:
         return barcode
     return _generate_internal_barcode(cur)
 
@@ -498,7 +498,7 @@ def add_item():
 
         item_id = cur.fetchone()["id"]
 
-        if item_type == "ingredient":
+        if item_type in {"ingredient", "semi_finished"}:
             opening_quantity = Decimal(str(request.form.get("opening_quantity") or 0))
             purchase_price = Decimal(str(request.form.get("purchase_price") or 0))
             if opening_quantity > 0:
