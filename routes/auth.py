@@ -972,6 +972,8 @@ def profile():
     conn = get_db()
     cur = conn.cursor()
     try:
+        _ensure_employee_accounting_schema(cur)
+        conn.commit()
         cur.execute("""
             SELECT
                 u.*,
@@ -1062,17 +1064,22 @@ def save_personal_profile():
     full_name = (request.form.get("full_name") or "").strip()
     phone = (request.form.get("phone") or "").strip()
     position = (request.form.get("position") or "").strip()
+    iin = "".join(ch for ch in str(request.form.get("iin") or "") if ch.isdigit())
+    if iin and len(iin) != 12:
+        return redirect("/profile?tab=personal&error=iin")
 
     conn = get_db()
     cur = conn.cursor()
     try:
+        _ensure_employee_accounting_schema(cur)
         cur.execute("""
             UPDATE users
             SET full_name = %s,
                 phone = %s,
-                position = %s
+                position = %s,
+                iin = %s
             WHERE id = %s
-        """, (full_name, phone, position, session["user_id"]))
+        """, (full_name, phone, position, iin or None, session["user_id"]))
         conn.commit()
         session["full_name"] = full_name
         session["phone"] = phone
