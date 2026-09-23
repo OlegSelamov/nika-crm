@@ -428,6 +428,59 @@
         };
     }
 
+    async function signJwsBatch(items) {
+        const source = Array.isArray(items) ? items : [];
+        if (!source.length) {
+            throw new Error("Нет платежей для подписи.");
+        }
+
+        const signableItems = source.map((item, index) => ({
+            id: String(item?.id || ("payment-" + (index + 1))),
+            name: String(item?.name || ("payment-" + (index + 1) + ".json")),
+            content: typeof item?.content === "string"
+                ? item.content
+                : JSON.stringify(item?.content ?? item?.payload ?? {}),
+            contentType: "application/json"
+        }));
+
+        const result = await sendRequest({
+            module: "kz.acbank.business.api.ncalayer.module",
+            method: "signJsonWithJws",
+            args: {
+                settings: {
+                    locale: "ru",
+                    screen: {
+                        devicePixelRatio: window.devicePixelRatio || 1
+                    }
+                },
+                signableItems,
+                signatureOperation: "INITIAL"
+            }
+        });
+
+        const body = result && result.signedItems ? result : (result?.body || result);
+        const signedItems = Array.isArray(body?.signedItems) ? body.signedItems : [];
+        if (signedItems.length !== signableItems.length) {
+            throw new Error("NCALayer подписал не все платежи пакета.");
+        }
+
+        const normalized = signedItems.map((item, index) => {
+            const content = String(item?.signature || "").trim();
+            if (!content || content.split(".").length !== 3) {
+                throw new Error("Платёж " + (index + 1) + " не получил корректную JWS-подпись.");
+            }
+            return {
+                id: String(item?.id || signableItems[index].id),
+                content
+            };
+        });
+
+        return {
+            items: normalized,
+            raw: result
+        };
+    }
+
     async function checkNcalayer() {
         setBusy(true);
         setStatus("Подключаемся к NCALayer…", "loading");
@@ -485,6 +538,7 @@
         signXml,
         signRaw,
         signJws,
+        signJwsBatch,
         // Kept temporarily for pages from an older browser cache.
         signCmsDetached: signRaw
     });
