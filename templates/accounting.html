@@ -233,98 +233,163 @@
         <div class="accounting-section__head tax-workspace__head">
             <div>
                 <h2>Налоги и зарплата</h2>
-                <p>Предварительный расчёт. Ставки можно изменить в настройках компании.</p>
+                <p>Расчёт строится автоматически по продажам, возвратам, сотрудникам и налоговым настройкам компании.</p>
             </div>
             <div class="tax-head-actions">
                 <form method="get" action="/accounting#taxesBlock" class="tax-period-form">
                     <input type="month" name="tax_period" value="{{ tax_calculation.period }}">
-                    <button class="accounting-secondary-btn" type="submit">Рассчитать</button>
+                    <button class="accounting-secondary-btn" type="submit">Показать</button>
                 </form>
-                <button class="accounting-secondary-btn" type="button" onclick="openAccountingModal('taxSettingsModal')">Настройки</button>
-                <button class="accounting-primary-btn" type="button" onclick="openAccountingModal('employeeTaxModal')">Добавить сотрудника</button>
+                <a class="accounting-secondary-btn tax-link-btn" href="/profile?tab=taxes">Ставки и базы</a>
+                <button class="accounting-primary-btn" type="button" onclick="openAccountingModal('employeeTaxModal')">Подключить сотрудника</button>
             </div>
+        </div>
+
+        <div class="tax-deadline-banner {{ 'is-overdue' if tax_days_left < 0 else 'is-soon' if tax_days_left <= 5 else '' }}">
+            <div>
+                <strong>
+                    {% if tax_days_left < 0 %}
+                    Срок оплаты прошёл {{ (-tax_days_left) }} дн. назад
+                    {% elif tax_days_left == 0 %}
+                    Срок оплаты сегодня
+                    {% else %}
+                    До оплаты {{ tax_days_left }} дн.
+                    {% endif %}
+                </strong>
+                <span>Ежемесячные социальные платежи за {{ tax_calculation.period_label }} · до {{ tax_calculation.due_date.strftime('%d.%m.%Y') }}</span>
+            </div>
+            <b>{{ "{:,.0f}".format(monthly_social_total).replace(",", " ") }} ₸</b>
         </div>
 
         <div class="tax-summary-grid">
             <article>
-                <span>Доход за месяц</span>
+                <span>Оплаченные продажи</span>
                 <strong>{{ "{:,.0f}".format(tax_calculation.income).replace(",", " ") }} ₸</strong>
-                <small>Оплаченные продажи</small>
+                <small>За выбранный месяц</small>
             </article>
             <article>
                 <span>Возвраты</span>
                 <strong>{{ "{:,.0f}".format(tax_calculation.refunds).replace(",", " ") }} ₸</strong>
-                <small>Уменьшают расчётный доход</small>
+                <small>Вычтены из расчётного дохода</small>
+            </article>
+            <article>
+                <span>Расчётный доход</span>
+                <strong>{{ "{:,.0f}".format(tax_calculation.taxable_income).replace(",", " ") }} ₸</strong>
+                <small>Продажи минус возвраты</small>
             </article>
             <article>
                 <span>Налог с оборота</span>
                 <strong>{{ "{:,.0f}".format(tax_calculation.turnover_tax).replace(",", " ") }} ₸</strong>
-                <small>Ставка {{ tax_calculation.turnover_rate }}%</small>
-            </article>
-            <article>
-                <span>Ежемесячно к оплате</span>
-                <strong>{{ "{:,.0f}".format(tax_calculation.monthly_total).replace(",", " ") }} ₸</strong>
-                <small>Срок: {{ tax_calculation.due_date.strftime('%d.%m.%Y') }}</small>
+                <small>Предварительно · {{ tax_calculation.turnover_rate }}%</small>
             </article>
         </div>
 
-        <div class="tax-two-columns">
-            <article class="tax-panel">
-                <div class="tax-panel__title">
-                    <div><h3>ИП за себя</h3><p>База: {{ "{:,.0f}".format(tax_calculation.owner.base).replace(",", " ") }} ₸</p></div>
-                    <strong>{{ "{:,.0f}".format(tax_calculation.owner.total).replace(",", " ") }} ₸</strong>
+        <div class="tax-action-layout">
+            <div>
+                <div class="tax-section-title">
+                    <div><h3>Что оплатить за месяц</h3><p>После формирования обязательства появятся в задолженностях и будут доступны приложению через API.</p></div>
+                    <form method="post" action="/accounting/taxes/create-debts">
+                        <input type="hidden" name="period" value="{{ tax_calculation.period }}">
+                        <button class="accounting-primary-btn" type="submit">Сформировать обязательства</button>
+                    </form>
                 </div>
-                <div class="tax-lines">
-                    <div><span>ОПВ</span><b>{{ "{:,.0f}".format(tax_calculation.owner.opv).replace(",", " ") }} ₸</b></div>
-                    <div><span>СО</span><b>{{ "{:,.0f}".format(tax_calculation.owner.so).replace(",", " ") }} ₸</b></div>
-                    <div><span>ВОСМС</span><b>{{ "{:,.0f}".format(tax_calculation.owner.vosms).replace(",", " ") }} ₸</b></div>
-                    {% if tax_calculation.owner.opvr %}<div><span>ОПВР</span><b>{{ "{:,.0f}".format(tax_calculation.owner.opvr).replace(",", " ") }} ₸</b></div>{% endif %}
+                <div class="tax-obligations">
+                    {% if tax_obligations %}
+                    {% for item in tax_obligations %}
+                    <article class="tax-obligation">
+                        <div class="tax-obligation__main">
+                            <span class="tax-obligation__group">{{ 'ИП' if item.group == 'owner' else 'Работники' }}</span>
+                            <strong>{{ item.title }}</strong>
+                            <small>Срок {{ item.due_date.strftime('%d.%m.%Y') }}</small>
+                        </div>
+                        <div class="tax-obligation__amount">
+                            <b>{{ "{:,.0f}".format(item.amount).replace(",", " ") }} ₸</b>
+                            {% if item.status == 'paid' %}
+                            <span class="tax-payment-state is-paid">Оплачено</span>
+                            {% elif item.debt_id %}
+                            <div class="tax-obligation__buttons">
+                                <a class="tax-bank-btn" href="/banks">Оплатить</a>
+                                <form method="post" action="/accounting/debts/{{ item.debt_id }}/paid">
+                                    <button type="submit" class="tax-done-btn">✓ Проведено</button>
+                                </form>
+                            </div>
+                            {% else %}
+                            <span class="tax-payment-state">Не сформировано</span>
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% endfor %}
+                    {% else %}
+                    <div class="tax-empty">За выбранный месяц ежемесячных обязательств к оплате нет.</div>
+                    {% endif %}
                 </div>
-            </article>
+            </div>
 
-            <article class="tax-panel">
-                <div class="tax-panel__title">
-                    <div><h3>Работники</h3><p>{{ tax_calculation.employees|length }} сотрудников в расчёте</p></div>
-                    <strong>{{ "{:,.0f}".format(tax_calculation.employee_total).replace(",", " ") }} ₸</strong>
-                </div>
-                <div class="tax-lines">
-                    <div><span>ОПВ</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.opv).replace(",", " ") }} ₸</b></div>
-                    <div><span>ВОСМС</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.vosms).replace(",", " ") }} ₸</b></div>
-                    <div><span>ИПН</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.ipn).replace(",", " ") }} ₸</b></div>
-                    <div><span>СО + ОСМС + ОПВР</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.so + tax_calculation.employee_totals.osms + tax_calculation.employee_totals.opvr).replace(",", " ") }} ₸</b></div>
-                </div>
-            </article>
+            <div class="tax-two-columns tax-two-columns--stacked">
+                <article class="tax-panel">
+                    <div class="tax-panel__title">
+                        <div><h3>ИП за себя</h3><p>База {{ "{:,.0f}".format(tax_calculation.owner.base).replace(",", " ") }} ₸</p></div>
+                        <strong>{{ "{:,.0f}".format(tax_calculation.owner.total).replace(",", " ") }} ₸</strong>
+                    </div>
+                    <div class="tax-lines">
+                        <div><span>ОПВ</span><b>{{ "{:,.0f}".format(tax_calculation.owner.opv).replace(",", " ") }} ₸</b></div>
+                        <div><span>СО</span><b>{{ "{:,.0f}".format(tax_calculation.owner.so).replace(",", " ") }} ₸</b></div>
+                        <div><span>ВОСМС</span><b>{{ "{:,.0f}".format(tax_calculation.owner.vosms).replace(",", " ") }} ₸</b></div>
+                        {% if tax_calculation.owner.opvr %}<div><span>ОПВР</span><b>{{ "{:,.0f}".format(tax_calculation.owner.opvr).replace(",", " ") }} ₸</b></div>{% endif %}
+                    </div>
+                </article>
+
+                <article class="tax-panel">
+                    <div class="tax-panel__title">
+                        <div><h3>За работников</h3><p>{{ tax_calculation.employees|length }} в расчёте</p></div>
+                        <strong>{{ "{:,.0f}".format(tax_calculation.employee_total).replace(",", " ") }} ₸</strong>
+                    </div>
+                    <div class="tax-lines">
+                        <div><span>ОПВ</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.opv).replace(",", " ") }} ₸</b></div>
+                        <div><span>ВОСМС</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.vosms).replace(",", " ") }} ₸</b></div>
+                        <div><span>ИПН</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.ipn).replace(",", " ") }} ₸</b></div>
+                        <div><span>СО</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.so).replace(",", " ") }} ₸</b></div>
+                        <div><span>ОСМС</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.osms).replace(",", " ") }} ₸</b></div>
+                        <div><span>ОПВР</span><b>{{ "{:,.0f}".format(tax_calculation.employee_totals.opvr).replace(",", " ") }} ₸</b></div>
+                    </div>
+                </article>
+            </div>
         </div>
 
-        {% if tax_calculation.employees %}
+        <div class="tax-section-title tax-employees-title">
+            <div><h3>Сотрудники и зарплата</h3><p>Пользователи компании подключаются к расчёту без создания отдельной карточки сотрудника.</p></div>
+            <a class="accounting-secondary-btn tax-link-btn" href="/users">Открыть сотрудников</a>
+        </div>
+
         <div class="tax-employees-table-wrap">
             <table class="tax-employees-table">
-                <thead><tr><th>Сотрудник</th><th>Начислено</th><th>ОПВ</th><th>ВОСМС</th><th>ИПН</th><th>За счёт работодателя</th><th>На руки</th></tr></thead>
+                <thead><tr><th>Сотрудник</th><th>Статус</th><th>Оклад</th><th>ОПВ</th><th>ВОСМС</th><th>ИПН</th><th>Работодатель</th><th>На руки</th></tr></thead>
                 <tbody>
-                {% for e in tax_calculation.employees %}
+                {% for u in tax_users %}
+                {% set calc = (tax_calculation.employees | selectattr('user_id', 'equalto', u.id) | list | first) %}
                 <tr>
-                    <td>{{ e.name }}</td>
-                    <td>{{ "{:,.0f}".format(e.salary).replace(",", " ") }} ₸</td>
-                    <td>{{ "{:,.0f}".format(e.opv).replace(",", " ") }} ₸</td>
-                    <td>{{ "{:,.0f}".format(e.vosms).replace(",", " ") }} ₸</td>
-                    <td>{{ "{:,.0f}".format(e.ipn).replace(",", " ") }} ₸</td>
-                    <td>{{ "{:,.0f}".format(e.so + e.osms + e.opvr).replace(",", " ") }} ₸</td>
-                    <td><strong>{{ "{:,.0f}".format(e.net_salary).replace(",", " ") }} ₸</strong></td>
+                    <td><strong>{{ u.name }}</strong><small>{{ u.position or 'Сотрудник' }}{% if u.iin %} · {{ u.iin }}{% endif %}</small></td>
+                    <td>
+                        {% if u.tax_active %}<span class="tax-payment-state is-paid">В расчёте</span>
+                        {% else %}<span class="tax-payment-state">Не подключён</span>{% endif %}
+                    </td>
+                    <td>{{ "{:,.0f}".format(u.salary or 0).replace(",", " ") }} ₸</td>
+                    <td>{{ "{:,.0f}".format(calc.opv if calc else 0).replace(",", " ") }} ₸</td>
+                    <td>{{ "{:,.0f}".format(calc.vosms if calc else 0).replace(",", " ") }} ₸</td>
+                    <td>{{ "{:,.0f}".format(calc.ipn if calc else 0).replace(",", " ") }} ₸</td>
+                    <td>{{ "{:,.0f}".format((calc.so + calc.osms + calc.opvr) if calc else 0).replace(",", " ") }} ₸</td>
+                    <td><strong>{{ "{:,.0f}".format(calc.net_salary if calc else u.salary or 0).replace(",", " ") }} ₸</strong></td>
                 </tr>
+                {% else %}
+                <tr><td colspan="8"><div class="tax-empty">В компании пока нет сотрудников.</div></td></tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% else %}
-        <div class="tax-empty">Работники пока не добавлены в налоговый расчёт.</div>
-        {% endif %}
 
         <div class="tax-footer-note">
-            <div><strong>Налог с оборота за полугодие</strong><span>Пока показывается как предварительная сумма за выбранный месяц.</span></div>
-            <form method="post" action="/accounting/taxes/create-debts">
-                <input type="hidden" name="period" value="{{ tax_calculation.period }}">
-                <button class="accounting-primary-btn" type="submit" onclick="return confirm('Создать или обновить налоговые задолженности за выбранный месяц?')">Создать задолженности</button>
-            </form>
+            <div><strong>Налог с оборота</strong><span>{{ "{:,.0f}".format(tax_calculation.turnover_tax).replace(",", " ") }} ₸ — предварительный расчёт за выбранный месяц. Отчётные обязательства 910/200 формируются отдельно по периоду формы.</span></div>
+            <a class="accounting-secondary-btn tax-link-btn" href="/accounting/report?form_type=910#isnaWorkflow">Открыть 910.00</a>
         </div>
     </section>
 
@@ -721,33 +786,6 @@
     </div>
 </div>
 
-
-<div class="accounting-modal" id="taxSettingsModal" aria-hidden="true">
-  <div class="accounting-modal__backdrop" onclick="closeAccountingModal('taxSettingsModal')"></div>
-  <div class="accounting-modal__dialog" role="dialog" aria-modal="true">
-    <div class="accounting-modal__head"><div><h3>Настройки налогов</h3><p>Ставки сохраняются отдельно для активной компании</p></div><button type="button" onclick="closeAccountingModal('taxSettingsModal')">×</button></div>
-    <form class="accounting-modal__body" method="post" action="/accounting/taxes/settings">
-      <div class="accounting-form-grid">
-        <label class="accounting-field"><span>Ставка с оборота, %</span><input name="turnover_rate" type="number" step="0.01" value="{{ tax_calculation.settings.turnover_rate }}"></label>
-        <label class="accounting-field"><span>База ИП за себя, ₸</span><input name="owner_base" type="number" value="{{ tax_calculation.settings.owner_base }}"></label>
-        <label class="accounting-field"><span>МЗП, ₸</span><input name="mzp" type="number" value="{{ tax_calculation.settings.mzp }}"></label>
-        <label class="accounting-field"><span>МРП, ₸</span><input name="mrp" type="number" value="{{ tax_calculation.settings.mrp }}"></label>
-        <label class="accounting-field"><span>Стандартный вычет, ₸</span><input name="standard_deduction" type="number" value="{{ tax_calculation.settings.standard_deduction }}"></label>
-        <label class="accounting-field"><span>ОПВ ИП, %</span><input name="owner_opv_rate" type="number" step="0.01" value="{{ tax_calculation.settings.owner_opv_rate }}"></label>
-        <label class="accounting-field"><span>СО ИП, %</span><input name="owner_so_rate" type="number" step="0.01" value="{{ tax_calculation.settings.owner_so_rate }}"></label>
-        <label class="accounting-field"><span>ВОСМС ИП, %</span><input name="owner_vosms_rate" type="number" step="0.01" value="{{ tax_calculation.settings.owner_vosms_rate }}"></label>
-        <label class="accounting-field"><span>ОПВ работника, %</span><input name="employee_opv_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employee_opv_rate }}"></label>
-        <label class="accounting-field"><span>ВОСМС работника, %</span><input name="employee_vosms_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employee_vosms_rate }}"></label>
-        <label class="accounting-field"><span>ИПН работника, %</span><input name="employee_ipn_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employee_ipn_rate }}"></label>
-        <label class="accounting-field"><span>СО работодателя, %</span><input name="employer_so_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employer_so_rate }}"></label>
-        <label class="accounting-field"><span>ОСМС работодателя, %</span><input name="employer_osms_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employer_osms_rate }}"></label>
-        <label class="accounting-field"><span>ОПВР работодателя, %</span><input name="employer_opvr_rate" type="number" step="0.01" value="{{ tax_calculation.settings.employer_opvr_rate }}"></label>
-        <label class="tax-check accounting-field--wide"><input type="checkbox" name="include_owner_opvr" value="1" {% if tax_calculation.settings.include_owner_opvr %}checked{% endif %}><span>Начислять ОПВР за ИП</span></label>
-      </div>
-      <div class="accounting-modal__footer"><button class="accounting-cancel-btn" type="button" onclick="closeAccountingModal('taxSettingsModal')">Отмена</button><button class="accounting-primary-btn" type="submit">Сохранить настройки</button></div>
-    </form>
-  </div>
-</div>
 
 <div class="accounting-modal" id="employeeTaxModal" aria-hidden="true">
   <div class="accounting-modal__backdrop" onclick="closeAccountingModal('employeeTaxModal')"></div>
