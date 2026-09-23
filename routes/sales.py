@@ -1056,21 +1056,9 @@ def process_sale(conn, sale_id):
             else "product"
         )
 
-        profit = item["total"] - (purchase_price * item["quantity"])
-
-        cur.execute("""
-            UPDATE sale_items
-            SET
-                unit = %s,
-                profit = %s,
-                item_type = COALESCE(NULLIF(item_type, ''), %s)
-            WHERE id = %s
-        """, (
-            unit,
-            profit,
-            item_type,
-            item["id"]
-        ))
+        # Retail keeps the historical purchase-price calculation. For dishes
+        # the real COGS is built from the recipe and selected modifiers below.
+        line_cost = purchase_price * item["quantity"]
 
         if item_type == "product":
             # Existing retail behavior must stay isolated from food-service recipes.
@@ -1122,6 +1110,7 @@ def process_sale(conn, sale_id):
                     ingredient_qty, ingredient_price, ingredient_qty * ingredient_price,
                     "Списание по техкарте", now_kz().isoformat()
                 ))
+                line_cost += ingredient_qty * ingredient_price
 
             selected_modifiers = item.get("modifiers") or []
             if isinstance(selected_modifiers, str):
@@ -1142,6 +1131,15 @@ def process_sale(conn, sale_id):
                     cur.execute("""INSERT INTO stock_movements(company_id,item_id,movement_type,quantity,price,total,comment,created_at)
                                    VALUES(%s,%s,'sale',%s,%s,%s,%s,%s)""",
                                 (sale["company_id"],mod["ingredient_item_id"],modifier_qty,mod["purchase_price"],modifier_qty*mod["purchase_price"],"Списание модификатора блюда",now_kz().isoformat()))
+                    line_cost += modifier_qty * (mod["purchase_price"] or 0)
+
+        profit = item["total"] - line_cost
+        cur.execute("""
+            UPDATE sale_items
+            SET unit = %s, profit = %s,
+                item_type = COALESCE(NULLIF(item_type, ''), %s)
+            WHERE id = %s
+        """, (unit, profit, item_type, item["id"]))
 
     cur.execute("""
         UPDATE sales
