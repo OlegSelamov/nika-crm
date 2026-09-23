@@ -36,10 +36,51 @@
 </div><input type="hidden" name="is_vat_payer" value="{{ 'on' if company.is_vat_payer else '' }}"><div class="actions"><button class="btn">Сохранить организацию</button></div></section></form>
 
 {% elif active_tab=='taxes' and can_manage_company %}
-<form method="post" action="/company/profile"><section class="card"><h2>Налоги</h2><p class="desc">Налоговые параметры организации для документов и бухгалтерии.</p>
-<input type="hidden" name="name" value="{{ company.name or '' }}"><input type="hidden" name="bin" value="{{ company.bin or '' }}"><input type="hidden" name="address" value="{{ company.address or '' }}"><input type="hidden" name="phone" value="{{ company.phone or '' }}"><input type="hidden" name="director" value="{{ company.director or '' }}"><input type="hidden" name="iik" value="{{ company.iik or '' }}"><input type="hidden" name="bik" value="{{ company.bik or '' }}"><input type="hidden" name="bank" value="{{ company.bank or '' }}"><input type="hidden" name="kbe" value="{{ company.kbe or '' }}"><input type="hidden" name="knp" value="{{ company.knp or '' }}">
-<div class="switch-row"><div><b>Плательщик НДС</b><small>Включите, если организация состоит на регистрационном учёте по НДС.</small></div><label class="switch"><input type="checkbox" name="is_vat_payer" {% if company.is_vat_payer %}checked{% endif %}><span class="slider"></span></label></div>
-<div class="actions"><button class="btn">Сохранить налоги</button></div></section></form>
+<form method="post" action="/profile/taxes">
+<section class="card">
+<h2>Налоговый режим и расчёт</h2>
+<p class="desc">Эти параметры являются едиными для сайта и приложения. Бухгалтерия использует их при автоматическом расчёте налогов и платежей.</p>
+<div class="grid">
+<div class="field"><label>Налоговый режим</label><select name="regime">
+<option value="simplified" {% if tax_settings and tax_settings.regime=='simplified' %}selected{% endif %}>Упрощённая декларация</option>
+<option value="general" {% if tax_settings and tax_settings.regime=='general' %}selected{% endif %}>Общеустановленный режим</option>
+<option value="retail_tax" {% if tax_settings and tax_settings.regime=='retail_tax' %}selected{% endif %}>Розничный налог</option>
+<option value="other" {% if tax_settings and tax_settings.regime=='other' %}selected{% endif %}>Другой</option>
+</select></div>
+<div class="field"><label>Ставка с оборота, %</label><input type="number" step="0.01" min="0" name="turnover_rate" value="{{ tax_settings.turnover_rate if tax_settings else 4 }}"></div>
+<div class="field"><label>МЗП, ₸</label><input type="number" step="1" min="0" name="mzp" value="{{ tax_settings.mzp if tax_settings else 85000 }}"></div>
+<div class="field"><label>МРП, ₸</label><input type="number" step="1" min="0" name="mrp" value="{{ tax_settings.mrp if tax_settings else 4325 }}"></div>
+<div class="field"><label>База ИП за себя, ₸</label><input type="number" step="1" min="0" name="owner_base" value="{{ tax_settings.owner_base if tax_settings else 85000 }}"></div>
+<div class="field"><label>Стандартный вычет, ₸</label><input type="number" step="1" min="0" name="standard_deduction" value="{{ tax_settings.standard_deduction if tax_settings else 0 }}"></div>
+</div>
+<div class="switch-row wide" style="margin-top:14px"><div><b>Плательщик НДС</b><small>Используется при формировании документов, ЭСФ и налоговой логике компании.</small></div><label class="switch"><input type="checkbox" name="is_vat_payer" {% if company.is_vat_payer %}checked{% endif %}><span class="slider"></span></label></div>
+</section>
+
+<section class="card">
+<h2>ИП за себя</h2>
+<p class="desc">Ставки ежемесячных социальных платежей предпринимателя.</p>
+<div class="grid">
+<div class="field"><label>ОПВ, %</label><input type="number" step="0.01" min="0" name="owner_opv_rate" value="{{ tax_settings.owner_opv_rate if tax_settings else 10 }}"></div>
+<div class="field"><label>СО, %</label><input type="number" step="0.01" min="0" name="owner_so_rate" value="{{ tax_settings.owner_so_rate if tax_settings else 5 }}"></div>
+<div class="field"><label>ВОСМС, %</label><input type="number" step="0.01" min="0" name="owner_vosms_rate" value="{{ tax_settings.owner_vosms_rate if tax_settings else 5 }}"></div>
+<div class="switch-row"><div><b>Начислять ОПВР за ИП</b><small>Включите, если этот платёж требуется для вашей ситуации.</small></div><label class="switch"><input type="checkbox" name="include_owner_opvr" value="1" {% if tax_settings and tax_settings.include_owner_opvr %}checked{% endif %}><span class="slider"></span></label></div>
+</div>
+</section>
+
+<section class="card">
+<h2>Работники</h2>
+<p class="desc">Ставки удержаний работника и платежей работодателя. Оклад и льготы задаются в карточке пользователя.</p>
+<div class="grid">
+<div class="field"><label>ОПВ работника, %</label><input type="number" step="0.01" min="0" name="employee_opv_rate" value="{{ tax_settings.employee_opv_rate if tax_settings else 10 }}"></div>
+<div class="field"><label>ВОСМС работника, %</label><input type="number" step="0.01" min="0" name="employee_vosms_rate" value="{{ tax_settings.employee_vosms_rate if tax_settings else 2 }}"></div>
+<div class="field"><label>ИПН работника, %</label><input type="number" step="0.01" min="0" name="employee_ipn_rate" value="{{ tax_settings.employee_ipn_rate if tax_settings else 10 }}"></div>
+<div class="field"><label>СО работодателя, %</label><input type="number" step="0.01" min="0" name="employer_so_rate" value="{{ tax_settings.employer_so_rate if tax_settings else 5 }}"></div>
+<div class="field"><label>ОСМС работодателя, %</label><input type="number" step="0.01" min="0" name="employer_osms_rate" value="{{ tax_settings.employer_osms_rate if tax_settings else 3 }}"></div>
+<div class="field"><label>ОПВР работодателя, %</label><input type="number" step="0.01" min="0" name="employer_opvr_rate" value="{{ tax_settings.employer_opvr_rate if tax_settings else 3.5 }}"></div>
+</div>
+<div class="actions"><a class="btn btn-light" href="/users">Сотрудники</a><button class="btn" type="submit">Сохранить налоговые настройки</button></div>
+</section>
+</form>
 
 {% elif active_tab=='documents' and can_manage_company %}
 <form method="post" action="/profile/documents">
