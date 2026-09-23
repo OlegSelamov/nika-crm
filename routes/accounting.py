@@ -79,6 +79,165 @@ TAX_PAYMENT_DEFAULTS = {
 }
 
 
+SOCIAL_PAYMENT_RECIPIENTS = {
+    "PENSION": {
+        "iinOrBin": "160440007161",
+        "name": 'НАО "Государственная корпорация «Правительство для граждан»',
+        "iban": "KZ12009NPS0413609816",
+        "bankName": 'НАО "Государственная корпорация «Правительство для граждан»',
+        "bic": "GCVPKZ2A",
+        "kbe": "11",
+    },
+    "SOCIAL": {
+        "iinOrBin": "160440007161",
+        "name": 'НАО "Государственная корпорация «Правительство для граждан»',
+        "iban": "KZ67009SS00368609110",
+        "bankName": 'НАО "Государственная корпорация «Правительство для граждан»',
+        "bic": "GCVPKZ2A",
+        "kbe": "11",
+    },
+    "MEDICAL": {
+        "iinOrBin": "160440007161",
+        "name": 'НАО "Государственная корпорация «Правительство для граждан»',
+        "iban": "KZ92009MEDS368609103",
+        "bankName": 'НАО "Государственная корпорация «Правительство для граждан»',
+        "bic": "GCVPKZ2A",
+        "kbe": "11",
+    },
+}
+
+SOCIAL_KNP_NAMES = {
+    "010": "Обязательные пенсионные взносы",
+    "012": "Социальные отчисления",
+    "089": "Обязательные пенсионные взносы работодателя",
+    "121": "Отчисления на обязательное социальное медицинское страхование",
+    "122": "Взносы на обязательное социальное медицинское страхование",
+}
+
+
+def _birth_date_from_iin(iin):
+    digits = "".join(ch for ch in str(iin or "") if ch.isdigit())
+    if len(digits) != 12:
+        return None
+    century_code = int(digits[6])
+    if century_code in (1, 2):
+        century = 1800
+    elif century_code in (3, 4):
+        century = 1900
+    elif century_code in (5, 6):
+        century = 2000
+    else:
+        return None
+    try:
+        born = date(
+            century + int(digits[0:2]),
+            int(digits[2:4]),
+            int(digits[4:6]),
+        )
+    except ValueError:
+        return None
+    return born.isoformat()
+
+
+def _person_name_parts(value):
+    parts = [part for part in str(value or "").strip().split() if part]
+    if not parts:
+        return {"lastName": "", "firstName": "Сотрудник", "middleName": ""}
+    if len(parts) == 1:
+        return {"lastName": "", "firstName": parts[0], "middleName": ""}
+    return {
+        "lastName": parts[0],
+        "firstName": parts[1],
+        "middleName": " ".join(parts[2:]),
+    }
+
+
+def _budget_employee(name, iin, amount, period):
+    amount = round(float(amount or 0), 2)
+    if amount <= 0:
+        return None
+    digits = "".join(ch for ch in str(iin or "") if ch.isdigit())
+    birth_date = _birth_date_from_iin(digits)
+    if len(digits) != 12 or not birth_date:
+        raise ValueError(f"Для {name or 'сотрудника'} укажите корректный ИИН в карточке пользователя")
+    names = _person_name_parts(name)
+    return {
+        "iin": digits,
+        "lastName": names["lastName"] or None,
+        "firstName": names["firstName"],
+        "middleName": names["middleName"] or None,
+        "paymentAmount": {"amount": amount, "currency": "KZT"},
+        "period": period,
+        "birthDate": birth_date,
+    }
+
+
+def _budget_payment_payload(payment_type, knp, payer_iban, period, employees, document_id, description):
+    recipient = SOCIAL_PAYMENT_RECIPIENTS[payment_type]
+    clean_employees = [row for row in employees if row]
+    amount = round(sum(float(row["paymentAmount"]["amount"]) for row in clean_employees), 2)
+    if amount <= 0 or not clean_employees:
+        return None
+    return {
+        "type": payment_type,
+        "category": "DOMESTIC",
+        "paymentRecipient": {
+            "iinOrBin": recipient["iinOrBin"],
+            "name": recipient["name"],
+            "kbe": {"code": recipient["kbe"]},
+            "recipientAccount": {
+                "iban": recipient["iban"],
+                "bankName": recipient["bankName"],
+                "bic": recipient["bic"],
+            },
+        },
+        "details": {
+            "knp": {
+                "code": knp,
+                "name": SOCIAL_KNP_NAMES.get(knp),
+            },
+            "description": description[:480],
+            "paymentAmount": {"amount": amount, "currency": "KZT"},
+            "urgent": False,
+            "payerIban": payer_iban,
+            "documentId": document_id,
+            "factualSender": None,
+        },
+        "paymentEmployees": clean_employees,
+    }
+
+
+def _tax_payment_payload(kbk, payer_iban, period, amount, document_id, description):
+    amount = round(float(amount or 0), 2)
+    if amount <= 0:
+        return None
+    return {
+        "type": "TAX",
+        "category": "DOMESTIC",
+        "paymentRecipient": {
+            "iinOrBin": "141040004756",
+            "name": 'РГУ "Комитет государственных доходов Министерства финансов"',
+            "recipientAccount": {
+                "iban": "KZ24070105KSN0000000",
+                "bankName": 'РГУ "Комитет казначейства Министерства финансов РК"',
+                "bic": "KKMFKZ2A",
+            },
+            "kbe": {"code": "11"},
+        },
+        "details": {
+            "knp": {"code": "911", "name": "Основной платеж"},
+            "kbk": {"code": kbk, "name": "ИПН с доходов у источника выплаты"},
+            "description": description[:480],
+            "tax": {"periodStart": period, "periodEnd": period},
+            "paymentAmount": {"amount": amount, "currency": "KZT"},
+            "urgent": False,
+            "payerIban": payer_iban,
+            "documentId": document_id,
+            "factualSender": None,
+        },
+    }
+
+
 def _require_company():
     if not session.get("user_id"):
         return None
@@ -1266,6 +1425,188 @@ def accounting_tax_package_api():
     except Exception as exc:
         conn.rollback()
         print("ACCOUNTING TAX PACKAGE API ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось подготовить налоговый пакет"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@accounting_bp.route("/api/accounting/taxes/package/prepare", methods=["POST"])
+def accounting_tax_package_prepare():
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Требуется вход"}), 401
+    company_id = _require_company()
+    if not company_id:
+        return jsonify({"success": False, "error": "Активная компания не выбрана"}), 400
+
+    data = request.get_json(silent=True) or {}
+    period = str(data.get("period") or now_kz().strftime("%Y-%m")).strip()
+    payer_iban = str(data.get("accountIban") or "").replace(" ", "").upper()
+    if len(payer_iban) != 20 or not payer_iban.startswith("KZ"):
+        return jsonify({"success": False, "error": "Не удалось определить счёт списания"}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        _ensure_tax_tables(cur)
+        _ensure_tax_bank_map(cur)
+        calc = _calculate_taxes(cur, company_id, period)
+        _upsert_tax_debts(cur, company_id, session.get("user_id"), period)
+
+        cur.execute("""
+            SELECT id, COALESCE(full_name,username) AS name, iin
+            FROM users
+            WHERE company_id=%s AND role='owner'
+            ORDER BY id
+            LIMIT 1
+        """, (company_id,))
+        owner = cur.fetchone()
+        if not owner:
+            cur.execute("""
+                SELECT id, COALESCE(full_name,username) AS name, iin
+                FROM users
+                WHERE company_id=%s
+                ORDER BY CASE WHEN is_super_admin THEN 0 ELSE 1 END, id
+                LIMIT 1
+            """, (company_id,))
+            owner = cur.fetchone()
+
+        mapping = _tax_bank_map(cur, company_id)
+        owner_name = (owner or {}).get("name") or "ИП"
+        owner_iin = (owner or {}).get("iin") or ""
+
+        signables = []
+        seq = 1
+
+        def add_budget(payment_type, knp, title, employee_rows):
+            nonlocal seq
+            payload = _budget_payment_payload(
+                payment_type,
+                knp,
+                payer_iban,
+                calc["period"],
+                employee_rows,
+                f"NB-{calc['period'].replace('-', '')}-{seq:02d}",
+                f"{title} за {calc['period_label']}",
+            )
+            if not payload:
+                return
+            amount = payload["details"]["paymentAmount"]["amount"]
+            recipient = payload["paymentRecipient"]
+            signables.append({
+                "id": f"{payment_type.lower()}-{knp}-{seq}",
+                "name": f"{payment_type.lower()}-{knp}.json",
+                "title": title,
+                "amount": amount,
+                "payload": payload,
+                "payment": {
+                    "paymentType": payment_type,
+                    "accountIban": payer_iban,
+                    "receiverName": recipient["name"],
+                    "receiverIinBin": recipient["iinOrBin"],
+                    "receiverIban": recipient["recipientAccount"]["iban"],
+                    "receiverBic": recipient["recipientAccount"]["bic"],
+                    "kbe": recipient["kbe"]["code"],
+                    "knp": knp,
+                    "kbk": "",
+                    "periodStart": calc["period"],
+                    "periodEnd": calc["period"],
+                    "amount": amount,
+                    "documentNumber": payload["details"]["documentId"],
+                    "purpose": payload["details"]["description"],
+                },
+            })
+            seq += 1
+
+        owner_opv = _budget_employee(owner_name, owner_iin, calc["owner"]["opv"], calc["period"]) if calc["owner"]["opv"] else None
+        emp_opv = [
+            _budget_employee(row["name"], row["iin"], row["opv"], calc["period"])
+            for row in calc["employees"] if row["opv"] > 0
+        ]
+        add_budget("PENSION", "010", "ОПВ", [owner_opv, *emp_opv])
+
+        owner_so = _budget_employee(owner_name, owner_iin, calc["owner"]["so"], calc["period"]) if calc["owner"]["so"] else None
+        emp_so = [
+            _budget_employee(row["name"], row["iin"], row["so"], calc["period"])
+            for row in calc["employees"] if row["so"] > 0
+        ]
+        add_budget("SOCIAL", "012", "Социальные отчисления", [owner_so, *emp_so])
+
+        owner_vosms = _budget_employee(owner_name, owner_iin, calc["owner"]["vosms"], calc["period"]) if calc["owner"]["vosms"] else None
+        emp_vosms = [
+            _budget_employee(row["name"], row["iin"], row["vosms"], calc["period"])
+            for row in calc["employees"] if row["vosms"] > 0
+        ]
+        add_budget("MEDICAL", "122", "Взносы ОСМС", [owner_vosms, *emp_vosms])
+
+        emp_osms = [
+            _budget_employee(row["name"], row["iin"], row["osms"], calc["period"])
+            for row in calc["employees"] if row["osms"] > 0
+        ]
+        add_budget("MEDICAL", "121", "Отчисления ОСМС", emp_osms)
+
+        owner_opvr = _budget_employee(owner_name, owner_iin, calc["owner"]["opvr"], calc["period"]) if calc["owner"]["opvr"] else None
+        emp_opvr = [
+            _budget_employee(row["name"], row["iin"], row["opvr"], calc["period"])
+            for row in calc["employees"] if row["opvr"] > 0
+        ]
+        add_budget("PENSION", "089", "ОПВР", [owner_opvr, *emp_opvr])
+
+        ipn_amount = float(calc["employee_totals"]["ipn"] or 0)
+        if ipn_amount > 0:
+            mapped = mapping.get("emp_ipn") or {}
+            default = TAX_PAYMENT_DEFAULTS["emp_ipn"]
+            kbk = mapped.get("kbk") or default["kbk"]
+            payload = _tax_payment_payload(
+                kbk,
+                payer_iban,
+                calc["period"],
+                ipn_amount,
+                f"NB-{calc['period'].replace('-', '')}-{seq:02d}",
+                f"ИПН работников за {calc['period_label']}",
+            )
+            signables.append({
+                "id": f"tax-ipn-{seq}",
+                "name": "tax-ipn.json",
+                "title": "ИПН работников",
+                "amount": ipn_amount,
+                "payload": payload,
+                "payment": {
+                    "paymentType": "TAX",
+                    "accountIban": payer_iban,
+                    "receiverName": payload["paymentRecipient"]["name"],
+                    "receiverIinBin": payload["paymentRecipient"]["iinOrBin"],
+                    "receiverIban": payload["paymentRecipient"]["recipientAccount"]["iban"],
+                    "receiverBic": payload["paymentRecipient"]["recipientAccount"]["bic"],
+                    "kbe": "11",
+                    "knp": "911",
+                    "kbk": kbk,
+                    "periodStart": calc["period"],
+                    "periodEnd": calc["period"],
+                    "amount": ipn_amount,
+                    "documentNumber": payload["details"]["documentId"],
+                    "purpose": payload["details"]["description"],
+                },
+            })
+
+        conn.commit()
+        if not signables:
+            return jsonify({"success": False, "error": "За выбранный месяц нет платежей к отправке"}), 400
+
+        return jsonify({
+            "success": True,
+            "period": calc["period"],
+            "total": round(sum(float(item["amount"]) for item in signables), 2),
+            "count": len(signables),
+            "items": signables,
+        })
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        conn.rollback()
+        print("ACCOUNTING TAX PACKAGE PREPARE ERROR:", exc)
         return jsonify({"success": False, "error": "Не удалось подготовить налоговый пакет"}), 500
     finally:
         cur.close()
