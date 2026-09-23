@@ -794,6 +794,8 @@ def _debt_view(row, today):
         "status": visual_status,
         "status_label": status_label,
         "icon": "✓" if status == "paid" else "₸",
+        "tax_key": row.get("tax_key"),
+        "paid_at": row.get("paid_at"),
     }
 
 
@@ -1052,9 +1054,9 @@ def _upsert_tax_debts(cur, company_id, user_id, period):
             VALUES(%s,%s,%s,%s,%s,%s,'debt',%s,%s)
             ON CONFLICT(company_id,tax_key) WHERE tax_key IS NOT NULL
             DO UPDATE SET
-                amount=EXCLUDED.amount,
-                due_date=EXCLUDED.due_date,
-                description=EXCLUDED.description,
+                amount=CASE WHEN accounting_debts.status='paid' THEN accounting_debts.amount ELSE EXCLUDED.amount END,
+                due_date=CASE WHEN accounting_debts.status='paid' THEN accounting_debts.due_date ELSE EXCLUDED.due_date END,
+                description=CASE WHEN accounting_debts.status='paid' THEN accounting_debts.description ELSE EXCLUDED.description END,
                 updated_at=%s
         """, (
             company_id, user_id, title,
@@ -1267,11 +1269,82 @@ def accounting():
 
         selected_tax_period = request.args.get("tax_period") or now_kz().strftime("%Y-%m")
         tax_calculation = _calculate_taxes(cur, company_id, selected_tax_period)
+
         cur.execute("""
-            SELECT id, COALESCE(full_name, username) AS name
-            FROM users WHERE company_id=%s ORDER BY name
+            SELECT
+                u.id,
+                COALESCE(u.full_name, u.username) AS name,
+                u.position,
+                u.iin,
+                u.hire_date,
+                u.dismissal_date,
+                u.employment_type,
+                u.salary_type,
+                u.bank_iban,
+                COALESCE(p.salary, 0) AS salary,
+                COALESCE(p.is_active, FALSE) AS tax_active,
+                COALESCE(p.use_standard_deduction, TRUE) AS use_standard_deduction,
+                COALESCE(p.is_pensioner, FALSE) AS is_pensioner,
+                COALESCE(p.is_exempt_vosms, FALSE) AS is_exempt_vosms
+            FROM users u
+            LEFT JOIN employee_tax_profiles p
+              ON p.company_id=u.company_id AND p.user_id=u.id
+            WHERE u.company_id=%s
+              AND COALESCE(u.role,'employee') <> 'owner'
+            ORDER BY COALESCE(u.full_name,u.username),u.id
         """, (company_id,))
         tax_users = cur.fetchall()
+
+        period_prefix = f"{tax_calculation['period']}:%"
+        cur.execute("""
+            SELECT id,tax_key,title,amount,due_date,status,paid_at
+            FROM accounting_debts
+            WHERE company_id=%s AND tax_key LIKE %s
+            ORDER BY id
+        """, (company_id, period_prefix))
+        tax_debts = {
+            row["tax_key"]: dict(row)
+            for row in cur.fetchall()
+            if row.get("tax_key")
+        }
+
+        tax_rows = [
+            ("owner_opv", "ОПВ за ИП", tax_calculation["owner"]["opv"], "owner"),
+            ("owner_so", "СО за ИП", tax_calculation["owner"]["so"], "owner"),
+            ("owner_vosms", "ВОСМС за ИП", tax_calculation["owner"]["vosms"], "owner"),
+            ("owner_opvr", "ОПВР за ИП", tax_calculation["owner"]["opvr"], "owner"),
+            ("emp_opv", "ОПВ работников", tax_calculation["employee_totals"]["opv"], "employees"),
+            ("emp_vosms", "ВОСМС работников", tax_calculation["employee_totals"]["vosms"], "employees"),
+            ("emp_ipn", "ИПН работников", tax_calculation["employee_totals"]["ipn"], "employees"),
+            ("emp_so", "СО работодателя", tax_calculation["employee_totals"]["so"], "employees"),
+            ("emp_osms", "ОСМС работодателя", tax_calculation["employee_totals"]["osms"], "employees"),
+            ("emp_opvr", "ОПВР работодателя", tax_calculation["employee_totals"]["opvr"], "employees"),
+        ]
+        tax_obligations = []
+        for key, title, amount, group in tax_rows:
+            amount = float(amount or 0)
+            if amount <= 0:
+                continue
+            tax_key = f"{tax_calculation['period']}:{key}"
+            debt = tax_debts.get(tax_key) or {}
+            tax_obligations.append({
+                "key": key,
+                "tax_key": tax_key,
+                "title": title,
+                "group": group,
+                "amount": amount,
+                "due_date": tax_calculation["due_date"],
+                "debt_id": debt.get("id"),
+                "status": debt.get("status") or "not_created",
+                "paid_at": debt.get("paid_at"),
+            })
+
+        monthly_social_total = (
+            float(tax_calculation["owner"]["total"] or 0)
+            + float(tax_calculation["employee_total"] or 0)
+        )
+        today_for_tax = now_kz().date()
+        tax_days_left = (tax_calculation["due_date"] - today_for_tax).days
 
         accounting_summary = {
             "income_total": operation_summary["income_total"] or 0,
@@ -1304,6 +1377,9 @@ def accounting():
             invoice_sales_count=invoice_sales_count,
             tax_calculation=tax_calculation,
             tax_users=tax_users,
+            tax_obligations=tax_obligations,
+            monthly_social_total=monthly_social_total,
+            tax_days_left=tax_days_left,
             filings=filings,
         )
 
