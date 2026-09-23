@@ -12,7 +12,7 @@
 <div class="pf">
 <div class="pf-head"><h1>Профиль</h1><p>{% if can_manage_company %}Аккаунт, организация и управление Nika Business{% else %}Ваш аккаунт и персональные настройки{% endif %}</p></div>
 {% if request.args.get('saved') %}<div class="notice ok">Изменения сохранены.</div>{% endif %}
-{% if request.args.get('error') %}<div class="notice err">{% if request.args.get('error')=='wrong_password' %}Текущий пароль указан неверно.{% elif request.args.get('error')=='password_mismatch' %}Новые пароли не совпадают.{% else %}Новый пароль должен содержать минимум 5 символов.{% endif %}</div>{% endif %}
+{% if request.args.get('error') %}<div class="notice err">{% if request.args.get('error')=='wrong_password' %}Текущий пароль указан неверно.{% elif request.args.get('error')=='password_mismatch' %}Новые пароли не совпадают.{% elif request.args.get('error')=='iin' %}ИИН должен содержать ровно 12 цифр.{% else %}Новый пароль должен содержать минимум 5 символов.{% endif %}</div>{% endif %}
 <nav class="pf-nav">
 <a href="/profile?tab=personal" class="{{ 'active' if active_tab=='personal' else '' }}">Личные данные</a>
 {% if can_manage_company %}
@@ -27,7 +27,7 @@
 
 {% if active_tab=='personal' %}
 <form method="post" action="/profile/personal"><section class="card"><h2>Личные данные</h2><p class="desc">Персональные данные вашей учётной записи.</p><div class="grid">
-<div class="field"><label>ФИО</label><input name="full_name" value="{{ user.full_name or '' }}"></div><div class="field"><label>Телефон</label><input name="phone" value="{{ user.phone or '' }}"></div><div class="field"><label>Должность</label><input name="position" value="{{ user.position or '' }}"></div><div class="field"><label>Логин</label><div class="ro">{{ user.username or '—' }}</div></div><div class="field"><label>Роль</label><div class="ro">{{ user.role or 'employee' }}</div></div><div class="field"><label>Организация</label><div class="ro">{{ user.company_name or 'Не указана' }}</div></div>
+<div class="field"><label>ФИО</label><input name="full_name" value="{{ user.full_name or '' }}"></div><div class="field"><label>Телефон</label><input name="phone" value="{{ user.phone or '' }}"></div><div class="field"><label>ИИН</label><input name="iin" inputmode="numeric" maxlength="12" placeholder="12 цифр" value="{{ user.iin or '' }}"><small style="color:#818899">Для ОПВ, СО и ОСМС за ИП используется ваш личный ИИН, не БИН компании.</small></div><div class="field"><label>Должность</label><input name="position" value="{{ user.position or '' }}"></div><div class="field"><label>Логин</label><div class="ro">{{ user.username or '—' }}</div></div><div class="field"><label>Роль</label><div class="ro">{{ user.role or 'employee' }}</div></div><div class="field"><label>Организация</label><div class="ro">{{ user.company_name or 'Не указана' }}</div></div>
 </div><div class="actions"><button class="btn">Сохранить</button></div></section></form>
 
 {% elif active_tab=='company' and can_manage_company %}
