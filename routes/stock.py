@@ -10,15 +10,24 @@ from routes.expenses import upsert_expense_from_source, _sync_expense_to_account
 stock_bp = Blueprint("stock", __name__)
 
 
-def is_product(cur, item_id, company_id):
+STOCK_ITEM_TYPES = ("product", "ingredient", "semi_finished")
+INCOME_ITEM_TYPES = ("product", "ingredient")
+
+
+def is_stock_item(cur, item_id, company_id, allowed_types=STOCK_ITEM_TYPES):
     cur.execute("""
-        SELECT 1
+        SELECT COALESCE(item_type, 'product') AS item_type
         FROM items
         WHERE id = %s
           AND company_id = %s
-          AND COALESCE(item_type, 'product') = 'product'
-    """, (item_id, company_id))
+          AND COALESCE(item_type, 'product') = ANY(%s)
+    """, (item_id, company_id, list(allowed_types)))
     return cur.fetchone() is not None
+
+
+def is_product(cur, item_id, company_id):
+    # Backwards-compatible helper for old retail callers.
+    return is_stock_item(cur, item_id, company_id, ("product",))
 
 
 @stock_bp.route("/stock/income", methods=["GET", "POST"])
@@ -44,9 +53,9 @@ def stock_income():
         company_id = session.get("company_id")
         update_retail = as_bool(request.form.get("update_retail"))
 
-        if not is_product(cur, item_id, company_id):
+        if not is_stock_item(cur, item_id, company_id, INCOME_ITEM_TYPES):
             pool.putconn(conn)
-            return "Приход доступен только для товаров", 400
+            return "Приход доступен только для товаров и ингредиентов", 400
         if quantity <= 0:
             pool.putconn(conn)
             return "Количество должно быть больше нуля", 400
@@ -61,6 +70,7 @@ def stock_income():
             quantity=quantity,
             price=price,
             update_retail=update_retail,
+            allowed_item_types=INCOME_ITEM_TYPES,
         )
         item_name = pricing["item_name"]
         total = quantity * price
@@ -132,7 +142,7 @@ def stock_income():
          AND i.company_id = sm.company_id
         WHERE sm.company_id = %s
           AND sm.movement_type = 'income'
-          AND COALESCE(i.item_type, 'product') = 'product'
+          AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient')
     """, (session.get("company_id"),))
     income_stats = cur.fetchone() or {
         "total_count": 0,
@@ -155,7 +165,7 @@ def stock_income():
         WHERE
             stock_movements.company_id = %s
             AND stock_movements.movement_type = 'income'
-            AND COALESCE(items.item_type, 'product') = 'product'
+            AND COALESCE(items.item_type, 'product') IN ('product', 'ingredient')
 
         ORDER BY stock_movements.id DESC
 
@@ -210,7 +220,7 @@ def stock():
                 ON i.id = sm.item_id
                AND i.company_id = sm.company_id
             WHERE i.company_id = %s
-              AND COALESCE(i.item_type, 'product') = 'product'
+              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient')
             GROUP BY i.id
         )
         SELECT *
@@ -238,7 +248,7 @@ def stock():
                 ON i.id = sm.item_id
                AND i.company_id = sm.company_id
             WHERE i.company_id = %s
-              AND COALESCE(i.item_type, 'product') = 'product'
+              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient')
             GROUP BY i.id
         )
         SELECT
@@ -292,7 +302,7 @@ def stock_movements():
          AND items.company_id = stock_movements.company_id
 
         WHERE stock_movements.company_id = %s
-          AND COALESCE(items.item_type, 'product') = 'product'
+          AND COALESCE(items.item_type, 'product') IN ('product', 'ingredient')
 
         ORDER BY stock_movements.id DESC
     """, (
@@ -326,7 +336,7 @@ def stock_writeoff():
         comment = request.form.get("comment")
         company_id = session.get("company_id")
 
-        if not is_product(cur, item_id, company_id):
+        if not is_stock_item(cur, item_id, company_id, INCOME_ITEM_TYPES):
             pool.putconn(conn)
             return "Списание доступен только для товаров", 400
 
@@ -465,7 +475,7 @@ def api_stock():
                 ON i.id = sm.item_id
                AND i.company_id = sm.company_id
             WHERE i.company_id = %s
-              AND COALESCE(i.item_type, 'product') = 'product'
+              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient')
             GROUP BY i.id
         ), filtered_rows AS (
             SELECT *
@@ -520,7 +530,7 @@ def api_stock_movements():
          AND items.company_id = stock_movements.company_id
 
         WHERE stock_movements.company_id = %s
-          AND COALESCE(items.item_type, 'product') = 'product'
+          AND COALESCE(items.item_type, 'product') IN ('product', 'ingredient')
 
         ORDER BY stock_movements.id DESC
     """, (
@@ -545,9 +555,9 @@ def api_stock_income():
     cur = conn.cursor()
     company_id = session.get("company_id")
 
-    if not is_product(cur, data.get("item_id"), company_id):
+    if not is_stock_item(cur, data.get("item_id"), company_id, INCOME_ITEM_TYPES):
         pool.putconn(conn)
-        return jsonify({"success": False, "error": "Приход доступен только для товаров"}), 400
+        return jsonify({"success": False, "error": "Приход доступен только для товаров и ингредиентов"}), 400
 
     quantity = float(data.get("quantity", 0))
     price = float(data.get("price", 0))
@@ -569,6 +579,7 @@ def api_stock_income():
         quantity=quantity,
         price=price,
         update_retail=as_bool(data.get("update_retail"), default=False),
+        allowed_item_types=INCOME_ITEM_TYPES,
     )
     item_name = pricing["item_name"]
 
@@ -643,7 +654,7 @@ def api_stock_writeoff():
     cur = conn.cursor()
     company_id = session.get("company_id")
 
-    if not is_product(cur, data.get("item_id"), company_id):
+    if not is_stock_item(cur, data.get("item_id"), company_id, INCOME_ITEM_TYPES):
         pool.putconn(conn)
         return jsonify({
             "success": False,
