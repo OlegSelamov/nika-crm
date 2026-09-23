@@ -36,7 +36,7 @@
 
   <div class="accx-top">
     <section class="accx-company">
-      <strong>{{ accounting_company.name or 'Компания' }}</strong>
+      <strong>{{ accounting_company.name or 'Компания' }} · {{ 'ТОО' if accounting_company.legal_form=='too' else 'ИП' }}</strong>
       <span>{{ accounting_company.bin or 'БИН/ИИН не указан' }} · {{ accounting_company.address or 'Адрес не указан' }}</span>
       <div class="rows">
         <b>{{ accounting_company.bank or 'Банк не указан' }}</b>
@@ -46,7 +46,11 @@
     </section>
     <section class="accx-kpi" id="bankBalanceCard"><span>На счету</span><strong id="bankBalanceValue">—</strong><small id="bankBalanceMeta">Alatau City Bank</small></section>
     <section class="accx-kpi"><span>Доход</span><strong>{{ "{:,.0f}".format(tax_calculation.taxable_income).replace(",", " ") }} ₸</strong><small>{{ tax_calculation.period_label }}</small></section>
+    {% if tax_calculation.legal_form == 'ip' %}
     <section class="accx-kpi"><span>ИП за себя</span><strong>{{ "{:,.0f}".format(tax_calculation.owner.total).replace(",", " ") }} ₸</strong><small>ОПВ + СО + ВОСМС</small></section>
+    {% else %}
+    <section class="accx-kpi"><span>ТОО</span><strong>0 ₸</strong><small>платежей «за себя» нет</small></section>
+    {% endif %}
     <section class="accx-kpi"><span>Работники</span><strong>{{ "{:,.0f}".format(tax_calculation.employee_total).replace(",", " ") }} ₸</strong><small>{{ tax_calculation.employees|length }} в расчёте</small></section>
     <section class="accx-kpi"><span>Пакет</span><strong>{{ "{:,.0f}".format(package_total).replace(",", " ") }} ₸</strong><small>{{ 'готов к оплате' if package_ready else 'нужно назначить КБК' }}</small></section>
   </div>
@@ -114,7 +118,7 @@
 
       <section class="accx-panel">
         <div class="accx-panel-head">
-          <div><h2>Сотрудники</h2><p>Оклад и участие в расчёте</p></div>
+          <div><h2>{{ 'Директор и сотрудники' if tax_calculation.legal_form=='too' else 'Сотрудники' }}</h2><p>{{ 'Директор ТОО учитывается как физлицо по ИИН и зарплате' if tax_calculation.legal_form=='too' else 'Оклад и участие в расчёте' }}</p></div>
           <button class="accx-btn alt" type="button" onclick="document.getElementById('employeeModal').classList.add('open')">Подключить</button>
         </div>
         <div class="accx-team">
