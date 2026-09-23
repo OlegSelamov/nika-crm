@@ -58,6 +58,121 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+
+  Future<void> openTaxSettings() async {
+    final current = Map<String, dynamic>.from(data?['tax_settings'] ?? const {});
+    final fields = <String, TextEditingController>{
+      'turnover_rate': TextEditingController(text: '${current['turnover_rate'] ?? 4}'),
+      'mzp': TextEditingController(text: '${current['mzp'] ?? 85000}'),
+      'mrp': TextEditingController(text: '${current['mrp'] ?? 4325}'),
+      'owner_base': TextEditingController(text: '${current['owner_base'] ?? 85000}'),
+      'owner_opv_rate': TextEditingController(text: '${current['owner_opv_rate'] ?? 10}'),
+      'owner_so_rate': TextEditingController(text: '${current['owner_so_rate'] ?? 5}'),
+      'owner_vosms_rate': TextEditingController(text: '${current['owner_vosms_rate'] ?? 5}'),
+      'employee_opv_rate': TextEditingController(text: '${current['employee_opv_rate'] ?? 10}'),
+      'employee_vosms_rate': TextEditingController(text: '${current['employee_vosms_rate'] ?? 2}'),
+      'employee_ipn_rate': TextEditingController(text: '${current['employee_ipn_rate'] ?? 10}'),
+      'employer_so_rate': TextEditingController(text: '${current['employer_so_rate'] ?? 5}'),
+      'employer_osms_rate': TextEditingController(text: '${current['employer_osms_rate'] ?? 3}'),
+      'employer_opvr_rate': TextEditingController(text: '${current['employer_opvr_rate'] ?? 3.5}'),
+      'standard_deduction': TextEditingController(text: '${current['standard_deduction'] ?? 0}'),
+    };
+    bool includeOwnerOpvr = current['include_owner_opvr'] == true;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('Настройки налогов'),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 460,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                _taxField(fields['turnover_rate']!, 'Налог с оборота', '%'),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: _taxField(fields['mzp']!, 'МЗП', '₸')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _taxField(fields['mrp']!, 'МРП', '₸')),
+                ]),
+                const SizedBox(height: 10),
+                _taxField(fields['owner_base']!, 'База ИП за себя', '₸'),
+                const SizedBox(height: 14),
+                const Align(alignment: Alignment.centerLeft, child: Text('ИП за себя', style: TextStyle(fontWeight: FontWeight.w900))),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(child: _taxField(fields['owner_opv_rate']!, 'ОПВ', '%')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _taxField(fields['owner_so_rate']!, 'СО', '%')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _taxField(fields['owner_vosms_rate']!, 'ВОСМС', '%')),
+                ]),
+                const SizedBox(height: 14),
+                const Align(alignment: Alignment.centerLeft, child: Text('Работники', style: TextStyle(fontWeight: FontWeight.w900))),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(child: _taxField(fields['employee_opv_rate']!, 'ОПВ', '%')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _taxField(fields['employee_vosms_rate']!, 'ВОСМС', '%')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _taxField(fields['employee_ipn_rate']!, 'ИПН', '%')),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: _taxField(fields['employer_so_rate']!, 'СО раб.', '%')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _taxField(fields['employer_osms_rate']!, 'ОСМС', '%')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _taxField(fields['employer_opvr_rate']!, 'ОПВР', '%')),
+                ]),
+                const SizedBox(height: 10),
+                _taxField(fields['standard_deduction']!, 'Стандартный вычет', '₸'),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: includeOwnerOpvr,
+                  onChanged: (v) => setDialog(() => includeOwnerOpvr = v),
+                  title: const Text('Считать ОПВР за ИП'),
+                ),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Отмена')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Сохранить')),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) {
+      try {
+        final payload = <String, dynamic>{
+          for (final entry in fields.entries)
+            entry.key: entry.value.text.replaceAll(' ', '').replaceAll(',', '.'),
+          'include_owner_opvr': includeOwnerOpvr,
+          'regime': current['regime'] ?? 'simplified',
+        };
+        await ApiService.saveMobileTaxSettings(payload);
+        await load();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Налоговые ставки сохранены')),
+          );
+        }
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));
+      }
+    }
+    for (final controller in fields.values) {
+      controller.dispose();
+    }
+  }
+
+  Widget _taxField(TextEditingController controller, String label, String suffix) =>
+      TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(labelText: label, suffixText: suffix),
+      );
+
   @override
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
@@ -107,6 +222,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
+          if (data?['can_manage_taxes'] == true) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: AppColors.primarySoft,
+                  child: Icon(Icons.calculate_outlined, color: AppColors.primary),
+                ),
+                title: const Text('Налоговые ставки и базы', style: TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: const Text('МЗП, МРП, ОПВ, СО, ОСМС, ВОСМС, ИПН и ОПВР'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: openTaxSettings,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Text('Сегодня', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
