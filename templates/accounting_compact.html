@@ -5,7 +5,7 @@
 .accx-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .accx-head h1{margin:0;font-size:26px}.accx-head p{margin:4px 0 0;color:#7c8496;font-size:12px}
 .accx-actions{display:flex;gap:8px;align-items:center}.accx-btn{height:38px;display:inline-flex;align-items:center;justify-content:center;padding:0 13px;border:0;border-radius:10px;background:#7257ff;color:#fff;text-decoration:none;font-size:11px;font-weight:850;cursor:pointer}.accx-btn.alt{background:#efecff;color:#654de2;border:1px solid #dcd5ff}.accx-btn.ok{background:#15845f}.accx-btn:disabled{opacity:.5;cursor:not-allowed}
-.accx-top{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(4,minmax(145px,.7fr));gap:9px}
+.accx-top{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(5,minmax(135px,.68fr));gap:9px}
 .accx-company,.accx-kpi,.accx-panel{border:1px solid #e5e8ef;border-radius:14px;background:#fff;box-shadow:0 7px 22px rgba(32,36,52,.05)}
 .accx-company{padding:12px 14px;display:grid;gap:5px}.accx-company strong{font-size:14px}.accx-company span{color:#7d8494;font-size:10px}.accx-company .rows{display:flex;gap:12px;flex-wrap:wrap}.accx-company .rows b{font-size:10px;font-weight:750}
 .accx-kpi{padding:11px 12px;display:grid;align-content:center;gap:3px}.accx-kpi span{font-size:9px;color:#858c9b;text-transform:uppercase;font-weight:800}.accx-kpi strong{font-size:17px}.accx-kpi small{font-size:9px;color:#9096a5}
@@ -44,6 +44,7 @@
         <b>{{ 'НДС' if accounting_company.is_vat_payer else 'Без НДС' }}</b>
       </div>
     </section>
+    <section class="accx-kpi" id="bankBalanceCard"><span>На счету</span><strong id="bankBalanceValue">—</strong><small id="bankBalanceMeta">Alatau City Bank</small></section>
     <section class="accx-kpi"><span>Доход</span><strong>{{ "{:,.0f}".format(tax_calculation.taxable_income).replace(",", " ") }} ₸</strong><small>{{ tax_calculation.period_label }}</small></section>
     <section class="accx-kpi"><span>ИП за себя</span><strong>{{ "{:,.0f}".format(tax_calculation.owner.total).replace(",", " ") }} ₸</strong><small>ОПВ + СО + ВОСМС</small></section>
     <section class="accx-kpi"><span>Работники</span><strong>{{ "{:,.0f}".format(tax_calculation.employee_total).replace(",", " ") }} ₸</strong><small>{{ tax_calculation.employees|length }} в расчёте</small></section>
@@ -92,7 +93,7 @@
             <input type="hidden" name="period" value="{{ tax_calculation.period }}">
             <button class="accx-btn alt" type="submit">Сформировать</button>
           </form>
-          <a class="accx-btn {{ '' if package_ready else 'alt' }}" href="/banks?tax_package={{ tax_calculation.period }}" {% if not package_ready %}onclick="alert('Для части платежей не определены банковские реквизиты');return false"{% endif %}>Оплатить пакетом</a>
+          <button class="accx-btn {{ '' if package_ready else 'alt' }}" type="button" onclick="openTaxPackage()" {% if not package_ready %}disabled{% endif %}>Подписать и оплатить</button>
         </div>
       </div>
     </section>
@@ -131,6 +132,26 @@
   </div>
 </div>
 
+<div class="accx-modal" id="taxPackageModal">
+  <div class="accx-dialog">
+    <h3>Подтверждение налогового пакета</h3>
+    <p>Все платежи будут подписаны одной операцией NCALayer. Перед подписью проверьте счёт, суммы и период.</p>
+    <div class="accx-company" style="margin-bottom:10px">
+      <strong id="pkgAccount">Счёт не выбран</strong>
+      <span id="pkgBalance">Баланс загружается…</span>
+    </div>
+    <div id="pkgItems" style="display:grid;gap:7px"></div>
+    <div class="accx-package" style="margin-top:12px">
+      <div><span>Итого к отправке</span><strong id="pkgTotal">—</strong></div>
+      <div class="accx-modal-actions" style="margin:0">
+        <button class="accx-btn alt" type="button" onclick="closeTaxPackage()">Отмена</button>
+        <button class="accx-btn ok" id="pkgSignButton" type="button" onclick="signAndSendTaxPackage()">Подписать и отправить</button>
+      </div>
+    </div>
+    <div id="pkgResult" style="margin-top:10px;font-size:10px;color:#7e8595"></div>
+  </div>
+</div>
+
 <div class="accx-modal" id="employeeModal">
   <div class="accx-dialog">
     <h3>Подключить сотрудника к налогам</h3>
@@ -148,6 +169,172 @@
 </div>
 
 <script>
+let accountingPayerIban='';
+let accountingBalance=0;
+let preparedTaxPackage=null;
+
+function moneyKz(value){
+  const n=Number(value||0);
+  return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n)+' ₸';
+}
+function firstValue(source, keys, fallback=''){
+  if(!source||typeof source!=='object') return fallback;
+  for(const key of keys){
+    const value=source[key];
+    if(value!==undefined && value!==null && value!=='') return value;
+  }
+  return fallback;
+}
+function normalizeAccounts(payload){
+  if(Array.isArray(payload)) return payload;
+  if(!payload||typeof payload!=='object') return [];
+  for(const key of ['accounts','data','items','content']){
+    if(Array.isArray(payload[key])) return payload[key];
+  }
+  return payload.iban ? [payload] : [];
+}
+function extractBalance(account){
+  const raw=firstValue(account,['availableBalance','balance','currentBalance','amount'],0);
+  if(raw&&typeof raw==='object') return Number(firstValue(raw,['amount','value','balance'],0))||0;
+  return Number(raw)||0;
+}
+function extractCurrency(account){
+  const raw=firstValue(account,['availableBalance','balance','currentBalance'],null);
+  if(raw&&typeof raw==='object') return String(firstValue(raw,['currency','currencyCode'],'KZT'));
+  return String(firstValue(account,['currency','currencyCode'],'KZT'));
+}
+async function loadAccountingBalance(){
+  const value=document.getElementById('bankBalanceValue');
+  const meta=document.getElementById('bankBalanceMeta');
+  try{
+    const r=await fetch('/api/integrations/alatau/accounts?environment=production',{headers:{Accept:'application/json'}});
+    const d=await r.json();
+    if(!r.ok||!d.success) throw new Error(d.error||'Банк недоступен');
+    const accounts=normalizeAccounts(d.accounts);
+    const account=accounts.find(a=>extractCurrency(a).toUpperCase()==='KZT') || accounts[0];
+    if(!account) throw new Error('Счёт не найден');
+    accountingPayerIban=String(firstValue(account,['iban','accountNumber','number'],'')).replace(/\s/g,'').toUpperCase();
+    accountingBalance=extractBalance(account);
+    value.textContent=moneyKz(accountingBalance);
+    meta.textContent=accountingPayerIban || 'Alatau City Bank';
+  }catch(e){
+    value.textContent='—';
+    meta.textContent=e.message||'Не удалось получить баланс';
+  }
+}
+async function openTaxPackage(){
+  if(!accountingPayerIban){
+    await loadAccountingBalance();
+  }
+  if(!accountingPayerIban){
+    alert('Не удалось определить счёт Alatau City Bank');
+    return;
+  }
+  const modal=document.getElementById('taxPackageModal');
+  const result=document.getElementById('pkgResult');
+  const itemsBox=document.getElementById('pkgItems');
+  document.getElementById('pkgAccount').textContent=accountingPayerIban;
+  document.getElementById('pkgBalance').textContent='Доступно: '+moneyKz(accountingBalance);
+  document.getElementById('pkgTotal').textContent='—';
+  itemsBox.innerHTML='<div class="accx-user"><div><strong>Подготавливаем платежи…</strong><small>Проверяем сотрудников и реквизиты</small></div></div>';
+  result.textContent='';
+  modal.classList.add('open');
+  try{
+    const r=await fetch('/api/accounting/taxes/package/prepare',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      body:JSON.stringify({period:{{ tax_calculation.period|tojson }},accountIban:accountingPayerIban})
+    });
+    const d=await r.json();
+    if(!r.ok||!d.success) throw new Error(d.error||'Не удалось подготовить пакет');
+    preparedTaxPackage=d;
+    document.getElementById('pkgTotal').textContent=moneyKz(d.total);
+    document.getElementById('pkgBalance').textContent='Доступно: '+moneyKz(accountingBalance)+' · после пакета: '+moneyKz(accountingBalance-Number(d.total||0));
+    itemsBox.innerHTML=d.items.map(item=>{
+      const details=item.payload?.details||{};
+      const code=details.kbk?.code ? ('КБК '+details.kbk.code+' · КНП '+(details.knp?.code||'')) : ('КНП '+(details.knp?.code||''));
+      return '<div class="accx-taxrow" style="grid-template-columns:minmax(0,1fr) 100px 140px">'+
+        '<div><strong>'+item.title+'</strong><small>'+code+'</small></div>'+
+        '<div class="accx-money">'+moneyKz(item.amount)+'</div>'+
+        '<div class="accx-status"><span class="pill ok">готов</span></div>'+
+      '</div>';
+    }).join('');
+    if(accountingBalance < Number(d.total||0)){
+      result.textContent='На выбранном счёте недостаточно денег для всего пакета.';
+      result.style.color='#b74343';
+      document.getElementById('pkgSignButton').disabled=true;
+    }else{
+      result.textContent='Одна подпись подтвердит '+d.count+' платежей.';
+      result.style.color='#167956';
+      document.getElementById('pkgSignButton').disabled=false;
+    }
+  }catch(e){
+    preparedTaxPackage=null;
+    itemsBox.innerHTML='';
+    result.textContent=e.message||'Ошибка подготовки пакета';
+    result.style.color='#b74343';
+    document.getElementById('pkgSignButton').disabled=true;
+  }
+}
+function closeTaxPackage(){
+  if(document.getElementById('pkgSignButton')?.disabled && preparedTaxPackage===null){
+    // modal can always be closed on prep errors
+  }
+  document.getElementById('taxPackageModal').classList.remove('open');
+}
+async function signAndSendTaxPackage(){
+  if(!preparedTaxPackage?.items?.length) return;
+  const button=document.getElementById('pkgSignButton');
+  const result=document.getElementById('pkgResult');
+  button.disabled=true;
+  try{
+    if(!window.NikaNCALayer?.signJwsBatch) throw new Error('NCALayer не готов. Запустите NCALayer и обновите страницу.');
+    result.style.color='#7e8595';
+    result.textContent='Ожидаем одну подпись для всего пакета…';
+    const batch=preparedTaxPackage.items.map(item=>({
+      id:item.id,
+      name:item.name,
+      content:JSON.stringify(item.payload)
+    }));
+    const signed=await window.NikaNCALayer.signJwsBatch(batch);
+    const signedById=new Map((signed.items||[]).map(x=>[String(x.id),x.content]));
+    let sent=0;
+    const errors=[];
+    for(const item of preparedTaxPackage.items){
+      const content=signedById.get(String(item.id));
+      if(!content){errors.push(item.title+': нет подписи');continue}
+      const requestId=('pkg-'+Date.now()+'-'+item.id).replace(/[^A-Za-z0-9._:-]/g,'-').slice(0,120);
+      const r=await fetch('/api/integrations/alatau/payments/signed',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify({
+          environment:'production',
+          content,
+          requestId,
+          payment:item.payment
+        })
+      });
+      const d=await r.json();
+      if(r.ok&&d.success) sent++;
+      else errors.push(item.title+': '+(d.error||'банк отклонил платёж'));
+    }
+    if(errors.length){
+      result.style.color='#b74343';
+      result.textContent='Отправлено '+sent+' из '+preparedTaxPackage.items.length+'. '+errors.join(' · ');
+      button.disabled=false;
+      return;
+    }
+    result.style.color='#167956';
+    result.textContent='Готово: пакет подписан одной операцией и '+sent+' платежей переданы в Alatau City Bank.';
+    setTimeout(()=>location.reload(),1400);
+  }catch(e){
+    result.style.color='#b74343';
+    result.textContent=e.message||'Не удалось подписать пакет';
+    button.disabled=false;
+  }
+}
 document.querySelectorAll('.accx-modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
+document.addEventListener('DOMContentLoaded',loadAccountingBalance);
 </script>
+<script src="{{ url_for('static', filename='js/ncalayer.js') }}"></script>
 {% endblock %}
