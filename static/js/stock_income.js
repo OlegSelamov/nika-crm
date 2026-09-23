@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (selectedMarkup <= 0) {
             retailHint.textContent = itemIdInput?.value
                 ? "У категории не указана наценка — розничная цена не изменится"
-                : "Сначала выберите товар";
+                : "Сначала выберите позицию";
             return;
         }
 
@@ -113,7 +113,7 @@ document.addEventListener("DOMContentLoaded", function () {
         selectedMarkup = 0;
         selectedRetail = 0;
         if (updateRetailInput) updateRetailInput.disabled = true;
-        if (retailHint) retailHint.textContent = "Сначала выберите товар";
+        if (retailHint) retailHint.textContent = "Сначала выберите позицию";
         if (previousPriceHint) {
             previousPriceHint.textContent = "После выбора товара подставится последняя закупочная цена";
         }
@@ -149,7 +149,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (previousPriceHint) {
             previousPriceHint.textContent = previousPrice > 0
                 ? `Подставлена последняя закупочная цена: ${formatMoney(previousPrice)}`
-                : "У товара ещё нет закупочной цены";
+                : "У позиции ещё нет закупочной цены";
         }
 
         closeDropdown();
@@ -210,7 +210,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const strong = document.createElement("strong");
             strong.textContent = `Показано ${items.length} из ${total}`;
             const span = document.createElement("span");
-            span.textContent = "Уточните название или код товара";
+            span.textContent = "Уточните название или код позиции";
             hint.append(strong, span);
             dropdown.appendChild(hint);
         }
@@ -236,10 +236,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         searchController?.abort();
         searchController = new AbortController();
-        showMessage("Поиск товара…", "Пожалуйста, подождите");
+        showMessage("Поиск позиции…", "Пожалуйста, подождите");
 
         const params = new URLSearchParams({
             q: normalized,
+            stock_scope: "income",
             limit: String(SEARCH_LIMIT),
             offset: "0",
             sort: "name"
@@ -257,7 +258,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const total = Number(data.total) || items.length;
 
             if (!items.length) {
-                showMessage("Товар не найден", "Проверьте название или код");
+                showMessage("Позиция не найдена", "Проверьте название или код");
                 return [];
             }
 
@@ -411,7 +412,7 @@ document.addEventListener("DOMContentLoaded", function () {
     form?.addEventListener("submit", function (event) {
         if (!itemIdInput?.value) {
             event.preventDefault();
-            searchInput?.setCustomValidity("Выберите товар из списка");
+            searchInput?.setCustomValidity("Выберите позицию из списка");
             searchInput?.reportValidity();
             openDropdown();
             return;
