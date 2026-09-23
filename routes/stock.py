@@ -399,6 +399,7 @@ def api_stock():
     query = parse_scanned_product_code(request.args.get("q")).lookup_code
     category = (request.args.get("category") or "").strip()
     status = (request.args.get("status") or "all").strip().lower()
+    stock_scope = (request.args.get("stock_scope") or "all").strip().lower()
     sort = (request.args.get("sort") or "name").strip().lower()
 
     if legacy_mode:
@@ -420,6 +421,9 @@ def api_stock():
 
     where_parts = []
     params = [company_id]
+
+    if stock_scope == "income":
+        where_parts.append("COALESCE(item_type, 'product') IN ('product', 'ingredient')")
 
     if query:
         where_parts.append("""
