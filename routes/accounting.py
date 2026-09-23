@@ -1019,30 +1019,71 @@ def save_employee_tax_profile():
         cur.close(); pool.putconn(conn)
 
 
+def _upsert_tax_debts(cur, company_id, user_id, period):
+    """Create/update monthly social and payroll obligations from the shared tax calculation."""
+    _ensure_accounting_tables(cur)
+    _ensure_tax_tables(cur)
+    calc = _calculate_taxes(cur, company_id, period)
+    rows = [
+        ('owner_opv', 'ОПВ за ИП', calc['owner']['opv']),
+        ('owner_so', 'СО за ИП', calc['owner']['so']),
+        ('owner_vosms', 'ВОСМС за ИП', calc['owner']['vosms']),
+    ]
+    if calc['owner']['opvr'] > 0:
+        rows.append(('owner_opvr', 'ОПВР за ИП', calc['owner']['opvr']))
+    totals = calc['employee_totals']
+    rows += [
+        ('emp_opv', 'ОПВ работников', totals['opv']),
+        ('emp_vosms', 'ВОСМС работников', totals['vosms']),
+        ('emp_ipn', 'ИПН работников', totals['ipn']),
+        ('emp_so', 'СО работников', totals['so']),
+        ('emp_osms', 'ОСМС работников', totals['osms']),
+        ('emp_opvr', 'ОПВР работников', totals['opvr']),
+    ]
+    created = 0
+    for key, title, amount in rows:
+        if amount <= 0:
+            continue
+        tax_key = f'{calc["period"]}:{key}'
+        cur.execute("""
+            INSERT INTO accounting_debts(
+                company_id,user_id,title,description,due_date,amount,status,created_at,tax_key
+            )
+            VALUES(%s,%s,%s,%s,%s,%s,'debt',%s,%s)
+            ON CONFLICT(company_id,tax_key) WHERE tax_key IS NOT NULL
+            DO UPDATE SET
+                amount=EXCLUDED.amount,
+                due_date=EXCLUDED.due_date,
+                description=EXCLUDED.description,
+                updated_at=%s
+        """, (
+            company_id, user_id, title,
+            f'Начисление за {calc["period_label"]}',
+            calc['due_date'], amount, now_kz(), tax_key, now_kz(),
+        ))
+        created += 1
+    return calc, created
+
+
 @accounting_bp.route('/accounting/taxes/create-debts', methods=['POST'])
 def create_tax_debts():
-    if not session.get('user_id'): return redirect('/login')
-    company_id=_require_company(); period=request.form.get('period') or now_kz().strftime('%Y-%m')
-    conn=get_db(); cur=conn.cursor()
+    if not session.get('user_id'):
+        return redirect('/login')
+    company_id = _require_company()
+    period = request.form.get('period') or now_kz().strftime('%Y-%m')
+    conn = get_db()
+    cur = conn.cursor()
     try:
-        _ensure_tax_tables(cur); calc=_calculate_taxes(cur,company_id,period)
-        rows=[('owner_opv','ОПВ за ИП',calc['owner']['opv']),('owner_so','СО за ИП',calc['owner']['so']),('owner_vosms','ВОСМС за ИП',calc['owner']['vosms'])]
-        if calc['owner']['opvr']>0: rows.append(('owner_opvr','ОПВР за ИП',calc['owner']['opvr']))
-        t=calc['employee_totals']
-        rows += [('emp_opv','ОПВ работников',t['opv']),('emp_vosms','ВОСМС работников',t['vosms']),('emp_ipn','ИПН работников',t['ipn']),('emp_so','СО работников',t['so']),('emp_osms','ОСМС работников',t['osms']),('emp_opvr','ОПВР работников',t['opvr'])]
-        for key,title,amount in rows:
-            if amount<=0: continue
-            tax_key=f'{period}:{key}'
-            cur.execute("""
-                INSERT INTO accounting_debts(company_id,user_id,title,description,due_date,amount,status,created_at,tax_key)
-                VALUES(%s,%s,%s,%s,%s,%s,'debt',%s,%s)
-                ON CONFLICT(company_id,tax_key) WHERE tax_key IS NOT NULL DO UPDATE SET amount=EXCLUDED.amount,due_date=EXCLUDED.due_date,description=EXCLUDED.description,updated_at=%s
-            """,(company_id,session.get('user_id'),title,f'Начисление за {calc["period_label"]}',calc['due_date'],amount,now_kz(),tax_key,now_kz()))
-        conn.commit(); return redirect('/accounting#debtsBlock')
+        _upsert_tax_debts(cur, company_id, session.get('user_id'), period)
+        conn.commit()
+        return redirect('/accounting#debtsBlock')
     except Exception as exc:
-        conn.rollback(); print('CREATE TAX DEBTS ERROR:',exc); return 'Не удалось создать задолженности',500
+        conn.rollback()
+        print('CREATE TAX DEBTS ERROR:', exc)
+        return 'Не удалось создать задолженности', 500
     finally:
-        cur.close(); pool.putconn(conn)
+        cur.close()
+        pool.putconn(conn)
 
 @accounting_bp.route("/accounting/sync", methods=["POST"])
 def sync_accounting_data():

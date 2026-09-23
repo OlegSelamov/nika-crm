@@ -1061,6 +1061,46 @@ class ApiService {
   static Future<Map<String, dynamic>> mobileAccounting() async =>
       Map<String, dynamic>.from(await _request('GET', '/api/mobile/accounting'));
 
+  static Future<Map<String, dynamic>> mobileTaxCalculation(String period) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET',
+        '/api/mobile/accounting/tax-calculation',
+        query: {'period': period},
+      ));
+
+  static Future<void> saveMobileTaxEmployee(
+    int userId,
+    Map<String, dynamic> data,
+  ) async {
+    await _request(
+      'POST',
+      '/api/mobile/accounting/tax-employee/$userId',
+      body: data,
+    );
+  }
+
+  static Future<void> createMobileTaxDebts(String period) async {
+    await _request(
+      'POST',
+      '/api/mobile/accounting/tax-debts',
+      body: {'period': period},
+    );
+  }
+
+  static Future<Map<String, dynamic>> mobileTaxSettings() async =>
+      Map<String, dynamic>.from(
+        await _request('GET', '/api/mobile/profile/tax-settings'),
+      );
+
+  static Future<Map<String, dynamic>> saveMobileTaxSettings(
+    Map<String, dynamic> data,
+  ) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST',
+        '/api/mobile/profile/tax-settings',
+        body: data,
+      ));
+
   static Future<void> syncMobileAccounting() async {
     await _request('POST', '/api/mobile/accounting/sync');
   }

@@ -16,7 +16,7 @@ from flask import (
 from models import get_db, pool
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
-from routes.auth import load_user_module_codes
+from routes.auth import load_user_module_codes, _ensure_employee_accounting_schema
 from routes.tasks import (
     TASK_PRIORITIES,
     TASK_STATUSES,
@@ -30,12 +30,16 @@ from routes.expenses import (
     _sync_expense_to_accounting,
 )
 from routes.accounting import (
+    _calculate_taxes,
     _debt_view,
     _document_view,
     _ensure_accounting_tables,
+    _ensure_tax_tables,
+    _get_tax_settings,
     _operation_view,
     _sync_accounting,
     _tax_event_view,
+    _upsert_tax_debts,
 )
 
 
@@ -88,6 +92,14 @@ def _date(value, *, required=False):
         return datetime.strptime(raw, "%Y-%m-%d").date()
     except ValueError:
         raise ValueError("Некорректная дата")
+
+
+def _bool_value(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _amount(value):
@@ -212,6 +224,17 @@ def mobile_profile():
         base_salary = float(user.get("salary") or 0)
         month_reward = month_revenue * percent_rate / 100
 
+        can_manage_taxes = bool(
+            session.get("is_super_admin")
+            or session.get("role") in ("owner", "admin")
+        )
+        tax_settings = None
+        if can_manage_taxes:
+            _ensure_accounting_tables(cur)
+            _ensure_tax_tables(cur)
+            tax_settings = dict(_get_tax_settings(cur, company_id))
+            conn.commit()
+
         return jsonify(_clean({
             "success": True,
             "user": user,
@@ -223,9 +246,72 @@ def mobile_profile():
                 "payable": base_salary + month_reward,
                 "percent_rate": percent_rate,
             },
+            "tax_settings": tax_settings,
+            "can_manage_taxes": can_manage_taxes,
             "recent_sales": recent_sales,
             "tasks": tasks,
         }))
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/profile/tax-settings", methods=["GET", "POST"])
+def mobile_profile_tax_settings():
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        _ensure_tax_tables(cur)
+        if request.method == "POST":
+            data = _payload()
+            fields = [
+                "turnover_rate", "mzp", "mrp", "owner_base",
+                "owner_opv_rate", "owner_so_rate", "owner_vosms_rate",
+                "employee_opv_rate", "employee_vosms_rate",
+                "employee_ipn_rate", "employer_so_rate",
+                "employer_osms_rate", "employer_opvr_rate",
+                "standard_deduction",
+            ]
+            current = dict(_get_tax_settings(cur, company_id))
+            values = []
+            for field in fields:
+                raw = data.get(field, current.get(field, 0))
+                try:
+                    values.append(max(float(raw or 0), 0))
+                except (TypeError, ValueError):
+                    raise ValueError(f"Некорректное значение: {field}")
+            regime = str(data.get("regime") or current.get("regime") or "simplified").strip()[:40]
+            include_owner_opvr = _bool_value(
+                data.get("include_owner_opvr"),
+                bool(current.get("include_owner_opvr")),
+            )
+            cur.execute(f"""
+                INSERT INTO accounting_tax_settings(
+                    company_id, regime, {','.join(fields)}, include_owner_opvr, updated_at
+                )
+                VALUES (%s,%s,{','.join(['%s']*len(fields))},%s,%s)
+                ON CONFLICT(company_id) DO UPDATE SET
+                    regime=EXCLUDED.regime,
+                    {','.join([f'{field}=EXCLUDED.{field}' for field in fields])},
+                    include_owner_opvr=EXCLUDED.include_owner_opvr,
+                    updated_at=EXCLUDED.updated_at
+            """, [company_id, regime, *values, include_owner_opvr, now_kz()])
+            conn.commit()
+        settings = _get_tax_settings(cur, company_id)
+        conn.commit()
+        return jsonify(_clean({"success": True, "settings": dict(settings)}))
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE TAX SETTINGS ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось сохранить налоговые настройки"}), 500
     finally:
         cur.close()
         pool.putconn(conn)
@@ -783,6 +869,203 @@ def mobile_expense(expense_id):
         conn.rollback()
         print("MOBILE EXPENSE ERROR:", exc)
         return jsonify({"success": False, "error": "Не удалось изменить расход"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def _mobile_tax_obligations(calc, debts_by_key):
+    totals = calc["employee_totals"]
+    rows = [
+        ("owner_opv", "ОПВ за ИП", calc["owner"]["opv"], "owner"),
+        ("owner_so", "СО за ИП", calc["owner"]["so"], "owner"),
+        ("owner_vosms", "ВОСМС за ИП", calc["owner"]["vosms"], "owner"),
+        ("owner_opvr", "ОПВР за ИП", calc["owner"]["opvr"], "owner"),
+        ("emp_opv", "ОПВ работников", totals["opv"], "employees"),
+        ("emp_vosms", "ВОСМС работников", totals["vosms"], "employees"),
+        ("emp_ipn", "ИПН работников", totals["ipn"], "employees"),
+        ("emp_so", "СО работников", totals["so"], "employees"),
+        ("emp_osms", "ОСМС работников", totals["osms"], "employees"),
+        ("emp_opvr", "ОПВР работников", totals["opvr"], "employees"),
+    ]
+    result = []
+    for key, title, amount, group in rows:
+        amount = float(amount or 0)
+        if amount <= 0:
+            continue
+        tax_key = f'{calc["period"]}:{key}'
+        debt = debts_by_key.get(tax_key) or {}
+        result.append({
+            "key": key,
+            "tax_key": tax_key,
+            "title": title,
+            "group": group,
+            "amount": amount,
+            "due_date": calc["due_date"],
+            "debt_id": debt.get("id"),
+            "status": debt.get("status") or "not_created",
+            "paid_at": debt.get("paid_at"),
+        })
+    return result
+
+
+@mobile_api_bp.route("/accounting/tax-calculation", methods=["GET"])
+def mobile_tax_calculation():
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    period = str(request.args.get("period") or now_kz().strftime("%Y-%m")).strip()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        _ensure_tax_tables(cur)
+        calc = _calculate_taxes(cur, company_id, period)
+
+        cur.execute("""
+            SELECT id,tax_key,status,paid_at,amount,due_date,title
+            FROM accounting_debts
+            WHERE company_id=%s AND tax_key LIKE %s
+        """, (company_id, f'{calc["period"]}:%'))
+        debts_by_key = {row["tax_key"]: dict(row) for row in cur.fetchall() if row.get("tax_key")}
+
+        cur.execute("""
+            SELECT
+                u.id,u.username,u.full_name,u.position,u.iin,u.hire_date,
+                u.dismissal_date,u.employment_type,u.salary_type,u.bank_iban,
+                p.salary AS tax_salary,p.is_active AS employee_tax_active,
+                p.use_standard_deduction,p.is_pensioner,p.is_exempt_vosms
+            FROM users u
+            LEFT JOIN employee_tax_profiles p
+              ON p.company_id=u.company_id AND p.user_id=u.id
+            WHERE u.company_id=%s
+            ORDER BY COALESCE(u.full_name,u.username),u.id
+        """, (company_id,))
+        users = []
+        for row in cur.fetchall():
+            users.append({
+                "id": row["id"],
+                "username": row.get("username") or "",
+                "full_name": row.get("full_name") or "",
+                "position": row.get("position") or "",
+                "iin": row.get("iin") or "",
+                "hire_date": row.get("hire_date"),
+                "dismissal_date": row.get("dismissal_date"),
+                "employment_type": row.get("employment_type") or "full_time",
+                "salary_type": row.get("salary_type") or "fixed",
+                "bank_iban": row.get("bank_iban") or "",
+                "salary": float(row.get("tax_salary") or 0),
+                "employee_tax_active": bool(row.get("employee_tax_active")) if row.get("employee_tax_active") is not None else False,
+                "use_standard_deduction": bool(row.get("use_standard_deduction")) if row.get("use_standard_deduction") is not None else True,
+                "is_pensioner": bool(row.get("is_pensioner")) if row.get("is_pensioner") is not None else False,
+                "is_exempt_vosms": bool(row.get("is_exempt_vosms")) if row.get("is_exempt_vosms") is not None else False,
+            })
+
+        due_date = calc["due_date"]
+        days_left = (due_date - now_kz().date()).days
+        if days_left < 0:
+            reminder_label = f"Просрочено на {abs(days_left)} дн."
+        elif days_left == 0:
+            reminder_label = "Срок оплаты сегодня"
+        else:
+            reminder_label = f"До оплаты {days_left} дн."
+
+        payload = {
+            "success": True,
+            "calculation": calc,
+            "obligations": _mobile_tax_obligations(calc, debts_by_key),
+            "users": users,
+            "reminder": {
+                "due_date": due_date,
+                "days_left": days_left,
+                "label": reminder_label,
+                "overdue": days_left < 0,
+            },
+        }
+        conn.commit()
+        return jsonify(_clean(payload))
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE TAX CALC ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось рассчитать налоги"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/accounting/tax-employee/<int:user_id>", methods=["POST"])
+def mobile_tax_employee(user_id):
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    data = _payload()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        _ensure_tax_tables(cur)
+        cur.execute("SELECT id FROM users WHERE id=%s AND company_id=%s", (user_id, company_id))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Сотрудник не найден"}), 404
+        salary = max(_number(data.get("salary")), 0)
+        cur.execute("""
+            INSERT INTO employee_tax_profiles(
+                company_id,user_id,salary,is_active,use_standard_deduction,
+                is_pensioner,is_exempt_vosms,created_at,updated_at
+            )
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT(company_id,user_id) DO UPDATE SET
+                salary=EXCLUDED.salary,
+                is_active=EXCLUDED.is_active,
+                use_standard_deduction=EXCLUDED.use_standard_deduction,
+                is_pensioner=EXCLUDED.is_pensioner,
+                is_exempt_vosms=EXCLUDED.is_exempt_vosms,
+                updated_at=EXCLUDED.updated_at
+        """, (
+            company_id,user_id,salary,
+            _bool_value(data.get("employee_tax_active"), True),
+            _bool_value(data.get("use_standard_deduction"), True),
+            _bool_value(data.get("is_pensioner"), False),
+            _bool_value(data.get("is_exempt_vosms"), False),
+            now_kz(),now_kz(),
+        ))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE TAX EMPLOYEE ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось сохранить сотрудника в расчёте"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/accounting/tax-debts", methods=["POST"])
+def mobile_create_tax_debts():
+    denied = _guard(admin=True)
+    if denied:
+        return denied
+    company_id = session["company_id"]
+    period = str(_payload().get("period") or now_kz().strftime("%Y-%m")).strip()
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        calc, created = _upsert_tax_debts(
+            cur, company_id, session.get("user_id"), period
+        )
+        conn.commit()
+        return jsonify(_clean({
+            "success": True,
+            "created": created,
+            "period": calc["period"],
+            "due_date": calc["due_date"],
+        }))
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE TAX DEBTS ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось сформировать обязательства"}), 500
     finally:
         cur.close()
         pool.putconn(conn)
@@ -1368,9 +1651,80 @@ def _employee_json(row):
         "position": row.get("position") or "",
         "role": row.get("role") or "employee",
         "percent_rate": _number(row.get("percent_rate")),
+        "iin": row.get("iin") or "",
+        "hire_date": row.get("hire_date").isoformat() if row.get("hire_date") else "",
+        "dismissal_date": row.get("dismissal_date").isoformat() if row.get("dismissal_date") else "",
+        "employment_type": row.get("employment_type") or "full_time",
+        "salary_type": row.get("salary_type") or "fixed",
+        "bank_iban": row.get("bank_iban") or "",
+        "salary": _number(row.get("tax_salary")),
+        "employee_tax_active": bool(row.get("employee_tax_active")) if row.get("employee_tax_active") is not None else False,
+        "use_standard_deduction": bool(row.get("use_standard_deduction")) if row.get("use_standard_deduction") is not None else True,
+        "is_pensioner": bool(row.get("is_pensioner")) if row.get("is_pensioner") is not None else False,
+        "is_exempt_vosms": bool(row.get("is_exempt_vosms")) if row.get("is_exempt_vosms") is not None else False,
         "is_online": bool(row.get("is_online")),
         "last_seen_at": row.get("last_seen_at").isoformat() if row.get("last_seen_at") else "",
     }
+
+
+def _mobile_employee_fields(data, old=None):
+    old = old or {}
+    iin = "".join(ch for ch in str(data.get("iin", old.get("iin") or "")) if ch.isdigit())
+    if iin and len(iin) != 12:
+        raise ValueError("ИИН сотрудника должен содержать 12 цифр")
+    hire_date = _date(data.get("hire_date", old.get("hire_date")))
+    dismissal_date = _date(data.get("dismissal_date", old.get("dismissal_date")))
+    if dismissal_date and hire_date and dismissal_date < hire_date:
+        raise ValueError("Дата увольнения не может быть раньше даты приёма")
+    employment_type = str(data.get("employment_type", old.get("employment_type") or "full_time")).strip()
+    if employment_type not in {"full_time", "part_time", "civil_contract", "intern"}:
+        employment_type = "full_time"
+    salary_type = str(data.get("salary_type", old.get("salary_type") or "fixed")).strip()
+    if salary_type not in {"fixed", "hourly", "percent", "mixed"}:
+        salary_type = "fixed"
+    bank_iban = str(data.get("bank_iban", old.get("bank_iban") or "")).replace(" ", "").upper()
+    if bank_iban and (len(bank_iban) != 20 or not bank_iban.startswith("KZ")):
+        raise ValueError("IBAN сотрудника должен быть казахстанским счётом KZ из 20 символов")
+    return {
+        "iin": iin or None,
+        "hire_date": hire_date,
+        "dismissal_date": dismissal_date,
+        "employment_type": employment_type,
+        "salary_type": salary_type,
+        "bank_iban": bank_iban or None,
+        "salary": max(_number(data.get("salary", old.get("tax_salary") or 0)), 0),
+        "employee_tax_active": _bool_value(
+            data.get("employee_tax_active"),
+            bool(old.get("employee_tax_active")) if old.get("employee_tax_active") is not None else True,
+        ),
+        "use_standard_deduction": _bool_value(
+            data.get("use_standard_deduction"),
+            bool(old.get("use_standard_deduction")) if old.get("use_standard_deduction") is not None else True,
+        ),
+        "is_pensioner": _bool_value(data.get("is_pensioner"), bool(old.get("is_pensioner"))),
+        "is_exempt_vosms": _bool_value(data.get("is_exempt_vosms"), bool(old.get("is_exempt_vosms"))),
+    }
+
+
+def _save_mobile_employee_tax_profile(cur, company_id, user_id, fields):
+    cur.execute("""
+        INSERT INTO employee_tax_profiles(
+            company_id,user_id,salary,is_active,use_standard_deduction,
+            is_pensioner,is_exempt_vosms,created_at,updated_at
+        )
+        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT(company_id,user_id) DO UPDATE SET
+            salary=EXCLUDED.salary,
+            is_active=EXCLUDED.is_active,
+            use_standard_deduction=EXCLUDED.use_standard_deduction,
+            is_pensioner=EXCLUDED.is_pensioner,
+            is_exempt_vosms=EXCLUDED.is_exempt_vosms,
+            updated_at=EXCLUDED.updated_at
+    """, (
+        company_id,user_id,fields["salary"],fields["employee_tax_active"],
+        fields["use_standard_deduction"],fields["is_pensioner"],
+        fields["is_exempt_vosms"],now_kz(),now_kz(),
+    ))
 
 
 @mobile_api_bp.route("/employees", methods=["GET", "POST"])
@@ -1382,6 +1736,7 @@ def mobile_employees():
     conn = get_db()
     cur = conn.cursor()
     try:
+        _ensure_employee_accounting_schema(cur)
         if request.method == "POST":
             data = _payload()
             username = str(data.get("username") or "").strip()
@@ -1395,38 +1750,52 @@ def mobile_employees():
             cur.execute("SELECT id FROM users WHERE username=%s", (username,))
             if cur.fetchone():
                 return jsonify({"success": False, "error": "Такой логин уже существует"}), 409
+            fields = _mobile_employee_fields(data)
             cur.execute("""
-                INSERT INTO users (
+                INSERT INTO users(
                     username,password,role,position,company_id,full_name,
-                    phone,percent_rate,is_super_admin,created_at
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,FALSE,%s) RETURNING id
+                    phone,percent_rate,is_super_admin,iin,hire_date,dismissal_date,
+                    employment_type,salary_type,bank_iban,created_at
+                )
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,FALSE,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
             """, (
-                username,
-                password,
-                role,
-                str(data.get("position") or "").strip(),
-                company_id,
-                full_name,
-                str(data.get("phone") or "").strip(),
-                _number(data.get("percent_rate")),
-                now_kz(),
+                username,password,role,str(data.get("position") or "").strip(),
+                company_id,full_name,str(data.get("phone") or "").strip(),
+                _number(data.get("percent_rate")),fields["iin"],fields["hire_date"],
+                fields["dismissal_date"],fields["employment_type"],fields["salary_type"],
+                fields["bank_iban"],now_kz(),
             ))
             employee_id = cur.fetchone()["id"]
+            _save_mobile_employee_tax_profile(cur, company_id, employee_id, fields)
             conn.commit()
             return jsonify({"success": True, "id": employee_id})
 
         cur.execute("""
             SELECT u.*,
+                p.salary AS tax_salary,
+                p.is_active AS employee_tax_active,
+                p.use_standard_deduction,
+                p.is_pensioner,
+                p.is_exempt_vosms,
                 CASE WHEN u.last_seen_at IS NOT NULL
                        AND u.last_seen_at >= NOW()-INTERVAL '3 minutes'
                      THEN TRUE ELSE FALSE END AS is_online
-            FROM users u WHERE u.company_id=%s ORDER BY u.id DESC
+            FROM users u
+            LEFT JOIN employee_tax_profiles p
+              ON p.company_id=u.company_id AND p.user_id=u.id
+            WHERE u.company_id=%s
+            ORDER BY u.id DESC
         """, (company_id,))
+        conn.commit()
         return jsonify({
             "success": True,
             "items": [_employee_json(row) for row in cur.fetchall()],
             "can_manage": True,
         })
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
     except Exception as exc:
         conn.rollback()
         print("MOBILE EMPLOYEES ERROR:", exc)
@@ -1447,13 +1816,26 @@ def mobile_employee(employee_id):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM users WHERE id=%s AND company_id=%s", (employee_id, company_id))
+        _ensure_employee_accounting_schema(cur)
+        cur.execute("""
+            SELECT u.*,
+                   p.salary AS tax_salary,
+                   p.is_active AS employee_tax_active,
+                   p.use_standard_deduction,
+                   p.is_pensioner,
+                   p.is_exempt_vosms
+            FROM users u
+            LEFT JOIN employee_tax_profiles p
+              ON p.company_id=u.company_id AND p.user_id=u.id
+            WHERE u.id=%s AND u.company_id=%s
+        """, (employee_id, company_id))
         old = cur.fetchone()
         if not old:
             return jsonify({"success": False, "error": "Сотрудник не найден"}), 404
         if old.get("role") == "owner" and employee_id != session.get("user_id"):
             return jsonify({"success": False, "error": "Владельца нельзя изменить"}), 403
         if request.method == "DELETE":
+            cur.execute("DELETE FROM employee_tax_profiles WHERE company_id=%s AND user_id=%s", (company_id, employee_id))
             cur.execute("DELETE FROM users WHERE id=%s AND company_id=%s", (employee_id, company_id))
             conn.commit()
             return jsonify({"success": True})
@@ -1462,23 +1844,33 @@ def mobile_employee(employee_id):
         if role not in ("admin", "employee", "owner"):
             role = "employee"
         password = str(data.get("password") or "").strip()
+        fields = _mobile_employee_fields(data, old)
         cur.execute("""
-            UPDATE users SET full_name=%s,phone=%s,position=%s,role=%s,
-                percent_rate=%s,password=CASE WHEN %s='' THEN password ELSE %s END
+            UPDATE users SET
+                full_name=%s,phone=%s,position=%s,role=%s,percent_rate=%s,
+                iin=%s,hire_date=%s,dismissal_date=%s,employment_type=%s,
+                salary_type=%s,bank_iban=%s,
+                password=CASE WHEN %s='' THEN password ELSE %s END
             WHERE id=%s AND company_id=%s
         """, (
             str(data.get("full_name", old.get("full_name") or "")).strip(),
             str(data.get("phone", old.get("phone") or "")).strip(),
             str(data.get("position", old.get("position") or "")).strip(),
-            role,
-            _number(data.get("percent_rate", old.get("percent_rate"))),
-            password,
-            password,
-            employee_id,
-            company_id,
+            role,_number(data.get("percent_rate", old.get("percent_rate"))),
+            fields["iin"],fields["hire_date"],fields["dismissal_date"],
+            fields["employment_type"],fields["salary_type"],fields["bank_iban"],
+            password,password,employee_id,company_id,
         ))
+        _save_mobile_employee_tax_profile(cur, company_id, employee_id, fields)
         conn.commit()
         return jsonify({"success": True})
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        conn.rollback()
+        print("MOBILE EMPLOYEE UPDATE ERROR:", exc)
+        return jsonify({"success": False, "error": "Не удалось изменить сотрудника"}), 500
     finally:
         cur.close()
         pool.putconn(conn)
