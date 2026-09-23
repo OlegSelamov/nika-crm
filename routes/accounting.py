@@ -1096,9 +1096,21 @@ def _get_tax_settings(cur, company_id):
     return cur.fetchone()
 
 
+def _company_legal_form(cur, company_id):
+    cur.execute("""
+        ALTER TABLE companies
+        ADD COLUMN IF NOT EXISTS legal_form VARCHAR(20) NOT NULL DEFAULT 'ip'
+    """)
+    cur.execute("SELECT COALESCE(legal_form,'ip') AS legal_form FROM companies WHERE id=%s", (company_id,))
+    row = cur.fetchone() or {}
+    legal_form = str(row.get("legal_form") or "ip").strip().lower()
+    return legal_form if legal_form in ("ip", "too") else "ip"
+
+
 def _calculate_taxes(cur, company_id, period):
     start, end, due_date = _month_bounds(period)
     settings = _get_tax_settings(cur, company_id)
+    legal_form = _company_legal_form(cur, company_id)
 
     cur.execute("""
         SELECT COALESCE(SUM(total_amount),0) AS income
@@ -1122,11 +1134,14 @@ def _calculate_taxes(cur, company_id, period):
     turnover_rate = float(settings['turnover_rate'] or 0)
     turnover_tax = taxable_income * turnover_rate / 100
 
-    owner_base = float(settings['owner_base'] or settings['mzp'] or 0)
-    owner_opv = owner_base * float(settings['owner_opv_rate'] or 0) / 100
-    owner_so = owner_base * float(settings['owner_so_rate'] or 0) / 100
-    owner_vosms = float(settings['mzp'] or 0) * 1.4 * float(settings['owner_vosms_rate'] or 0) / 100
-    owner_opvr = owner_base * float(settings['employer_opvr_rate'] or 0) / 100 if settings['include_owner_opvr'] else 0
+    if legal_form == 'ip':
+        owner_base = float(settings['owner_base'] or settings['mzp'] or 0)
+        owner_opv = owner_base * float(settings['owner_opv_rate'] or 0) / 100
+        owner_so = owner_base * float(settings['owner_so_rate'] or 0) / 100
+        owner_vosms = float(settings['mzp'] or 0) * 1.4 * float(settings['owner_vosms_rate'] or 0) / 100
+        owner_opvr = owner_base * float(settings['employer_opvr_rate'] or 0) / 100 if settings['include_owner_opvr'] else 0
+    else:
+        owner_base = owner_opv = owner_so = owner_vosms = owner_opvr = 0
 
     cur.execute("""
         SELECT
@@ -1186,6 +1201,7 @@ def _calculate_taxes(cur, company_id, period):
         'date_from':start,'date_to':end,'due_date':due_date,
         'income':income,'refunds':refunds,'taxable_income':taxable_income,
         'turnover_rate':turnover_rate,'turnover_tax':turnover_tax,
+        'legal_form':legal_form,
         'owner':{'base':owner_base,'opv':owner_opv,'so':owner_so,'vosms':owner_vosms,'opvr':owner_opvr,'total':owner_total},
         'employees':employees,'employee_totals':totals,'employee_total':employee_total,
         'monthly_total':monthly_total,
@@ -1799,6 +1815,7 @@ def accounting():
 
         cur.execute("""
             SELECT id,name,bin,address,phone,director,iik,bik,bank,kbe,knp,
+                   COALESCE(legal_form,'ip') AS legal_form,
                    COALESCE(is_vat_payer,FALSE) AS is_vat_payer
             FROM companies
             WHERE id=%s
@@ -1825,9 +1842,9 @@ def accounting():
             LEFT JOIN employee_tax_profiles p
               ON p.company_id=u.company_id AND p.user_id=u.id
             WHERE u.company_id=%s
-              AND COALESCE(u.role,'employee') <> 'owner'
+              AND (%s='too' OR COALESCE(u.role,'employee') <> 'owner')
             ORDER BY COALESCE(u.full_name,u.username),u.id
-        """, (company_id,))
+        """, (company_id, tax_calculation["legal_form"]))
         tax_users = cur.fetchall()
 
         period_prefix = f"{tax_calculation['period']}:%"
