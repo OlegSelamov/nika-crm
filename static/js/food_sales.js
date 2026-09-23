@@ -209,8 +209,8 @@
             section.innerHTML='<div class="food-modifier-group-title"><strong>'+escapeFood(group.name)+'</strong><small>'+(group.min_select>0?'Выберите обязательно':'По желанию')+(group.max_select>1?' · до '+group.max_select:'')+'</small></div>';
             (group.options||[]).forEach(option=>{
                 const label=document.createElement('label'); label.className='food-modifier-option';
-                const input=document.createElement('input'); input.type=group.max_select>1?'checkbox':'radio'; input.name='food-modifier-'+group.id; input.value=option.id; input.dataset.groupId=group.id;
-                input.addEventListener('change',()=>{ if(input.type==='checkbox'){const checked=section.querySelectorAll('input:checked');if(checked.length>group.max_select){input.checked=false;return;}} renderFoodModifierTotal();});
+                const input=document.createElement('input'); input.type='checkbox'; input.name='food-modifier-'+group.id; input.value=option.id; input.dataset.groupId=group.id;
+                input.addEventListener('change',()=>{const checked=section.querySelectorAll('input:checked');const max=Number(group.max_select||0);if(max>0&&checked.length>max){input.checked=false;return;} renderFoodModifierTotal();});
                 const text=document.createElement('span'); text.innerHTML='<b>'+escapeFood(option.name)+'</b>'+(Number(option.price_delta)?'<small>+'+money(option.price_delta)+'</small>':'');
                 label.append(input,text); section.appendChild(label);
             }); root.appendChild(section);
@@ -225,8 +225,7 @@
         if(!pendingModifierItem)return;
         for(const group of pendingModifierGroups){const count=document.querySelectorAll('#foodModifierGroups input[data-group-id="'+group.id+'"]:checked').length;if(count<Number(group.min_select||0)){alert('Выберите: '+group.name);return}}
         const mods=selectedFoodModifiers(); const price=Number(pendingModifierItem.retail_price||0)+mods.reduce((s,o)=>s+Number(o.price_delta||0),0);
-        addToCart(Number(pendingModifierItem.id), pendingModifierItem.name || 'Блюдо', price, 1, pendingModifierItem.gtin||'', pendingModifierItem.ntin||'', pendingModifierItem.unit||'шт');
-        const added=cart[cart.length-1]; if(added){added.modifiers=mods.map(o=>({id:o.id,name:o.name,price_delta:Number(o.price_delta||0)})); added.name=(pendingModifierItem.name||'Блюдо')+(mods.length?' · '+mods.map(o=>o.name).join(', '):'');}
+        cart.push({id:Number(pendingModifierItem.id),name:pendingModifierItem.name||'Блюдо',price:price,qty:1,gtin:pendingModifierItem.gtin||'',ntin:pendingModifierItem.ntin||'',unit:pendingModifierItem.unit||'шт',item_type:'dish',modifiers:mods.map(o=>({id:o.id,name:o.name,price_delta:Number(o.price_delta||0)}))});
         closeFoodModifierModal(); renderCart(); renderFoodCart();
     }
 
