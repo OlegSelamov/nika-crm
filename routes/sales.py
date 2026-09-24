@@ -319,14 +319,28 @@ def pay_sale():
             ))
 
         process_sale(conn, sale_id)
-        
+
+        # Локальная продажа, склад и прибыль должны сохраниться независимо от
+        # доступности внешней кассы. После этого фискализацию можно безопасно
+        # повторить по уже существующей продаже.
+        conn.commit()
+
         from routes.rekassa import rekassa_sell
 
-        rekassa_result = rekassa_sell(
-            conn,
-            sale_id
-        )
-        
+        try:
+            rekassa_result = rekassa_sell(conn, sale_id)
+            if not isinstance(rekassa_result, dict):
+                rekassa_result = {
+                    "status": "ERROR",
+                    "message": "reKassa вернула ответ неизвестного формата"
+                }
+        except Exception as exc:
+            print("REKASSA SELL UNEXPECTED ERROR:", repr(exc))
+            rekassa_result = {
+                "status": "ERROR",
+                "message": f"Ошибка подключения к reKassa: {exc}"
+            }
+
         print("REKASSA RESULT:")
         print(rekassa_result)
 
@@ -343,9 +357,15 @@ def pay_sale():
                 SET rekassa_status = %s
                 WHERE id = %s
             """, (("ERROR: " + str(fiscal_error))[:500], sale_id))
+            conn.commit()
 
-        conn.commit()
-
+    except Exception as exc:
+        conn.rollback()
+        print("SALE PAYMENT ERROR:", repr(exc))
+        return jsonify({
+            "success": False,
+            "error": f"Не удалось сохранить продажу: {exc}"
+        }), 500
     finally:
         pool.putconn(conn)
 
