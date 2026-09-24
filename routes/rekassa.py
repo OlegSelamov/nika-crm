@@ -1067,7 +1067,24 @@ def rekassa_sell(conn, sale_id):
             "details": auth_data
         }
 
-    crs_id = integration["rekassa_crs_id"]
+    auth_payload_data = auth_data.get("data") if isinstance(auth_data.get("data"), dict) else {}
+    auth_crs_id = auth_data.get("id") or auth_payload_data.get("id")
+    crs_id = auth_crs_id or integration["rekassa_crs_id"]
+
+    # При переходе test -> production ID кассы может отличаться.
+    # Всегда доверяем ID, который вернула текущая production-авторизация,
+    # и синхронизируем его с настройками компании.
+    if auth_crs_id and str(auth_crs_id) != str(integration.get("rekassa_crs_id") or ""):
+        try:
+            cur.execute(
+                "UPDATE integrations SET rekassa_crs_id=%s WHERE id=%s",
+                (int(auth_crs_id), integration["id"]),
+            )
+            conn.commit()
+        except Exception as sync_exc:
+            conn.rollback()
+            print("REKASSA CRS ID SYNC ERROR:", repr(sync_exc))
+
     now = datetime.now()
     ticket_items = []
     total = 0
