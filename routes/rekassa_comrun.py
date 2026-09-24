@@ -346,11 +346,44 @@ def pay_sale_comrun():
         process_sale(conn, sale_id)
         _ensure_sale_stock_movements(conn, sale_id, company_id, normalized_cart, movement_before)
 
-        fiscal = fiscalize_sale(conn, sale_id, company_id)
-        if not fiscal.get("skipped") and not fiscal.get("fiscalized"):
-            _mark_fiscal_error(conn, sale_id, fiscal)
-
+        # Сначала фиксируем продажу, склад и прибыль в Nika. Внешняя
+        # фискализация не должна откатывать уже принятую оплату.
         conn.commit()
+
+        try:
+            fiscal = fiscalize_sale(conn, sale_id, company_id)
+            if not isinstance(fiscal, dict):
+                fiscal = {
+                    "success": False,
+                    "fiscalized": False,
+                    "skipped": False,
+                    "provider": "rekassa",
+                    "provider_name": "reKassa",
+                    "code": "FISCAL_INVALID_RESPONSE",
+                    "message": "reKassa вернула ответ неизвестного формата",
+                }
+        except Exception as exc:
+            # Продажа уже сохранена. Ошибку внешней кассы показываем отдельно
+            # и оставляем возможность повторной фискализации по sale_id.
+            conn.rollback()
+            print("SALE FISCALIZATION ERROR:", repr(exc))
+            fiscal = {
+                "success": False,
+                "fiscalized": False,
+                "skipped": False,
+                "provider": "rekassa",
+                "provider_name": "reKassa",
+                "code": "FISCAL_PROVIDER_ERROR",
+                "message": f"Не удалось фискализировать чек: {exc}",
+            }
+
+        if not fiscal.get("skipped") and not fiscal.get("fiscalized"):
+            try:
+                _mark_fiscal_error(conn, sale_id, fiscal)
+                conn.commit()
+            except Exception as mark_exc:
+                conn.rollback()
+                print("SALE FISCAL STATUS SAVE ERROR:", repr(mark_exc))
 
         response = {
             "success": True,
