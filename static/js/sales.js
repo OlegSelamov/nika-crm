@@ -755,12 +755,15 @@ async function submitSalePayment({
         window.dispatchEvent(new CustomEvent("nika:sale-completed"));
         showCashChangeNotice(cashChange);
 
-        if (data.rekassa_required === true && data.fiscalized !== true) {
-            const reason = data.rekassa?.message || "reKassa отклонила чек";
+        if (data.fiscalized !== true && data.fiscalization_skipped !== true) {
+            const fiscal = data.fiscal || data.rekassa || {};
+            const reason = fiscal.message || "reKassa отклонила чек";
+            const code = fiscal.code ? "\nКод: " + fiscal.code : "";
+            const http = fiscal.http_status ? "\nHTTP: " + fiscal.http_status : "";
             alert(
                 "Продажа сохранена, но чек НЕ фискализирован.\n\n" +
-                reason +
-                "\n\nНе проводите оплату повторно. Откройте Настройки → reKassa → Проверить интеграцию."
+                reason + code + http +
+                "\n\nПовторно продажу не проводите — чек можно дофискализировать по этой продаже."
             );
             return;
         }
