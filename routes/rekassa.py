@@ -8,6 +8,7 @@ import re
 import threading
 import time
 from urllib.parse import urlsplit
+from utils.measure_units import rekassa_unit
 
 rekassa_bp = Blueprint("rekassa", __name__)
 
