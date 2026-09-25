@@ -10,6 +10,7 @@ from flask import (
     flash,
 )
 from models import get_db, pool
+from psycopg2.extras import Json
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -386,8 +387,8 @@ def record_subscription_change(cur, company_id, action, old_value, new_value):
         company_id,
         session.get("user_id"),
         action,
-        old_value,
-        new_value,
+        Json(old_value) if old_value is not None else None,
+        Json(new_value) if new_value is not None else None,
     ))
 
 
