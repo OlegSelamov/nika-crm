@@ -185,7 +185,7 @@ class SalesScreenState extends State<SalesScreen> {
       MaterialPageRoute(builder: (_) => const ScannerScreen()),
     );
     if (barcode == null) return;
-    final code = barcode.toString().trim();
+    final code = barcode.toString();
     await addBarcodeToCart(code);
   }
 

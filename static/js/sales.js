@@ -8,11 +8,13 @@ let pendingQuantityItem = null;
 let pendingQuantityMode = "quantity";
 
 function parseNikaScannedProductCode(value) {
-    const raw = String(value || '').trim();
+    // ASCII 29 (GS) is part of the GS1 DataMatrix. Never trim it away.
+    const raw = String(value == null ? '' : value);
     let payload = raw
-        .replace(/^[\x00-\x20\x7f]+/, '')
+        .replace(/^[\x00-\x1c\x1e-\x20\x7f]+/, '')
         .replace(/^\][A-Za-z0-9]{2}/, '')
-        .replace(/^[\x00-\x20\x7f]+/, '');
+        .replace(/^[\x00-\x1c\x1e-\x20\x7f]+/, '')
+        .replace(/[\x00-\x1c\x1e-\x20\x7f]+$/, '');
     const match = payload.match(/^(?:\(01\)|01)(\d{14})/);
     const gtin = match ? match[1] : '';
     const ean13 = gtin.startsWith('0') ? gtin.slice(1) : '';
@@ -2140,49 +2142,87 @@ function closeAddItemModal() {
 }
 
 let barcodeBuffer = "";
+let barcodeStartedAt = 0;
 let lastKeyTime = 0;
+const SALES_SCANNER_MAX_GAP_MS = 140;
+
+function appendScannerCharacter(value, now, event) {
+    if (!lastKeyTime || now - lastKeyTime > SALES_SCANNER_MAX_GAP_MS) {
+        barcodeBuffer = "";
+        barcodeStartedAt = now;
+    }
+    if (!barcodeBuffer) barcodeStartedAt = now;
+    barcodeBuffer += value;
+    lastKeyTime = now;
+    if (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+}
 
 document.addEventListener("keydown", function(e) {
-
     const now = Date.now();
 
-    // 🔥 если пауза большая — новый скан
-    if (now - lastKeyTime > 100) {
-        barcodeBuffer = "";
+    // Many keyboard-wedge 2D scanners emit GS (ASCII 29) as Ctrl+].
+    if (e.ctrlKey && !e.altKey && !e.metaKey &&
+        (e.key === "]" || e.code === "BracketRight")) {
+        appendScannerCharacter("\x1d", now, e);
+        return;
     }
 
-    lastKeyTime = now;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
 
-    // 🔥 если нажали Enter → код готов
-    if (e.key === "Enter") {
+    if (e.key === "Enter" || e.key === "Tab") {
+        const duration = barcodeStartedAt && lastKeyTime
+            ? Math.max(0, lastKeyTime - barcodeStartedAt)
+            : 0;
+        const avgGap = barcodeBuffer.length > 1
+            ? duration / (barcodeBuffer.length - 1)
+            : Infinity;
+        const isScanner = barcodeBuffer.length >= 8 &&
+            (avgGap <= SALES_SCANNER_MAX_GAP_MS || duration <= 1200);
 
-        if (barcodeBuffer.length >= 8) {
+        if (isScanner) {
+            const fullCode = barcodeBuffer;
+            console.log("USB Скан:", fullCode);
 
-            console.log("USB Скан:", barcodeBuffer);
-
-            // Сканер уже передал полный код: отменяем отложенный ручной поиск.
             clearTimeout(itemSearchTimer);
             if (itemSearchController) itemSearchController.abort();
 
-            // 🔊 пик
             const beep = document.getElementById("beepSound");
             if (beep) {
                 beep.currentTime = 0;
                 beep.play().catch(() => {});
             }
 
-            handleBarcode(barcodeBuffer);
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            handleBarcode(fullCode);
         }
 
         barcodeBuffer = "";
+        barcodeStartedAt = 0;
+        lastKeyTime = 0;
         return;
     }
 
-    // 🔥 только цифры
-    if (/[0-9]/.test(e.key)) {
-        barcodeBuffer += e.key;
+    let scannedChar = null;
+    if (e.key === "GroupSeparator" || e.keyCode === 29 || e.which === 29) {
+        scannedChar = "\x1d";
+    } else if (typeof e.key === "string" && e.key.length === 1) {
+        scannedChar = e.key;
     }
-});
+
+    if (scannedChar !== null) {
+        if (!lastKeyTime || now - lastKeyTime > SALES_SCANNER_MAX_GAP_MS) {
+            barcodeBuffer = "";
+            barcodeStartedAt = now;
+        }
+        if (!barcodeBuffer) barcodeStartedAt = now;
+        barcodeBuffer += scannedChar;
+        lastKeyTime = now;
+    }
+}, true);
 
 document.getElementById("quantityInput").addEventListener("input", updateQuantityPreview);
 

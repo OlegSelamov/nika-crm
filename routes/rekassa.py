@@ -9,6 +9,7 @@ import threading
 import time
 from urllib.parse import urlsplit
 from utils.measure_units import rekassa_unit
+from utils.product_codes import normalize_scanned_payload
 
 rekassa_bp = Blueprint("rekassa", __name__)
 
@@ -18,6 +19,14 @@ REKASSA_URL = os.getenv("REKASSA_URL")
 REKASSA_TIMEZONE = "+05:00"
 _SHIFT_LOCKS = {}
 _SHIFT_LOCKS_GUARD = threading.Lock()
+
+
+def _rekassa_marking_code(value):
+    """Remove scanner framing but preserve the complete DataMatrix payload."""
+    if value in (None, ""):
+        return None
+    payload = normalize_scanned_payload(value)
+    return payload or None
 
 
 def _response_json(response):
@@ -1106,8 +1115,9 @@ def rekassa_sell(conn, sale_id):
             commodity["barcode"] = str(item.get("gtin"))
         if item.get("ntin"):
             commodity["ntin"] = str(item.get("ntin"))
-        if item.get("excise_stamp"):
-            commodity["excise_stamp"] = item.get("excise_stamp")
+        marking_code = _rekassa_marking_code(item.get("excise_stamp"))
+        if marking_code:
+            commodity["excise_stamp"] = marking_code
         ticket_items.append({"type": "ITEM_TYPE_COMMODITY", "commodity": commodity})
 
     payment_type = "PAYMENT_CARD" if sale["sale_type"] in ("card", "kaspi", "invoice") else "PAYMENT_CASH"
@@ -1345,6 +1355,10 @@ def rekassa_refund(conn, sale_id):
 
         if item.get("ntin"):
             commodity["ntin"] = str(item.get("ntin"))
+
+        marking_code = _rekassa_marking_code(item.get("excise_stamp"))
+        if marking_code:
+            commodity["excise_stamp"] = marking_code
 
         ticket_items.append({
             "type": "ITEM_TYPE_COMMODITY",

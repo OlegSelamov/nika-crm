@@ -73,10 +73,11 @@
     }
 
     function productLookupCode(value) {
-        let payload = String(value || '').trim()
-            .replace(/^[\x00-\x20\x7f]+/, '')
+        let payload = String(value == null ? '' : value)
+            .replace(/^[\x00-\x1c\x1e-\x20\x7f]+/, '')
             .replace(/^\][A-Za-z0-9]{2}/, '')
-            .replace(/^[\x00-\x20\x7f]+/, '');
+            .replace(/^[\x00-\x1c\x1e-\x20\x7f]+/, '')
+            .replace(/[\x00-\x1c\x1e-\x20\x7f]+$/, '');
         const match = payload.match(/^(?:\(01\)|01)(\d{14})/);
         if (!match) return payload;
         const gtin = match[1];
@@ -191,7 +192,7 @@
     function finishScan() {
         clearTimer();
 
-        const code = buffer.trim();
+        const code = buffer;
         const duration = startedAt && lastKeyAt ? Math.max(0, lastKeyAt - startedAt) : 0;
         const avgGap = code.length > 1 ? duration / (code.length - 1) : Infinity;
         const looksLikeScanner =
@@ -221,10 +222,30 @@
     }
 
     document.addEventListener('keydown', function (event) {
+        const now = Date.now();
+
+        if (event.ctrlKey && !event.altKey && !event.metaKey &&
+            (event.key === ']' || event.code === 'BracketRight')) {
+            if (!lastKeyAt || now - lastKeyAt > MAX_GAP_MS) {
+                buffer = '';
+                startedAt = now;
+                sourceElement = event.target;
+                sourceSnapshot = snapshotEditable(event.target);
+            }
+            buffer += '\x1d';
+            lastKeyAt = now;
+            scheduleFinish();
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+
         if (event.ctrlKey || event.altKey || event.metaKey) return;
 
-        const now = Date.now();
-        const key = event.key;
+        let key = event.key;
+        if (key === 'GroupSeparator' || event.keyCode === 29 || event.which === 29) {
+            key = '\x1d';
+        }
 
         if (key === 'Enter' || key === 'Tab') {
             if (buffer.length >= MIN_LENGTH) {
@@ -243,7 +264,7 @@
             return;
         }
 
-        if (key.length !== 1 || /\s/.test(key)) return;
+        if (key.length !== 1 || (/\s/.test(key) && key !== '\x1d')) return;
 
         if (!lastKeyAt || now - lastKeyAt > MAX_GAP_MS) {
             buffer = '';

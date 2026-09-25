@@ -228,7 +228,35 @@ def pay_sale():
             unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
             item_type = (db_item["item_type"] if db_item else "product") or "product"
             price, qty, line_total = normalize_sale_line(item, unit)
+
+            marking_value = item.get("excise_stamp")
+            if marking_value:
+                parsed_mark = parse_scanned_product_code(marking_value)
+                canonical_mark = parsed_mark.payload
+                if not canonical_mark:
+                    return jsonify({
+                        "success": False,
+                        "error": "Не удалось прочитать код маркировки DataMatrix",
+                    }), 400
+                item["excise_stamp"] = canonical_mark
+                if qty != 1:
+                    return jsonify({
+                        "success": False,
+                        "error": "Маркированная единица должна продаваться отдельно. Отсканируйте DataMatrix каждой упаковки.",
+                    }), 400
+
             normalized_cart.append((item, unit, item_type, price, qty, line_total))
+
+        marking_codes = [
+            line[0].get("excise_stamp")
+            for line in normalized_cart
+            if line[0].get("excise_stamp")
+        ]
+        if len(marking_codes) != len(set(marking_codes)):
+            return jsonify({
+                "success": False,
+                "error": "Один и тот же DataMatrix отсканирован в чеке дважды",
+            }), 400
 
         total = sum((line[5] for line in normalized_cart), start=0)
         cash = total if payment_method == "cash" else 0
