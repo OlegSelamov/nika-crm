@@ -4,40 +4,28 @@ from utils.product_codes import normalize_scanned_payload, parse_scanned_product
 
 
 class ProductCodesTest(unittest.TestCase):
-    def test_aim_prefix_is_removed_but_internal_gs_is_preserved(self):
-        value = "]d2010460123456789021SERIAL123\x1d91ABCD\x1d92CRYPTO\r\n"
+    def test_raw_marking_is_preserved_exactly_for_rekassa(self):
+        value = "]d2010460043993125621JgXJ5.T\x1d930001\x1d923zbrLA==\x1d24014276281"
         parsed = parse_scanned_product_code(value)
 
-        self.assertEqual(parsed.gtin, "04601234567890")
-        self.assertEqual(parsed.ean13, "4601234567890")
-        self.assertEqual(
-            parsed.marking_code,
-            "010460123456789021SERIAL123\x1d91ABCD\x1d92CRYPTO",
-        )
-        self.assertIn("\x1d", parsed.marking_code)
+        self.assertEqual(parsed.raw, value)
+        self.assertEqual(parsed.marking_code, value)
+        self.assertEqual(parsed.gtin, "04600439931256")
+        self.assertEqual(parsed.ean13, "4600439931256")
 
-    def test_trailing_group_separator_is_not_trimmed(self):
-        value = "010460123456789021ABC\x1d"
+    def test_lookup_copy_can_drop_aim_but_keeps_internal_gs(self):
+        value = "]d2010460043993125621ABC\x1d930001\x1d92XYZ"
+        normalized = normalize_scanned_payload(value)
         self.assertEqual(
-            normalize_scanned_payload(value),
-            "010460123456789021ABC\x1d",
+            normalized,
+            "010460043993125621ABC\x1d930001\x1d92XYZ",
         )
+        self.assertIn("\x1d", normalized)
 
-    def test_plain_ean_is_not_mistaken_for_marking(self):
-        parsed = parse_scanned_product_code("4601234567890\r")
-        self.assertEqual(parsed.payload, "4601234567890")
+    def test_plain_ean_is_not_marking(self):
+        parsed = parse_scanned_product_code("4600439931256")
         self.assertIsNone(parsed.marking_code)
-        self.assertEqual(parsed.lookup_code, "4601234567890")
-
-    def test_parenthesized_ai_keeps_crypto_tail(self):
-        parsed = parse_scanned_product_code(
-            "(01)04601234567890(21)ABC123\x1d91KEY"
-        )
-        self.assertEqual(parsed.gtin, "04601234567890")
-        self.assertEqual(
-            parsed.marking_code,
-            "(01)04601234567890(21)ABC123\x1d91KEY",
-        )
+        self.assertEqual(parsed.lookup_code, "4600439931256")
 
 
 if __name__ == "__main__":

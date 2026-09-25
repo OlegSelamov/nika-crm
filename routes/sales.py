@@ -232,13 +232,14 @@ def pay_sale():
             marking_value = item.get("excise_stamp")
             if marking_value:
                 parsed_mark = parse_scanned_product_code(marking_value)
-                canonical_mark = parsed_mark.payload
-                if not canonical_mark:
+                if not parsed_mark.is_marking_code:
                     return jsonify({
                         "success": False,
                         "error": "Не удалось прочитать код маркировки DataMatrix",
                     }), 400
-                item["excise_stamp"] = canonical_mark
+                # ВАЖНО: excise_stamp сохраняем ровно как пришёл со сканера.
+                # Нормализованный payload используется только для поиска GTIN.
+                item["excise_stamp"] = parsed_mark.raw
                 if qty != 1:
                     return jsonify({
                         "success": False,

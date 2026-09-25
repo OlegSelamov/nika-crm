@@ -24,7 +24,7 @@ function parseNikaScannedProductCode(value) {
         gtin,
         ean13,
         lookupCode: ean13 || gtin || payload,
-        markingCode: match && payload.length > match[0].length ? payload : ''
+        markingCode: match && payload.length > match[0].length ? raw : ''
     };
 }
 
