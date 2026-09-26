@@ -61,6 +61,15 @@
         }
     };
 
+    // sales.js already contains the primary HID scanner handler. In embedded
+    // desktop mode this helper is injected after sales.js, so attaching a second
+    // keydown listener would process the same physical scan twice (qty +2).
+    // Keep the search/quick-add enhancements above, but do not register a second
+    // scanner when the primary handler is present.
+    if (typeof window.appendScannerCharacter === 'function') {
+        return;
+    }
+
     const MIN_BARCODE_LENGTH = 8;
     const MAX_KEY_GAP_MS = 140;
     const AUTO_FINISH_DELAY_MS = 160;
