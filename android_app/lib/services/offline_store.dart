@@ -515,7 +515,7 @@ class OfflineStore {
     }
     final uid = await userId;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final operationId = '${cid}_${uid ?? 0}_$now_${DateTime.now().microsecondsSinceEpoch}';
+    final operationId = '${cid}_${uid ?? 0}_${now}_${DateTime.now().microsecondsSinceEpoch}';
 
     await (await _db).insert(
       'sync_queue',
