@@ -4,6 +4,20 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/scanner_feedback_service.dart';
 import '../theme/app_theme.dart';
 
+const _quickScannerFormats = <BarcodeFormat>[
+  BarcodeFormat.dataMatrix,
+  BarcodeFormat.ean13,
+  BarcodeFormat.ean8,
+  BarcodeFormat.upcA,
+  BarcodeFormat.upcE,
+  BarcodeFormat.code128,
+  BarcodeFormat.code39,
+  BarcodeFormat.code93,
+  BarcodeFormat.codabar,
+  BarcodeFormat.itf,
+  BarcodeFormat.qrCode,
+];
+
 class HoldScannerButton extends StatefulWidget {
   final Future<void> Function(String code) onScan;
   final bool enabled;
@@ -25,7 +39,11 @@ class HoldScannerButton extends StatefulWidget {
 class _HoldScannerButtonState extends State<HoldScannerButton> {
   final scannerController = MobileScannerController(
     autoStart: false,
-    detectionSpeed: DetectionSpeed.normal,
+    cameraResolution: const Size(1920, 1080),
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    formats: _quickScannerFormats,
+    autoZoom: true,
+    initialZoom: 0.12,
   );
   final scannedCodes = <String>{};
   bool pressed = false;
@@ -51,8 +69,17 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
   Future<void> _activateScanner(int session) async {
     try {
       await scannerController.start();
+
       if (!pressed || session != scanSession) {
         await scannerController.stop();
+        return;
+      }
+
+      try {
+        await scannerController.setFocusPoint(const Offset(0.5, 0.5));
+      } catch (_) {
+        // Continuous autofocus remains active on cameras
+        // that do not support an explicit focus point.
       }
     } catch (_) {
       if (!mounted || session != scanSession) return;
