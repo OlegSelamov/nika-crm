@@ -29,8 +29,11 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen>
     with WidgetsBindingObserver {
   late final MobileScannerController scannerController;
+
   bool scanned = false;
-  bool _initialFocusApplied = false;
+  bool _markingMode = false;
+  bool _zoomReady = false;
+  double _baseZoom = 0;
 
   @override
   void initState() {
@@ -39,22 +42,33 @@ class _ScannerScreenState extends State<ScannerScreen>
 
     scannerController = MobileScannerController(
       cameraResolution: const Size(1920, 1080),
-      detectionSpeed: DetectionSpeed.noDuplicates,
+      detectionSpeed: DetectionSpeed.normal,
+      detectionTimeoutMs: 90,
       formats: _scannerFormats,
       autoZoom: true,
-      initialZoom: 0.12,
-    )..addListener(_applyInitialFocus);
+    )..addListener(_handleScannerState);
   }
 
-  Future<void> _applyInitialFocus() async {
-    if (_initialFocusApplied || !scannerController.value.isRunning) return;
+  void _handleScannerState() {
+    final state = scannerController.value;
+    if (!state.isRunning) return;
 
-    _initialFocusApplied = true;
-    try {
-      await scannerController.setFocusPoint(const Offset(0.5, 0.5));
-    } catch (_) {
-      // Some cameras do not expose manual focus points.
-      // Continuous autofocus still remains active.
+    // MobileScannerState starts with zoomScale == 1 before CameraX reports
+    // the real linear zoom. Wait for the first real camera zoom value.
+    if (!_zoomReady) {
+      if (state.zoomScale < 0.95) {
+        _zoomReady = true;
+        _baseZoom = state.zoomScale;
+      }
+      return;
+    }
+
+    // ML Kit changes zoom automatically when it sees a code that is too small
+    // to decode confidently. Use that as the automatic trigger for the
+    // dedicated marking UI instead of asking the cashier to switch modes.
+    if (!_markingMode && state.zoomScale > _baseZoom + 0.03) {
+      if (!mounted) return;
+      setState(() => _markingMode = true);
     }
   }
 
@@ -64,7 +78,11 @@ class _ScannerScreenState extends State<ScannerScreen>
 
     switch (state) {
       case AppLifecycleState.resumed:
-        _initialFocusApplied = false;
+        _zoomReady = false;
+        _baseZoom = 0;
+        if (mounted && _markingMode) {
+          setState(() => _markingMode = false);
+        }
         unawaited(scannerController.start());
       case AppLifecycleState.inactive:
         unawaited(scannerController.stop());
@@ -78,20 +96,27 @@ class _ScannerScreenState extends State<ScannerScreen>
   Future<void> onDetect(BarcodeCapture capture) async {
     if (scanned || capture.barcodes.isEmpty) return;
 
-    final barcode = capture.barcodes.first.rawValue?.trim();
+    var code = '';
+    for (final barcode in capture.barcodes) {
+      final value = barcode.rawValue?.trim() ?? '';
+      if (value.isNotEmpty) {
+        code = value;
+        break;
+      }
+    }
 
-    if (barcode == null || barcode.isEmpty) return;
+    if (code.isEmpty) return;
 
     scanned = true;
 
     await ScannerFeedbackService.play();
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
-    Navigator.pop(context, barcode);
+    Navigator.pop(context, code);
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text('Считан штрихкод: $barcode'),
+        content: Text('Считан штрихкод: $code'),
       ),
     );
   }
@@ -99,7 +124,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    scannerController.removeListener(_applyInitialFocus);
+    scannerController.removeListener(_handleScannerState);
     unawaited(scannerController.dispose());
     super.dispose();
   }
@@ -109,46 +134,156 @@ class _ScannerScreenState extends State<ScannerScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Сканер'),
+        title: Text(_markingMode ? 'Сканер · маркировка' : 'Сканер'),
         backgroundColor: const Color(0xFF0B1F3A),
         foregroundColor: Colors.white,
       ),
-      body: Stack(
-        children: [
-          MobileScanner(
-            controller: scannerController,
-            onDetect: onDetect,
-            tapToFocus: true,
-          ),
-          IgnorePointer(
-            child: Center(
-              child: Container(
-                width: 260,
-                height: 180,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 3,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = constraints.biggest;
+          final targetY = size.height * 0.34;
+
+          const targetSize = 82.0;
+          const loupeWidth = 238.0;
+          const loupeHeight = 218.0;
+          final loupeCenterY = targetY + 190;
+          final loupeTop = loupeCenterY - loupeHeight / 2;
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              MobileScanner(
+                controller: scannerController,
+                onDetect: onDetect,
+              ),
+
+              if (_markingMode)
+                Positioned(
+                  left: (size.width - loupeWidth) / 2,
+                  top: loupeTop,
+                  child: IgnorePointer(
+                    child: RawMagnifier(
+                      size: const Size(loupeWidth, loupeHeight),
+                      magnificationScale: 2.35,
+                      focalPointOffset: Offset(0, targetY - loupeCenterY),
+                      clipBehavior: Clip.antiAlias,
+                      decoration: MagnifierDecoration(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: const BorderSide(
+                            color: Colors.white,
+                            width: 2,
+                          ),
+                        ),
+                        shadows: const [
+                          BoxShadow(
+                            blurRadius: 16,
+                            spreadRadius: 1,
+                            offset: Offset(0, 5),
+                            color: Color(0x66000000),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(18),
+                ),
+
+              if (_markingMode)
+                Positioned(
+                  left: (size.width - targetSize) / 2,
+                  top: targetY - targetSize / 2,
+                  child: IgnorePointer(
+                    child: Container(
+                      width: targetSize,
+                      height: targetSize,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 2.5,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x55000000),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                IgnorePointer(
+                  child: Center(
+                    child: Container(
+                      width: 260,
+                      height: 180,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 3,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
+
+              if (_markingMode)
+                Positioned(
+                  top: 18,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xB3000000),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: const Text(
+                          'Режим маркировки',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              Positioned(
+                bottom: 40,
+                left: 20,
+                right: 20,
+                child: IgnorePointer(
+                  child: Text(
+                    _markingMode
+                        ? 'DataMatrix обнаружен · держите код в маленьком квадрате'
+                        : 'Наведите камеру на штрихкод или DataMatrix',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      shadows: [
+                        Shadow(
+                          blurRadius: 5,
+                          color: Colors.black,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          const Positioned(
-            bottom: 40,
-            left: 20,
-            right: 20,
-            child: Text(
-              'Наведите камеру на код. Для мелкого DataMatrix коснитесь кода для фокусировки.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
