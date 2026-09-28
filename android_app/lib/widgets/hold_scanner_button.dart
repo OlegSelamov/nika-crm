@@ -40,10 +40,10 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
   final scannerController = MobileScannerController(
     autoStart: false,
     cameraResolution: const Size(1920, 1080),
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.normal,
+    detectionTimeoutMs: 90,
     formats: _quickScannerFormats,
     autoZoom: true,
-    initialZoom: 0.12,
   );
   final scannedCodes = <String>{};
   bool pressed = false;
@@ -75,12 +75,6 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
         return;
       }
 
-      try {
-        await scannerController.setFocusPoint(const Offset(0.5, 0.5));
-      } catch (_) {
-        // Continuous autofocus remains active on cameras
-        // that do not support an explicit focus point.
-      }
     } catch (_) {
       if (!mounted || session != scanSession) return;
       setState(() => pressed = false);
@@ -108,7 +102,14 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
 
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (!pressed || scanBusy || capture.barcodes.isEmpty) return;
-    final code = capture.barcodes.first.rawValue?.trim() ?? '';
+    var code = '';
+    for (final barcode in capture.barcodes) {
+      final value = barcode.rawValue?.trim() ?? '';
+      if (value.isNotEmpty) {
+        code = value;
+        break;
+      }
+    }
     if (code.isEmpty || scannedCodes.contains(code)) return;
     scannedCodes.add(code);
     scanBusy = true;
