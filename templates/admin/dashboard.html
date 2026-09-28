@@ -30,6 +30,8 @@
         }
         .nav a.active, .nav a:hover { background: rgba(255,255,255,.08); color: white; }
         .main { padding: 28px; }
+        .top-actions { display:flex; gap:10px; flex-wrap:wrap; }
+        .btn-accent { background:#7c3aed; color:#fff; }
         .top {
             display:flex;
             justify-content:space-between;
@@ -128,7 +130,10 @@
                 <div class="muted">Центр управления платформой</div>
                 <h1>Nika Admin</h1>
             </div>
-            <a href="/admin/companies" class="btn">Все компании</a>
+            <div class="top-actions">
+                <a href="/admin/capital/" class="btn btn-accent">Открыть Capital Lab</a>
+                <a href="/admin/companies" class="btn">Все компании</a>
+            </div>
         </div>
 
         <div class="cards">
