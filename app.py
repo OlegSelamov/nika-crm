@@ -69,6 +69,7 @@ from routes.esf import esf_bp
 import routes.esf as esf_module
 from routes.bcc import bcc_bp
 from routes.school import school_bp
+from routes.capital import capital_bp
 from datetime import timedelta
 
 # Keep non-sent ESF drafts in sync with the current client contract.
@@ -299,6 +300,7 @@ app.register_blueprint(mobile_api_bp)
 app.register_blueprint(esf_bp)
 app.register_blueprint(bcc_bp)
 app.register_blueprint(school_bp)
+app.register_blueprint(capital_bp)
 
 # Keep the public URLs unchanged, but replace only the sale/fiscalization
 # handlers with the COMRUN-aware flow. This avoids duplicate Flask routes and
