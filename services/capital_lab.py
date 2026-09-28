@@ -424,6 +424,21 @@ def ensure_schema(cur):
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS capital_monitor_state (
+            monitor_key TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'stopped',
+            started_at TIMESTAMPTZ,
+            last_heartbeat TIMESTAMPTZ,
+            last_cycle_at TIMESTAMPTZ,
+            cycle_count BIGINT NOT NULL DEFAULT 0,
+            last_closed_count INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
 
 
 def _ensure_defaults(cur, company_id):
@@ -843,6 +858,103 @@ def sync_open_positions(company_id):
         pool.putconn(conn)
 
 
+def update_monitor_state(status, cycle_count=0, last_closed_count=0, last_error=None, started=False):
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        ensure_schema(cur)
+        cur.execute(
+            """
+            INSERT INTO capital_monitor_state (
+                monitor_key, status, started_at, last_heartbeat, last_cycle_at,
+                cycle_count, last_closed_count, last_error, updated_at
+            )
+            VALUES (
+                'paper', %s,
+                CASE WHEN %s THEN NOW() ELSE NULL END,
+                NOW(), NOW(), %s, %s, %s, NOW()
+            )
+            ON CONFLICT (monitor_key) DO UPDATE SET
+                status = EXCLUDED.status,
+                started_at = CASE
+                    WHEN %s THEN NOW()
+                    ELSE capital_monitor_state.started_at
+                END,
+                last_heartbeat = NOW(),
+                last_cycle_at = NOW(),
+                cycle_count = EXCLUDED.cycle_count,
+                last_closed_count = EXCLUDED.last_closed_count,
+                last_error = EXCLUDED.last_error,
+                updated_at = NOW()
+            """,
+            (
+                status,
+                bool(started),
+                int(cycle_count or 0),
+                int(last_closed_count or 0),
+                str(last_error)[:1000] if last_error else None,
+                bool(started),
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+def get_monitor_state():
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        ensure_schema(cur)
+        conn.commit()
+        cur.execute(
+            """
+            SELECT
+                monitor_key,
+                status,
+                started_at,
+                last_heartbeat,
+                last_cycle_at,
+                cycle_count,
+                last_closed_count,
+                last_error,
+                EXTRACT(EPOCH FROM (NOW() - last_heartbeat)) AS heartbeat_age_seconds
+            FROM capital_monitor_state
+            WHERE monitor_key = 'paper'
+            """
+        )
+        row = cur.fetchone()
+        if not row:
+            return {
+                "running": False,
+                "status": "not_started",
+                "cycle_count": 0,
+                "last_closed_count": 0,
+                "last_error": None,
+                "heartbeat_age_seconds": None,
+            }
+        heartbeat_age = _float(row.get("heartbeat_age_seconds"), 999999)
+        max_age = max(45.0, _float(os.getenv("CAPITAL_MONITOR_INTERVAL", "10")) * 4.0)
+        return {
+            "running": row.get("status") == "running" and heartbeat_age <= max_age,
+            "status": row.get("status") or "unknown",
+            "cycle_count": int(row.get("cycle_count") or 0),
+            "last_closed_count": int(row.get("last_closed_count") or 0),
+            "last_error": row.get("last_error"),
+            "heartbeat_age_seconds": heartbeat_age,
+            "started_at": row["started_at"].isoformat() if row.get("started_at") else None,
+            "last_heartbeat": row["last_heartbeat"].isoformat() if row.get("last_heartbeat") else None,
+            "last_cycle_at": row["last_cycle_at"].isoformat() if row.get("last_cycle_at") else None,
+        }
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
 def sync_all_open_positions():
     conn = get_db()
     cur = conn.cursor()
@@ -1034,6 +1146,7 @@ def get_overview(company_id):
         },
         "signals": [_serialize_signal(row) for row in signals],
         "positions": serialized_positions,
+        "monitor": get_monitor_state(),
         "updated_at": datetime.utcnow().isoformat() + "Z",
     }
 
