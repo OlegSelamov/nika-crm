@@ -15,10 +15,15 @@ BINANCE_BASE_URL = os.getenv("CAPITAL_BINANCE_BASE_URL", "https://api.binance.co
 DEFAULT_PAPER_BALANCE = Decimal(os.getenv("CAPITAL_PAPER_BALANCE", "10000"))
 DEFAULT_SYMBOLS = tuple(
     s.strip().upper()
-    for s in os.getenv("CAPITAL_SYMBOLS", "BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT").split(",")
+    for s in os.getenv(
+        "CAPITAL_SYMBOLS",
+        "BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT,DOGEUSDT,ADAUSDT,LINKUSDT,"
+        "AVAXUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,TONUSDT,SUIUSDT,NEARUSDT,"
+        "UNIUSDT,AAVEUSDT,ETCUSDT,FILUSDT"
+    ).split(",")
     if s.strip()
 )
-ALLOWED_INTERVALS = {"15m", "30m", "1h", "2h", "4h"}
+ALLOWED_INTERVALS = {"5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"}
 HTTP_TIMEOUT = float(os.getenv("CAPITAL_HTTP_TIMEOUT", "8"))
 
 
@@ -220,6 +225,8 @@ def analyze_klines(klines):
         if price > stop_price
         else 0.0
     )
+    potential_return_pct = ((take_price / price) - 1.0) * 100.0 if price > 0 else 0.0
+    stop_risk_pct = ((price - stop_price) / price) * 100.0 if price > 0 else 0.0
 
     reasons = []
     reasons.append(
@@ -243,6 +250,8 @@ def analyze_klines(klines):
         "stop_price": stop_price,
         "take_price": take_price,
         "risk_reward": risk_reward,
+        "potential_return_pct": potential_return_pct,
+        "stop_risk_pct": stop_risk_pct,
         "reasons": reasons,
         "indicators": {
             "ema20": ema20,
@@ -529,8 +538,7 @@ def open_paper_position(company_id, signal_id):
             raise CapitalLabError("Сигнал не найден")
         if signal["status"] != "pending":
             raise CapitalLabError("Этот сигнал уже обработан")
-        if signal["action"] != "BUY":
-            raise CapitalLabError("Сигнал WAIT нельзя открыть как сделку")
+        manual_override = signal["action"] != "BUY"
 
         current_price = fetch_price(signal["symbol"])
         planned_entry = _float(signal["entry_price"])
@@ -656,6 +664,8 @@ def open_paper_position(company_id, signal_id):
                     {
                         "paper": True,
                         "signal_score": signal["score"],
+                        "signal_action": signal["action"],
+                        "manual_override": manual_override,
                         "risk_pct": sizing["risk_pct"],
                     }
                 ),
