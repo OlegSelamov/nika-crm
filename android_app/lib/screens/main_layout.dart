@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -5,6 +7,7 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/catalog_display_preferences.dart';
 import '../services/nika_assistant_controller.dart';
+import '../services/offline_sync_service.dart';
 import '../services/scanner_feedback_service.dart';
 import '../services/sales_voice_bridge.dart';
 import '../theme/app_theme.dart';
@@ -45,7 +48,7 @@ class MainLayout extends StatefulWidget {
   State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   int selectedIndex = 0;
   final salesKey = GlobalKey<SalesScreenState>();
   final quickScannerController = MobileScannerController(
@@ -57,6 +60,7 @@ class _MainLayoutState extends State<MainLayout> {
   bool quickScanBusy = false;
   int quickScanSession = 0;
   final nika = NikaAssistantController.instance;
+  Timer? offlineSyncTimer;
   Set<String>? enabledModules;
   String currentRole = 'employee';
 
@@ -67,16 +71,30 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     SalesVoiceBridge.instance.setSalesVisible(false);
     nika.setHandlers(
       onNavigate: _openVoiceTarget,
       onOpenChat: _openAssistant,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) nika.activate();
+      if (!mounted) return;
+      nika.activate();
+      unawaited(OfflineSyncService.instance.syncNow());
     });
+    offlineSyncTimer = Timer.periodic(
+      const Duration(minutes: 2),
+      (_) => unawaited(OfflineSyncService.instance.syncNow()),
+    );
     _loadModules();
     CatalogDisplayPreferences.load().catchError((_) {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(OfflineSyncService.instance.syncNow());
+    }
   }
 
   Future<void> _loadModules() async {
@@ -104,6 +122,8 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    offlineSyncTimer?.cancel();
     SalesVoiceBridge.instance.setSalesVisible(false);
     nika.clearHandlers();
     nika.deactivate();
@@ -411,6 +431,63 @@ class _MainLayoutState extends State<MainLayout> {
               ],
             ),
             actions: [
+              ValueListenableBuilder<OfflineSyncStatus>(
+                valueListenable: OfflineSyncService.instance.status,
+                builder: (context, syncStatus, _) {
+                  final syncing = syncStatus == OfflineSyncStatus.syncing;
+                  final offline = syncStatus == OfflineSyncStatus.offline;
+                  final failed = syncStatus == OfflineSyncStatus.error;
+                  final icon = syncing
+                      ? Icons.sync_rounded
+                      : offline
+                          ? Icons.cloud_off_rounded
+                          : failed
+                              ? Icons.sync_problem_rounded
+                              : Icons.cloud_done_rounded;
+                  final color = offline
+                      ? AppColors.warning
+                      : failed
+                          ? AppColors.danger
+                          : syncing
+                              ? AppColors.primary
+                              : AppColors.success;
+                  final tooltip = syncing
+                      ? 'Синхронизация…'
+                      : offline
+                          ? 'Офлайн · данные на телефоне'
+                          : failed
+                              ? 'Ошибка синхронизации'
+                              : 'Синхронизировано';
+                  return IconButton(
+                    tooltip: tooltip,
+                    onPressed: syncing
+                        ? null
+                        : () async {
+                            await OfflineSyncService.instance.syncNow(force: true);
+                            if (!context.mounted) return;
+                            final status = OfflineSyncService.instance.status.value;
+                            final message = status == OfflineSyncStatus.synced
+                                ? 'Данные синхронизированы'
+                                : status == OfflineSyncStatus.offline
+                                    ? 'Нет интернета · работа продолжается офлайн'
+                                    : 'Не удалось синхронизировать данные';
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message)),
+                            );
+                          },
+                    icon: syncing
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: color,
+                            ),
+                          )
+                        : Icon(icon, color: color),
+                  );
+                },
+              ),
               IconButton(
                 tooltip: 'Nika AI',
                 onPressed: _openAssistant,

@@ -56,7 +56,11 @@ class ApiService {
 
   static Future<bool> isLoggedIn() async {
     await loadCookie();
-    return _cookie != null && _cookie!.isNotEmpty;
+    if (_cookie != null && _cookie!.isNotEmpty) return true;
+
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getBool('logged_in') ?? false) &&
+        prefs.getInt('offline_company_id') != null;
   }
 
   static Future<void> logout() async {
@@ -187,13 +191,35 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> mobileProfile() async =>
-      Map<String, dynamic>.from(await _request('GET', '/api/mobile/profile'));
+  static Future<Map<String, dynamic>> mobileProfile() async {
+    try {
+      final result = Map<String, dynamic>.from(
+        await _request('GET', '/api/mobile/profile'),
+      );
+      await OfflineStore.instance.cacheSnapshot('mobile_profile', result);
+      return result;
+    } on ApiException catch (error) {
+      if (error.statusCode != null) rethrow;
+      final cached = await OfflineStore.instance.snapshot('mobile_profile');
+      if (cached is Map) return Map<String, dynamic>.from(cached);
+      rethrow;
+    }
+  }
 
-  static Future<Map<String, dynamic>> interfaceSettings() async =>
-      Map<String, dynamic>.from(
+  static Future<Map<String, dynamic>> interfaceSettings() async {
+    try {
+      final result = Map<String, dynamic>.from(
         await _request('GET', '/api/mobile/interface-settings'),
       );
+      await OfflineStore.instance.cacheSnapshot('interface_settings', result);
+      return result;
+    } on ApiException catch (error) {
+      if (error.statusCode != null) rethrow;
+      final cached = await OfflineStore.instance.snapshot('interface_settings');
+      if (cached is Map) return Map<String, dynamic>.from(cached);
+      rethrow;
+    }
+  }
 
   static Future<Map<String, dynamic>> saveInterfaceSettings({
     required bool showCatalogImages,
@@ -227,17 +253,52 @@ class ApiService {
   static Future<Map<String, dynamic>> saveSchoolPrices(Map<String, dynamic> data) async =>
       Map<String, dynamic>.from(await _request('POST', '/api/mobile/school/prices', body: data));
 
+  static Future<Map<String, dynamic>> syncHealth() async =>
+      Map<String, dynamic>.from(
+        await _request(
+          'GET',
+          '/api/mobile/health',
+          timeout: const Duration(seconds: 8),
+        ),
+      );
+
   static Future<Set<String>> getModules() async {
-    final result = Map<String, dynamic>.from(
-      await _request('GET', '/api/mobile/modules'),
-    );
-    return List<dynamic>.from(result['modules'] ?? const [])
-        .map((item) => item.toString())
-        .toSet();
+    try {
+      final result = Map<String, dynamic>.from(
+        await _request('GET', '/api/mobile/modules'),
+      );
+      final modules = List<dynamic>.from(result['modules'] ?? const [])
+          .map((item) => item.toString())
+          .toSet();
+      await OfflineStore.instance.cacheSnapshot(
+        'modules',
+        modules.toList(),
+      );
+      return modules;
+    } on ApiException catch (error) {
+      if (error.statusCode != null) rethrow;
+      final cached = await OfflineStore.instance.snapshot('modules');
+      if (cached is List) {
+        return cached.map((item) => item.toString()).toSet();
+      }
+      rethrow;
+    }
   }
 
-  static Future<Map<String, dynamic>> dashboard() async =>
-      Map<String, dynamic>.from(await _request('GET', '/api/dashboard'));
+  static Future<Map<String, dynamic>> dashboard() async {
+    try {
+      final result = Map<String, dynamic>.from(
+        await _request('GET', '/api/dashboard'),
+      );
+      await OfflineStore.instance.cacheSnapshot('dashboard', result);
+      return result;
+    } on ApiException catch (error) {
+      if (error.statusCode != null) rethrow;
+      final cached = await OfflineStore.instance.snapshot('dashboard');
+      if (cached is Map) return Map<String, dynamic>.from(cached);
+      rethrow;
+    }
+  }
 
   static Future<List<dynamic>> getItems({
     String type = 'all',
