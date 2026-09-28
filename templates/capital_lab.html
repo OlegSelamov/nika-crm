@@ -10,6 +10,7 @@
 <div class="capital-page">
   <div class="capital-head"><div><h1>Nika Capital Lab</h1><p>Полуавтоматическая лаборатория стратегий и paper trading.</p></div><div class="paper-badge">PAPER ONLY · реальные ордера отключены</div></div>
   <div class="notice">Это исследовательский режим. Средства не переводятся и реальные сделки не отправляются.</div>
+  <div class="card" style="margin-bottom:14px"><strong>Capital Monitor</strong><div id="monitorStatus" class="muted" style="margin-top:6px">Проверяю состояние…</div></div>
   <div class="grid">
     <div class="card metric"><small>Капитал</small><b id="mEquity">—</b><div class="muted" id="mCash"></div></div>
     <div class="card metric"><small>Результат</small><b id="mPnl">—</b><div class="muted" id="mUnrealized"></div></div>
@@ -40,7 +41,7 @@ async function api(url,options){options=options||{};var headers=options.headers|
 async function loadOverview(){
   try{
     var j=await api('/admin/capital/api/overview');overview=j.data;
-    mEquity.textContent=money(overview.account.equity);mCash.textContent='Свободно: '+money(overview.account.cash_balance);mPnl.textContent=money(overview.stats.total_pnl);mUnrealized.textContent='Плавающий: '+money(overview.account.unrealized_pnl);mWin.textContent=overview.stats.win_rate.toFixed(1)+'%';mClosed.textContent='Закрыто сделок: '+overview.stats.closed_count;mDailyLoss.textContent=money(overview.risk.daily_loss);mDailyLimit.textContent='Лимит: '+overview.risk.max_daily_loss_pct+'%';
+    mEquity.textContent=money(overview.account.equity);mCash.textContent='Свободно: '+money(overview.account.cash_balance);mPnl.textContent=money(overview.stats.total_pnl);mUnrealized.textContent='Плавающий: '+money(overview.account.unrealized_pnl);mWin.textContent=overview.stats.win_rate.toFixed(1)+'%';mClosed.textContent='Закрыто сделок: '+overview.stats.closed_count;mDailyLoss.textContent=money(overview.risk.daily_loss);mDailyLimit.textContent='Лимит: '+overview.risk.max_daily_loss_pct+'%';var mon=overview.monitor||{};monitorStatus.textContent=mon.running?('Работает · цикл '+(mon.cycle_count||0)+' · обновление '+Math.round(mon.heartbeat_age_seconds||0)+' сек назад'+(mon.last_error?' · ошибка: '+mon.last_error:'')):('Не запущен'+(mon.last_error?' · '+mon.last_error:''));monitorStatus.className=mon.running?'good':'bad';
     if(!symbol.options.length){overview.symbols.forEach(function(s){symbol.add(new Option(s,s))})}
     riskTrade.value=overview.risk.risk_per_trade_pct;riskDaily.value=overview.risk.max_daily_loss_pct;riskPosition.value=overview.risk.max_position_pct;riskCount.value=overview.risk.max_open_positions;riskRR.value=overview.risk.min_risk_reward;
     var posHtml=overview.positions.map(function(p){var pnl=(p.pnl===null||p.pnl===undefined)?p.unrealized_pnl:p.pnl;var current=p.status==='open'?p.mark_price:p.exit_price;var btn=p.status==='open'?'<button onclick="closePosition('+p.id+')">Закрыть</button>':'';return '<tr><td>'+p.symbol+'</td><td>'+p.status+'</td><td>'+px(p.entry_price)+'</td><td>'+px(current)+'</td><td>'+px(p.stop_price)+'</td><td>'+px(p.take_price)+'</td><td class="'+(pnl>=0?'good':'bad')+'">'+money(pnl)+'</td><td>'+btn+'</td></tr>'}).join('');
