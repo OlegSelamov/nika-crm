@@ -1,0 +1,18 @@
+[Unit]
+Description=Nika Capital Paper Trading Monitor
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/nika-crm
+EnvironmentFile=-/home/ubuntu/nika-crm/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=CAPITAL_MONITOR_INTERVAL=10
+ExecStart=/home/ubuntu/nika-crm/venv/bin/python /home/ubuntu/nika-crm/scripts/capital_monitor.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
