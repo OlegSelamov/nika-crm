@@ -39,7 +39,7 @@ function toast(msg){var e=document.getElementById('toast');e.textContent=msg;e.s
 async function api(url,options){options=options||{};var headers=options.headers||{};headers['Content-Type']='application/json';options.headers=headers;var r=await fetch(url,options);var j=await r.json();if(!j.success)throw new Error(j.error||'Ошибка');return j}
 async function loadOverview(){
   try{
-    var j=await api('/capital/api/overview');overview=j.data;
+    var j=await api('/admin/capital/api/overview');overview=j.data;
     mEquity.textContent=money(overview.account.equity);mCash.textContent='Свободно: '+money(overview.account.cash_balance);mPnl.textContent=money(overview.stats.total_pnl);mUnrealized.textContent='Плавающий: '+money(overview.account.unrealized_pnl);mWin.textContent=overview.stats.win_rate.toFixed(1)+'%';mClosed.textContent='Закрыто сделок: '+overview.stats.closed_count;mDailyLoss.textContent=money(overview.risk.daily_loss);mDailyLimit.textContent='Лимит: '+overview.risk.max_daily_loss_pct+'%';
     if(!symbol.options.length){overview.symbols.forEach(function(s){symbol.add(new Option(s,s))})}
     riskTrade.value=overview.risk.risk_per_trade_pct;riskDaily.value=overview.risk.max_daily_loss_pct;riskPosition.value=overview.risk.max_position_pct;riskCount.value=overview.risk.max_open_positions;riskRR.value=overview.risk.min_risk_reward;
@@ -49,13 +49,13 @@ async function loadOverview(){
     signalsBody.innerHTML=sigHtml||'<tr><td colspan="6" class="muted">Сигналов пока нет</td></tr>';
   }catch(e){toast(e.message)}
 }
-async function analyzeMarket(){analyzeBtn.disabled=true;analyzeBtn.textContent='Анализирую…';try{var j=await api('/capital/api/analyze',{method:'POST',body:JSON.stringify({symbol:symbol.value,interval:interval.value})});latestSignal=j.signal;showSignal(j.signal);await loadOverview()}catch(e){toast(e.message)}finally{analyzeBtn.disabled=false;analyzeBtn.textContent='Анализировать рынок'}}
+async function analyzeMarket(){analyzeBtn.disabled=true;analyzeBtn.textContent='Анализирую…';try{var j=await api('/admin/capital/api/analyze',{method:'POST',body:JSON.stringify({symbol:symbol.value,interval:interval.value})});latestSignal=j.signal;showSignal(j.signal);await loadOverview()}catch(e){toast(e.message)}finally{analyzeBtn.disabled=false;analyzeBtn.textContent='Анализировать рынок'}}
 function showSignal(s){signalCard.style.display='block';sigSymbol.textContent=s.symbol;sigAction.textContent=s.action;sigAction.className=s.action==='BUY'?'good':'wait';sigScore.textContent=s.score;sigPlan.textContent='Вход '+px(s.price)+' · Стоп '+px(s.stop_price)+' · Цель '+px(s.take_price);sigRR.textContent='Risk/Reward: '+Number(s.risk_reward).toFixed(2);sigReasons.innerHTML=(s.reasons||[]).map(function(x){return '<li>'+x+'</li>'}).join('');openBtn.disabled=s.action!=='BUY'}
-async function openSignal(){if(!latestSignal)return;try{await api('/capital/api/signals/'+latestSignal.id+'/open',{method:'POST',body:'{}'});toast('Виртуальная позиция открыта');signalCard.style.display='none';latestSignal=null;await loadOverview()}catch(e){toast(e.message)}}
-async function skipSignal(){if(!latestSignal)return;try{await api('/capital/api/signals/'+latestSignal.id+'/skip',{method:'POST',body:'{}'});signalCard.style.display='none';latestSignal=null;await loadOverview()}catch(e){toast(e.message)}}
-async function closePosition(id){try{await api('/capital/api/positions/'+id+'/close',{method:'POST',body:'{}'});toast('Позиция закрыта');await loadOverview()}catch(e){toast(e.message)}}
-async function saveRisk(){try{await api('/capital/api/risk',{method:'POST',body:JSON.stringify({risk_per_trade_pct:riskTrade.value,max_daily_loss_pct:riskDaily.value,max_position_pct:riskPosition.value,max_open_positions:riskCount.value,min_risk_reward:riskRR.value})});toast('Риск-лимиты сохранены');await loadOverview()}catch(e){toast(e.message)}}
-async function resetPaper(){if(!confirm('Удалить историю виртуальных сигналов и сделок?'))return;try{await api('/capital/api/reset',{method:'POST',body:'{}'});toast('Paper-история сброшена');await loadOverview()}catch(e){toast(e.message)}}
+async function openSignal(){if(!latestSignal)return;try{await api('/admin/capital/api/signals/'+latestSignal.id+'/open',{method:'POST',body:'{}'});toast('Виртуальная позиция открыта');signalCard.style.display='none';latestSignal=null;await loadOverview()}catch(e){toast(e.message)}}
+async function skipSignal(){if(!latestSignal)return;try{await api('/admin/capital/api/signals/'+latestSignal.id+'/skip',{method:'POST',body:'{}'});signalCard.style.display='none';latestSignal=null;await loadOverview()}catch(e){toast(e.message)}}
+async function closePosition(id){try{await api('/admin/capital/api/positions/'+id+'/close',{method:'POST',body:'{}'});toast('Позиция закрыта');await loadOverview()}catch(e){toast(e.message)}}
+async function saveRisk(){try{await api('/admin/capital/api/risk',{method:'POST',body:JSON.stringify({risk_per_trade_pct:riskTrade.value,max_daily_loss_pct:riskDaily.value,max_position_pct:riskPosition.value,max_open_positions:riskCount.value,min_risk_reward:riskRR.value})});toast('Риск-лимиты сохранены');await loadOverview()}catch(e){toast(e.message)}}
+async function resetPaper(){if(!confirm('Удалить историю виртуальных сигналов и сделок?'))return;try{await api('/admin/capital/api/reset',{method:'POST',body:'{}'});toast('Paper-история сброшена');await loadOverview()}catch(e){toast(e.message)}}
 loadOverview();
 </script>
 {% endblock %}
