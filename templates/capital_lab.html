@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block page_css %}
+<style>
+.capital-page{padding:22px;max-width:1500px;margin:0 auto}.capital-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}.capital-head h1{margin:0 0 6px;font-size:28px}.capital-head p{margin:0;color:#687386}.paper-badge{padding:8px 12px;border-radius:999px;background:#eef5ff;font-weight:700;font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:#fff;border:1px solid #e5e9f0;border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(30,45,70,.05)}.metric small{display:block;color:#7b8492;margin-bottom:8px}.metric b{font-size:24px}.section{margin-top:16px}.section h2{margin:0 0 12px;font-size:18px}.controls{display:flex;gap:10px;flex-wrap:wrap}.controls select,.controls input,.controls button{min-height:42px;border-radius:12px;border:1px solid #d9e0ea;padding:0 12px;background:#fff}button.primary{background:#111827;color:#fff;border-color:#111827;font-weight:700}button.danger{background:#fff5f5;color:#b42318;border-color:#fecaca}button:disabled{opacity:.45;cursor:not-allowed}.signal{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.signal-main b{font-size:22px}.score{font-size:38px;font-weight:800}.reason-list{margin:10px 0 0;padding-left:18px;color:#4f5968}.muted{color:#7b8492}.good{color:#067647}.wait{color:#9a6700}.bad{color:#b42318}.table-wrap{overflow:auto}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:10px 8px;border-bottom:1px solid #edf0f4;text-align:left;white-space:nowrap}.table th{font-size:12px;color:#7b8492}.risk-grid{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:10px}.risk-grid label{font-size:12px;color:#657083}.risk-grid input{width:100%;box-sizing:border-box;margin-top:5px}.notice{padding:12px 14px;border-radius:12px;background:#fff8e6;color:#7a5a00;margin-bottom:14px}.toast{position:fixed;right:20px;bottom:20px;background:#111827;color:#fff;padding:12px 16px;border-radius:12px;display:none;z-index:9999}@media(max-width:980px){.grid{grid-template-columns:repeat(2,1fr)}.signal{grid-template-columns:1fr}.risk-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.capital-page{padding:14px}.grid{grid-template-columns:1fr}.risk-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="capital-page">
+  <div class="capital-head"><div><h1>Nika Capital Lab</h1><p>Полуавтоматическая лаборатория стратегий и paper trading.</p></div><div class="paper-badge">PAPER ONLY · реальные ордера отключены</div></div>
+  <div class="notice">Это исследовательский режим. Средства не переводятся и реальные сделки не отправляются.</div>
+  <div class="grid">
+    <div class="card metric"><small>Капитал</small><b id="mEquity">—</b><div class="muted" id="mCash"></div></div>
+    <div class="card metric"><small>Результат</small><b id="mPnl">—</b><div class="muted" id="mUnrealized"></div></div>
+    <div class="card metric"><small>Win rate</small><b id="mWin">—</b><div class="muted" id="mClosed"></div></div>
+    <div class="card metric"><small>Дневной убыток</small><b id="mDailyLoss">—</b><div class="muted" id="mDailyLimit"></div></div>
+  </div>
+
+  <div class="section card"><h2>Новый анализ</h2><div class="controls"><select id="symbol"></select><select id="interval"><option value="15m">15m</option><option value="30m">30m</option><option value="1h" selected>1h</option><option value="2h">2h</option><option value="4h">4h</option></select><button class="primary" id="analyzeBtn" onclick="analyzeMarket()">Анализировать рынок</button><button onclick="loadOverview()">Обновить</button></div></div>
+
+  <div class="section card" id="signalCard" style="display:none"><h2>Последний сигнал</h2><div class="signal"><div class="signal-main"><div><b id="sigSymbol"></b> <span id="sigAction"></span></div><div class="muted" id="sigPlan"></div><ul class="reason-list" id="sigReasons"></ul><div class="controls" style="margin-top:14px"><button class="primary" id="openBtn" onclick="openSignal()">Открыть виртуальную сделку</button><button onclick="skipSignal()">Пропустить</button></div></div><div><div class="muted">Score</div><div class="score" id="sigScore">—</div><div class="muted" id="sigRR"></div></div></div></div>
+
+  <div class="section card"><h2>Риск-лимиты</h2><div class="risk-grid"><label>Риск на сделку, %<input id="riskTrade" type="number" step="0.05"></label><label>Дневной лимит, %<input id="riskDaily" type="number" step="0.25"></label><label>Макс. позиция, %<input id="riskPosition" type="number" step="1"></label><label>Открытых позиций<input id="riskCount" type="number" step="1"></label><label>Мин. Risk/Reward<input id="riskRR" type="number" step="0.1"></label></div><div class="controls" style="margin-top:12px"><button onclick="saveRisk()">Сохранить лимиты</button></div></div>
+
+  <div class="section card"><h2>Позиции</h2><div class="table-wrap"><table class="table"><thead><tr><th>Пара</th><th>Статус</th><th>Вход</th><th>Текущая/выход</th><th>Стоп</th><th>Тейк</th><th>PnL</th><th></th></tr></thead><tbody id="positionsBody"></tbody></table></div></div>
+  <div class="section card"><h2>История сигналов</h2><div class="table-wrap"><table class="table"><thead><tr><th>Время</th><th>Пара</th><th>TF</th><th>Действие</th><th>Score</th><th>Статус</th></tr></thead><tbody id="signalsBody"></tbody></table></div></div>
+  <div class="section card"><h2>Лаборатория</h2><div class="controls"><button class="danger" onclick="resetPaper()">Сбросить paper-историю</button></div></div>
+</div>
+<div class="toast" id="toast"></div>
+{% endblock %}
+
+{% block page_js %}
+<script>
+var overview=null,latestSignal=null;
+function money(v){return Number(v||0).toLocaleString('ru-RU',{maximumFractionDigits:2})+' USDT'}
+function px(v){return Number(v||0).toLocaleString('ru-RU',{maximumFractionDigits:8})}
+function toast(msg){var e=document.getElementById('toast');e.textContent=msg;e.style.display='block';clearTimeout(window.__ct);window.__ct=setTimeout(function(){e.style.display='none'},3200)}
+async function api(url,options){options=options||{};var headers=options.headers||{};headers['Content-Type']='application/json';options.headers=headers;var r=await fetch(url,options);var j=await r.json();if(!j.success)throw new Error(j.error||'Ошибка');return j}
+async function loadOverview(){
+  try{
+    var j=await api('/admin/capital/api/overview');overview=j.data;
+    mEquity.textContent=money(overview.account.equity);mCash.textContent='Свободно: '+money(overview.account.cash_balance);mPnl.textContent=money(overview.stats.total_pnl);mUnrealized.textContent='Плавающий: '+money(overview.account.unrealized_pnl);mWin.textContent=overview.stats.win_rate.toFixed(1)+'%';mClosed.textContent='Закрыто сделок: '+overview.stats.closed_count;mDailyLoss.textContent=money(overview.risk.daily_loss);mDailyLimit.textContent='Лимит: '+overview.risk.max_daily_loss_pct+'%';
+    if(!symbol.options.length){overview.symbols.forEach(function(s){symbol.add(new Option(s,s))})}
+    riskTrade.value=overview.risk.risk_per_trade_pct;riskDaily.value=overview.risk.max_daily_loss_pct;riskPosition.value=overview.risk.max_position_pct;riskCount.value=overview.risk.max_open_positions;riskRR.value=overview.risk.min_risk_reward;
+    var posHtml=overview.positions.map(function(p){var pnl=(p.pnl===null||p.pnl===undefined)?p.unrealized_pnl:p.pnl;var current=p.status==='open'?p.mark_price:p.exit_price;var btn=p.status==='open'?'<button onclick="closePosition('+p.id+')">Закрыть</button>':'';return '<tr><td>'+p.symbol+'</td><td>'+p.status+'</td><td>'+px(p.entry_price)+'</td><td>'+px(current)+'</td><td>'+px(p.stop_price)+'</td><td>'+px(p.take_price)+'</td><td class="'+(pnl>=0?'good':'bad')+'">'+money(pnl)+'</td><td>'+btn+'</td></tr>'}).join('');
+    positionsBody.innerHTML=posHtml||'<tr><td colspan="8" class="muted">Сделок пока нет</td></tr>';
+    var sigHtml=overview.signals.map(function(s){return '<tr><td>'+new Date(s.created_at).toLocaleString('ru-RU')+'</td><td>'+s.symbol+'</td><td>'+s.interval+'</td><td>'+s.action+'</td><td>'+s.score+'</td><td>'+s.status+'</td></tr>'}).join('');
+    signalsBody.innerHTML=sigHtml||'<tr><td colspan="6" class="muted">Сигналов пока нет</td></tr>';
+  }catch(e){toast(e.message)}
+}
+async function analyzeMarket(){analyzeBtn.disabled=true;analyzeBtn.textContent='Анализирую…';try{var j=await api('/admin/capital/api/analyze',{method:'POST',body:JSON.stringify({symbol:symbol.value,interval:interval.value})});latestSignal=j.signal;showSignal(j.signal);await loadOverview()}catch(e){toast(e.message)}finally{analyzeBtn.disabled=false;analyzeBtn.textContent='Анализировать рынок'}}
+function showSignal(s){signalCard.style.display='block';sigSymbol.textContent=s.symbol;sigAction.textContent=s.action;sigAction.className=s.action==='BUY'?'good':'wait';sigScore.textContent=s.score;sigPlan.textContent='Вход '+px(s.price)+' · Стоп '+px(s.stop_price)+' · Цель '+px(s.take_price);sigRR.textContent='Risk/Reward: '+Number(s.risk_reward).toFixed(2);sigReasons.innerHTML=(s.reasons||[]).map(function(x){return '<li>'+x+'</li>'}).join('');openBtn.disabled=s.action!=='BUY'}
+async function openSignal(){if(!latestSignal)return;try{await api('/admin/capital/api/signals/'+latestSignal.id+'/open',{method:'POST',body:'{}'});toast('Виртуальная позиция открыта');signalCard.style.display='none';latestSignal=null;await loadOverview()}catch(e){toast(e.message)}}
+async function skipSignal(){if(!latestSignal)return;try{await api('/admin/capital/api/signals/'+latestSignal.id+'/skip',{method:'POST',body:'{}'});signalCard.style.display='none';latestSignal=null;await loadOverview()}catch(e){toast(e.message)}}
+async function closePosition(id){try{await api('/admin/capital/api/positions/'+id+'/close',{method:'POST',body:'{}'});toast('Позиция закрыта');await loadOverview()}catch(e){toast(e.message)}}
+async function saveRisk(){try{await api('/admin/capital/api/risk',{method:'POST',body:JSON.stringify({risk_per_trade_pct:riskTrade.value,max_daily_loss_pct:riskDaily.value,max_position_pct:riskPosition.value,max_open_positions:riskCount.value,min_risk_reward:riskRR.value})});toast('Риск-лимиты сохранены');await loadOverview()}catch(e){toast(e.message)}}
+async function resetPaper(){if(!confirm('Удалить историю виртуальных сигналов и сделок?'))return;try{await api('/admin/capital/api/reset',{method:'POST',body:'{}'});toast('Paper-история сброшена');await loadOverview()}catch(e){toast(e.message)}}
+loadOverview();
+</script>
+{% endblock %}
