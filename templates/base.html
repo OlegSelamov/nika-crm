@@ -324,30 +324,61 @@ if (window.NIKA_EMBEDDED_PAGE && window.parent !== window && !window.nikaDesktop
 <script src="/static/js/storefront_workflow.js?v=20260904-4"></script>
 <script src="/static/js/media_upload.js?v=20260908-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="/static/js/app_shell.js?v=20260912-1"></script>
+<script src="/static/js/app_shell.js?v=20260929-offline2"></script>
 <script>
 (function () {
     if (window.parent !== window) return;
     if (!window.nikaDesktop?.isElectron) return;
     if (!("serviceWorker" in navigator)) return;
 
+    function offlinePages() {
+        const urls = new Set([window.location.pathname + window.location.search, "/analytics"]);
+        document.querySelectorAll(".sidebar a[href]").forEach(link => {
+            try {
+                const url = new URL(link.href, window.location.origin);
+                if (url.origin !== window.location.origin) return;
+                if (url.pathname === "/logout" || url.pathname === "/login") return;
+                urls.add(url.pathname + url.search);
+            } catch (_) {}
+        });
+        return Array.from(urls);
+    }
+
+    async function worker() {
+        const registration = await navigator.serviceWorker.register(
+            "/desktop-offline-sw.js",
+            { scope: "/" }
+        );
+        const ready = await navigator.serviceWorker.ready;
+        return ready.active || registration.active || registration.waiting;
+    }
+
     async function prepareDesktopOfflineUi() {
         try {
-            const registration = await navigator.serviceWorker.register(
-                "/desktop-offline-sw.js",
-                { scope: "/" }
-            );
-            const ready = await navigator.serviceWorker.ready;
-            (ready.active || registration.active || registration.waiting)?.postMessage({
-                type: "PREFETCH_CORE"
-            });
+            const active = await worker();
+            active?.postMessage({ type: "SET_OFFLINE", offline: navigator.onLine === false });
+            active?.postMessage({ type: "PREFETCH_CORE" });
+            active?.postMessage({ type: "PREFETCH_URLS", urls: offlinePages() });
         } catch (error) {
             console.warn("Nika desktop offline UI cache:", error);
         }
     }
 
+    async function reportDesktopNetworkState() {
+        try {
+            window.nikaDesktop?.offline?.setNetworkState?.(navigator.onLine !== false);
+            const active = await worker();
+            active?.postMessage({ type: "SET_OFFLINE", offline: navigator.onLine === false });
+        } catch (_) {}
+    }
+
     prepareDesktopOfflineUi();
-    window.addEventListener("online", prepareDesktopOfflineUi);
+    window.addEventListener("online", function () {
+        reportDesktopNetworkState();
+        prepareDesktopOfflineUi();
+    });
+    window.addEventListener("offline", reportDesktopNetworkState);
+    navigator.serviceWorker.addEventListener("controllerchange", reportDesktopNetworkState);
 })();
 </script>
 {% if nika_embedded_page %}

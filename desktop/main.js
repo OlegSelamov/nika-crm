@@ -608,8 +608,9 @@ function createWindow() {
 
     if (offlineRuntime) offlineRuntime.attachWindow(win);
 
-    if (DEV_MODE) setTimeout(() => win.loadURL(APP_URL), 5000);
-    else win.loadURL(APP_URL);
+    const initialUrl = offlineRuntime?.startupUrl?.() || APP_URL;
+    if (DEV_MODE) setTimeout(() => win.loadURL(initialUrl), 5000);
+    else win.loadURL(initialUrl);
 
     win.maximize();
     win.setMenu(null);

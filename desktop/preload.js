@@ -146,7 +146,8 @@ const offline = Object.freeze({
     sync: () => ipcRenderer.invoke("offline:sync"),
     submit: payload => ipcRenderer.invoke("offline:submit", payload),
     openOnline: () => ipcRenderer.invoke("offline:open-online"),
-    request: payload => ipcRenderer.invoke("offline:request", payload)
+    request: payload => ipcRenderer.invoke("offline:request", payload),
+    setNetworkState: online => ipcRenderer.invoke("offline:set-network-state", { online: online === true })
 });
 
 
@@ -245,12 +246,14 @@ function installOfflineFetchBridge() {
             "/api/mobile/stock/income/supplier"
         ]);
 
+        function apiLike(pathname) {
+            return pathname.startsWith("/api/") ||
+                pathname.startsWith("/whatsapp/api/");
+        }
+
         function supported(url, method) {
             if (url.origin !== window.location.origin) return false;
-            if (method === "GET") {
-                return getPaths.has(url.pathname) ||
-                    url.pathname.startsWith("/api/barcode-info/");
-            }
+            if (method === "GET") return apiLike(url.pathname);
             if (method === "POST") {
                 return queuePaths.has(url.pathname) ||
                     url.pathname === "/api/barcode";
@@ -269,7 +272,7 @@ function installOfflineFetchBridge() {
             if (!supported(url, method)) {
                 if (
                     url.origin === window.location.origin &&
-                    url.pathname.startsWith("/api/") &&
+                    apiLike(url.pathname) &&
                     navigator.onLine === false
                 ) {
                     throw new TypeError("Failed to fetch");
@@ -328,6 +331,17 @@ function installOfflineFetchBridge() {
     }
 }
 
+function installOfflineNetworkBridge() {
+    const report = () => {
+        ipcRenderer.invoke("offline:set-network-state", {
+            online: navigator.onLine !== false
+        }).catch(() => {});
+    };
+    report();
+    window.addEventListener("online", report);
+    window.addEventListener("offline", report);
+}
+
 const printers = Object.freeze({
     getState: () => ipcRenderer.invoke("printer:get-state"),
     refresh: () => ipcRenderer.invoke("printer:refresh"),
@@ -349,4 +363,5 @@ contextBridge.exposeInMainWorld("nikaDesktop", Object.freeze({
 }));
 
 installOfflineFetchBridge();
+installOfflineNetworkBridge();
 installOfflineStatusBadge();

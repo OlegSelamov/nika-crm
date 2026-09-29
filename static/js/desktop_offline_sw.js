@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "nika-desktop-ui-";
-const CACHE_NAME = CACHE_PREFIX + "v2";
+const CACHE_NAME = CACHE_PREFIX + "v3";
 const CORE_PAGES = [
   "/analytics",
   "/sales",
@@ -8,8 +8,17 @@ const CORE_PAGES = [
   "/stock/income",
   "/stock/writeoff",
   "/stock/movements",
-  "/clients"
+  "/clients",
+  "/profile",
+  "/tasks",
+  "/accounting",
+  "/reports",
+  "/expenses",
+  "/users",
+  "/settings"
 ];
+
+let forcedOffline = false;
 
 self.addEventListener("install", event => {
   self.skipWaiting();
@@ -72,24 +81,45 @@ async function cachePage(url, cache) {
   } catch (_) {}
 }
 
-async function prefetchCore() {
+function pageVariants(paths) {
+  const urls = new Set();
+  for (const value of paths || []) {
+    try {
+      const url = new URL(value, self.location.origin);
+      if (url.origin !== self.location.origin) continue;
+      if (url.pathname === "/logout" || url.pathname === "/login") continue;
+      url.hash = "";
+      urls.add(url.pathname + url.search);
+      const embedded = new URL(url.href);
+      embedded.searchParams.set("nika_embedded", "1");
+      urls.add(embedded.pathname + embedded.search);
+    } catch (_) {}
+  }
+  return Array.from(urls);
+}
+
+async function prefetchPages(paths) {
   const cache = await caches.open(CACHE_NAME);
-  const urls = [];
-  for (const path of CORE_PAGES) {
-    urls.push(path);
-    const embedded = new URL(path, self.location.origin);
-    embedded.searchParams.set("nika_embedded", "1");
-    urls.push(embedded.pathname + embedded.search);
+  const urls = pageVariants(paths);
+  for (let i = 0; i < urls.length; i += 4) {
+    await Promise.all(urls.slice(i, i + 4).map(url => cachePage(url, cache)));
   }
-  for (const url of urls) {
-    await cachePage(url, cache);
-  }
+}
+
+async function prefetchCore() {
+  return prefetchPages(CORE_PAGES);
 }
 
 self.addEventListener("message", event => {
   const data = event.data || {};
+  if (data.type === "SET_OFFLINE") {
+    forcedOffline = data.offline === true;
+  }
   if (data.type === "PREFETCH_CORE") {
     event.waitUntil(prefetchCore());
+  }
+  if (data.type === "PREFETCH_URLS") {
+    event.waitUntil(prefetchPages(Array.isArray(data.urls) ? data.urls : []));
   }
   if (data.type === "CLEAR_NIKA_CACHE") {
     event.waitUntil(caches.delete(CACHE_NAME));
@@ -106,16 +136,34 @@ async function fetchWithTimeout(request, timeoutMs = 1800) {
   }
 }
 
+async function matchCachedPage(request, cache) {
+  let cached = await cache.match(request);
+  if (cached) return cached;
+  try {
+    const url = new URL(request.url);
+    const embedded = url.searchParams.get("nika_embedded") === "1";
+    url.search = embedded ? "?nika_embedded=1" : "";
+    url.hash = "";
+    cached = await cache.match(new Request(url.href, {
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "text/html" }
+    }));
+    return cached || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
+  const cached = await matchCachedPage(request, cache);
 
-  if (self.navigator && self.navigator.onLine === false && cached) {
-    return cached;
-  }
+  if (forcedOffline && cached) return cached;
+  if (self.navigator && self.navigator.onLine === false && cached) return cached;
 
   try {
-    const response = await fetchWithTimeout(request, 1800);
+    const response = await fetchWithTimeout(request, 1400);
     if (response && response.ok) {
       const finalUrl = new URL(response.url);
       if (
@@ -138,7 +186,10 @@ async function cacheFirst(request) {
   const cached = await cache.match(request);
   if (cached) return cached;
 
-  const response = await fetch(request);
+  if (forcedOffline) {
+    throw new Error("offline");
+  }
+  const response = await fetchWithTimeout(request, 1400);
   if (response && response.ok) {
     await cache.put(request, response.clone());
   }

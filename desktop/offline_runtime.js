@@ -1,4 +1,5 @@
 const http=require("http"),https=require("https"),path=require("path"),{URL}=require("url");
+const {net}=require("electron");
 const {DesktopOfflineStore}=require("./offline_store");
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8"};
 const NET_ERRORS=new Set([-21,-101,-102,-105,-106,-109,-118]);
@@ -19,14 +20,24 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
   const store=new DesktopOfflineStore(path.join(app.getPath("userData"),"nika-offline-store.json"));
   const origin=new URL(appUrl).origin;
   let syncState="idle",syncPromise=null,interval=null,switching=false,offlineUntil=0;
+  let rendererOnline=null,recoveryAttempts=0;
 
   function ses(){const w=getWindow();return w&&!w.isDestroyed()?w.webContents.session:null}
   function systemOffline(){
-    try{const {net}=require("electron");return net&&net.online===false}catch(_){return false}
+    try{
+      if(rendererOnline===false)return true;
+      if(net&&typeof net.isOnline==="function"&&net.isOnline()===false)return true;
+    }catch(_){}
+    return false;
   }
   function preferOffline(){return systemOffline()||Date.now()<offlineUntil}
   function markOffline(){offlineUntil=Date.now()+15000;syncState="offline"}
-  function markOnline(){offlineUntil=0}
+  function markOnline(){offlineUntil=0;if(syncState==="offline")syncState="idle"}
+  function setRendererOnline(value){
+    rendererOnline=value===true?true:value===false?false:null;
+    if(rendererOnline===false)markOffline();
+    else if(rendererOnline===true)offlineUntil=0;
+  }
   async function cookieHeader(){
     const s=ses(); if(!s)return "";
     try{return (await s.cookies.get({url:appUrl})).map(c=>c.name+"="+c.value).join("; ")}catch(_){return ""}
@@ -61,6 +72,39 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
   }
 
   function cache(){return store.state().cache||{}}
+  function apiLike(p){return p.startsWith("/api/")||p.startsWith("/whatsapp/api/")}
+  function httpCacheKey(url){return "__http_get__"+url.pathname+url.search}
+  function genericCacheAllowed(url){
+    const p=url.pathname;
+    return apiLike(p)&&
+      !p.startsWith("/api/presence/")&&
+      !p.startsWith("/api/ai/")&&
+      !p.startsWith("/api/agent/")&&
+      !p.startsWith("/api/chat/")&&
+      !p.startsWith("/api/notifications")&&
+      !p.startsWith("/whatsapp/api/");
+  }
+  function cachedHttpGet(url){
+    const entry=cache()[httpCacheKey(url)];
+    if(!entry||typeof entry!=="object")return null;
+    return {
+      handled:true,
+      status:Number(entry.status||200),
+      headers:entry.headers||JSON_HEADERS,
+      bodyText:String(entry.bodyText||"")
+    };
+  }
+  function cacheHttpGet(url,response){
+    if(!genericCacheAllowed(url)||!response||response.status<200||response.status>=300)return;
+    const bodyText=String(response.bodyText||"");
+    if(bodyText.length>2*1024*1024)return;
+    store.cache(httpCacheKey(url),{
+      status:response.status,
+      headers:response.headers||JSON_HEADERS,
+      bodyText,
+      cached_at:new Date().toISOString()
+    });
+  }
   function filterRows(rows,q){
     const n=String(q||"").trim().toLowerCase(); if(!n)return Array.isArray(rows)?rows:[];
     return (Array.isArray(rows)?rows:[]).filter(r=>[
@@ -210,36 +254,80 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
     return syncPromise;
   }
   function state(){return {...store.state(),sync_state:syncState,legacy:legacyMode}}
-  function supportedGet(p){return ["/api/items","/api/items/search","/api/stock","/api/stock/movements","/api/clients","/api/categories","/api/suppliers","/api/company/active"].includes(p)||p.startsWith("/api/barcode-info/")}
+  function supportedGet(p){return apiLike(p)}
   async function intercepted(payload={}){
     const u=new URL(payload.url||"/",appUrl); if(u.origin!==origin)return {handled:false};
     const method=String(payload.method||"GET").toUpperCase(),body=parseJson(payload.bodyText||"")||{},type=opType(u.pathname);
     if(method==="POST"&&type)return submitOperation(type,u.pathname,body);
     const barcode=method==="POST"&&u.pathname==="/api/barcode";
     if(!barcode&&!(method==="GET"&&supportedGet(u.pathname)))return {handled:false};
-    const fb=fallback(u,method,body);
-    if(preferOffline()&&fb)return fb;
+    const fb=fallback(u,method,body)||cachedHttpGet(u);
+    if(preferOffline()){
+      return fb||jsonResponse({success:false,offline:true,error:"Этот запрос недоступен без интернета"},503);
+    }
     try{
       const r=await requestServer(u.pathname+u.search,{method,body:method==="GET"?null:body,timeoutMs:1800});
-      if(r.status>=200&&r.status<300){markOnline();cacheResponse(u,r.json);return {handled:true,status:r.status,headers:r.headers,bodyText:r.bodyText}}
+      if(r.status>=200&&r.status<300){
+        markOnline();cacheResponse(u,r.json);
+        if(method==="GET")cacheHttpGet(u,r);
+        return {handled:true,status:r.status,headers:r.headers,bodyText:r.bodyText};
+      }
       if(fb&&retryable(r.status))return fb;
       return {handled:true,status:r.status,headers:r.headers,bodyText:r.bodyText};
-    }catch(_){markOffline();return fb||{handled:false}}
+    }catch(_){
+      markOffline();
+      return fb||jsonResponse({success:false,offline:true,error:"Нет соединения с сервером"},503);
+    }
+  }
+  function startupUrl(){
+    const s=store.state(),last=s&&s.cache&&s.cache.last_page_path;
+    const p=typeof last==="string"&&last.startsWith("/")?last:(s.ready?"/analytics":"/");
+    return new URL(p,appUrl).href;
+  }
+  function rememberPage(target){
+    try{
+      const u=new URL(target,appUrl);
+      if(u.origin!==origin||u.pathname==="/login"||u.pathname==="/logout"||u.searchParams.get("nika_embedded")==="1")return;
+      store.cache("last_page_path",u.pathname+u.search);
+    }catch(_){}
   }
   async function switchOffline(w){
     if(switching||!w||w.isDestroyed()||w.webContents.getURL().startsWith("file:"))return;
     switching=true;try{await w.loadFile(path.join(__dirname,"offline.html"))}catch(e){console.error(e)}finally{switching=false}
   }
+  async function recoverMainFrame(w){
+    markOffline();
+    const s=store.state();
+    if(s.ready&&recoveryAttempts<2){
+      recoveryAttempts+=1;
+      try{await w.loadURL(startupUrl());return}catch(_){}
+    }
+    await switchOffline(w);
+  }
   function attachWindow(w){
     w.webContents.on("did-fail-load",(ev,code,desc,url,isMainFrame)=>{
-      if(isMainFrame===false||!NET_ERRORS.has(code))return;
-      try{if(new URL(url||appUrl,appUrl).origin===origin)switchOffline(w)}catch(_){}
+      if(!NET_ERRORS.has(code))return;
+      if(isMainFrame===false){markOffline();return}
+      try{
+        if(new URL(url||appUrl,appUrl).origin===origin)recoverMainFrame(w).catch(()=>{});
+      }catch(_){}
     });
-    w.webContents.on("did-finish-load",()=>{if(w.webContents.getURL().startsWith(origin))setTimeout(()=>syncNow(false).catch(()=>{}),800)});
+    w.webContents.on("did-finish-load",()=>{
+      if(w.webContents.getURL().startsWith(origin)){
+        recoveryAttempts=0;rememberPage(w.webContents.getURL());
+        setTimeout(()=>syncNow(false).catch(()=>{}),800);
+      }
+    });
+    w.webContents.on("did-navigate-in-page",(ev,url,isMainFrame)=>{if(isMainFrame!==false)rememberPage(url)});
     w.webContents.on("will-navigate",(ev,target)=>{try{const u=new URL(target);if(u.origin===origin&&u.pathname==="/logout")store.clearActiveIdentity()}catch(_){}});
   }
 
   ipcMain.handle("offline:get-state",async()=>state());
+  ipcMain.handle("offline:set-network-state",async(event,payload={})=>{
+    setRendererOnline(payload.online===true);
+    if(payload.online===true)setTimeout(()=>syncNow(false).catch(()=>{}),100);
+    return state();
+  });
   ipcMain.handle("offline:sync",async()=>syncNow(true));
   ipcMain.handle("offline:request",async(event,payload)=>intercepted(payload||{}));
   ipcMain.handle("offline:submit",async(event,payload={})=>{
@@ -250,6 +338,6 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
   ipcMain.handle("offline:open-online",async()=>{const w=getWindow();if(!w||w.isDestroyed())return false;await w.loadURL(appUrl);return true});
 
   interval=setInterval(()=>syncNow(false).catch(()=>{}),5*60*1000);
-  return {attachWindow,syncNow,state,dispose(){if(interval)clearInterval(interval);interval=null}};
+  return {attachWindow,syncNow,state,startupUrl,dispose(){if(interval)clearInterval(interval);interval=null}};
 }
 module.exports={createDesktopOfflineRuntime};

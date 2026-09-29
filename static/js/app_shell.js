@@ -56,11 +56,13 @@
     let requestedUrl = cleanUrl(window.location.href);
     let loadTimer = null;
     let loadSafetyTimer = null;
+    let navigationInFlight = false;
 
     function setLoading(isLoading) {
         window.clearTimeout(loadTimer);
         window.clearTimeout(loadSafetyTimer);
         if (isLoading) {
+            navigationInFlight = true;
             loadTimer = window.setTimeout(function () {
                 loader.classList.add('active');
                 frame.classList.add('is-loading');
@@ -68,9 +70,11 @@
             loadSafetyTimer = window.setTimeout(function () {
                 loader.classList.remove('active');
                 frame.classList.remove('is-loading');
-            }, 15000);
+                navigationInFlight = false;
+            }, navigator.onLine === false ? 2200 : 15000);
             return;
         }
+        navigationInFlight = false;
         loader.classList.remove('active');
         frame.classList.remove('is-loading');
         frame.classList.add('ready');
@@ -150,6 +154,14 @@
 
     window.addEventListener('popstate', function () {
         navigate(window.location.href, {push: false});
+    });
+
+    window.addEventListener('offline', function () {
+        if (!navigationInFlight) return;
+        window.setTimeout(function () {
+            if (!navigationInFlight) return;
+            frame.src = embeddedUrl(requestedUrl);
+        }, 120);
     });
 
     window.nikaShellNavigate = function (value) {
