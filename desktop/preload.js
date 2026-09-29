@@ -140,6 +140,110 @@ function installElectronFocusGuard() {
 
 installElectronFocusGuard();
 
+
+const offline = Object.freeze({
+    getState: () => ipcRenderer.invoke("offline:get-state"),
+    sync: () => ipcRenderer.invoke("offline:sync"),
+    submit: payload => ipcRenderer.invoke("offline:submit", payload),
+    openOnline: () => ipcRenderer.invoke("offline:open-online"),
+    request: payload => ipcRenderer.invoke("offline:request", payload)
+});
+
+function installOfflineFetchBridge() {
+    const source = \`
+    (() => {
+        if (window.__nikaDesktopOfflineFetchInstalled) return;
+        window.__nikaDesktopOfflineFetchInstalled = true;
+        const originalFetch = window.fetch.bind(window);
+        const bridge = window.nikaDesktop && window.nikaDesktop.offline;
+        if (!bridge) return;
+
+        const getPaths = new Set([
+            "/api/items", "/api/items/search", "/api/stock",
+            "/api/stock/movements", "/api/clients",
+            "/api/categories", "/api/suppliers"
+        ]);
+        const queuePaths = new Set([
+            "/sales/pay", "/api/stock/income", "/api/stock/writeoff",
+            "/api/mobile/stock/income/supplier"
+        ]);
+
+        function supported(url, method) {
+            if (url.origin !== window.location.origin) return false;
+            if (method === "GET") {
+                return getPaths.has(url.pathname) ||
+                    url.pathname.startsWith("/api/barcode-info/");
+            }
+            if (method === "POST") {
+                return queuePaths.has(url.pathname) ||
+                    url.pathname === "/api/barcode";
+            }
+            return false;
+        }
+
+        window.fetch = async function(input, init = {}) {
+            const request = input instanceof Request ? input : null;
+            const method = String(
+                init.method || (request && request.method) || "GET"
+            ).toUpperCase();
+            const inputUrl = request ? request.url : String(input);
+            const url = new URL(inputUrl, window.location.href);
+
+            if (!supported(url, method)) {
+                return originalFetch(input, init);
+            }
+            if (init.signal && init.signal.aborted) {
+                throw new DOMException("Aborted", "AbortError");
+            }
+
+            let bodyText = "";
+            if (typeof init.body === "string") {
+                bodyText = init.body;
+            } else if (request && method !== "GET" && method !== "HEAD") {
+                try { bodyText = await request.clone().text(); } catch (_) {}
+            }
+
+            try {
+                const result = await bridge.request({
+                    url: url.pathname + url.search,
+                    method,
+                    bodyText
+                });
+                if (!result || result.handled !== true) {
+                    return originalFetch(input, init);
+                }
+                return new Response(result.bodyText || "", {
+                    status: Number(result.status || 200),
+                    headers: result.headers || {
+                        "content-type": "application/json; charset=utf-8"
+                    }
+                });
+            } catch (error) {
+                if (error && error.name === "AbortError") throw error;
+                return originalFetch(input, init);
+            }
+        };
+    })();
+    \`;
+
+    const inject = () => {
+        try {
+            const script = document.createElement("script");
+            script.textContent = source;
+            (document.documentElement || document.head || document.body).appendChild(script);
+            script.remove();
+        } catch (error) {
+            console.error("Nika offline fetch bridge install error:", error);
+        }
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", inject, { once: true });
+    } else {
+        inject();
+    }
+}
+
 const printers = Object.freeze({
     getState: () => ipcRenderer.invoke("printer:get-state"),
     refresh: () => ipcRenderer.invoke("printer:refresh"),
@@ -156,5 +260,8 @@ const printers = Object.freeze({
 contextBridge.exposeInMainWorld("nikaDesktop", Object.freeze({
     isElectron: true,
     platform: process.platform,
-    printers
+    printers,
+    offline
 }));
+
+installOfflineFetchBridge();

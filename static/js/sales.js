@@ -757,6 +757,14 @@ async function submitSalePayment({
         window.dispatchEvent(new CustomEvent("nika:sale-completed"));
         showCashChangeNotice(cashChange);
 
+        if (data.queued === true) {
+            alert(
+                "Интернет недоступен. Продажа сохранена на этом компьютере и поставлена в очередь.\n\n" +
+                "Повторно продажу не проводите. Nika отправит её на сервер и фискализирует чек reKassa после восстановления связи."
+            );
+            return;
+        }
+
         if (data.fiscalized !== true && data.fiscalization_skipped !== true) {
             const fiscal = data.fiscal || data.rekassa || {};
             const reason = fiscal.message || "reKassa отклонила чек";

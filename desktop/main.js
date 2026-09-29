@@ -3,11 +3,13 @@ const { autoUpdater } = require("electron-updater");
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const { createDesktopOfflineRuntime } = require("./offline_runtime");
 
 let win;
 let flaskProcess;
 let updatePromptOpen = false;
 let updateCheckTimer;
+let offlineRuntime;
 
 const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
@@ -604,6 +606,8 @@ function createWindow() {
         }
     });
 
+    if (offlineRuntime) offlineRuntime.attachWindow(win);
+
     if (DEV_MODE) setTimeout(() => win.loadURL(APP_URL), 5000);
     else win.loadURL(APP_URL);
 
@@ -697,6 +701,13 @@ function configureAutoUpdates() {
 app.whenReady().then(() => {
     settings = loadPrinterSettings();
     registerPrinterIpc();
+    offlineRuntime = createDesktopOfflineRuntime({
+        app,
+        ipcMain,
+        getWindow: () => win,
+        appUrl: APP_URL,
+        legacyMode: LEGACY_MODE
+    });
     if (DEV_MODE) startFlask();
     createWindow();
     configureAutoUpdates();
@@ -708,6 +719,7 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
     if (updateCheckTimer) clearInterval(updateCheckTimer);
+    if (offlineRuntime) offlineRuntime.dispose();
     if (DEV_MODE && flaskProcess) {
         flaskProcess.kill();
         flaskProcess = null;
