@@ -144,13 +144,21 @@ class _WriteoffScreenState extends State<WriteoffScreen> {
     }
     setState(() => saving = true);
     try {
-      await ApiService.stockWriteoff(
+      final result = await ApiService.stockWriteoff(
         itemId: stockNumber(selectedItem!['id']).toInt(),
         quantity: quantity,
         comment: commentController.text.trim(),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Списание проведено')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result['queued'] == true
+                ? 'Списание сохранено в очередь синхронизации'
+                : 'Списание проведено',
+          ),
+        ),
+      );
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(readableError(e))));

@@ -5,6 +5,7 @@ from flask import jsonify
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from utils.stock_pricing import apply_income_pricing, as_bool
+from utils.offline_operations import load_offline_operation, save_offline_operation
 from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting
 
 stock_bp = Blueprint("stock", __name__)
@@ -553,11 +554,26 @@ def api_stock_movements():
 )
 def api_stock_income():
 
-    data = request.json
-
+    data = request.get_json(silent=True) or {}
     conn = get_db()
     cur = conn.cursor()
     company_id = session.get("company_id")
+    operation_id = str(data.get("operation_id") or "").strip()
+
+    if operation_id:
+        existing = load_offline_operation(cur, company_id, operation_id)
+        conn.commit()
+        if existing:
+            if existing.get("operation_type") != "stock_income":
+                pool.putconn(conn)
+                return jsonify({"success": False, "error": "Этот operation_id уже использован другой операцией"}), 409
+            result = existing.get("result")
+            pool.putconn(conn)
+            if isinstance(result, dict):
+                result = dict(result)
+                result["duplicate"] = True
+                return jsonify(result)
+            return jsonify({"success": True, "duplicate": True, "movement_id": existing.get("entity_id")})
 
     if not is_stock_item(cur, data.get("item_id"), company_id, INCOME_ITEM_TYPES):
         pool.putconn(conn)
@@ -589,28 +605,15 @@ def api_stock_income():
 
     cur.execute("""
         INSERT INTO stock_movements (
-            company_id,
-            item_id,
-            movement_type,
-            quantity,
-            price,
-            total,
-            comment,
-            created_at
+            company_id, item_id, movement_type, quantity, price,
+            total, comment, created_at
         )
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         RETURNING id
     """, (
-        company_id,
-        data["item_id"],
-        "income",
-        quantity,
-        price,
-        total,
-        comment,
-        movement_datetime
+        company_id, data["item_id"], "income", quantity, price,
+        total, comment, movement_datetime
     ))
-
     movement_id = cur.fetchone()["id"]
 
     expense_id = upsert_expense_from_source(
@@ -626,14 +629,9 @@ def api_stock_income():
         comment=comment or "Создано автоматически из прихода товара",
         user_id=session.get("user_id"),
     )
-
     _sync_expense_to_accounting(cur, expense_id, company_id)
 
-    conn.commit()
-
-    pool.putconn(conn)
-
-    return jsonify({
+    response_payload = {
         "success": True,
         "movement_id": movement_id,
         "expense_id": expense_id,
@@ -644,84 +642,103 @@ def api_stock_income():
             "markup_percent": float(pricing["markup_percent"]),
             "retail_updated": pricing["retail_updated"],
         }
-    })
-    
+    }
+    if operation_id:
+        save_offline_operation(
+            cur,
+            company_id=company_id,
+            operation_id=operation_id,
+            operation_type="stock_income",
+            entity_id=movement_id,
+            result=response_payload,
+        )
+
+    conn.commit()
+    pool.putconn(conn)
+    return jsonify(response_payload)
+
+
 @stock_bp.route(
     "/api/stock/writeoff",
     methods=["POST"]
 )
 def api_stock_writeoff():
 
-    data = request.json
-
+    data = request.get_json(silent=True) or {}
     conn = get_db()
     cur = conn.cursor()
     company_id = session.get("company_id")
+    operation_id = str(data.get("operation_id") or "").strip()
+
+    if operation_id:
+        existing = load_offline_operation(cur, company_id, operation_id)
+        conn.commit()
+        if existing:
+            if existing.get("operation_type") != "stock_writeoff":
+                pool.putconn(conn)
+                return jsonify({"success": False, "error": "Этот operation_id уже использован другой операцией"}), 409
+            result = existing.get("result")
+            pool.putconn(conn)
+            if isinstance(result, dict):
+                result = dict(result)
+                result["duplicate"] = True
+                return jsonify(result)
+            return jsonify({"success": True, "duplicate": True, "movement_id": existing.get("entity_id")})
 
     if not is_stock_item(cur, data.get("item_id"), company_id, STOCK_ITEM_TYPES):
         pool.putconn(conn)
-        return jsonify({
-            "success": False,
-            "error": "Списание доступно только для складских позиций"
-        }), 400
+        return jsonify({"success": False, "error": "Списание доступно только для складских позиций"}), 400
 
     quantity = float(data.get("quantity", 0))
+    if quantity <= 0:
+        pool.putconn(conn)
+        return jsonify({"success": False, "error": "Количество должно быть больше нуля"}), 400
 
     cur.execute("""
-        SELECT
-            name,
-            COALESCE(purchase_price, 0) AS purchase_price
+        SELECT name, COALESCE(purchase_price, 0) AS purchase_price
         FROM items
         WHERE id = %s AND company_id = %s
-    """, (
-        data["item_id"],
-        company_id
-    ))
-
+    """, (data["item_id"], company_id))
     item_row = cur.fetchone()
 
     if not item_row:
         pool.putconn(conn)
-        return jsonify({
-            "success": False,
-            "error": "Товар не найден"
-        }), 404
+        return jsonify({"success": False, "error": "Товар не найден"}), 404
 
     purchase_price = float(item_row["purchase_price"] or 0)
     writeoff_total = quantity * purchase_price
 
     cur.execute("""
         INSERT INTO stock_movements (
-            company_id,
-            item_id,
-            movement_type,
-            quantity,
-            price,
-            total,
-            comment,
-            created_at
+            company_id, item_id, movement_type, quantity, price,
+            total, comment, created_at
         )
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         RETURNING id
     """, (
-        company_id,
-        data["item_id"],
-        "writeoff",
-        quantity,
-        purchase_price,
-        writeoff_total,
-        data.get("comment", ""),
+        company_id, data["item_id"], "writeoff", quantity,
+        purchase_price, writeoff_total, data.get("comment", ""),
         datetime.utcnow() + timedelta(hours=5)
     ))
-
     movement_id = cur.fetchone()["id"]
 
-    conn.commit()
-    pool.putconn(conn)
-
-    return jsonify({
+    response_payload = {
         "success": True,
         "movement_id": movement_id,
         "price": purchase_price,
         "total": writeoff_total
-    })
+    }
+    if operation_id:
+        save_offline_operation(
+            cur,
+            company_id=company_id,
+            operation_id=operation_id,
+            operation_type="stock_writeoff",
+            entity_id=movement_id,
+            result=response_payload,
+        )
+
+    conn.commit()
+    pool.putconn(conn)
+    return jsonify(response_payload)
+

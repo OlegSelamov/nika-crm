@@ -1377,6 +1377,38 @@ class SalesScreenState extends State<SalesScreen> {
         selectedClient = Map<String, dynamic>.from(defaultClient);
       });
 
+      if (result['queued'] == true) {
+        final change = paymentMethod == 'cash' && cashReceived != null
+            ? cashReceived - saleTotal
+            : 0.0;
+        lastPaymentError = null;
+        if (mounted) {
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              icon: const Icon(
+                Icons.cloud_upload_outlined,
+                color: AppColors.warning,
+                size: 40,
+              ),
+              title: const Text('Продажа сохранена в очередь'),
+              content: Text(
+                change > .009
+                    ? 'Интернета сейчас недостаточно для отправки. Продажа сохранена на телефоне и уйдёт на сервер автоматически. Чек reKassa будет фискализирован после синхронизации.\n\nСдача: ${money(change)}'
+                    : 'Интернета сейчас недостаточно для отправки. Продажа сохранена на телефоне и уйдёт на сервер автоматически. Чек reKassa будет фискализирован после синхронизации.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Понятно'),
+                ),
+              ],
+            ),
+          );
+        }
+        return true;
+      }
+
       if (result['fiscalized'] != true) {
         final rekassa = result['rekassa'] is Map
             ? Map<String, dynamic>.from(result['rekassa'] as Map)

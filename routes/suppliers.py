@@ -4,7 +4,9 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 
 from models import get_db, pool
 from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting
-from routes.stock import is_product
+from routes.stock import is_product, is_stock_item, INCOME_ITEM_TYPES
+from utils.stock_pricing import apply_income_pricing, as_bool
+from utils.offline_operations import load_offline_operation, save_offline_operation
 
 
 suppliers_bp = Blueprint("suppliers", __name__)
@@ -429,6 +431,123 @@ def api_supplier_detail(supplier_id):
         ))
         conn.commit()
         return jsonify({"success": True})
+    finally:
+        pool.putconn(conn)
+
+
+@suppliers_bp.route("/api/mobile/stock/income/supplier", methods=["POST"])
+def api_stock_income_with_supplier():
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+
+    data = request.get_json(silent=True) or {}
+    operation_id = str(data.get("operation_id") or "").strip()
+    conn = get_db()
+    try:
+        ensure_supplier_schema(conn)
+        cur = conn.cursor()
+
+        if operation_id:
+            existing = load_offline_operation(cur, company_id, operation_id)
+            conn.commit()
+            if existing:
+                if existing.get("operation_type") != "stock_income_supplier":
+                    return jsonify({"success": False, "error": "Этот operation_id уже использован другой операцией"}), 409
+                result = existing.get("result")
+                if isinstance(result, dict):
+                    result = dict(result)
+                    result["duplicate"] = True
+                    return jsonify(result)
+                return jsonify({"success": True, "duplicate": True, "movement_id": existing.get("entity_id")})
+
+        item_id = data.get("item_id")
+        supplier_id = data.get("supplier_id")
+        try:
+            quantity = float(data.get("quantity", 0))
+            price = float(data.get("price", 0))
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "Некорректное количество или цена"}), 400
+
+        if quantity <= 0 or price < 0:
+            return jsonify({"success": False, "error": "Проверьте количество и закупочную цену"}), 400
+        if not is_stock_item(cur, item_id, company_id, INCOME_ITEM_TYPES):
+            return jsonify({"success": False, "error": "Приход доступен только для товаров и ингредиентов"}), 400
+
+        supplier = _supplier_for_company(cur, supplier_id, company_id)
+        if not supplier:
+            return jsonify({"success": False, "error": "Выберите поставщика"}), 400
+
+        pricing = apply_income_pricing(
+            cur,
+            company_id=company_id,
+            item_id=item_id,
+            quantity=quantity,
+            price=price,
+            update_retail=as_bool(data.get("update_retail"), default=False),
+            allowed_item_types=INCOME_ITEM_TYPES,
+        )
+        item_name = pricing["item_name"]
+        comment = str(data.get("comment") or "")
+        total = quantity * price
+        movement_datetime = datetime.utcnow() + timedelta(hours=5)
+
+        cur.execute("""
+            INSERT INTO stock_movements (
+                company_id, item_id, movement_type, quantity, price,
+                total, comment, supplier_id, created_at
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            company_id, item_id, "income", quantity, price,
+            total, comment, supplier["id"], movement_datetime
+        ))
+        movement_id = cur.fetchone()["id"]
+
+        expense_id = upsert_expense_from_source(
+            cur,
+            company_id=company_id,
+            source_type="stock_income",
+            source_id=movement_id,
+            category="Закупки",
+            description=f"Закуп товара: {item_name} · {supplier['name']}",
+            amount=total,
+            expense_date=movement_datetime.date(),
+            payment_method="Другое",
+            comment=comment or f"Поставщик: {supplier['name']}",
+            user_id=session.get("user_id"),
+        )
+        _sync_expense_to_accounting(cur, expense_id, company_id)
+
+        response_payload = {
+            "success": True,
+            "movement_id": movement_id,
+            "expense_id": expense_id,
+            "supplier_id": supplier["id"],
+            "supplier_name": supplier["name"],
+            "pricing": {
+                "average_cost": float(pricing["average_cost"]),
+                "last_purchase_price": float(pricing["last_purchase_price"]),
+                "retail_price": float(pricing["retail_price"]),
+                "markup_percent": float(pricing["markup_percent"]),
+                "retail_updated": pricing["retail_updated"],
+            }
+        }
+        if operation_id:
+            save_offline_operation(
+                cur,
+                company_id=company_id,
+                operation_id=operation_id,
+                operation_type="stock_income_supplier",
+                entity_id=movement_id,
+                result=response_payload,
+            )
+        conn.commit()
+        return jsonify(response_payload)
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         pool.putconn(conn)
 

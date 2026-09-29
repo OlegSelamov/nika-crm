@@ -151,6 +151,82 @@ class ApiService {
     return decoded;
   }
 
+  static bool _retryableQueueError(ApiException error) {
+    final status = error.statusCode;
+    return status == null || status == 401 || status >= 500;
+  }
+
+  static Future<Map<String, dynamic>> _queuedPost({
+    required String operationType,
+    required String path,
+    required Map<String, dynamic> body,
+    required Map<String, dynamic> queuedResult,
+    Future<void> Function()? onQueued,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final operationId = await OfflineStore.instance.enqueue(
+      operationType: operationType,
+      method: 'POST',
+      path: path,
+      body: body,
+    );
+    final payload = <String, dynamic>{...body, 'operation_id': operationId};
+
+    try {
+      final result = Map<String, dynamic>.from(
+        await _request('POST', path, body: payload, timeout: timeout),
+      );
+      if (result['pending'] == true) {
+        await OfflineStore.instance.markOperationPending(operationId);
+      } else {
+        await OfflineStore.instance.markOperationSynced(operationId);
+      }
+      return result;
+    } on ApiException catch (error) {
+      if (_retryableQueueError(error)) {
+        await OfflineStore.instance.markOperationPending(
+          operationId,
+          error: error.message,
+        );
+        if (onQueued != null) await onQueued();
+        return {
+          ...queuedResult,
+          'success': true,
+          'queued': true,
+          'operation_id': operationId,
+        };
+      }
+      await OfflineStore.instance.markOperationError(
+        operationId,
+        error.message,
+      );
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> replayQueuedOperation(
+    Map<String, dynamic> operation,
+  ) async {
+    final method = '${operation['method'] ?? 'POST'}'.toUpperCase();
+    final path = '${operation['path'] ?? ''}';
+    final operationId = '${operation['operation_id'] ?? ''}';
+    final rawBody = operation['body'];
+    final body = rawBody is Map
+        ? Map<String, dynamic>.from(rawBody)
+        : <String, dynamic>{};
+    body['operation_id'] = operationId;
+
+    final result = await _request(
+      method,
+      path,
+      body: body,
+      timeout: const Duration(seconds: 60),
+    );
+    return result is Map
+        ? Map<String, dynamic>.from(result)
+        : <String, dynamic>{'success': true};
+  }
+
   static Future<Map<String, dynamic>> login(
     String username,
     String password,
@@ -373,19 +449,33 @@ class ApiService {
     String? paymentMethod,
     String? kaspiTransactionId,
     String? kaspiMethod,
-  }) async =>
-      Map<String, dynamic>.from(await _request(
-        'POST',
-        '/sales/pay',
-        timeout: const Duration(seconds: 60),
-        body: {
-          'client_id': clientId,
-          'payment_method': paymentMethod ?? 'cash',
-          'kaspi_transaction_id': kaspiTransactionId,
-          'kaspi_method': kaspiMethod,
-          'cart': cart,
+  }) async {
+    final cartSnapshot = cart
+        .map((item) => item is Map ? Map<String, dynamic>.from(item) : item)
+        .toList();
+    return _queuedPost(
+      operationType: 'sale',
+      path: '/sales/pay',
+      timeout: const Duration(seconds: 60),
+      body: {
+        'client_id': clientId,
+        'payment_method': paymentMethod ?? 'cash',
+        'kaspi_transaction_id': kaspiTransactionId,
+        'kaspi_method': kaspiMethod,
+        'cart': cartSnapshot,
+      },
+      queuedResult: {
+        'sale_id': null,
+        'fiscalized': false,
+        'rekassa_required': true,
+        'rekassa': {
+          'status': 'PENDING',
+          'message': 'Ожидает синхронизации и фискализации',
         },
-      ));
+      },
+      onQueued: () => OfflineStore.instance.applySaleStockDelta(cartSnapshot),
+    );
+  }
 
   static Future<Map<String, dynamic>> createInvoiceSale({
     required List cart,
@@ -503,25 +593,66 @@ class ApiService {
     String comment = '',
     bool updateRetail = false,
   }) async =>
-      Map<String, dynamic>.from(await _request('POST', '/api/stock/income', body: {
-        'item_id': itemId,
-        'quantity': quantity,
-        'price': price,
-        'comment': comment,
-        'update_retail': updateRetail,
-      }));
+      _queuedPost(
+        operationType: 'stock_income',
+        path: '/api/stock/income',
+        body: {
+          'item_id': itemId,
+          'quantity': quantity,
+          'price': price,
+          'comment': comment,
+          'update_retail': updateRetail,
+        },
+        queuedResult: {
+          'movement_id': null,
+          'pricing': <String, dynamic>{},
+        },
+        onQueued: () => OfflineStore.instance.applyStockDelta(itemId, quantity),
+      );
 
-  static Future<void> stockWriteoff({
+  static Future<Map<String, dynamic>> stockIncomeWithSupplier({
+    required int itemId,
+    required int supplierId,
+    required double quantity,
+    required double price,
+    String comment = '',
+    bool updateRetail = false,
+  }) async =>
+      _queuedPost(
+        operationType: 'stock_income_supplier',
+        path: '/api/mobile/stock/income/supplier',
+        body: {
+          'item_id': itemId,
+          'supplier_id': supplierId,
+          'quantity': quantity,
+          'price': price,
+          'comment': comment,
+          'update_retail': updateRetail,
+        },
+        queuedResult: {
+          'movement_id': null,
+          'supplier_id': supplierId,
+          'pricing': <String, dynamic>{},
+        },
+        onQueued: () => OfflineStore.instance.applyStockDelta(itemId, quantity),
+      );
+
+  static Future<Map<String, dynamic>> stockWriteoff({
     required int itemId,
     required double quantity,
     String comment = '',
-  }) async {
-    await _request('POST', '/api/stock/writeoff', body: {
-      'item_id': itemId,
-      'quantity': quantity,
-      'comment': comment,
-    });
-  }
+  }) async =>
+      _queuedPost(
+        operationType: 'stock_writeoff',
+        path: '/api/stock/writeoff',
+        body: {
+          'item_id': itemId,
+          'quantity': quantity,
+          'comment': comment,
+        },
+        queuedResult: {'movement_id': null},
+        onQueued: () => OfflineStore.instance.applyStockDelta(itemId, -quantity),
+      );
 
   static Future<Map<String, dynamic>> getBarcodeInfo(
     String barcode, {

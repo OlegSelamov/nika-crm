@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_service.dart';
+import 'offline_store.dart';
 
 enum OfflineSyncStatus { idle, syncing, synced, offline, error }
 
@@ -47,6 +48,7 @@ class OfflineSyncService {
     if (_bulkRunning) return;
     _bulkRunning = true;
     try {
+      await _flushQueue();
       await Future<void>.delayed(const Duration(seconds: 2));
       await Future.wait<dynamic>([
         ApiService.getModules(forceRemote: true),
@@ -71,6 +73,45 @@ class OfflineSyncService {
       // Keep the last good cache and retry later.
     } finally {
       _bulkRunning = false;
+    }
+  }
+
+  Future<void> _flushQueue() async {
+    final operations = await OfflineStore.instance.pendingOperations(limit: 25);
+    for (final operation in operations) {
+      final operationId = '${operation['operation_id'] ?? ''}';
+      if (operationId.isEmpty) continue;
+
+      await OfflineStore.instance.markOperationSyncing(operationId);
+      try {
+        final result = await ApiService.replayQueuedOperation(operation);
+        if (result['pending'] == true) {
+          await OfflineStore.instance.markOperationPending(operationId);
+        } else {
+          await OfflineStore.instance.markOperationSynced(operationId);
+        }
+      } on ApiException catch (error) {
+        final statusCode = error.statusCode;
+        final retryable =
+            statusCode == null || statusCode == 401 || statusCode >= 500;
+        if (retryable) {
+          await OfflineStore.instance.markOperationPending(
+            operationId,
+            error: error.message,
+          );
+          break;
+        }
+        await OfflineStore.instance.markOperationError(
+          operationId,
+          error.message,
+        );
+      } catch (error) {
+        await OfflineStore.instance.markOperationPending(
+          operationId,
+          error: error.toString(),
+        );
+        break;
+      }
     }
   }
 

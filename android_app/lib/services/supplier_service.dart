@@ -57,7 +57,6 @@ class SupplierService {
       throw const ApiException('Нет связи с сервером. Проверьте интернет');
     }
 
-    if (response.statusCode == 401) await ApiService.logout();
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
         _messageFromResponse(response),
@@ -112,16 +111,12 @@ class SupplierService {
     String comment = '',
     bool updateRetail = false,
   }) async =>
-      _jsonMap(
-        'POST',
-        '/api/mobile/stock/income/supplier',
-        body: {
-          'item_id': itemId,
-          'supplier_id': supplierId,
-          'quantity': quantity,
-          'price': price,
-          'comment': comment,
-          'update_retail': updateRetail,
-        },
+      ApiService.stockIncomeWithSupplier(
+        itemId: itemId,
+        supplierId: supplierId,
+        quantity: quantity,
+        price: price,
+        comment: comment,
+        updateRetail: updateRetail,
       );
 }

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from utils.sale_amounts import normalize_sale_line
+from utils.offline_operations import load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from flask import render_template
 from num2words import num2words
 from flask import session
@@ -53,6 +54,23 @@ def nested_value(data, *paths):
         if value not in (None, ""):
             return value
     return None
+
+
+def _sale_operation_payload(sale_id, rekassa_result):
+    rekassa_result = rekassa_result or {}
+    response_payload = _sale_operation_payload(sale_id, rekassa_result)
+    if operation_id:
+        save_offline_operation(
+            cur,
+            company_id=company_id,
+            operation_id=operation_id,
+            operation_type="sale",
+            entity_id=sale_id,
+            result=response_payload,
+        )
+        conn.commit()
+    return jsonify(response_payload)
+
 
 @sales_bp.route("/sales")
 def sales():
@@ -210,6 +228,7 @@ def pay_sale():
     kaspi_transaction_id = data.get("kaspi_transaction_id")
     kaspi_method = data.get("kaspi_method")
     payment_method = data.get("payment_method", "cash")
+    operation_id = str(data.get("operation_id") or "").strip()
 
     conn = get_db()
     
@@ -217,6 +236,95 @@ def pay_sale():
 
     try:
         cur = conn.cursor()
+
+        if operation_id:
+            existing_operation = load_offline_operation(
+                cur, company_id, operation_id
+            )
+            # Commit the one-time CREATE TABLE/INDEX before business validation.
+            conn.commit()
+
+            if existing_operation:
+                if existing_operation.get("operation_type") != "sale":
+                    return jsonify({
+                        "success": False,
+                        "error": "Этот operation_id уже использован другой операцией",
+                    }), 409
+
+                existing_result = existing_operation.get("result")
+                if isinstance(existing_result, dict):
+                    existing_result = dict(existing_result)
+                    existing_result["duplicate"] = True
+                    return jsonify(existing_result)
+
+                existing_sale_id = existing_operation.get("entity_id")
+                if existing_sale_id:
+                    if offline_operation_age_seconds(existing_operation) < 45:
+                        return jsonify({
+                            "success": True,
+                            "queued": True,
+                            "pending": True,
+                            "operation_id": operation_id,
+                            "sale_id": existing_sale_id,
+                            "fiscalized": False,
+                            "rekassa_required": True,
+                            "rekassa": {
+                                "status": "PENDING",
+                                "message": "Продажа уже принята сервером и завершается",
+                            },
+                        })
+
+                    cur.execute("""
+                        SELECT id, rekassa_ticket_id, rekassa_ticket_number,
+                               rekassa_shift_number, rekassa_status
+                        FROM sales
+                        WHERE id = %s AND company_id = %s
+                    """, (existing_sale_id, company_id))
+                    existing_sale = cur.fetchone()
+                    if not existing_sale:
+                        return jsonify({
+                            "success": False,
+                            "error": "Операция найдена, но продажа отсутствует",
+                        }), 409
+
+                    if existing_sale.get("rekassa_ticket_id"):
+                        resumed_rekassa = {
+                            "status": "OK",
+                            "id": existing_sale.get("rekassa_ticket_id"),
+                            "ticketNumber": existing_sale.get("rekassa_ticket_number"),
+                            "shiftNumber": existing_sale.get("rekassa_shift_number"),
+                        }
+                    else:
+                        from routes.rekassa import rekassa_sell
+                        resumed_rekassa = rekassa_sell(conn, existing_sale_id)
+                        if not isinstance(resumed_rekassa, dict):
+                            resumed_rekassa = {
+                                "status": "ERROR",
+                                "message": "reKassa вернула ответ неизвестного формата",
+                            }
+                        if resumed_rekassa.get("status") not in {"OK", "SKIPPED"}:
+                            resumed_error = (
+                                resumed_rekassa.get("message")
+                                or resumed_rekassa.get("error")
+                                or "Чек не фискализирован"
+                            )
+                            cur.execute("""
+                                UPDATE sales SET rekassa_status = %s WHERE id = %s
+                            """, (("ERROR: " + str(resumed_error))[:500], existing_sale_id))
+
+                    resumed_payload = _sale_operation_payload(
+                        existing_sale_id, resumed_rekassa
+                    )
+                    save_offline_operation(
+                        cur,
+                        company_id=company_id,
+                        operation_id=operation_id,
+                        operation_type="sale",
+                        entity_id=existing_sale_id,
+                        result=resumed_payload,
+                    )
+                    conn.commit()
+                    return jsonify(resumed_payload)
 
         normalized_cart = []
         for item in cart:
@@ -348,6 +456,15 @@ def pay_sale():
             ))
 
         process_sale(conn, sale_id)
+
+        if operation_id:
+            save_offline_operation(
+                cur,
+                company_id=company_id,
+                operation_id=operation_id,
+                operation_type="sale",
+                entity_id=sale_id,
+            )
 
         # Локальная продажа, склад и прибыль должны сохраниться независимо от
         # доступности внешней кассы. После этого фискализацию можно безопасно

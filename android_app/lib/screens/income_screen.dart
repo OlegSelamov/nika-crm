@@ -187,23 +187,17 @@ class _IncomeScreenState extends State<IncomeScreen> {
     try {
       final itemId = stockNumber(selectedItem!['id']).toInt();
       final shouldUpdateRetail = updateRetail && categoryMarkup > 0;
-      String message;
-
+      late final Map<String, dynamic> result;
       if (selectedSupplierId == null) {
-        final result = await ApiService.stockIncome(
+        result = await ApiService.stockIncome(
           itemId: itemId,
           quantity: quantity,
           price: price,
           comment: commentController.text.trim(),
           updateRetail: shouldUpdateRetail,
         );
-        final pricing = Map<String, dynamic>.from(result['pricing'] ?? const {});
-        final averageCost = money(pricing['average_cost']);
-        message = pricing['retail_updated'] == true
-            ? 'Приход проведён · средняя себестоимость $averageCost · розничная ${money(pricing['retail_price'])}'
-            : 'Приход проведён · средняя себестоимость $averageCost';
       } else {
-        await SupplierService.stockIncomeWithSupplier(
+        result = await SupplierService.stockIncomeWithSupplier(
           itemId: itemId,
           supplierId: selectedSupplierId!,
           quantity: quantity,
@@ -211,7 +205,21 @@ class _IncomeScreenState extends State<IncomeScreen> {
           comment: commentController.text.trim(),
           updateRetail: shouldUpdateRetail,
         );
+      }
+
+      String message;
+      if (result['queued'] == true) {
+        message = selectedSupplierId == null
+            ? 'Приход сохранён в очередь синхронизации'
+            : 'Приход от поставщика сохранён в очередь синхронизации';
+      } else if (selectedSupplierId != null) {
         message = 'Приход проведён · поставщик ${selectedSupplier?['name'] ?? ''}';
+      } else {
+        final pricing = Map<String, dynamic>.from(result['pricing'] ?? const {});
+        final averageCost = money(pricing['average_cost']);
+        message = pricing['retail_updated'] == true
+            ? 'Приход проведён · средняя себестоимость $averageCost · розничная ${money(pricing['retail_price'])}'
+            : 'Приход проведён · средняя себестоимость $averageCost';
       }
 
       if (!mounted) return;

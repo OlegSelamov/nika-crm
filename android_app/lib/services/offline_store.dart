@@ -140,6 +140,9 @@ class OfflineStore {
 
   String _text(dynamic value) => '${value ?? ''}'.trim();
 
+  double _number(dynamic value) =>
+      double.tryParse('${value ?? 0}'.replaceAll(',', '.')) ?? 0;
+
   Map<String, dynamic>? _decodeMap(String? value) {
     if (value == null || value.isEmpty) return null;
     try {
@@ -537,6 +540,150 @@ class OfflineStore {
     return operationId;
   }
 
+  Future<List<Map<String, dynamic>>> pendingOperations({
+    int limit = 25,
+  }) async {
+    final cid = await companyId;
+    if (cid == null) return const [];
+
+    final rows = await (await _db).query(
+      'sync_queue',
+      where: "company_id = ? AND state IN ('pending', 'syncing')",
+      whereArgs: [cid],
+      orderBy: 'created_at ASC',
+      limit: limit,
+    );
+
+    return rows.map((row) {
+      final operation = Map<String, dynamic>.from(row);
+      final rawBody = operation['body'];
+      if (rawBody is String && rawBody.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(rawBody);
+          operation['body'] = decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : <String, dynamic>{};
+        } catch (_) {
+          operation['body'] = <String, dynamic>{};
+        }
+      } else {
+        operation['body'] = <String, dynamic>{};
+      }
+      return operation;
+    }).toList();
+  }
+
+  Future<void> markOperationSyncing(String operationId) async {
+    await (await _db).update(
+      'sync_queue',
+      {
+        'state': 'syncing',
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'operation_id = ?',
+      whereArgs: [operationId],
+    );
+  }
+
+  Future<void> markOperationPending(
+    String operationId, {
+    String? error,
+  }) async {
+    await (await _db).rawUpdate(
+      '''
+      UPDATE sync_queue
+      SET state='pending',
+          attempts=attempts+1,
+          last_error=?,
+          updated_at=?
+      WHERE operation_id=?
+      ''',
+      [error, DateTime.now().millisecondsSinceEpoch, operationId],
+    );
+  }
+
+  Future<void> markOperationSynced(String operationId) async {
+    await (await _db).update(
+      'sync_queue',
+      {
+        'state': 'synced',
+        'last_error': null,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'operation_id = ?',
+      whereArgs: [operationId],
+    );
+  }
+
+  Future<void> markOperationError(String operationId, String error) async {
+    await (await _db).rawUpdate(
+      '''
+      UPDATE sync_queue
+      SET state='error',
+          attempts=attempts+1,
+          last_error=?,
+          updated_at=?
+      WHERE operation_id=?
+      ''',
+      [error, DateTime.now().millisecondsSinceEpoch, operationId],
+    );
+  }
+
+  Future<void> applyStockDelta(int itemId, double delta) async {
+    final cid = await companyId;
+    if (cid == null || delta == 0) return;
+
+    final db = await _db;
+    await db.transaction((txn) async {
+      Future<void> updatePayload(String table) async {
+        final rows = await txn.query(
+          table,
+          columns: ['payload'],
+          where: 'company_id = ? AND item_id = ?',
+          whereArgs: [cid, '$itemId'],
+          limit: 1,
+        );
+        if (rows.isEmpty) return;
+
+        final payload = _decodeMap(rows.first['payload'] as String?);
+        if (payload == null) return;
+
+        final current = _number(payload['stock'] ?? payload['quantity']);
+        final next = current + delta;
+        payload['stock'] = next;
+        payload['quantity'] = next;
+
+        await txn.update(
+          table,
+          {
+            'payload': jsonEncode(payload),
+            'updated_at': DateTime.now().millisecondsSinceEpoch,
+          },
+          where: 'company_id = ? AND item_id = ?',
+          whereArgs: [cid, '$itemId'],
+        );
+      }
+
+      await updatePayload('offline_stock');
+      await updatePayload('offline_items');
+    });
+  }
+
+  Future<void> applySaleStockDelta(List<dynamic> cart) async {
+    for (final raw in cart) {
+      if (raw is! Map) continue;
+      final item = Map<String, dynamic>.from(raw);
+      final itemType = '${item['item_type'] ?? 'product'}'.trim();
+      if (!{'product', 'ingredient', 'semi_finished'}.contains(itemType)) {
+        continue;
+      }
+      final itemId = int.tryParse('${item['id'] ?? ''}');
+      final quantity = _number(item['qty'] ?? item['quantity']);
+      if (itemId == null || quantity <= 0) continue;
+      await applyStockDelta(itemId, -quantity);
+    }
+  }
+
   Future<int> pendingCount() async {
     final cid = await companyId;
     if (cid == null) return 0;
@@ -544,7 +691,7 @@ class OfflineStore {
       '''
       SELECT COUNT(*) AS count
       FROM sync_queue
-      WHERE company_id = ? AND state = 'pending'
+      WHERE company_id = ? AND state IN ('pending', 'syncing')
       ''',
       [cid],
     );
