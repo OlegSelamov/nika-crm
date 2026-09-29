@@ -212,7 +212,10 @@ function installOfflineStatusBadge() {
 
         update();
         window.setInterval(update, 3000);
-        window.addEventListener("online", update);
+        window.addEventListener("online", () => {
+            ipcRenderer.invoke("offline:sync").catch(() => {});
+            update();
+        });
         window.addEventListener("offline", update);
     };
 
@@ -264,6 +267,13 @@ function installOfflineFetchBridge() {
             const url = new URL(inputUrl, window.location.href);
 
             if (!supported(url, method)) {
+                if (
+                    url.origin === window.location.origin &&
+                    url.pathname.startsWith("/api/") &&
+                    navigator.onLine === false
+                ) {
+                    throw new TypeError("Failed to fetch");
+                }
                 return originalFetch(input, init);
             }
             if (init.signal && init.signal.aborted) {

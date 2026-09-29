@@ -18,9 +18,15 @@ function candidates(raw){
 function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=false}){
   const store=new DesktopOfflineStore(path.join(app.getPath("userData"),"nika-offline-store.json"));
   const origin=new URL(appUrl).origin;
-  let syncState="idle",syncPromise=null,interval=null,switching=false;
+  let syncState="idle",syncPromise=null,interval=null,switching=false,offlineUntil=0;
 
   function ses(){const w=getWindow();return w&&!w.isDestroyed()?w.webContents.session:null}
+  function systemOffline(){
+    try{const {net}=require("electron");return net&&net.online===false}catch(_){return false}
+  }
+  function preferOffline(){return systemOffline()||Date.now()<offlineUntil}
+  function markOffline(){offlineUntil=Date.now()+15000;syncState="offline"}
+  function markOnline(){offlineUntil=0}
   async function cookieHeader(){
     const s=ses(); if(!s)return "";
     try{return (await s.cookies.get({url:appUrl})).map(c=>c.name+"="+c.value).join("; ")}catch(_){return ""}
@@ -42,11 +48,14 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
       },res=>{
         const chunks=[]; res.on("data",c=>chunks.push(Buffer.from(c)));
         res.on("end",()=>{
+          clearTimeout(hardTimer);
           const bodyText=Buffer.concat(chunks).toString("utf8");
           resolve({status:res.statusCode||0,headers:{"content-type":res.headers["content-type"]||JSON_HEADERS["content-type"]},bodyText,json:parseJson(bodyText)});
         });
       });
-      req.on("error",reject); req.setTimeout(timeoutMs,()=>req.destroy(new Error("timeout")));
+      const hardTimer=setTimeout(()=>req.destroy(new Error("timeout")),timeoutMs);
+      req.on("error",error=>{clearTimeout(hardTimer);reject(error)});
+      req.setTimeout(timeoutMs,()=>req.destroy(new Error("timeout")));
       if(payload!=null)req.write(payload); req.end();
     });
   }
@@ -148,15 +157,20 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
   }
   async function submitOperation(type,p,body){
     const op=store.createOperation(type,p,body); store.markSyncing(op.operation_id);
+    if(preferOffline()){
+      store.applyOptimistic(op.operation_id);store.markPending(op.operation_id,"offline");syncState="offline";
+      return jsonResponse(queued(op));
+    }
     try{
       const r=await sendOp(op),j=r.json;
       if(r.status>=200&&r.status<300){
+        markOnline();
         if(j&&j.pending===true){store.applyOptimistic(op.operation_id);store.markPending(op.operation_id);return jsonResponse({...queued(op),...j,queued:true})}
         store.markSynced(op.operation_id); return {handled:true,status:r.status,headers:r.headers,bodyText:r.bodyText};
       }
       if(retryable(r.status)){store.applyOptimistic(op.operation_id);store.markPending(op.operation_id,(j&&(j.error||j.message))||("HTTP "+r.status));return jsonResponse(queued(op))}
       store.markError(op.operation_id,(j&&(j.error||j.message))||("HTTP "+r.status)); return {handled:true,status:r.status,headers:r.headers,bodyText:r.bodyText};
-    }catch(e){store.applyOptimistic(op.operation_id);store.markPending(op.operation_id,e.message);return jsonResponse(queued(op))}
+    }catch(e){markOffline();store.applyOptimistic(op.operation_id);store.markPending(op.operation_id,e.message);return jsonResponse(queued(op))}
   }
   async function flushQueue(){
     for(const op of store.pendingOperations(50)){
@@ -175,12 +189,13 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
   }
   async function syncNow(force=false){
     if(syncPromise)return syncPromise;
+    if(systemOffline()){syncState="offline";return state()}
     syncPromise=(async()=>{
       syncState="syncing";
       try{
-        const p=await requestServer("/api/mobile/profile",{timeoutMs:force?10000:6000});
+        const p=await requestServer("/api/mobile/profile",{timeoutMs:force?5000:2500});
         if(p.status<200||p.status>=300||!p.json)throw new Error("offline");
-        store.setActiveIdentity(p.json);
+        markOnline();store.setActiveIdentity(p.json);
         await flushQueue();
         await Promise.all([
           fetchCache("/api/items","items"),fetchCache("/api/stock","stock"),
@@ -189,7 +204,7 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
           fetchCache("/api/company/active","company_active")
         ]);
         store.cache("profile",p.json);store.markSyncedNow();syncState="synced";
-      }catch(_){syncState="offline"}finally{syncPromise=null}
+      }catch(_){markOffline()}finally{syncPromise=null}
       return state();
     })();
     return syncPromise;
@@ -202,12 +217,14 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
     if(method==="POST"&&type)return submitOperation(type,u.pathname,body);
     const barcode=method==="POST"&&u.pathname==="/api/barcode";
     if(!barcode&&!(method==="GET"&&supportedGet(u.pathname)))return {handled:false};
+    const fb=fallback(u,method,body);
+    if(preferOffline()&&fb)return fb;
     try{
-      const r=await requestServer(u.pathname+u.search,{method,body:method==="GET"?null:body,timeoutMs:8000});
-      if(r.status>=200&&r.status<300){cacheResponse(u,r.json);return {handled:true,status:r.status,headers:r.headers,bodyText:r.bodyText}}
-      const fb=fallback(u,method,body); if(fb&&retryable(r.status))return fb;
+      const r=await requestServer(u.pathname+u.search,{method,body:method==="GET"?null:body,timeoutMs:1800});
+      if(r.status>=200&&r.status<300){markOnline();cacheResponse(u,r.json);return {handled:true,status:r.status,headers:r.headers,bodyText:r.bodyText}}
+      if(fb&&retryable(r.status))return fb;
       return {handled:true,status:r.status,headers:r.headers,bodyText:r.bodyText};
-    }catch(_){return fallback(u,method,body)||{handled:false}}
+    }catch(_){markOffline();return fb||{handled:false}}
   }
   async function switchOffline(w){
     if(switching||!w||w.isDestroyed()||w.webContents.getURL().startsWith("file:"))return;

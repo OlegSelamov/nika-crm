@@ -96,10 +96,26 @@ self.addEventListener("message", event => {
   }
 });
 
+async function fetchWithTimeout(request, timeoutMs = 1800) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(new Request(request, { signal: controller.signal }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+
+  if (self.navigator && self.navigator.onLine === false && cached) {
+    return cached;
+  }
+
   try {
-    const response = await fetch(request);
+    const response = await fetchWithTimeout(request, 1800);
     if (response && response.ok) {
       const finalUrl = new URL(response.url);
       if (
@@ -112,7 +128,6 @@ async function networkFirst(request) {
     }
     return response;
   } catch (_) {
-    const cached = await cache.match(request);
     if (cached) return cached;
     throw _;
   }
