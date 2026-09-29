@@ -424,6 +424,45 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         commentInput.setCustomValidity("");
+
+        if (window.nikaDesktop?.isElectron) {
+            event.preventDefault();
+
+            const submit = form.querySelector(".writeoff-submit");
+            if (submit) submit.disabled = true;
+
+            fetch("/api/stock/writeoff", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    item_id: Number(itemIdInput.value),
+                    quantity,
+                    comment: commentInput.value.trim()
+                })
+            })
+            .then(async response => {
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.error || data.message || ("HTTP " + response.status));
+                }
+                alert(
+                    data.queued
+                        ? "Списание сохранено на этом компьютере и поставлено в очередь синхронизации."
+                        : "Списание проведено."
+                );
+                form.reset();
+                clearProduct();
+                reasonSelect.value = "";
+                commentInput.dataset.autoReason = "0";
+            })
+            .catch(error => {
+                console.error("DESKTOP WRITEOFF ERROR:", error);
+                alert(error.message || "Не удалось сохранить списание");
+            })
+            .finally(() => {
+                updateSummary();
+            });
+        }
     });
 
     updateSummary();

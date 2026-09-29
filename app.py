@@ -302,6 +302,14 @@ app.register_blueprint(bcc_bp)
 app.register_blueprint(school_bp)
 app.register_blueprint(capital_bp)
 
+@app.route("/desktop-offline-sw.js")
+def desktop_offline_service_worker():
+    response = app.send_static_file("js/desktop_offline_sw.js")
+    response.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
+
 # Keep the public URLs unchanged, but replace only the sale/fiscalization
 # handlers with the COMRUN-aware flow. This avoids duplicate Flask routes and
 # preserves compatibility with web, desktop and mobile clients.
@@ -336,7 +344,7 @@ def check_company_access():
     load_subscription_context()
     if session.get("is_super_admin"):
         return None
-    allowed_paths = ("/", "/login", "/logout", "/register", "/onboarding", "/subscription", "/static/", "/s/", "/whatsapp/webhook")
+    allowed_paths = ("/", "/login", "/logout", "/register", "/onboarding", "/subscription", "/static/", "/desktop-offline-sw.js", "/s/", "/whatsapp/webhook")
     if any(request.path == path or request.path.startswith(path) for path in allowed_paths):
         return None
     if not session.get("user_id") or not session.get("company_id"):

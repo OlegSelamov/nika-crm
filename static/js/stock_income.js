@@ -437,6 +437,59 @@ document.addEventListener("DOMContentLoaded", function () {
             priceInput?.reportValidity();
             return;
         }
+
+        if (window.nikaDesktop?.isElectron) {
+            event.preventDefault();
+
+            const supplierSelect = document.getElementById("incomeSupplier");
+            const supplierId = Number(supplierSelect?.value || 0);
+            const path = supplierId
+                ? "/api/mobile/stock/income/supplier"
+                : "/api/stock/income";
+            const submit = form.querySelector(".income-submit");
+            if (submit) {
+                submit.disabled = true;
+                submit.innerHTML = "<span>…</span> Сохраняю приход";
+            }
+
+            fetch(path, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    item_id: Number(itemIdInput.value),
+                    supplier_id: supplierId || undefined,
+                    quantity,
+                    price,
+                    comment: document.getElementById("incomeComment")?.value.trim() || "",
+                    update_retail: Boolean(updateRetailInput?.checked)
+                })
+            })
+            .then(async response => {
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.error || data.message || ("HTTP " + response.status));
+                }
+                alert(
+                    data.queued
+                        ? "Приход сохранён на этом компьютере и поставлен в очередь синхронизации."
+                        : "Приход проведён."
+                );
+                form.reset();
+                clearProduct();
+                updateSummary();
+                showMessage("Начните вводить название", "Введите не менее 2 символов или отсканируйте штрихкод");
+            })
+            .catch(error => {
+                console.error("DESKTOP INCOME ERROR:", error);
+                alert(error.message || "Не удалось сохранить приход");
+            })
+            .finally(() => {
+                if (submit) {
+                    submit.disabled = false;
+                    submit.innerHTML = "<span>✓</span> Сохранить приход";
+                }
+            });
+        }
     });
 
     const historySearch = document.getElementById("incomeHistorySearch");

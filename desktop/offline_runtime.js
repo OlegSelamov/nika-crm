@@ -80,8 +80,47 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
     }
     if(p==="/api/items/search"){const rows=filterRows(c.items,q);return jsonResponse({items:rows.slice(0,30),has_more:rows.length>30,offline:true})}
     if(p==="/api/items")return jsonResponse(filterRows(c.items,q));
-    if(p==="/api/stock")return jsonResponse(filterRows(c.stock,q));
+    if(p==="/api/stock"){
+      let rows=filterRows(c.stock,q);
+      const scope=url.searchParams.get("stock_scope")||"all";
+      const category=(url.searchParams.get("category")||"").trim().toLowerCase();
+      const status=(url.searchParams.get("status")||"all").trim().toLowerCase();
+      const sort=(url.searchParams.get("sort")||"name").trim().toLowerCase();
+
+      if(scope==="income"){
+        rows=rows.filter(r=>["product","ingredient"].includes(String(r.item_type||"product")));
+      }
+      if(category){
+        rows=rows.filter(r=>String(r.category||"").toLowerCase()===category);
+      }
+      if(status==="normal") rows=rows.filter(r=>num(r.stock)>5);
+      else if(status==="low") rows=rows.filter(r=>num(r.stock)>0&&num(r.stock)<=5);
+      else if(status==="out") rows=rows.filter(r=>num(r.stock)<=0);
+
+      rows=[...rows].sort((a,b)=>{
+        if(sort==="stock-asc") return num(a.stock)-num(b.stock);
+        if(sort==="stock-desc") return num(b.stock)-num(a.stock);
+        if(sort==="retail-asc") return num(a.retail_price)-num(b.retail_price);
+        if(sort==="retail-desc") return num(b.retail_price)-num(a.retail_price);
+        return String(a.name||"").localeCompare(String(b.name||""),"ru");
+      });
+
+      if(!url.search) return jsonResponse(rows);
+
+      const limit=Math.max(1,Math.min(Number(url.searchParams.get("limit")||50),100));
+      const offset=Math.max(0,Number(url.searchParams.get("offset")||0));
+      const items=rows.slice(offset,offset+limit);
+      return jsonResponse({
+        items,
+        total:rows.length,
+        offset,
+        limit,
+        has_more:offset+items.length<rows.length,
+        offline:true
+      });
+    }
     if(p==="/api/stock/movements")return jsonResponse(Array.isArray(c.movements)?c.movements:[]);
+    if(p==="/api/company/active")return jsonResponse(c.company_active||{});
     if(p==="/api/clients")return jsonResponse(filterRows(c.clients,q));
     if(p==="/api/categories")return jsonResponse(Array.isArray(c.categories)?c.categories:[]);
     if(p==="/api/suppliers")return jsonResponse(Array.isArray(c.suppliers)?c.suppliers:[]);
@@ -96,6 +135,7 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
     else if(p==="/api/categories"&&Array.isArray(json))store.cache("categories",json);
     else if(p==="/api/stock/movements"&&Array.isArray(json))store.cache("movements",json);
     else if(p==="/api/suppliers"&&Array.isArray(json))store.cache("suppliers",json);
+    else if(p==="/api/company/active"&&json&&typeof json==="object")store.cache("company_active",json);
   }
   function opType(p){return p==="/sales/pay"?"sale":p==="/api/stock/income"?"stock_income":p==="/api/stock/writeoff"?"stock_writeoff":p==="/api/mobile/stock/income/supplier"?"stock_income_supplier":null}
   function queued(op){
@@ -145,7 +185,8 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
         await Promise.all([
           fetchCache("/api/items","items"),fetchCache("/api/stock","stock"),
           fetchCache("/api/clients","clients"),fetchCache("/api/categories","categories"),
-          fetchCache("/api/stock/movements","movements"),fetchCache("/api/suppliers","suppliers")
+          fetchCache("/api/stock/movements","movements"),fetchCache("/api/suppliers","suppliers"),
+          fetchCache("/api/company/active","company_active")
         ]);
         store.cache("profile",p.json);store.markSyncedNow();syncState="synced";
       }catch(_){syncState="offline"}finally{syncPromise=null}
@@ -154,7 +195,7 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
     return syncPromise;
   }
   function state(){return {...store.state(),sync_state:syncState,legacy:legacyMode}}
-  function supportedGet(p){return ["/api/items","/api/items/search","/api/stock","/api/stock/movements","/api/clients","/api/categories","/api/suppliers"].includes(p)||p.startsWith("/api/barcode-info/")}
+  function supportedGet(p){return ["/api/items","/api/items/search","/api/stock","/api/stock/movements","/api/clients","/api/categories","/api/suppliers","/api/company/active"].includes(p)||p.startsWith("/api/barcode-info/")}
   async function intercepted(payload={}){
     const u=new URL(payload.url||"/",appUrl); if(u.origin!==origin)return {handled:false};
     const method=String(payload.method||"GET").toUpperCase(),body=parseJson(payload.bodyText||"")||{},type=opType(u.pathname);
@@ -173,8 +214,8 @@ function createDesktopOfflineRuntime({app,ipcMain,getWindow,appUrl,legacyMode=fa
     switching=true;try{await w.loadFile(path.join(__dirname,"offline.html"))}catch(e){console.error(e)}finally{switching=false}
   }
   function attachWindow(w){
-    w.webContents.on("did-fail-load",(ev,code,desc,url)=>{
-      if(!NET_ERRORS.has(code))return;
+    w.webContents.on("did-fail-load",(ev,code,desc,url,isMainFrame)=>{
+      if(isMainFrame===false||!NET_ERRORS.has(code))return;
       try{if(new URL(url||appUrl,appUrl).origin===origin)switchOffline(w)}catch(_){}
     });
     w.webContents.on("did-finish-load",()=>{if(w.webContents.getURL().startsWith(origin))setTimeout(()=>syncNow(false).catch(()=>{}),800)});

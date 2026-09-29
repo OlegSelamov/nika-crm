@@ -149,6 +149,80 @@ const offline = Object.freeze({
     request: payload => ipcRenderer.invoke("offline:request", payload)
 });
 
+
+function installOfflineStatusBadge() {
+    if (window.parent !== window) return;
+
+    const create = () => {
+        if (document.getElementById("nikaDesktopOfflineBadge")) return;
+
+        const badge = document.createElement("button");
+        badge.id = "nikaDesktopOfflineBadge";
+        badge.type = "button";
+        badge.style.cssText = [
+            "position:fixed",
+            "right:14px",
+            "bottom:14px",
+            "z-index:2147483647",
+            "display:none",
+            "border:0",
+            "border-radius:999px",
+            "padding:8px 12px",
+            "font:700 12px/1.2 Segoe UI,Arial,sans-serif",
+            "box-shadow:0 8px 24px rgba(15,23,42,.18)",
+            "cursor:pointer",
+            "background:#fff7ed",
+            "color:#c2410c"
+        ].join(";");
+        badge.title = "Нажмите, чтобы повторить синхронизацию";
+        badge.addEventListener("click", () => {
+            ipcRenderer.invoke("offline:sync").catch(() => {});
+        });
+        document.body.appendChild(badge);
+
+        const update = async () => {
+            try {
+                const state = await ipcRenderer.invoke("offline:get-state");
+                const pending = Number(state?.pending_count || 0);
+                const sync = state?.sync_state || "idle";
+
+                if (sync === "synced" && pending === 0) {
+                    badge.style.display = "none";
+                    return;
+                }
+
+                badge.style.display = "block";
+                if (sync === "syncing") {
+                    badge.textContent = pending
+                        ? "Синхронизация · в очереди " + pending
+                        : "Синхронизация…";
+                    badge.style.background = "#eef2ff";
+                    badge.style.color = "#3346a8";
+                } else if (pending > 0) {
+                    badge.textContent = "Офлайн · в очереди " + pending;
+                    badge.style.background = "#fff7ed";
+                    badge.style.color = "#c2410c";
+                } else {
+                    badge.textContent = "Офлайн";
+                    badge.style.background = "#fff7ed";
+                    badge.style.color = "#c2410c";
+                }
+            } catch (_) {}
+        };
+
+        update();
+        window.setInterval(update, 3000);
+        window.addEventListener("online", update);
+        window.addEventListener("offline", update);
+    };
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", create, { once: true });
+    } else {
+        create();
+    }
+}
+
 function installOfflineFetchBridge() {
     const source = \`
     (() => {
@@ -161,7 +235,7 @@ function installOfflineFetchBridge() {
         const getPaths = new Set([
             "/api/items", "/api/items/search", "/api/stock",
             "/api/stock/movements", "/api/clients",
-            "/api/categories", "/api/suppliers"
+            "/api/categories", "/api/suppliers", "/api/company/active"
         ]);
         const queuePaths = new Set([
             "/sales/pay", "/api/stock/income", "/api/stock/writeoff",
@@ -265,3 +339,4 @@ contextBridge.exposeInMainWorld("nikaDesktop", Object.freeze({
 }));
 
 installOfflineFetchBridge();
+installOfflineStatusBadge();
