@@ -83,7 +83,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       unawaited(OfflineSyncService.instance.syncNow());
     });
     offlineSyncTimer = Timer.periodic(
-      const Duration(minutes: 2),
+      const Duration(minutes: 5),
       (_) => unawaited(OfflineSyncService.instance.syncNow()),
     );
     _loadModules();

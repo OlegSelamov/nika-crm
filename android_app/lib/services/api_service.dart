@@ -63,10 +63,14 @@ class ApiService {
         prefs.getInt('offline_company_id') != null;
   }
 
-  static Future<void> logout() async {
+  static Future<void> _clearServerSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('session_cookie');
     _cookie = null;
+  }
+
+  static Future<void> logout() async {
+    await _clearServerSession();
     await OfflineStore.instance.clearActiveIdentity();
   }
 
@@ -134,7 +138,7 @@ class ApiService {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      if (response.statusCode == 401) await logout();
+      if (response.statusCode == 401) await _clearServerSession();
       throw ApiException(
         _errorMessage(decoded, response.statusCode),
         statusCode: response.statusCode,
@@ -191,31 +195,31 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> mobileProfile() async {
+  static Future<Map<String, dynamic>> mobileProfile({bool forceRemote = false}) async {
+    final cached = await OfflineStore.instance.snapshot('mobile_profile');
+    if (!forceRemote && cached is Map) return Map<String, dynamic>.from(cached);
     try {
-      final result = Map<String, dynamic>.from(
-        await _request('GET', '/api/mobile/profile'),
-      );
+      final result = Map<String, dynamic>.from(await _request(
+        'GET', '/api/mobile/profile', timeout: const Duration(seconds: 8),
+      ));
       await OfflineStore.instance.cacheSnapshot('mobile_profile', result);
       return result;
-    } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final cached = await OfflineStore.instance.snapshot('mobile_profile');
+    } on ApiException {
       if (cached is Map) return Map<String, dynamic>.from(cached);
       rethrow;
     }
   }
 
-  static Future<Map<String, dynamic>> interfaceSettings() async {
+  static Future<Map<String, dynamic>> interfaceSettings({bool forceRemote = false}) async {
+    final cached = await OfflineStore.instance.snapshot('interface_settings');
+    if (!forceRemote && cached is Map) return Map<String, dynamic>.from(cached);
     try {
-      final result = Map<String, dynamic>.from(
-        await _request('GET', '/api/mobile/interface-settings'),
-      );
+      final result = Map<String, dynamic>.from(await _request(
+        'GET', '/api/mobile/interface-settings', timeout: const Duration(seconds: 8),
+      ));
       await OfflineStore.instance.cacheSnapshot('interface_settings', result);
       return result;
-    } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final cached = await OfflineStore.instance.snapshot('interface_settings');
+    } on ApiException {
       if (cached is Map) return Map<String, dynamic>.from(cached);
       rethrow;
     }
@@ -258,43 +262,39 @@ class ApiService {
         await _request(
           'GET',
           '/api/mobile/health',
-          timeout: const Duration(seconds: 8),
+          timeout: const Duration(seconds: 4),
         ),
       );
 
-  static Future<Set<String>> getModules() async {
+  static Future<Set<String>> getModules({bool forceRemote = false}) async {
+    final cached = await OfflineStore.instance.snapshot('modules');
+    if (!forceRemote && cached is List) {
+      return cached.map((item) => item.toString()).toSet();
+    }
     try {
-      final result = Map<String, dynamic>.from(
-        await _request('GET', '/api/mobile/modules'),
-      );
+      final result = Map<String, dynamic>.from(await _request(
+        'GET', '/api/mobile/modules', timeout: const Duration(seconds: 8),
+      ));
       final modules = List<dynamic>.from(result['modules'] ?? const [])
-          .map((item) => item.toString())
-          .toSet();
-      await OfflineStore.instance.cacheSnapshot(
-        'modules',
-        modules.toList(),
-      );
+          .map((item) => item.toString()).toSet();
+      await OfflineStore.instance.cacheSnapshot('modules', modules.toList());
       return modules;
-    } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final cached = await OfflineStore.instance.snapshot('modules');
-      if (cached is List) {
-        return cached.map((item) => item.toString()).toSet();
-      }
+    } on ApiException {
+      if (cached is List) return cached.map((item) => item.toString()).toSet();
       rethrow;
     }
   }
 
-  static Future<Map<String, dynamic>> dashboard() async {
+  static Future<Map<String, dynamic>> dashboard({bool forceRemote = false}) async {
+    final cached = await OfflineStore.instance.snapshot('dashboard');
+    if (!forceRemote && cached is Map) return Map<String, dynamic>.from(cached);
     try {
-      final result = Map<String, dynamic>.from(
-        await _request('GET', '/api/dashboard'),
-      );
+      final result = Map<String, dynamic>.from(await _request(
+        'GET', '/api/dashboard', timeout: const Duration(seconds: 8),
+      ));
       await OfflineStore.instance.cacheSnapshot('dashboard', result);
       return result;
-    } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final cached = await OfflineStore.instance.snapshot('dashboard');
+    } on ApiException {
       if (cached is Map) return Map<String, dynamic>.from(cached);
       rethrow;
     }
@@ -303,27 +303,23 @@ class ApiService {
   static Future<List<dynamic>> getItems({
     String type = 'all',
     String category = 'all',
+    bool forceRemote = false,
   }) async {
+    final cached = await OfflineStore.instance.items(type: type, category: category);
+    if (!forceRemote && cached.isNotEmpty) return cached;
     try {
       final result = List<dynamic>.from(await _request(
-        'GET',
-        '/api/items',
+        'GET', '/api/items', timeout: const Duration(seconds: 8),
         query: {
           if (type != 'all') 'type': type,
           if (category != 'all') 'category': category,
         },
       ));
       await OfflineStore.instance.cacheItems(
-        result,
-        replaceAll: type == 'all' && category == 'all',
+        result, replaceAll: type == 'all' && category == 'all',
       );
       return result;
-    } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final cached = await OfflineStore.instance.items(
-        type: type,
-        category: category,
-      );
+    } on ApiException {
       if (cached.isNotEmpty) return cached;
       rethrow;
     }
@@ -443,22 +439,22 @@ class ApiService {
         },
       ));
 
-  static Future<List<dynamic>> getClients({bool deleted = false}) async {
+  static Future<List<dynamic>> getClients({
+    bool deleted = false,
+    bool forceRemote = false,
+  }) async {
+    final cached = await OfflineStore.instance.clients(deleted: deleted);
+    if (!forceRemote && cached.isNotEmpty) return cached;
     try {
       final result = List<dynamic>.from(await _request(
-        'GET',
-        '/api/clients',
+        'GET', '/api/clients', timeout: const Duration(seconds: 8),
         query: {if (deleted) 'deleted': 'true'},
       ));
       await OfflineStore.instance.cacheClients(
-        result,
-        deleted: deleted,
-        replaceAll: true,
+        result, deleted: deleted, replaceAll: true,
       );
       return result;
-    } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final cached = await OfflineStore.instance.clients(deleted: deleted);
+    } on ApiException {
       if (cached.isNotEmpty) return cached;
       rethrow;
     }
@@ -470,21 +466,35 @@ class ApiService {
   static Future<Map<String, dynamic>> getSale(int saleId) async =>
       Map<String, dynamic>.from(await _request('GET', '/api/sale/$saleId'));
 
-  static Future<List<dynamic>> getStock() async {
+  static Future<List<dynamic>> getStock({bool forceRemote = false}) async {
+    final cached = await OfflineStore.instance.stock();
+    if (!forceRemote && cached.isNotEmpty) return cached;
     try {
-      final result = List<dynamic>.from(await _request('GET', '/api/stock'));
+      final result = List<dynamic>.from(await _request(
+        'GET', '/api/stock', timeout: const Duration(seconds: 8),
+      ));
       await OfflineStore.instance.cacheStock(result, replaceAll: true);
       return result;
-    } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final cached = await OfflineStore.instance.stock();
+    } on ApiException {
       if (cached.isNotEmpty) return cached;
       rethrow;
     }
   }
 
-  static Future<List<dynamic>> getStockMovements() async =>
-      List<dynamic>.from(await _request('GET', '/api/stock/movements'));
+  static Future<List<dynamic>> getStockMovements({bool forceRemote = false}) async {
+    final cached = await OfflineStore.instance.snapshot('stock_movements');
+    if (!forceRemote && cached is List) return List<dynamic>.from(cached);
+    try {
+      final result = List<dynamic>.from(await _request(
+        'GET', '/api/stock/movements', timeout: const Duration(seconds: 8),
+      ));
+      await OfflineStore.instance.cacheSnapshot('stock_movements', result);
+      return result;
+    } on ApiException {
+      if (cached is List) return List<dynamic>.from(cached);
+      return const [];
+    }
+  }
 
   static Future<Map<String, dynamic>> stockIncome({
     required int itemId,
@@ -595,12 +605,16 @@ class ApiService {
     await _request('DELETE', '/api/items/$id');
   }
 
-  static Future<List<dynamic>> getCategories({String type = 'all'}) async {
+  static Future<List<dynamic>> getCategories({
+    String type = 'all',
+    bool forceRemote = false,
+  }) async {
     final cacheKey = 'categories:$type';
+    final cached = await OfflineStore.instance.snapshot(cacheKey);
+    if (!forceRemote && cached is List) return List<dynamic>.from(cached);
     try {
       final result = List<dynamic>.from(await _request(
-        'GET',
-        '/api/categories',
+        'GET', '/api/categories', timeout: const Duration(seconds: 8),
         query: {if (type != 'all') 'type': type},
       ));
       await OfflineStore.instance.cacheSnapshot(cacheKey, result);
@@ -608,20 +622,9 @@ class ApiService {
         await OfflineStore.instance.cacheSnapshot('categories:all', result);
       }
       return result;
-    } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final cached = await OfflineStore.instance.snapshot(cacheKey);
-      if (cached is List && cached.isNotEmpty) return List<dynamic>.from(cached);
-      if (type != 'all') {
-        final all = await OfflineStore.instance.snapshot('categories:all');
-        if (all is List) {
-          return all.where((raw) {
-            if (raw is! Map) return false;
-            return '${raw['category_type'] ?? 'product'}' == type;
-          }).toList();
-        }
-      }
-      rethrow;
+    } on ApiException {
+      if (cached is List) return List<dynamic>.from(cached);
+      return const [];
     }
   }
 
@@ -885,7 +888,7 @@ class ApiService {
       } catch (_) {
         decoded = null;
       }
-      if (response.statusCode == 401) await logout();
+      if (response.statusCode == 401) await _clearServerSession();
       throw ApiException(
         _errorMessage(decoded, response.statusCode),
         statusCode: response.statusCode,
@@ -1189,7 +1192,7 @@ class ApiService {
       } catch (_) {
         decoded = null;
       }
-      if (response.statusCode == 401) await logout();
+      if (response.statusCode == 401) await _clearServerSession();
       throw ApiException(
         _errorMessage(decoded, response.statusCode),
         statusCode: response.statusCode,
@@ -1337,7 +1340,7 @@ class ApiService {
       } catch (_) {
         decoded = null;
       }
-      if (response.statusCode == 401) await logout();
+      if (response.statusCode == 401) await _clearServerSession();
       throw ApiException(
         _errorMessage(decoded, response.statusCode),
         statusCode: response.statusCode,
