@@ -142,7 +142,21 @@ jobs:
         run: |
           Copy-Item desktop/main.js desktop/legacy/main.js -Force
           Copy-Item desktop/preload.js desktop/legacy/preload.js -Force
+          Copy-Item desktop/offline_runtime.js desktop/legacy/offline_runtime.js -Force
+          Copy-Item desktop/offline_store.js desktop/legacy/offline_store.js -Force
+          Copy-Item desktop/offline.html desktop/legacy/offline.html -Force
+          Copy-Item desktop/offline.js desktop/legacy/offline.js -Force
           Copy-Item desktop/icon.ico desktop/legacy/icon.ico -Force
+          @(
+            "main.js",
+            "preload.js",
+            "offline_runtime.js",
+            "offline_store.js",
+            "offline.html",
+            "offline.js"
+          ) | ForEach-Object {
+            if (!(Test-Path (Join-Path "desktop/legacy" $_))) { throw "Legacy source is missing: $_" }
+          }
       - name: Set app version
         working-directory: desktop/legacy
         shell: pwsh
