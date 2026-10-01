@@ -23,11 +23,7 @@
     },
     "files": [
       "main.js",
-      "preload.js",
-      "offline_runtime.js",
-      "offline_store.js",
-      "offline.html",
-      "offline.js"
+      "preload.js"
     ],
     "publish": [
       {

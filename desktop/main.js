@@ -4,28 +4,15 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const http = require("http");
-const { createDesktopOfflineRuntime } = require("./offline_runtime");
 
 let win;
 let flaskProcess;
 let updatePromptOpen = false;
 let updateCheckTimer;
-let offlineRuntime;
 
 const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
 const LEGACY_MODE = process.env.NIKA_LEGACY === "1" || /legacy/i.test(app.getName());
-
-// Electron 22 on Windows 8.1 can corrupt GPU-composited surfaces on some
-// older Intel/AMD drivers: stale tiles are reused and parts of the window
-// appear duplicated after every repaint/click. D3D9 still reproduces this on
-// affected machines, so Legacy deliberately uses Chromium software rendering.
-if (LEGACY_MODE) {
-    app.disableHardwareAcceleration();
-    app.commandLine.appendSwitch("disable-gpu-compositing");
-    app.commandLine.appendSwitch("disable-direct-composition");
-}
-
 const APP_URL = DEV_MODE
     ? "http://127.0.0.1:5000"
     : "https://nikabusiness.com";
@@ -87,14 +74,17 @@ function normalizeKaspiIp(value) {
         .split(":")[0];
     const parts = raw.split(".");
     if (parts.length !== 4) return null;
+
     const octets = parts.map((part) => Number(part));
     if (octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
         return null;
     }
+
     const isPrivate =
         octets[0] === 10 ||
         (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
         (octets[0] === 192 && octets[1] === 168);
+
     return isPrivate ? octets.join(".") : null;
 }
 
@@ -557,7 +547,8 @@ function kaspiPosRequest(pathname, params = {}, options = {}) {
                 try {
                     data = body ? JSON.parse(body) : {};
                 } catch (_) {
-                    return reject(new Error("Kaspi POS вернул некорректный ответ"));
+                    reject(new Error("Kaspi POS вернул некорректный ответ"));
+                    return;
                 }
                 resolve({
                     httpStatus: response.statusCode || 0,
@@ -569,26 +560,43 @@ function kaspiPosRequest(pathname, params = {}, options = {}) {
         request.on("timeout", () => {
             request.destroy(new Error("Kaspi POS не отвечает. Проверьте IP и локальную сеть"));
         });
-        request.on("error", (error) => reject(error));
+        request.on("error", reject);
     });
 }
 
 async function kaspiPosTest(ipOverride = null) {
     const ip = normalizeKaspiIp(ipOverride || settings.kaspi_pos_ip);
     if (!ip) {
-        return { success: false, connected: false, error: "Некорректный локальный IP терминала" };
-    }
-    try {
-        const response = await kaspiPosRequest("/v2/deviceinfo", {}, { ip, timeoutMs: 4500 });
         return {
-            success: response.httpStatus >= 200 && response.httpStatus < 300,
-            connected: response.httpStatus >= 200 && response.httpStatus < 300,
+            success: false,
+            connected: false,
+            error: "Некорректный локальный IP терминала"
+        };
+    }
+
+    try {
+        const response = await kaspiPosRequest("/v2/deviceinfo", {}, {
+            ip,
+            timeoutMs: 4500
+        });
+        const connected =
+            response.httpStatus >= 200 &&
+            response.httpStatus < 300;
+
+        return {
+            success: connected,
+            connected,
             ip,
             httpStatus: response.httpStatus,
             device: response.data
         };
     } catch (error) {
-        return { success: false, connected: false, ip, error: error.message || String(error) };
+        return {
+            success: false,
+            connected: false,
+            ip,
+            error: error.message || String(error)
+        };
     }
 }
 
@@ -606,7 +614,10 @@ function registerKaspiPosIpc() {
         requireMainWindow(event);
         const ip = normalizeKaspiIp(payload.ip);
         if (!ip) {
-            return { success: false, error: "Введите локальный IP, например 192.168.1.159" };
+            return {
+                success: false,
+                error: "Введите локальный IP, например 192.168.1.159"
+            };
         }
         savePrinterSettings({ kaspi_pos_ip: ip });
         return { success: true, ip };
@@ -623,40 +634,78 @@ function registerKaspiPosIpc() {
         if (!Number.isFinite(amount) || amount <= 0) {
             return { success: false, error: "Некорректная сумма оплаты" };
         }
+
         try {
-            const response = await kaspiPosRequest("/v2/payment", { amount }, { timeoutMs: 10000 });
+            const response = await kaspiPosRequest(
+                "/v2/payment",
+                { amount },
+                { timeoutMs: 10000 }
+            );
             const result = response.data || {};
-            if (response.httpStatus < 200 || response.httpStatus >= 300 || result.statusCode !== 0) {
-                return { success: false, error: result, httpStatus: response.httpStatus };
+
+            if (
+                response.httpStatus < 200 ||
+                response.httpStatus >= 300 ||
+                result.statusCode !== 0
+            ) {
+                return {
+                    success: false,
+                    error: result,
+                    httpStatus: response.httpStatus
+                };
             }
-            const processId = result?.data?.processId;
+
+            const processId =
+                result &&
+                result.data &&
+                result.data.processId;
+
             if (!processId) {
-                return { success: false, error: "Kaspi POS не вернул processId" };
+                return {
+                    success: false,
+                    error: "Kaspi POS не вернул processId"
+                };
             }
+
             return { success: true, processId, raw: result };
         } catch (error) {
-            return { success: false, error: error.message || String(error) };
+            return {
+                success: false,
+                error: error.message || String(error)
+            };
         }
     });
 
     ipcMain.handle("kaspi:status", async (event, payload = {}) => {
         requireMainWindow(event);
         const processId = String(payload.processId || "").trim();
-        if (!processId) return { status: "error", message: "processId не указан" };
+        if (!processId) {
+            return { status: "error", message: "processId не указан" };
+        }
+
         try {
-            const response = await kaspiPosRequest("/v2/status", { processId }, { timeoutMs: 7000 });
+            const response = await kaspiPosRequest(
+                "/v2/status",
+                { processId },
+                { timeoutMs: 7000 }
+            );
             const result = response.data || {};
             const data = result.data || {};
+            const chequeInfo = data.chequeInfo || {};
+
             return {
                 status: data.status,
                 subStatus: data.subStatus,
                 message: data.message,
                 transactionId: data.transactionId,
-                method: data?.chequeInfo?.method,
+                method: chequeInfo.method,
                 raw: result
             };
         } catch (error) {
-            return { status: "error", message: error.message || String(error) };
+            return {
+                status: "error",
+                message: error.message || String(error)
+            };
         }
     });
 }
@@ -769,27 +818,14 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            // Electron 22 defaults to sandboxed renderers. The Legacy build
-            // keeps Node disabled and context isolation enabled, but runs the
-            // trusted preload outside Chromium's renderer sandbox so the
-            // desktop IPC bridge (printers/Kaspi POS/offline) is available
-            // consistently on Windows 8.1.
-            sandbox: !LEGACY_MODE,
             spellcheck: false,
             preload: path.join(__dirname, "preload.js"),
             partition: LEGACY_MODE ? "persist:nika-business-legacy" : "persist:nika-business"
         }
     });
 
-    win.webContents.on("preload-error", (_event, preloadPath, error) => {
-        console.error("Nika preload failed:", preloadPath, error);
-    });
-
-    if (offlineRuntime) offlineRuntime.attachWindow(win);
-
-    const initialUrl = offlineRuntime?.startupUrl?.() || APP_URL;
-    if (DEV_MODE) setTimeout(() => win.loadURL(initialUrl), 5000);
-    else win.loadURL(initialUrl);
+    if (DEV_MODE) setTimeout(() => win.loadURL(APP_URL), 5000);
+    else win.loadURL(APP_URL);
 
     win.maximize();
     win.setMenu(null);
@@ -799,18 +835,6 @@ function createWindow() {
             await detectPrinters();
         } catch (error) {
             console.error("Не удалось получить список принтеров:", error);
-        }
-
-        if (LEGACY_MODE) {
-            try {
-                const bridgeReady = await win.webContents.executeJavaScript(
-                    "Boolean(window.nikaDesktop && window.nikaDesktop.isElectron && window.nikaDesktop.kaspiPos)",
-                    true
-                );
-                console.log("Legacy desktop bridge:", bridgeReady ? "ready" : "missing");
-            } catch (error) {
-                console.error("Не удалось проверить Legacy desktop bridge:", error);
-            }
         }
     });
 
@@ -894,13 +918,6 @@ app.whenReady().then(() => {
     settings = loadPrinterSettings();
     registerPrinterIpc();
     registerKaspiPosIpc();
-    offlineRuntime = createDesktopOfflineRuntime({
-        app,
-        ipcMain,
-        getWindow: () => win,
-        appUrl: APP_URL,
-        legacyMode: LEGACY_MODE
-    });
     if (DEV_MODE) startFlask();
     createWindow();
     configureAutoUpdates();
@@ -912,7 +929,6 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
     if (updateCheckTimer) clearInterval(updateCheckTimer);
-    if (offlineRuntime) offlineRuntime.dispose();
     if (DEV_MODE && flaskProcess) {
         flaskProcess.kill();
         flaskProcess = null;
