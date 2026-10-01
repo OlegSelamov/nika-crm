@@ -16,14 +16,14 @@ const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
 const LEGACY_MODE = process.env.NIKA_LEGACY === "1" || /legacy/i.test(app.getName());
 
-// Electron 22 is the last branch that supports Windows 8.1. On some older
-// Intel/AMD drivers D3D11 + partial tile reuse can leave stale/duplicated UI
-// regions. Keep hardware acceleration for responsiveness, but use the older
-// D3D9 ANGLE backend and force full tile rasterization in Legacy.
+// Electron 22 on Windows 8.1 can corrupt GPU-composited surfaces on some
+// older Intel/AMD drivers: stale tiles are reused and parts of the window
+// appear duplicated after every repaint/click. D3D9 still reproduces this on
+// affected machines, so Legacy deliberately uses Chromium software rendering.
 if (LEGACY_MODE) {
-    app.commandLine.appendSwitch("use-angle", "d3d9");
-    app.commandLine.appendSwitch("disable-partial-raster");
-    app.commandLine.appendSwitch("disable-zero-copy");
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch("disable-gpu-compositing");
+    app.commandLine.appendSwitch("disable-direct-composition");
 }
 
 const APP_URL = DEV_MODE
@@ -769,10 +769,20 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            // Electron 22 defaults to sandboxed renderers. The Legacy build
+            // keeps Node disabled and context isolation enabled, but runs the
+            // trusted preload outside Chromium's renderer sandbox so the
+            // desktop IPC bridge (printers/Kaspi POS/offline) is available
+            // consistently on Windows 8.1.
+            sandbox: !LEGACY_MODE,
             spellcheck: false,
             preload: path.join(__dirname, "preload.js"),
             partition: LEGACY_MODE ? "persist:nika-business-legacy" : "persist:nika-business"
         }
+    });
+
+    win.webContents.on("preload-error", (_event, preloadPath, error) => {
+        console.error("Nika preload failed:", preloadPath, error);
     });
 
     if (offlineRuntime) offlineRuntime.attachWindow(win);
@@ -789,6 +799,18 @@ function createWindow() {
             await detectPrinters();
         } catch (error) {
             console.error("Не удалось получить список принтеров:", error);
+        }
+
+        if (LEGACY_MODE) {
+            try {
+                const bridgeReady = await win.webContents.executeJavaScript(
+                    "Boolean(window.nikaDesktop && window.nikaDesktop.isElectron && window.nikaDesktop.kaspiPos)",
+                    true
+                );
+                console.log("Legacy desktop bridge:", bridgeReady ? "ready" : "missing");
+            } catch (error) {
+                console.error("Не удалось проверить Legacy desktop bridge:", error);
+            }
         }
     });
 
