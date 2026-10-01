@@ -342,6 +342,14 @@ function installOfflineNetworkBridge() {
     window.addEventListener("offline", report);
 }
 
+const kaspiPos = Object.freeze({
+    getState: () => ipcRenderer.invoke("kaspi:get-state"),
+    saveIp: (ip) => ipcRenderer.invoke("kaspi:save-ip", { ip }),
+    test: (ip) => ipcRenderer.invoke("kaspi:test", { ip }),
+    startPayment: (payload) => ipcRenderer.invoke("kaspi:payment", payload || {}),
+    getStatus: (processId) => ipcRenderer.invoke("kaspi:status", { processId })
+});
+
 const printers = Object.freeze({
     getState: () => ipcRenderer.invoke("printer:get-state"),
     refresh: () => ipcRenderer.invoke("printer:refresh"),
@@ -359,6 +367,7 @@ contextBridge.exposeInMainWorld("nikaDesktop", Object.freeze({
     isElectron: true,
     platform: process.platform,
     printers,
+    kaspiPos,
     offline
 }));
 
