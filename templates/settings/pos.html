@@ -4,33 +4,88 @@
 
 <h2>POS Терминалы</h2>
 
-<div class="card">
-
+<div class="card" style="max-width:620px">
     <div class="form-group">
         <label>Тип терминала</label>
-
-        <select>
+        <select id="posType">
             <option>Kaspi POS</option>
-            <option>Halyk POS</option>
-            <option>Freedom POS</option>
-            <option>Smart POS</option>
         </select>
     </div>
 
     <div class="form-group">
-        <label>IP адрес</label>
-        <input type="text" placeholder="192.168.1.100">
+        <label>IP адрес терминала</label>
+        <input id="kaspiPosIp" type="text" inputmode="decimal" autocomplete="off" placeholder="192.168.1.159">
+        <div id="kaspiPosHint" style="margin-top:7px;color:#6b7280;font-size:12px">
+            Компьютер и Kaspi POS должны быть подключены к одному роутеру.
+        </div>
     </div>
 
-    <div class="form-group">
-        <label>Порт</label>
-        <input type="text" placeholder="8080">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn" type="button" id="kaspiPosTestBtn">Проверить подключение</button>
+        <button class="btn" type="button" id="kaspiPosSaveBtn">Сохранить</button>
     </div>
 
-    <button class="btn">
-        Проверить подключение
-    </button>
-
+    <div id="kaspiPosStatus" style="margin-top:14px;font-weight:700"></div>
 </div>
+
+<script>
+(() => {
+    const bridge = window.nikaDesktop && window.nikaDesktop.kaspiPos;
+    const input = document.getElementById("kaspiPosIp");
+    const status = document.getElementById("kaspiPosStatus");
+    const testBtn = document.getElementById("kaspiPosTestBtn");
+    const saveBtn = document.getElementById("kaspiPosSaveBtn");
+
+    const show = (text, ok = null) => {
+        status.textContent = text;
+        status.style.color = ok === true ? "#16834a" : ok === false ? "#c2410c" : "#475569";
+    };
+
+    if (!bridge) {
+        show("Локальное подключение Kaspi POS доступно в приложении Nika Business для Windows.", false);
+        testBtn.disabled = true;
+        saveBtn.disabled = true;
+        return;
+    }
+
+    bridge.getState().then((state) => {
+        if (state && state.ip) input.value = state.ip;
+    }).catch(() => {});
+
+    saveBtn.addEventListener("click", async () => {
+        show("Сохраняем…");
+        const result = await bridge.saveIp(input.value.trim());
+        if (!result || !result.success) {
+            show((result && result.error) || "Не удалось сохранить IP", false);
+            return;
+        }
+        input.value = result.ip;
+        show("IP терминала сохранён", true);
+    });
+
+    testBtn.addEventListener("click", async () => {
+        const ip = input.value.trim();
+        if (!ip) {
+            show("Введите IP терминала", false);
+            return;
+        }
+        show("Проверяем соединение…");
+        testBtn.disabled = true;
+        try {
+            const result = await bridge.test(ip);
+            if (result && result.connected) {
+                await bridge.saveIp(ip);
+                show("Kaspi POS подключён · " + result.ip, true);
+            } else {
+                show((result && result.error) || "Терминал недоступен", false);
+            }
+        } catch (error) {
+            show(error && error.message ? error.message : "Ошибка подключения", false);
+        } finally {
+            testBtn.disabled = false;
+        }
+    });
+})();
+</script>
 
 {% endblock %}
