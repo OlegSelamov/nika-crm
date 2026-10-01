@@ -676,6 +676,61 @@ function registerKaspiPosIpc() {
         }
     });
 
+    ipcMain.handle("kaspi:refund", async (event, payload = {}) => {
+        requireMainWindow(event);
+
+        const transactionId = String(payload.transactionId || "").trim();
+        const method = String(payload.method || "qr").trim() || "qr";
+        const amount = Math.round(Number(payload.amount || 0));
+
+        if (!transactionId) {
+            return { success: false, error: "transactionId не указан" };
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return { success: false, error: "Некорректная сумма возврата" };
+        }
+
+        try {
+            const response = await kaspiPosRequest(
+                "/v2/refund",
+                { transactionId, amount, method },
+                { timeoutMs: 15000 }
+            );
+            const result = response.data || {};
+
+            if (
+                response.httpStatus < 200 ||
+                response.httpStatus >= 300 ||
+                result.statusCode !== 0
+            ) {
+                return {
+                    success: false,
+                    error: result,
+                    httpStatus: response.httpStatus
+                };
+            }
+
+            const processId =
+                result &&
+                result.data &&
+                result.data.processId;
+
+            if (!processId) {
+                return {
+                    success: false,
+                    error: "Kaspi POS не вернул processId возврата"
+                };
+            }
+
+            return { success: true, processId, raw: result };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message || String(error)
+            };
+        }
+    });
+
     ipcMain.handle("kaspi:status", async (event, payload = {}) => {
         requireMainWindow(event);
         const processId = String(payload.processId || "").trim();

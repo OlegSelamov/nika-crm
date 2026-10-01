@@ -3227,9 +3227,67 @@ function monitorKaspiPayment(processId) {
     }, 2000);
 }
 
-function refundSale(id, button = null){
+async function waitKaspiPosProcess(processId, timeoutMs = 70000) {
+    const bridge = window.nikaDesktop && window.nikaDesktop.kaspiPos;
+    if (!bridge || typeof bridge.getStatus !== "function") {
+        throw new Error("Локальный Kaspi POS недоступен");
+    }
 
-    if(!confirm("Оформить возврат продажи? Товар будет возвращён на склад.")){
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        const data = await bridge.getStatus(processId);
+
+        if (data && data.status === "success") {
+            return data;
+        }
+        if (data && data.status === "fail") {
+            throw new Error(data.message || "Возврат отменён или отклонён на терминале");
+        }
+        if (data && data.status === "unknown") {
+            throw new Error("Статус возврата неизвестен. Проверьте терминал перед повторной попыткой.");
+        }
+        if (data && data.status === "error") {
+            throw new Error(data.message || "Ошибка связи с Kaspi POS");
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    throw new Error("Истекло время ожидания возврата Kaspi POS");
+}
+
+async function refundKaspiPosLocally(sale) {
+    const bridge = window.nikaDesktop && window.nikaDesktop.kaspiPos;
+    if (!bridge || typeof bridge.refund !== "function") {
+        throw new Error("Локальное подключение Kaspi POS недоступно в этом окне");
+    }
+
+    const transactionId = String(sale.kaspi_transaction_id || "").trim();
+    if (!transactionId) {
+        throw new Error("В продаже отсутствует transactionId Kaspi POS");
+    }
+
+    const result = await bridge.refund({
+        transactionId,
+        amount: Math.round(Number(sale.total_amount || 0)),
+        method: sale.kaspi_method || "qr"
+    });
+
+    if (!result || result.success !== true) {
+        const error = result && result.error;
+        const message = typeof error === "string"
+            ? error
+            : (error && (error.message || error.statusMessage)) ||
+              "Не удалось запустить возврат Kaspi POS";
+        throw new Error(message);
+    }
+
+    const status = await waitKaspiPosProcess(result.processId);
+    return status.transactionId || result.processId;
+}
+
+async function refundSale(id, button = null) {
+    if (!confirm("Оформить возврат продажи? Товар будет возвращён на склад.")) {
         return;
     }
 
@@ -3239,47 +3297,63 @@ function refundSale(id, button = null){
         button.textContent = "Возвращаем…";
     }
 
-    fetch("/sales/refund/" + id,{
-        method:"POST"
-    })
-    .then(r => r.json())
-    .then(data => {
+    try {
+        let finalizeBody = {};
 
-        if(data.success){
+        const saleResponse = await fetch("/api/sale/" + encodeURIComponent(id));
+        const sale = await saleResponse.json().catch(() => null);
 
-            alert("Возврат выполнен");
+        if (!saleResponse.ok || !sale) {
+            throw new Error((sale && sale.error) || "Не удалось загрузить продажу");
+        }
 
-            loadSalesHistory();
+        if (sale.sale_type === "kaspi") {
+            const bridge = window.nikaDesktop && window.nikaDesktop.kaspiPos;
 
-            if(data.refund_check_available){
-                openRefundCheckModal(id);
-            }
+            if (bridge && typeof bridge.refund === "function") {
+                if (button) button.textContent = "Возврат Kaspi…";
 
-        }else{
-
-            alert(
-                data.error ||
-                "Ошибка возврата"
-            );
-            if (button && document.body.contains(button)) {
-                button.disabled = false;
-                button.textContent = originalText;
+                const refundTransactionId = await refundKaspiPosLocally(sale);
+                finalizeBody = {
+                    kaspi_refund_local: true,
+                    kaspi_refund_transaction_id: refundTransactionId
+                };
             }
         }
 
-    })
-    .catch(err => {
+        if (button) button.textContent = "Возврат чека…";
 
-        console.error(err);
+        const response = await fetch("/sales/refund/" + encodeURIComponent(id), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(finalizeBody)
+        });
 
-        alert("Ошибка связи");
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data || data.success !== true) {
+            throw new Error(
+                (data && (typeof data.error === "string"
+                    ? data.error
+                    : JSON.stringify(data.error))) ||
+                "Ошибка возврата"
+            );
+        }
 
+        alert("Возврат выполнен");
+        loadSalesHistory();
+
+        if (data.refund_check_available) {
+            openRefundCheckModal(id);
+        }
+    } catch (err) {
+        console.error("REFUND ERROR:", err);
+        alert(err.message || "Ошибка связи");
+    } finally {
         if (button && document.body.contains(button)) {
             button.disabled = false;
             button.textContent = originalText;
         }
-
-    });
+    }
 }
 
 /* Предыдущая реализация управления сменой оставлена только для истории сборки.

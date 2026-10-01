@@ -146,6 +146,8 @@ const kaspiPos = Object.freeze({
     test: (ip) => ipcRenderer.invoke("kaspi:test", { ip }),
     startPayment: (payload) =>
         ipcRenderer.invoke("kaspi:payment", payload || {}),
+    refund: (payload) =>
+        ipcRenderer.invoke("kaspi:refund", payload || {}),
     getStatus: (processId) =>
         ipcRenderer.invoke("kaspi:status", { processId })
 });
