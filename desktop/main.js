@@ -16,11 +16,14 @@ const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
 const LEGACY_MODE = process.env.NIKA_LEGACY === "1" || /legacy/i.test(app.getName());
 
-// Electron 22 on Windows 8.1 can produce duplicated/ghosted UI regions with GPU
-// compositing on older display drivers. Legacy mode favors stable software rendering.
+// Electron 22 is the last branch that supports Windows 8.1. On some older
+// Intel/AMD drivers D3D11 + partial tile reuse can leave stale/duplicated UI
+// regions. Keep hardware acceleration for responsiveness, but use the older
+// D3D9 ANGLE backend and force full tile rasterization in Legacy.
 if (LEGACY_MODE) {
-    app.disableHardwareAcceleration();
-    app.commandLine.appendSwitch("disable-gpu-compositing");
+    app.commandLine.appendSwitch("use-angle", "d3d9");
+    app.commandLine.appendSwitch("disable-partial-raster");
+    app.commandLine.appendSwitch("disable-zero-copy");
 }
 
 const APP_URL = DEV_MODE
