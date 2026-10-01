@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const fs = require("fs");
 const path = require("path");
@@ -810,6 +810,27 @@ function registerPrinterIpc() {
     });
 }
 
+async function clearRetiredDesktopOfflineState() {
+    const marker = path.join(app.getPath("userData"), "desktop-offline-retired-v1");
+    if (fs.existsSync(marker)) return;
+
+    const partition = LEGACY_MODE
+        ? "persist:nika-business-legacy"
+        : "persist:nika-business";
+    const ses = session.fromPartition(partition);
+
+    try {
+        await ses.clearStorageData({
+            storages: ["serviceworkers", "cachestorage"]
+        });
+        await ses.clearCache();
+        fs.writeFileSync(marker, new Date().toISOString(), "utf8");
+        console.log("Старый desktop offline cache очищен");
+    } catch (error) {
+        console.error("Не удалось очистить старый desktop offline cache:", error);
+    }
+}
+
 function createWindow() {
     win = new BrowserWindow({
         width: 1400,
@@ -914,10 +935,11 @@ function configureAutoUpdates() {
     updateCheckTimer = setInterval(check, 4 * 60 * 60 * 1000);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
     settings = loadPrinterSettings();
     registerPrinterIpc();
     registerKaspiPosIpc();
+    await clearRetiredDesktopOfflineState();
     if (DEV_MODE) startFlask();
     createWindow();
     configureAutoUpdates();
