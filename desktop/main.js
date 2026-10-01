@@ -3,6 +3,7 @@ const { autoUpdater } = require("electron-updater");
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const http = require("http");
 const { createDesktopOfflineRuntime } = require("./offline_runtime");
 
 let win;
@@ -26,7 +27,8 @@ const DEFAULT_PRINTER_SETTINGS = Object.freeze({
     receipt_copies: 1,
     document_copies: 1,
     auto_print_receipt: false,
-    document_landscape: false
+    document_landscape: false,
+    kaspi_pos_ip: null
 });
 
 let settings = { ...DEFAULT_PRINTER_SETTINGS };
@@ -66,6 +68,25 @@ function normalizePrinterName(value) {
     return trimmed || null;
 }
 
+function normalizeKaspiIp(value) {
+    if (typeof value !== "string") return null;
+    const raw = value.trim()
+        .replace(/^https?:\/\//i, "")
+        .split("/")[0]
+        .split(":")[0];
+    const parts = raw.split(".");
+    if (parts.length !== 4) return null;
+    const octets = parts.map((part) => Number(part));
+    if (octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+        return null;
+    }
+    const isPrivate =
+        octets[0] === 10 ||
+        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+        (octets[0] === 192 && octets[1] === 168);
+    return isPrivate ? octets.join(".") : null;
+}
+
 function normalizeSettings(value = {}) {
     const paperWidth = Number(value.receipt_paper_width);
     const rawOffset = Number(value.receipt_offset_mm);
@@ -80,7 +101,8 @@ function normalizeSettings(value = {}) {
         receipt_copies: toCopyCount(value.receipt_copies),
         document_copies: toCopyCount(value.document_copies),
         auto_print_receipt: value.auto_print_receipt === true,
-        document_landscape: value.document_landscape === true
+        document_landscape: value.document_landscape === true,
+        kaspi_pos_ip: normalizeKaspiIp(value.kaspi_pos_ip)
     };
 }
 
@@ -492,6 +514,142 @@ function testDocumentHtml() {
         </main>`;
 }
 
+function kaspiPosRequest(pathname, params = {}, options = {}) {
+    const ip = normalizeKaspiIp(options.ip || settings.kaspi_pos_ip);
+    if (!ip) {
+        return Promise.reject(new Error("Укажите IP Kaspi POS в Настройки → POS терминалы"));
+    }
+
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+            query.set(key, String(value));
+        }
+    });
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const target = `http://${ip}:8080${pathname}${suffix}`;
+    const timeoutMs = Number(options.timeoutMs || 7000);
+
+    return new Promise((resolve, reject) => {
+        const request = http.get(target, { timeout: timeoutMs }, (response) => {
+            let body = "";
+            response.setEncoding("utf8");
+            response.on("data", (chunk) => {
+                body += chunk;
+                if (body.length > 1024 * 1024) {
+                    request.destroy(new Error("Слишком большой ответ Kaspi POS"));
+                }
+            });
+            response.on("end", () => {
+                let data;
+                try {
+                    data = body ? JSON.parse(body) : {};
+                } catch (_) {
+                    return reject(new Error("Kaspi POS вернул некорректный ответ"));
+                }
+                resolve({
+                    httpStatus: response.statusCode || 0,
+                    data
+                });
+            });
+        });
+
+        request.on("timeout", () => {
+            request.destroy(new Error("Kaspi POS не отвечает. Проверьте IP и локальную сеть"));
+        });
+        request.on("error", (error) => reject(error));
+    });
+}
+
+async function kaspiPosTest(ipOverride = null) {
+    const ip = normalizeKaspiIp(ipOverride || settings.kaspi_pos_ip);
+    if (!ip) {
+        return { success: false, connected: false, error: "Некорректный локальный IP терминала" };
+    }
+    try {
+        const response = await kaspiPosRequest("/v2/deviceinfo", {}, { ip, timeoutMs: 4500 });
+        return {
+            success: response.httpStatus >= 200 && response.httpStatus < 300,
+            connected: response.httpStatus >= 200 && response.httpStatus < 300,
+            ip,
+            httpStatus: response.httpStatus,
+            device: response.data
+        };
+    } catch (error) {
+        return { success: false, connected: false, ip, error: error.message || String(error) };
+    }
+}
+
+function registerKaspiPosIpc() {
+    ipcMain.handle("kaspi:get-state", async (event) => {
+        requireMainWindow(event);
+        return {
+            isElectron: true,
+            ip: settings.kaspi_pos_ip || "",
+            configured: Boolean(settings.kaspi_pos_ip)
+        };
+    });
+
+    ipcMain.handle("kaspi:save-ip", async (event, payload = {}) => {
+        requireMainWindow(event);
+        const ip = normalizeKaspiIp(payload.ip);
+        if (!ip) {
+            return { success: false, error: "Введите локальный IP, например 192.168.1.159" };
+        }
+        savePrinterSettings({ kaspi_pos_ip: ip });
+        return { success: true, ip };
+    });
+
+    ipcMain.handle("kaspi:test", async (event, payload = {}) => {
+        requireMainWindow(event);
+        return kaspiPosTest(payload.ip || null);
+    });
+
+    ipcMain.handle("kaspi:payment", async (event, payload = {}) => {
+        requireMainWindow(event);
+        const amount = Math.round(Number(payload.amount || 0));
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return { success: false, error: "Некорректная сумма оплаты" };
+        }
+        try {
+            const response = await kaspiPosRequest("/v2/payment", { amount }, { timeoutMs: 10000 });
+            const result = response.data || {};
+            if (response.httpStatus < 200 || response.httpStatus >= 300 || result.statusCode !== 0) {
+                return { success: false, error: result, httpStatus: response.httpStatus };
+            }
+            const processId = result?.data?.processId;
+            if (!processId) {
+                return { success: false, error: "Kaspi POS не вернул processId" };
+            }
+            return { success: true, processId, raw: result };
+        } catch (error) {
+            return { success: false, error: error.message || String(error) };
+        }
+    });
+
+    ipcMain.handle("kaspi:status", async (event, payload = {}) => {
+        requireMainWindow(event);
+        const processId = String(payload.processId || "").trim();
+        if (!processId) return { status: "error", message: "processId не указан" };
+        try {
+            const response = await kaspiPosRequest("/v2/status", { processId }, { timeoutMs: 7000 });
+            const result = response.data || {};
+            const data = result.data || {};
+            return {
+                status: data.status,
+                subStatus: data.subStatus,
+                message: data.message,
+                transactionId: data.transactionId,
+                method: data?.chequeInfo?.method,
+                raw: result
+            };
+        } catch (error) {
+            return { status: "error", message: error.message || String(error) };
+        }
+    });
+}
+
 function registerPrinterIpc() {
     ipcMain.handle("printer:get-state", async (event) => {
         requireMainWindow(event);
@@ -702,6 +860,7 @@ function configureAutoUpdates() {
 app.whenReady().then(() => {
     settings = loadPrinterSettings();
     registerPrinterIpc();
+    registerKaspiPosIpc();
     offlineRuntime = createDesktopOfflineRuntime({
         app,
         ipcMain,
