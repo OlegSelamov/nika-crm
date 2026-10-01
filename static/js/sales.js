@@ -3161,20 +3161,20 @@ function payKaspiPOS() {
         return;
     }
 
-    let total = 0;
-    cart.forEach(item => {
-        total += item.price * item.qty;
-    });
+    // Используем тот же итог, который показан в корзине и затем сохраняется
+    // в продаже. Для весового товара/ввода по сумме cartItemTotal учитывает
+    // line_total и округление, тогда как price * qty может отличаться на 1–2 ₸.
+    const total = Math.round(saleCartTotal());
 
     startKaspiPosPayment(total)
-        .then(data => monitorKaspiPayment(data.processId))
+        .then(data => monitorKaspiPayment(data.processId, total))
         .catch(error => {
             console.error("KASPI POS START ERROR:", error);
             alert(error.message || "Ошибка связи с Kaspi POS");
         });
 }
 
-function monitorKaspiPayment(processId) {
+function monitorKaspiPayment(processId, chargedTotal = null) {
     let requestInFlight = false;
 
     const timer = setInterval(async () => {
@@ -3188,10 +3188,11 @@ function monitorKaspiPayment(processId) {
             if (data.status === "success") {
                 clearInterval(timer);
 
+                const confirmedTotal = Number(chargedTotal);
                 document.getElementById("kaspiInput").value =
-                    document.getElementById("totalAmount")
-                        .innerText
-                        .replace(/\D/g, "");
+                    Number.isFinite(confirmedTotal) && confirmedTotal > 0
+                        ? String(Math.round(confirmedTotal))
+                        : String(Math.round(saleCartTotal()));
 
                 window.lastKaspiTransactionId = data.transactionId;
                 window.lastKaspiMethod = data.method || "qr";
