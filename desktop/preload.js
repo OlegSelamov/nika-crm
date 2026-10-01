@@ -138,9 +138,6 @@ function installElectronFocusGuard() {
     }, true);
 }
 
-installElectronFocusGuard();
-
-
 const offline = Object.freeze({
     getState: () => ipcRenderer.invoke("offline:get-state"),
     sync: () => ipcRenderer.invoke("offline:sync"),
@@ -366,11 +363,23 @@ const printers = Object.freeze({
 contextBridge.exposeInMainWorld("nikaDesktop", Object.freeze({
     isElectron: true,
     platform: process.platform,
+    electronVersion: process.versions.electron,
     printers,
     kaspiPos,
     offline
 }));
 
-installOfflineFetchBridge();
-installOfflineNetworkBridge();
-installOfflineStatusBadge();
+// Optional helpers must never block the core desktop bridge. This is
+// especially important on the older Chromium build used by Windows 8.1.
+try { installElectronFocusGuard(); } catch (error) {
+    console.error("Nika desktop focus guard failed:", error);
+}
+try { installOfflineFetchBridge(); } catch (error) {
+    console.error("Nika desktop offline fetch bridge failed:", error);
+}
+try { installOfflineNetworkBridge(); } catch (error) {
+    console.error("Nika desktop network bridge failed:", error);
+}
+try { installOfflineStatusBadge(); } catch (error) {
+    console.error("Nika desktop offline badge failed:", error);
+}
