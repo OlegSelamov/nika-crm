@@ -3110,8 +3110,47 @@ async function confirmInvoicePayment(saleId, button) {
     }
 }
 
-function payKaspiPOS() {
+async function startKaspiPosPayment(total) {
+    const desktopBridge = window.nikaDesktop && window.nikaDesktop.kaspiPos;
 
+    if (desktopBridge && typeof desktopBridge.startPayment === "function") {
+        const result = await desktopBridge.startPayment({ amount: Math.round(total) });
+        if (!result || !result.success) {
+            const error = result && result.error;
+            const message = typeof error === "string"
+                ? error
+                : (error && (error.message || error.statusMessage)) || "Ошибка Kaspi POS";
+            throw new Error(message);
+        }
+        return result;
+    }
+
+    const response = await fetch("/kaspi/start-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: total })
+    });
+    const data = await response.json();
+    if (!data.success) {
+        const message = typeof data.error === "string"
+            ? data.error
+            : (data.error && (data.error.message || data.error.statusMessage)) || "Ошибка POS";
+        throw new Error(message);
+    }
+    return data;
+}
+
+async function getKaspiPosPaymentStatus(processId) {
+    const desktopBridge = window.nikaDesktop && window.nikaDesktop.kaspiPos;
+    if (desktopBridge && typeof desktopBridge.getStatus === "function") {
+        return desktopBridge.getStatus(processId);
+    }
+
+    const response = await fetch("/kaspi/status/" + encodeURIComponent(processId));
+    return response.json();
+}
+
+function payKaspiPOS() {
     if (!selectedClient) {
         alert("Сначала выбери клиента");
         return;
@@ -3123,96 +3162,68 @@ function payKaspiPOS() {
     }
 
     let total = 0;
-
     cart.forEach(item => {
         total += item.price * item.qty;
     });
 
-    fetch("/kaspi/start-payment", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            amount: total
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-
-        if (!data.success) {
-            alert(data.error || "Ошибка POS");
-            return;
-        }
-
-        monitorKaspiPayment(data.processId);
-    });
+    startKaspiPosPayment(total)
+        .then(data => monitorKaspiPayment(data.processId))
+        .catch(error => {
+            console.error("KASPI POS START ERROR:", error);
+            alert(error.message || "Ошибка связи с Kaspi POS");
+        });
 }
 
 function monitorKaspiPayment(processId) {
+    let requestInFlight = false;
 
-    const timer = setInterval(() => {
+    const timer = setInterval(async () => {
+        if (requestInFlight) return;
+        requestInFlight = true;
 
-        fetch("/kaspi/status/" + processId)
-        .then(res => res.json())
-        .then(data => {
-
+        try {
+            const data = await getKaspiPosPaymentStatus(processId);
             console.log("KASPI STATUS:", data);
 
             if (data.status === "success") {
-
                 clearInterval(timer);
 
                 document.getElementById("kaspiInput").value =
                     document.getElementById("totalAmount")
                         .innerText
-                        .replace(/\D/g, '');
-				
-				window.lastKaspiTransactionId =
-					data.transactionId;
+                        .replace(/\D/g, "");
 
-				window.lastKaspiMethod =
-					data.method || "qr";
-					
+                window.lastKaspiTransactionId = data.transactionId;
+                window.lastKaspiMethod = data.method || "qr";
+
                 alert("Оплата Kaspi POS прошла успешно");
-
                 pay();
                 return;
             }
 
             if (data.status === "fail") {
-
                 clearInterval(timer);
-
-                alert(
-                    data.message ||
-                    "Оплата отменена или отклонена на терминале"
-                );
-
+                alert(data.message || "Оплата отменена или отклонена на терминале");
                 return;
             }
 
             if (data.status === "unknown") {
-
                 clearInterval(timer);
-
-                alert(
-                    "Статус оплаты неизвестен. Проверь терминал и историю Kaspi перед повторной оплатой."
-                );
-
+                alert("Статус оплаты неизвестен. Проверь терминал и историю Kaspi перед повторной оплатой.");
                 return;
             }
 
-        })
-        .catch(err => {
-
+            if (data.status === "error") {
+                clearInterval(timer);
+                alert(data.message || "Ошибка связи с Kaspi POS");
+            }
+        } catch (error) {
             clearInterval(timer);
-
-            alert("Ошибка связи с Kaspi POS");
-
-            console.error(err);
-        });
-
+            console.error("KASPI POS STATUS ERROR:", error);
+            alert(error.message || "Ошибка связи с Kaspi POS");
+        } finally {
+            requestInFlight = false;
+        }
     }, 2000);
 }
 
