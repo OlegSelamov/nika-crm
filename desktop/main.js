@@ -15,6 +15,14 @@ let offlineRuntime;
 const APP_MODE = process.env.NIKA_MODE || "vps";
 const DEV_MODE = APP_MODE === "local";
 const LEGACY_MODE = process.env.NIKA_LEGACY === "1" || /legacy/i.test(app.getName());
+
+// Electron 22 on Windows 8.1 can produce duplicated/ghosted UI regions with GPU
+// compositing on older display drivers. Legacy mode favors stable software rendering.
+if (LEGACY_MODE) {
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch("disable-gpu-compositing");
+}
+
 const APP_URL = DEV_MODE
     ? "http://127.0.0.1:5000"
     : "https://nikabusiness.com";
