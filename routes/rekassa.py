@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, session
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import requests
 import os
 import uuid
@@ -18,6 +19,107 @@ REKASSA_URL = os.getenv("REKASSA_URL")
 REKASSA_TIMEZONE = "+05:00"
 _SHIFT_LOCKS = {}
 _SHIFT_LOCKS_GUARD = threading.Lock()
+
+
+def _decimal_amount(value, default="0"):
+    try:
+        number = Decimal(str(value if value not in (None, "") else default))
+    except (InvalidOperation, TypeError, ValueError):
+        number = Decimal(default)
+    return number if number.is_finite() else Decimal(default)
+
+
+def _money_from_cents(cents):
+    cents = int(cents or 0)
+    sign = -1 if cents < 0 else 1
+    absolute = abs(cents)
+    bills = absolute // 100
+    coins = absolute % 100
+    return {
+        "bills": str(sign * bills),
+        "coins": sign * coins,
+    }
+
+
+def _money(value):
+    cents = int(
+        (_decimal_amount(value) * Decimal("100")).quantize(
+            Decimal("1"),
+            rounding=ROUND_HALF_UP,
+        )
+    )
+    return _money_from_cents(cents)
+
+
+def _rounded_line_cents(quantity_milli, price_cents):
+    value = (
+        Decimal(quantity_milli)
+        * Decimal(price_cents)
+        / Decimal("1000")
+    )
+    return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _rekassa_line_amounts(item):
+    """Build a mathematically consistent reKassa commodity line.
+
+    reKassa validates commodity.sum == quantity * price. Nika can store an
+    exact line total for measured goods (for example 1290 ₸) while quantity is
+    rounded to 0.001. In that case catalog price * rounded quantity can differ
+    by 1–2 ₸. Keep the sold quantity and exact charged total, and derive the
+    fiscal unit price (including tiyn) so the reKassa equation is satisfied.
+    """
+    quantity = _decimal_amount(item.get("quantity"), "0")
+    quantity_milli = int(
+        (quantity * Decimal("1000")).quantize(
+            Decimal("1"),
+            rounding=ROUND_HALF_UP,
+        )
+    )
+    if quantity_milli <= 0:
+        quantity_milli = 1000
+
+    total_cents = int(
+        (_decimal_amount(item.get("total"), "0") * Decimal("100")).quantize(
+            Decimal("1"),
+            rounding=ROUND_HALF_UP,
+        )
+    )
+    catalog_price_cents = int(
+        (_decimal_amount(item.get("price"), "0") * Decimal("100")).quantize(
+            Decimal("1"),
+            rounding=ROUND_HALF_UP,
+        )
+    )
+
+    # Normal goods keep the catalog unit price when it already reproduces the
+    # exact line sum according to reKassa's 0.001 quantity precision.
+    if _rounded_line_cents(quantity_milli, catalog_price_cents) == total_cents:
+        price_cents = catalog_price_cents
+    else:
+        # Exact-amount / measured sale: derive the closest 0.01 ₸ unit price.
+        ideal = (
+            Decimal(total_cents)
+            * Decimal("1000")
+            / Decimal(quantity_milli)
+        )
+        center = int(ideal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        price_cents = center
+
+        # Usually center is enough. Search a few tiyn around it to guarantee
+        # that rounding(quantity * price) equals the stored charged sum.
+        for delta in (0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5):
+            candidate = center + delta
+            if candidate >= 0 and _rounded_line_cents(quantity_milli, candidate) == total_cents:
+                price_cents = candidate
+                break
+
+    return {
+        "quantity": quantity_milli,
+        "price": _money_from_cents(price_cents),
+        "sum": _money_from_cents(total_cents),
+        "total_cents": total_cents,
+    }
 
 
 def _response_json(response):
@@ -1088,17 +1190,17 @@ def rekassa_sell(conn, sale_id):
 
     now = datetime.now()
     ticket_items = []
-    total = 0
+    total_cents = 0
 
     for item in items:
-        amount = int(round(float(item["total"] or 0)))
-        total += amount
+        fiscal_line = _rekassa_line_amounts(item)
+        total_cents += fiscal_line["total_cents"]
         commodity = {
             "name": item["name"] or "Позиция",
             "sectionCode": "1",
-            "quantity": int(round(float(item["quantity"] or 0) * 1000)),
-            "price": {"bills": str(int(round(float(item["price"] or 0)))), "coins": 0},
-            "sum": {"bills": str(amount), "coins": 0},
+            "quantity": fiscal_line["quantity"],
+            "price": fiscal_line["price"],
+            "sum": fiscal_line["sum"],
             "measureUnitCode": rekassa_unit(item.get("unit"), item.get("item_type"))[0],
             "auxiliary": [{"key": "UNIT_TYPE", "value": rekassa_unit(item.get("unit"), item.get("item_type"))[1]}]
         }
@@ -1111,9 +1213,10 @@ def rekassa_sell(conn, sale_id):
         ticket_items.append({"type": "ITEM_TYPE_COMMODITY", "commodity": commodity})
 
     payment_type = "PAYMENT_CARD" if sale["sale_type"] in ("card", "kaspi", "invoice") else "PAYMENT_CASH"
-    amounts = {"total": {"bills": str(total), "coins": 0}}
+    total_money = _money_from_cents(total_cents)
+    amounts = {"total": total_money}
     if payment_type == "PAYMENT_CASH":
-        amounts["taken"] = {"bills": str(total), "coins": 0}
+        amounts["taken"] = total_money
         amounts["change"] = {"bills": "0", "coins": 0}
 
     ticket = {
@@ -1124,7 +1227,7 @@ def rekassa_sell(conn, sale_id):
         },
         "domain": {"type": "DOMAIN_SERVICES"},
         "items": ticket_items,
-        "payments": [{"type": payment_type, "sum": {"bills": str(total), "coins": 0}}],
+        "payments": [{"type": payment_type, "sum": total_money}],
         "amounts": amounts,
         "operator": {"code": 0}
     }
@@ -1318,24 +1421,18 @@ def rekassa_refund(conn, sale_id):
     now = datetime.now()
 
     ticket_items = []
-    total = 0
+    total_cents = 0
 
     for item in items:
-        amount = int(item["total"])
-        total += amount
+        fiscal_line = _rekassa_line_amounts(item)
+        total_cents += fiscal_line["total_cents"]
 
         commodity = {
             "name": item["name"],
             "sectionCode": "1",
-            "quantity": int(item["quantity"] * 1000),
-            "price": {
-                "bills": str(int(item["price"])),
-                "coins": 0
-            },
-            "sum": {
-                "bills": str(amount),
-                "coins": 0
-            },
+            "quantity": fiscal_line["quantity"],
+            "price": fiscal_line["price"],
+            "sum": fiscal_line["sum"],
             "measureUnitCode": rekassa_unit(item.get("unit"), item.get("item_type"))[0],
             "auxiliary": [{"key": "UNIT_TYPE", "value": rekassa_unit(item.get("unit"), item.get("item_type"))[1]}]
         }
@@ -1359,11 +1456,9 @@ def rekassa_refund(conn, sale_id):
     if sale["sale_type"] in ["card", "kaspi", "invoice"]:
         payment_type = "PAYMENT_CARD"
 
+    total_money = _money_from_cents(total_cents)
     amounts = {
-        "total": {
-            "bills": str(total),
-            "coins": 0
-        }
+        "total": total_money
     }
 
     # Для наличного возврата поле taken обязательно, но должно быть равно нулю:
@@ -1404,10 +1499,7 @@ def rekassa_refund(conn, sale_id):
         "payments": [
             {
                 "type": payment_type,
-                "sum": {
-                    "bills": str(total),
-                    "coins": 0
-                }
+                "sum": total_money
             }
         ],
 
