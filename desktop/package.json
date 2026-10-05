@@ -8,7 +8,9 @@
     "local": "set NIKA_MODE=local&& electron .",
     "vps": "set NIKA_MODE=vps&& electron .",
     "start": "set NIKA_MODE=vps&& electron .",
-    "build": "electron-builder --win --publish never"
+    "build": "electron-builder --win --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:mac": "electron-builder --mac --universal --publish never"
   },
   "dependencies": {
     "electron-updater": "^6.6.1"
@@ -48,6 +50,19 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Nika Business",
       "artifactName": "NikaBusinessSetup.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "icon.icns",
+      "category": "public.app-category.business",
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "Nika Business подключается к POS-терминалу и другим устройствам в вашей локальной сети."
+      },
+      "artifactName": "NikaBusiness-macOS.${ext}"
     }
   }
 }
