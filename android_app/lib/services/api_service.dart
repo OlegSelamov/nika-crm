@@ -647,6 +647,20 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> cancelStockMovement(
+    int movementId, {
+    String reason = 'Отменено из мобильного приложения',
+  }) async {
+    final result = await _request(
+      'POST',
+      '/api/stock/movements/$movementId/cancel',
+      body: {'reason': reason},
+      timeout: const Duration(seconds: 30),
+    );
+    await OfflineStore.instance.removeSnapshot('stock_movements');
+    return Map<String, dynamic>.from(result as Map);
+  }
+
   static Future<Map<String, dynamic>> stockIncome({
     required int itemId,
     required double quantity,
