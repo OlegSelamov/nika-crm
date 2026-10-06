@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from utils.sale_amounts import normalize_sale_line
-from utils.offline_operations import load_offline_operation, save_offline_operation, offline_operation_age_seconds
+from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from flask import render_template
 from num2words import num2words
 from flask import session
@@ -238,11 +238,9 @@ def pay_sale():
         cur = conn.cursor()
 
         if operation_id:
-            existing_operation = load_offline_operation(
-                cur, company_id, operation_id
+            existing_operation = lock_and_load_offline_operation(
+                conn, cur, company_id, operation_id
             )
-            # Commit the one-time CREATE TABLE/INDEX before business validation.
-            conn.commit()
 
             if existing_operation:
                 if existing_operation.get("operation_type") != "sale":
