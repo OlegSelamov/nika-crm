@@ -6,7 +6,7 @@ from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from utils.stock_pricing import apply_income_pricing, as_bool
 from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation
-from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting
+from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting, delete_expense_by_source
 
 stock_bp = Blueprint("stock", __name__)
 
@@ -319,6 +319,166 @@ def stock_movements():
         rows=rows
     )
     
+def _ensure_stock_movement_cancellations(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS stock_movement_cancellations (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            movement_id BIGINT NOT NULL,
+            item_id INTEGER NOT NULL,
+            movement_type TEXT NOT NULL,
+            quantity NUMERIC NOT NULL,
+            price NUMERIC,
+            total NUMERIC,
+            comment TEXT,
+            movement_created_at TIMESTAMP,
+            cancelled_by INTEGER,
+            cancel_reason TEXT,
+            cancelled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            UNIQUE (company_id, movement_id)
+        )
+    """)
+
+
+def _recalculate_item_purchase_price(cur, company_id, item_id):
+    """Rebuild moving-average purchase cost from the remaining income history."""
+    cur.execute("""
+        SELECT quantity, price
+        FROM stock_movements
+        WHERE company_id = %s
+          AND item_id = %s
+          AND movement_type = 'income'
+          AND COALESCE(quantity, 0) > 0
+        ORDER BY created_at ASC, id ASC
+    """, (company_id, item_id))
+    incomes = cur.fetchall() or []
+
+    total_qty = 0.0
+    total_cost = 0.0
+    last_price = 0.0
+    for row in incomes:
+        qty = float(row["quantity"] or 0)
+        price = float(row["price"] or 0)
+        if qty <= 0:
+            continue
+        total_qty += qty
+        total_cost += qty * price
+        last_price = price
+
+    average = (total_cost / total_qty) if total_qty > 0 else 0
+    cur.execute("""
+        UPDATE items
+        SET purchase_price = %s,
+            last_purchase_price = %s
+        WHERE id = %s AND company_id = %s
+    """, (average, last_price, item_id, company_id))
+
+
+@stock_bp.route("/api/stock/movements/<int:movement_id>/cancel", methods=["POST"])
+def cancel_stock_movement(movement_id):
+    company_id = session.get("company_id")
+    user_id = session.get("user_id")
+    if not company_id:
+        return jsonify({"success": False, "error": "Компания не выбрана"}), 401
+
+    data = request.get_json(silent=True) or {}
+    reason = str(data.get("reason") or "Отменено пользователем").strip()
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_stock_movement_cancellations(cur)
+        conn.commit()
+
+        cur.execute("""
+            SELECT sm.*
+            FROM stock_movements sm
+            WHERE sm.id = %s AND sm.company_id = %s
+            FOR UPDATE
+        """, (movement_id, company_id))
+        movement = cur.fetchone()
+
+        if not movement:
+            cur.execute("""
+                SELECT movement_id
+                FROM stock_movement_cancellations
+                WHERE company_id = %s AND movement_id = %s
+            """, (company_id, movement_id))
+            if cur.fetchone():
+                conn.rollback()
+                return jsonify({
+                    "success": True,
+                    "already_cancelled": True,
+                    "movement_id": movement_id,
+                })
+            conn.rollback()
+            return jsonify({"success": False, "error": "Движение не найдено"}), 404
+
+        movement_type = str(movement["movement_type"] or "")
+        if movement_type not in ("income", "writeoff"):
+            conn.rollback()
+            return jsonify({
+                "success": False,
+                "error": "Продажи и возвраты отменяются только через соответствующий кассовый документ",
+            }), 400
+
+        cur.execute("""
+            INSERT INTO stock_movement_cancellations (
+                company_id, movement_id, item_id, movement_type,
+                quantity, price, total, comment, movement_created_at,
+                cancelled_by, cancel_reason
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (company_id, movement_id) DO NOTHING
+        """, (
+            company_id,
+            movement["id"],
+            movement["item_id"],
+            movement_type,
+            movement["quantity"],
+            movement["price"],
+            movement["total"],
+            movement["comment"],
+            movement["created_at"],
+            user_id,
+            reason,
+        ))
+
+        if movement_type == "income":
+            delete_expense_by_source(
+                cur,
+                company_id=company_id,
+                source_type="stock_income",
+                source_id=movement_id,
+            )
+
+        cur.execute("""
+            DELETE FROM offline_operations
+            WHERE company_id = %s AND entity_id = %s
+              AND operation_type IN ('stock_income', 'stock_income_supplier', 'stock_writeoff')
+        """, (company_id, movement_id))
+
+        cur.execute("""
+            DELETE FROM stock_movements
+            WHERE id = %s AND company_id = %s
+        """, (movement_id, company_id))
+
+        if movement_type == "income":
+            _recalculate_item_purchase_price(cur, company_id, movement["item_id"])
+
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "movement_id": movement_id,
+            "movement_type": movement_type,
+        })
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
 @stock_bp.route("/stock/writeoff", methods=["GET", "POST"])
 def stock_writeoff():
 
