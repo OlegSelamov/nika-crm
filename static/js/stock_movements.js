@@ -124,3 +124,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
     sortMovementRecords();
 });
+
+async function cancelMovement(button) {
+    const movementId = button?.dataset?.movementId;
+    if (!movementId || button.disabled) return;
+
+    const itemName = button.dataset.itemName || "товар";
+    const movementType = button.dataset.movementType || "";
+    const label = movementType === "income" ? "приход" : "списание";
+    const confirmed = window.confirm(
+        `Отменить ${label} «${itemName}»? Остатки и связанные данные будут пересчитаны.`
+    );
+    if (!confirmed) return;
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Отмена…";
+
+    try {
+        const response = await fetch(
+            `/api/stock/movements/${encodeURIComponent(movementId)}/cancel`,
+            {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({reason: "Отменено из журнала движения товара"})
+            }
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success !== true) {
+            throw new Error(payload.error || "Не удалось отменить движение");
+        }
+        window.location.reload();
+    } catch (error) {
+        button.disabled = false;
+        button.textContent = originalText;
+        window.alert(error?.message || "Не удалось отменить движение");
+    }
+}
