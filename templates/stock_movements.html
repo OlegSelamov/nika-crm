@@ -173,6 +173,7 @@
                         <th>Количество</th>
                         <th>Сумма</th>
                         <th>Дата и время</th>
+                        <th>Действия</th>
                     </tr>
                 </thead>
 
@@ -235,6 +236,21 @@
                                 <small>{{ row.created_at.strftime('%H:%M') if row.created_at else "" }}</small>
                             </div>
                         </td>
+                        <td>
+                            {% if row.movement_type in ("income", "writeoff") %}
+                            <button
+                                type="button"
+                                class="movement-cancel-btn"
+                                data-movement-id="{{ row.id }}"
+                                data-item-name="{{ row.item_name or 'товар' }}"
+                                data-movement-type="{{ row.movement_type }}"
+                                onclick="cancelMovement(this)">
+                                Отменить
+                            </button>
+                            {% else %}
+                            <span class="movement-action-muted">—</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -295,6 +311,17 @@
                         <strong>{{ "{:,.0f}".format(row.total or 0).replace(",", " ") }} ₸</strong>
                     </div>
                 </div>
+                {% if row.movement_type in ("income", "writeoff") %}
+                <button
+                    type="button"
+                    class="movement-cancel-btn movement-cancel-btn--mobile"
+                    data-movement-id="{{ row.id }}"
+                    data-item-name="{{ row.item_name or 'товар' }}"
+                    data-movement-type="{{ row.movement_type }}"
+                    onclick="cancelMovement(this)">
+                    Отменить движение
+                </button>
+                {% endif %}
             </article>
             {% endfor %}
         </div>
