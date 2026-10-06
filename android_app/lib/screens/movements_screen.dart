@@ -181,6 +181,49 @@ class _MovementsScreenState extends State<MovementsScreen> {
     );
   }
 
+  Future<void> _cancelMovement(Map<String, dynamic> row) async {
+    final type = '${row['movement_type'] ?? ''}';
+    if (type != 'income' && type != 'writeoff') return;
+    final itemName = '${row['item_name'] ?? 'товар'}';
+    final label = type == 'income' ? 'приход' : 'списание';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Отменить движение?'),
+        content: Text(
+          'Отменить $label «$itemName»? Остатки и связанные данные будут пересчитаны.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Нет'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отменить движение'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ApiService.cancelStockMovement(
+        int.parse('${row['id']}'),
+      );
+      await loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Движение отменено')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(readableError(error))),
+      );
+    }
+  }
+
   Widget _movementCard(Map<String, dynamic> row) {
     final meta = movementMeta(row['movement_type']);
     final comment = '${row['comment'] ?? ''}'.trim();
@@ -238,6 +281,17 @@ class _MovementsScreenState extends State<MovementsScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(comment, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              ),
+            ],
+            if (row['movement_type'] == 'income' || row['movement_type'] == 'writeoff') ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _cancelMovement(row),
+                  icon: const Icon(Icons.undo_rounded),
+                  label: const Text('Отменить движение'),
+                ),
               ),
             ],
           ],
