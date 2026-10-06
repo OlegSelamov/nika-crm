@@ -74,6 +74,70 @@ class ApiService {
     await OfflineStore.instance.clearActiveIdentity();
   }
 
+  static Future<bool> _persistOfflineIdentity(
+    Map<String, dynamic> result,
+  ) async {
+    final rawUser = result['user'];
+    final user = rawUser is Map
+        ? Map<String, dynamic>.from(rawUser)
+        : <String, dynamic>{};
+
+    final companyId = int.tryParse(
+      '${result['company_id'] ?? user['company_id'] ?? ''}',
+    );
+    final userId = int.tryParse(
+      '${result['user_id'] ?? user['id'] ?? ''}',
+    );
+
+    if (companyId == null ||
+        companyId <= 0 ||
+        userId == null ||
+        userId <= 0) {
+      return false;
+    }
+
+    await OfflineStore.instance.setIdentity(
+      companyId: companyId,
+      userId: userId,
+    );
+    return true;
+  }
+
+  static Future<bool> ensureOfflineIdentity() async {
+    final companyId = await OfflineStore.instance.companyId;
+    final userId = await OfflineStore.instance.userId;
+    if (companyId != null &&
+        companyId > 0 &&
+        userId != null &&
+        userId > 0) {
+      return true;
+    }
+
+    if (_cookie == null || _cookie!.isEmpty) {
+      await loadCookie();
+    }
+    if (_cookie == null || _cookie!.isEmpty) return false;
+
+    try {
+      final result = Map<String, dynamic>.from(
+        await _request(
+          'GET',
+          '/api/mobile/profile',
+          timeout: const Duration(seconds: 8),
+        ),
+      );
+      final restored = await _persistOfflineIdentity(result);
+      if (restored) {
+        await OfflineStore.instance.cacheSnapshot('mobile_profile', result);
+      }
+      return restored;
+    } on ApiException {
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static String _errorMessage(dynamic decoded, int statusCode) {
     if (decoded is Map) {
       for (final key in const ['error', 'message', 'detail']) {
@@ -164,6 +228,8 @@ class ApiService {
     Future<void> Function()? onQueued,
     Duration timeout = const Duration(seconds: 30),
   }) async {
+    await ensureOfflineIdentity();
+
     final operationId = await OfflineStore.instance.enqueue(
       operationType: operationType,
       method: 'POST',
@@ -251,17 +317,11 @@ class ApiService {
       final rawCookie = response.headers['set-cookie'];
       if (response.statusCode >= 200 &&
           response.statusCode < 300 &&
-          result['success'] == true &&
-          rawCookie != null) {
-        await saveCookie(rawCookie.split(';').first);
-        final companyId = int.tryParse('${result['company_id'] ?? ''}');
-        final userId = int.tryParse('${result['user_id'] ?? ''}');
-        if (companyId != null && userId != null) {
-          await OfflineStore.instance.setIdentity(
-            companyId: companyId,
-            userId: userId,
-          );
+          result['success'] == true) {
+        if (rawCookie != null && rawCookie.trim().isNotEmpty) {
+          await saveCookie(rawCookie.split(';').first);
         }
+        await _persistOfflineIdentity(result);
       }
       return result;
     } on ApiException {
@@ -278,6 +338,7 @@ class ApiService {
       final result = Map<String, dynamic>.from(await _request(
         'GET', '/api/mobile/profile', timeout: const Duration(seconds: 8),
       ));
+      await _persistOfflineIdentity(result);
       await OfflineStore.instance.cacheSnapshot('mobile_profile', result);
       return result;
     } on ApiException {
