@@ -5,7 +5,7 @@ from flask import jsonify
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz
 from utils.stock_pricing import apply_income_pricing, as_bool
-from utils.offline_operations import load_offline_operation, save_offline_operation
+from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation
 from routes.expenses import upsert_expense_from_source, _sync_expense_to_accounting
 
 stock_bp = Blueprint("stock", __name__)
@@ -561,8 +561,7 @@ def api_stock_income():
     operation_id = str(data.get("operation_id") or "").strip()
 
     if operation_id:
-        existing = load_offline_operation(cur, company_id, operation_id)
-        conn.commit()
+        existing = lock_and_load_offline_operation(conn, cur, company_id, operation_id)
         if existing:
             if existing.get("operation_type") != "stock_income":
                 pool.putconn(conn)
@@ -671,8 +670,7 @@ def api_stock_writeoff():
     operation_id = str(data.get("operation_id") or "").strip()
 
     if operation_id:
-        existing = load_offline_operation(cur, company_id, operation_id)
-        conn.commit()
+        existing = lock_and_load_offline_operation(conn, cur, company_id, operation_id)
         if existing:
             if existing.get("operation_type") != "stock_writeoff":
                 pool.putconn(conn)
