@@ -10,6 +10,7 @@ from routes.suppliers import (
 )
 from utils.stock_pricing import apply_income_pricing, as_bool
 from utils.timezone import now_kz
+from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation
 
 
 @suppliers_bp.route("/api/mobile/stock/income/supplier", methods=["POST"])
@@ -19,6 +20,7 @@ def mobile_stock_income_with_supplier():
         return jsonify({"success": False, "error": "Компания не выбрана"}), 401
 
     data = request.get_json(silent=True) or {}
+    operation_id = str(data.get("operation_id") or "").strip()
 
     try:
         item_id = int(data.get("item_id"))
@@ -37,6 +39,27 @@ def mobile_stock_income_with_supplier():
     try:
         ensure_supplier_schema(conn)
         cur = conn.cursor()
+
+        if operation_id:
+            existing = lock_and_load_offline_operation(
+                conn, cur, company_id, operation_id
+            )
+            if existing:
+                if existing.get("operation_type") != "stock_income_supplier":
+                    return jsonify({
+                        "success": False,
+                        "error": "Этот operation_id уже использован другой операцией",
+                    }), 409
+                result = existing.get("result")
+                if isinstance(result, dict):
+                    result = dict(result)
+                    result["duplicate"] = True
+                    return jsonify(result)
+                return jsonify({
+                    "success": True,
+                    "duplicate": True,
+                    "movement_id": existing.get("entity_id"),
+                })
 
         if not is_product(cur, item_id, company_id):
             return jsonify({"success": False, "error": "Приход доступен только для товаров"}), 400
@@ -93,8 +116,7 @@ def mobile_stock_income_with_supplier():
         )
         _sync_expense_to_accounting(cur, expense_id, company_id)
 
-        conn.commit()
-        return jsonify({
+        response_payload = {
             "success": True,
             "movement_id": movement_id,
             "supplier": {
@@ -102,7 +124,19 @@ def mobile_stock_income_with_supplier():
                 "name": supplier["name"],
             },
             "pricing": pricing,
-        })
+        }
+        if operation_id:
+            save_offline_operation(
+                cur,
+                company_id=company_id,
+                operation_id=operation_id,
+                operation_type="stock_income_supplier",
+                entity_id=movement_id,
+                result=response_payload,
+            )
+
+        conn.commit()
+        return jsonify(response_payload)
     except Exception:
         conn.rollback()
         raise
