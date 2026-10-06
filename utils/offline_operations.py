@@ -22,6 +22,30 @@ def ensure_offline_operations(cur):
     """)
 
 
+def lock_and_load_offline_operation(conn, cur, company_id, operation_id):
+    """
+    Serialize concurrent requests with the same offline operation id.
+
+    The schema DDL is committed before taking the transaction advisory lock.
+    The lock is then held until the caller commits or rolls back the business
+    transaction, so a replay cannot pass the duplicate check while the first
+    request is still creating its entity.
+    """
+    operation_id = str(operation_id or "").strip()
+    if not company_id or not operation_id:
+        return None
+
+    ensure_offline_operations(cur)
+    conn.commit()
+
+    lock_key = f"{company_id}:{operation_id}"
+    cur.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+        (lock_key,),
+    )
+    return load_offline_operation(cur, company_id, operation_id)
+
+
 def load_offline_operation(cur, company_id, operation_id):
     operation_id = str(operation_id or "").strip()
     if not company_id or not operation_id:
