@@ -657,7 +657,15 @@ class ApiService {
       body: {'reason': reason},
       timeout: const Duration(seconds: 30),
     );
-    await OfflineStore.instance.removeSnapshot('stock_movements');
+    final refreshed = await _request(
+      'GET',
+      '/api/stock/movements',
+      timeout: const Duration(seconds: 8),
+    );
+    await OfflineStore.instance.cacheSnapshot(
+      'stock_movements',
+      List<dynamic>.from(refreshed as List),
+    );
     return Map<String, dynamic>.from(result as Map);
   }
 
