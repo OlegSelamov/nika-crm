@@ -356,16 +356,26 @@ def sync_missing_stock_income_expenses(cur, *, company_id=None, user_id=None):
 
 
 def delete_expense_by_source(cur, *, company_id, source_type, source_id):
-    """Удаляет автоматический расход при отмене исходной операции."""
+    """Удаляет автоматический расход и его бухгалтерское зеркало."""
     cur.execute("""
-        DELETE FROM expenses
+        SELECT id
+        FROM expenses
         WHERE company_id = %s
           AND source_type = %s
           AND source_id = %s
-        RETURNING id
+        LIMIT 1
     """, (company_id, source_type, source_id))
     row = cur.fetchone()
-    return row["id"] if row else None
+    if not row:
+        return None
+
+    expense_id = row["id"]
+    _delete_expense_from_accounting(cur, expense_id, company_id)
+    cur.execute("""
+        DELETE FROM expenses
+        WHERE id = %s AND company_id = %s
+    """, (expense_id, company_id))
+    return expense_id
 
 
 def _source_filter_sql(source):
