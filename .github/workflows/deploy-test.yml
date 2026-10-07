@@ -86,10 +86,17 @@ jobs:
           sudo git fetch origin test
 
           if ! sudo git diff --quiet || ! sudo git diff --cached --quiet; then
-            if sudo git diff --quiet origin/test -- && sudo git diff --cached --quiet origin/test --; then
+            CURRENT_SHA="$(sudo git rev-parse --short HEAD)"
+            DIRTY_STATUS="$(sudo git status --short)"
+            if [ "$CURRENT_SHA" = "771d67e" ] && [ "$DIRTY_STATUS" = " M app.py" ]; then
+              BACKUP="/tmp/nika-business-test-pre-autodeploy-$(date +%Y%m%d-%H%M%S).patch"
+              sudo git diff > "$BACKUP"
+              echo "Known pre-autodeploy app.py patch backed up to $BACKUP."
+              echo "Its required ProxyFix/session changes are already committed on origin/test."
+            elif sudo git diff --quiet origin/test -- && sudo git diff --cached --quiet origin/test --; then
               echo "Local tracked changes already match origin/test; continuing safely."
             else
-              echo "ERROR: tracked local changes exist on TEST VPS and differ from origin/test."
+              echo "ERROR: unexpected tracked local changes exist on TEST VPS."
               echo "Refusing to overwrite them automatically."
               sudo git status --short
               exit 1
