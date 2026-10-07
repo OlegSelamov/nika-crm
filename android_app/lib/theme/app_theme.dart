@@ -337,6 +337,15 @@ class AppTheme {
       dropdownMenuTheme: const DropdownMenuThemeData(
         textStyle: TextStyle(color: AppColors.darkText),
       ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected)
+                ? const Color(0xFF8B78FF)
+                : Colors.transparent),
+        checkColor: const WidgetStatePropertyAll(Colors.white),
+        side: const BorderSide(color: AppColors.darkMuted, width: 1.5),
+      ),
+      disabledColor: AppColors.darkMuted,
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) =>
             states.contains(WidgetState.selected) ? Colors.white : AppColors.darkMuted),
