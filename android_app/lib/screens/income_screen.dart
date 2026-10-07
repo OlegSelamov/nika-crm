@@ -410,22 +410,28 @@ class _IncomeScreenState extends State<IncomeScreen> {
                           Card(
                             color: Theme.of(context).colorScheme.primaryContainer,
                             child: CheckboxListTile(
-                              textColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                              iconColor: Theme.of(context).colorScheme.primary,
+                              activeColor: Theme.of(context).colorScheme.primary,
                               value: updateRetail && categoryMarkup > 0,
                               onChanged: categoryMarkup > 0
                                   ? (value) => setState(() => updateRetail = value ?? false)
                                   : null,
                               controlAffinity: ListTileControlAffinity.leading,
-                              title: const Text(
+                              title: Text(
                                 'Обновить розничную цену',
-                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
                               ),
                               subtitle: Text(
                                 categoryMarkup > 0
                                     ? 'Текущая: ${money(selectedItem?['retail_price'])} → новая: ${money(suggestedRetail)} по наценке ${stockQuantity(categoryMarkup)}%'
                                     : 'У категории не указана наценка — цена не изменится',
-                                style: const TextStyle(fontSize: 11),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
                               ),
                             ),
                           ),
