@@ -255,7 +255,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.text),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
               ),
             ],
