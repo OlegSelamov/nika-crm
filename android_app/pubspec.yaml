@@ -23,6 +23,7 @@ dependencies:
   qr_flutter: ^4.1.0
   network_info_plus: ^6.1.1
   print_bluetooth_thermal: ^1.2.1
+  permission_handler: ^12.0.1
   charset_converter: ^2.3.0
   printing: 5.14.3
   file_saver: 0.4.0
