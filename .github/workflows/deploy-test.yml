@@ -93,6 +93,7 @@ jobs:
               sudo git diff > "$BACKUP"
               echo "Known pre-autodeploy app.py patch backed up to $BACKUP."
               echo "Its required ProxyFix/session changes are already committed on origin/test."
+              sudo git reset --hard HEAD
             elif sudo git diff --quiet origin/test -- && sudo git diff --cached --quiet origin/test --; then
               echo "Local tracked changes already match origin/test; continuing safely."
             else
