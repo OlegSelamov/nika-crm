@@ -13,7 +13,11 @@ class PrinterService {
   static Future<int> receiptColumns() async {
     final prefs = await SharedPreferences.getInstance();
     final paperWidth = prefs.getInt('printer_paper_width') ?? 58;
-    return paperWidth >= 80 ? 48 : 32;
+    // 58 mm is already tuned for 32 columns. Many portable 80 mm
+    // printers (including XP-P810 class devices) expose a printable area
+    // narrower than the theoretical 48 Font-A columns, so 42 prevents
+    // clipping at the right edge.
+    return paperWidth >= 80 ? 42 : 32;
   }
 
   static Future<bool> printReceipt({
@@ -92,7 +96,25 @@ class PrinterService {
       // feed paper
       bytes.addAll([0x0A, 0x0A, 0x0A]);
 
-      final ok = await PrintBluetoothThermal.writeBytes(bytes);
+      // Portable Bluetooth printers have small receive buffers. A long
+      // 80 mm receipt sent in one write can be truncated. Send it in
+      // conservative chunks with a short pause so the printer can drain
+      // its buffer. This is harmless for the already-working 58 mm mode.
+      var ok = true;
+      const chunkSize = 384;
+      for (var offset = 0; offset < bytes.length; offset += chunkSize) {
+        final end = (offset + chunkSize < bytes.length)
+            ? offset + chunkSize
+            : bytes.length;
+        final partOk = await PrintBluetoothThermal.writeBytes(
+          bytes.sublist(offset, end),
+        );
+        if (!partOk) {
+          ok = false;
+          break;
+        }
+        await Future.delayed(const Duration(milliseconds: 120));
+      }
 
       await Future.delayed(const Duration(seconds: 2));
 
