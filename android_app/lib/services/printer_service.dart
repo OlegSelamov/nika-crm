@@ -232,20 +232,10 @@ class PrinterService {
 	  ),
 	);
 
-	final address =
-		(sale["company_address"] ?? "")
-			.toString();
-
-	for (final line in address.split(",")) {
-	  if (line.trim().isNotEmpty) {
-		buffer.writeln(
-		  centerText(
-			line.trim(),
-			width: width,
-		  ),
-		);
-	  }
-	}
+    final address = (sale["company_address"] ?? "").toString();
+    for (final line in wrapText(address, width: width)) {
+      buffer.writeln(centerText(line, width: width));
+    }
 
     buffer.writeln(_repeat('=', width));
 
@@ -262,13 +252,33 @@ class PrinterService {
 	  } catch (_) {}
 	}
 
-	buffer.writeln(
-	  lineLR(
-		"Чек №${sale["sale_number"] ?? sale["id"]}",
-		formattedDate,
-		width: width,
-	  ),
-	);
+    buffer.writeln(
+      lineLR(
+        "Чек №${sale["sale_number"] ?? sale["id"]}",
+        formattedDate,
+        width: width,
+      ),
+    );
+
+    final ticket = '${sale["rekassa_ticket_number"] ?? ""}'.trim();
+    if (ticket.isNotEmpty) {
+      buffer.writeln(
+        lineLR(
+          "Продажа №${sale["rekassa_document_number"] ?? "-"}",
+          "Смена ${sale["rekassa_shift_number"] ?? "-"}",
+          width: width,
+        ),
+      );
+      buffer.writeln(lineLR("ФП:", ticket, width: width));
+      final rnm = '${sale["rekassa_rnm"] ?? ""}'.trim();
+      if (rnm.isNotEmpty) {
+        buffer.writeln(lineLR("РНМ:", rnm, width: width));
+      }
+      final znm = '${sale["rekassa_znm"] ?? ""}'.trim();
+      if (znm.isNotEmpty) {
+        buffer.writeln(lineLR("ЗНМ:", znm, width: width));
+      }
+    }
 
     buffer.writeln(_repeat('-', width));
 
@@ -310,38 +320,36 @@ class PrinterService {
 
     buffer.writeln("");
 
-	buffer.writeln(
-	  lineLR(
-		"ИТОГО:",
-		"${sale["total_amount"]} тг",
-		width: width,
-	  ),
-	);
+    buffer.writeln(
+      lineLR(
+        "ИТОГО:",
+        "${sale["total_amount"]} тг",
+        width: width,
+      ),
+    );
 
-	String paymentName = "Неизвестно";
+    final paid = sale["paid_amount"] ?? sale["total_amount"] ?? 0;
+    final totalValue = double.tryParse('${sale["total_amount"] ?? 0}') ?? 0;
+    final paidValue = double.tryParse('$paid') ?? totalValue;
+    final change = (paidValue - totalValue) > 0 ? (paidValue - totalValue) : 0;
+    buffer.writeln(lineLR("Оплачено:", "${_plainNumber(paid)} тг", width: width));
+    buffer.writeln(lineLR("Сдача:", "${_plainNumber(change)} тг", width: width));
 
-	switch ((sale["sale_type"] ?? "").toString()) {
-	  case "cash":
-		paymentName = "Наличные";
-		break;
+    String paymentName = "Неизвестно";
+    switch ((sale["sale_type"] ?? "").toString()) {
+      case "cash":
+        paymentName = "Наличные";
+        break;
+      case "card":
+        paymentName = "Банковская карта";
+        break;
+      case "kaspi":
+        paymentName =
+            '${sale["kaspi_method"] ?? ""}'.trim().isNotEmpty ? "Kaspi QR" : "Kaspi";
+        break;
+    }
 
-	  case "card":
-		paymentName = "Банковская карта";
-		break;
-
-	  case "kaspi":
-		paymentName = "Kaspi QR";
-		break;
-	}
-
-	buffer.writeln(
-	  lineLR(
-		"Оплата:",
-		paymentName,
-		width: width,
-	  ),
-	);
-
+    buffer.writeln(lineLR("Оплата:", paymentName, width: width));
     return buffer.toString();
   }
 
