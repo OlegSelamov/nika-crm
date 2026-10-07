@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/api_service.dart';
@@ -95,11 +96,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _pickPrinter() async {
-    final devices = await PrintBluetoothThermal.pairedBluetooths;
+    try {
+      final statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+      ].request();
+      final denied = statuses.values.any((status) => !status.isGranted);
+      if (denied) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Разрешите приложению доступ к Bluetooth-устройствам')),
+        );
+        return;
+      }
+    } catch (_) {
+      // Android 11 and older use the legacy Bluetooth permissions.
+    }
+
+    List<BluetoothInfo> devices;
+    try {
+      devices = await PrintBluetoothThermal.pairedBluetooths;
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось получить Bluetooth-устройства: $error')),
+      );
+      return;
+    }
     if (!mounted) return;
     if (devices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сначала подключите принтер в настройках Bluetooth телефона')),
+        const SnackBar(content: Text('Сопрягите принтер в настройках Bluetooth телефона и попробуйте снова')),
       );
       return;
     }
