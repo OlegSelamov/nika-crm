@@ -216,7 +216,9 @@ class _StockProductPickerSheetState extends State<_StockProductPickerSheet> {
                           .firstWhere((value) => value.isNotEmpty, orElse: () => '');
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
-                        color: selected ? AppColors.primarySoft : AppColors.surface,
+                        color: selected
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : Theme.of(context).cardTheme.color,
                         child: ListTile(
                           onTap: () => Navigator.pop(context, item),
                           leading: CircleAvatar(
