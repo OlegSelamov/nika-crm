@@ -408,8 +408,10 @@ class _IncomeScreenState extends State<IncomeScreen> {
                         if (selectedItem != null) ...[
                           const SizedBox(height: 12),
                           Card(
-                            color: AppColors.primarySoft,
+                            color: Theme.of(context).colorScheme.primaryContainer,
                             child: CheckboxListTile(
+                              textColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                              iconColor: Theme.of(context).colorScheme.primary,
                               value: updateRetail && categoryMarkup > 0,
                               onChanged: categoryMarkup > 0
                                   ? (value) => setState(() => updateRetail = value ?? false)
@@ -436,7 +438,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                         ),
                         const SizedBox(height: 16),
                         Card(
-                          color: AppColors.primarySoft,
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(
