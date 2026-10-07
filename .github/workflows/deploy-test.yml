@@ -73,35 +73,39 @@ jobs:
           set -euo pipefail
 
           cd /var/www/nika-business-test
-          git config --global --add safe.directory /var/www/nika-business-test
+
+          # The TEST checkout was initially prepared by root, so its .git directory
+          # is not writable by the ubuntu deploy user. Use passwordless sudo for
+          # repository/venv maintenance and keep the existing ownership intact.
+          sudo git config --global --add safe.directory /var/www/nika-business-test
 
           echo "Current TEST commit:"
-          git rev-parse --short HEAD
-          git status --short
+          sudo git rev-parse --short HEAD
+          sudo git status --short
 
-          git fetch origin test
+          sudo git fetch origin test
 
-          if ! git diff --quiet || ! git diff --cached --quiet; then
-            if git diff --quiet origin/test -- && git diff --cached --quiet origin/test --; then
+          if ! sudo git diff --quiet || ! sudo git diff --cached --quiet; then
+            if sudo git diff --quiet origin/test -- && sudo git diff --cached --quiet origin/test --; then
               echo "Local tracked changes already match origin/test; continuing safely."
             else
               echo "ERROR: tracked local changes exist on TEST VPS and differ from origin/test."
               echo "Refusing to overwrite them automatically."
-              git status --short
+              sudo git status --short
               exit 1
             fi
           fi
 
-          git checkout -B test origin/test
-          git reset --hard origin/test
+          sudo git checkout -B test origin/test
+          sudo git reset --hard origin/test
 
           if [ -f requirements.txt ]; then
-            .venv/bin/pip install -r requirements.txt --quiet
+            sudo .venv/bin/pip install -r requirements.txt --quiet
           fi
 
           echo "Checking Python syntax before restart..."
-          .venv/bin/python -m py_compile app.py
-          .venv/bin/python -m compileall -q routes services
+          sudo .venv/bin/python -m py_compile app.py
+          sudo .venv/bin/python -m compileall -q routes services
 
           sudo systemctl restart nika-business-test
           sleep 3
@@ -122,5 +126,5 @@ jobs:
 
           echo "TEST HTTP health check passed."
           echo "Deployed TEST commit:"
-          git rev-parse --short HEAD
+          sudo git rev-parse --short HEAD
           REMOTE
