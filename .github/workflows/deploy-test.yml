@@ -1,0 +1,120 @@
+name: Deploy Nika Business TEST
+
+on:
+  push:
+    branches:
+      - test
+  workflow_dispatch:
+
+concurrency:
+  group: nika-test
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to TEST VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          TEST_VPS_HOST: ${{ secrets.TEST_VPS_HOST }}
+          TEST_VPS_SSH_KEY_B64: ${{ secrets.TEST_VPS_SSH_KEY_B64 }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$TEST_VPS_HOST" ]; then
+            echo "ERROR: TEST_VPS_HOST secret is empty."
+            exit 1
+          fi
+          if [ -z "$TEST_VPS_SSH_KEY_B64" ]; then
+            echo "ERROR: TEST_VPS_SSH_KEY_B64 secret is empty."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          CLEAN_KEY="$(printf '%s' "$TEST_VPS_SSH_KEY_B64" | tr -d '[:space:]')"
+          if ! printf '%s' "$CLEAN_KEY" | base64 --decode > ~/.ssh/nika_test_deploy 2>/dev/null; then
+            echo "ERROR: TEST_VPS_SSH_KEY_B64 is not valid base64."
+            exit 1
+          fi
+
+          chmod 600 ~/.ssh/nika_test_deploy
+
+          if ! ssh-keygen -y -f ~/.ssh/nika_test_deploy >/dev/null 2>&1; then
+            echo "ERROR: decoded TEST SSH private key is malformed."
+            exit 1
+          fi
+
+          ssh-keyscan -H "$TEST_VPS_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy TEST
+        shell: bash
+        env:
+          TEST_VPS_HOST: ${{ secrets.TEST_VPS_HOST }}
+          TEST_VPS_USER: ${{ secrets.TEST_VPS_USER }}
+        run: |
+          set -euo pipefail
+
+          TEST_VPS_USER="${TEST_VPS_USER:-ubuntu}"
+
+          ssh -i ~/.ssh/nika_test_deploy \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            "$TEST_VPS_USER@$TEST_VPS_HOST" <<'REMOTE'
+          set -euo pipefail
+
+          cd /var/www/nika-business-test
+
+          echo "Current TEST commit:"
+          git rev-parse --short HEAD
+          git status --short
+
+          # Do not silently destroy emergency/manual fixes made directly on TEST.
+          # First deployment will intentionally fail if tracked local changes exist;
+          # review/commit those changes once, then autodeploy becomes clean and repeatable.
+          if ! git diff --quiet || ! git diff --cached --quiet; then
+            echo "ERROR: tracked local changes exist on TEST VPS."
+            echo "Refusing to overwrite them automatically."
+            git status --short
+            exit 1
+          fi
+
+          git fetch origin test
+          git checkout -B test origin/test
+          git reset --hard origin/test
+
+          if [ -f requirements.txt ]; then
+            .venv/bin/pip install -r requirements.txt --quiet
+          fi
+
+          echo "Checking Python syntax before restart..."
+          .venv/bin/python -m py_compile app.py
+          .venv/bin/python -m compileall -q routes services
+
+          sudo systemctl restart nika-business-test
+          sleep 3
+
+          if ! sudo systemctl is-active --quiet nika-business-test; then
+            echo "nika-business-test service is not active"
+            sudo systemctl status nika-business-test --no-pager -l || true
+            sudo journalctl -u nika-business-test -n 120 --no-pager || true
+            exit 1
+          fi
+
+          if ! curl -fsS --max-time 8 "http://127.0.0.1:5000/login" >/dev/null; then
+            echo "TEST service is active but HTTP health check failed on port 5000"
+            sudo systemctl status nika-business-test --no-pager -l || true
+            sudo journalctl -u nika-business-test -n 160 --no-pager || true
+            exit 1
+          fi
+
+          echo "TEST HTTP health check passed."
+          echo "Deployed TEST commit:"
+          git rev-parse --short HEAD
+          REMOTE
