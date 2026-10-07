@@ -73,6 +73,7 @@ jobs:
           set -euo pipefail
 
           cd /var/www/nika-business-test
+          git config --global --add safe.directory /var/www/nika-business-test
 
           echo "Current TEST commit:"
           git rev-parse --short HEAD
