@@ -79,14 +79,19 @@ jobs:
           git rev-parse --short HEAD
           git status --short
 
+          git fetch origin test
+
           if ! git diff --quiet || ! git diff --cached --quiet; then
-            echo "ERROR: tracked local changes exist on TEST VPS."
-            echo "Refusing to overwrite them automatically."
-            git status --short
-            exit 1
+            if git diff --quiet origin/test -- && git diff --cached --quiet origin/test --; then
+              echo "Local tracked changes already match origin/test; continuing safely."
+            else
+              echo "ERROR: tracked local changes exist on TEST VPS and differ from origin/test."
+              echo "Refusing to overwrite them automatically."
+              git status --short
+              exit 1
+            fi
           fi
 
-          git fetch origin test
           git checkout -B test origin/test
           git reset --hard origin/test
 
