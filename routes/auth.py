@@ -330,7 +330,6 @@ def login():
         session["is_creator"] = False  # устаревшее поле: права определяются через role
         session["employee_modules"] = load_user_module_codes(user)
         session["presence_heartbeat_at"] = now_kz().isoformat()
-    session["access_refreshed_at"] = now_kz().isoformat()
         session["access_refreshed_at"] = now_kz().isoformat()
         
         session.permanent = True
