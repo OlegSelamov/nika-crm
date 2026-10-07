@@ -22,6 +22,7 @@ jobs:
         env:
           TEST_VPS_HOST: ${{ secrets.TEST_VPS_HOST }}
           TEST_VPS_SSH_KEY_B64: ${{ secrets.TEST_VPS_SSH_KEY_B64 }}
+          TEST_VPS_SSH_KEY: ${{ secrets.TEST_VPS_SSH_KEY }}
         run: |
           set -euo pipefail
 
@@ -29,24 +30,28 @@ jobs:
             echo "ERROR: TEST_VPS_HOST secret is empty."
             exit 1
           fi
-          if [ -z "$TEST_VPS_SSH_KEY_B64" ]; then
-            echo "ERROR: TEST_VPS_SSH_KEY_B64 secret is empty."
+          if [ -z "$TEST_VPS_SSH_KEY" ] && [ -z "$TEST_VPS_SSH_KEY_B64" ]; then
+            echo "ERROR: both TEST_VPS_SSH_KEY and TEST_VPS_SSH_KEY_B64 are empty."
             exit 1
           fi
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          CLEAN_KEY="$(printf '%s' "$TEST_VPS_SSH_KEY_B64" | tr -d '[:space:]')"
-          if ! printf '%s' "$CLEAN_KEY" | base64 --decode > ~/.ssh/nika_test_deploy 2>/dev/null; then
-            echo "ERROR: TEST_VPS_SSH_KEY_B64 is not valid base64."
-            exit 1
+          if [ -n "$TEST_VPS_SSH_KEY" ]; then
+            printf '%s\n' "$TEST_VPS_SSH_KEY" > ~/.ssh/nika_test_deploy
+          else
+            CLEAN_KEY="$(printf '%s' "$TEST_VPS_SSH_KEY_B64" | tr -d '[:space:]')"
+            if ! printf '%s' "$CLEAN_KEY" | base64 --decode > ~/.ssh/nika_test_deploy 2>/dev/null; then
+              echo "ERROR: TEST_VPS_SSH_KEY_B64 is not valid base64."
+              exit 1
+            fi
           fi
 
           chmod 600 ~/.ssh/nika_test_deploy
 
           if ! ssh-keygen -y -f ~/.ssh/nika_test_deploy >/dev/null 2>&1; then
-            echo "ERROR: decoded TEST SSH private key is malformed."
+            echo "ERROR: TEST SSH private key is malformed."
             exit 1
           fi
 
