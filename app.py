@@ -29,6 +29,7 @@ def _openai_ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
 socket.getaddrinfo = _openai_ipv4_getaddrinfo
 
 from flask import Flask, render_template, request, redirect, session, g, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 from routes.dashboard import dashboard_bp
 from routes.clients import clients_bp
 from routes.tasks import tasks_bp
@@ -93,9 +94,13 @@ def _esf_document_view_with_current_contract(row, fallback_payload):
 esf_module._document_view = _esf_document_view_with_current_contract
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"), static_folder=os.path.join(BASE_DIR, "static"))
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.getenv("SECRET_KEY", "nika_super_secret_key")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 app.config["APP_MODE"] = APP_MODE
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+app.config["SESSION_COOKIE_HTTPONLY"] = os.getenv("SESSION_COOKIE_HTTPONLY", "true").lower() == "true"
+app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 
 # Lightweight production migration for the item media gallery.
 # Gunicorn does not call init_db(), so this must run during app import too.
