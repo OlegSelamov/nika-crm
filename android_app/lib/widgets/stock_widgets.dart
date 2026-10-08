@@ -84,14 +84,18 @@ DateTime? parseStockDate(dynamic value) {
   };
   final month = months[match.group(2)];
   if (month == null) return null;
-  return DateTime.utc(
+  // Stock movements are stored as Kazakhstan local wall-clock time in
+  // PostgreSQL TIMESTAMP WITHOUT TIME ZONE. Flask may serialize these naive
+  // values as HTTP dates with "GMT", though the values are not actually UTC.
+  // Preserve the recorded time rather than shifting it by the device offset.
+  return DateTime(
     int.parse(match.group(3)!),
     month,
     int.parse(match.group(1)!),
     int.parse(match.group(4)!),
     int.parse(match.group(5)!),
     int.parse(match.group(6)!),
-  ).toLocal();
+  );
 }
 
 String stockDateTime(dynamic value) {
