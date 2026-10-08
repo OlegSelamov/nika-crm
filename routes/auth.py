@@ -7,6 +7,18 @@ auth_bp = Blueprint("auth", __name__)
 
 ONLINE_TIMEOUT_MINUTES = 3
 HEARTBEAT_INTERVAL_SECONDS = 45
+ACCESS_REFRESH_INTERVAL_SECONDS = 15
+
+
+def _skip_request_session_refresh():
+    """Static/public asset requests must never trigger user/access DB lookups."""
+    path = request.path or ""
+    return (
+        path.startswith("/static/")
+        or path == "/desktop-offline-sw.js"
+        or path.startswith("/s/")
+        or path.startswith("/whatsapp/webhook")
+    )
 
 # Тарифы лендинга. Код сохраняется в companies.tariff, а цена — в подписке.
 # Не принимаем произвольные значения из URL/формы.
@@ -112,6 +124,9 @@ def normalize_registration_plan(value):
 @auth_bp.before_app_request
 def update_user_presence():
     """Обновляет время активности авторизованного пользователя без записи в БД на каждый запрос."""
+    if _skip_request_session_refresh():
+        return
+
     user_id = session.get("user_id")
     if not user_id:
         return
@@ -238,8 +253,18 @@ def refresh_current_user_access():
     Благодаря этому включённые/отключённые в подписке модули появляются
     в меню сразу после следующего запроса, без выхода из аккаунта.
     """
-    if not session.get("user_id"):
+    if _skip_request_session_refresh() or not session.get("user_id"):
         return
+
+    current_time = now_kz()
+    last_refresh_raw = session.get("access_refreshed_at")
+    if last_refresh_raw:
+        try:
+            last_refresh = datetime.fromisoformat(last_refresh_raw)
+            if (current_time - last_refresh).total_seconds() < ACCESS_REFRESH_INTERVAL_SECONDS:
+                return
+        except (TypeError, ValueError):
+            pass
 
     user = current_user()
     if not user:
@@ -253,6 +278,7 @@ def refresh_current_user_access():
     session["is_super_admin"] = bool(user.get("is_super_admin"))
     session["show_catalog_images"] = user.get("show_catalog_images") is not False
     session["employee_modules"] = load_user_module_codes(user)
+    session["access_refreshed_at"] = current_time.isoformat()
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -304,6 +330,7 @@ def login():
         session["is_creator"] = False  # устаревшее поле: права определяются через role
         session["employee_modules"] = load_user_module_codes(user)
         session["presence_heartbeat_at"] = now_kz().isoformat()
+        session["access_refreshed_at"] = now_kz().isoformat()
         
         session.permanent = True
 

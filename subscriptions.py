@@ -3,6 +3,8 @@ from flask import g, redirect, request, session, url_for
 from models import get_db, pool
 from utils.timezone import now_kz
 
+SUBSCRIPTION_CONTEXT_TTL_SECONDS = 15
+
 PUBLIC_ENDPOINTS = {
     "auth.login", "auth.logout", "auth.register", "auth.api_login",
     "landing", "static", "subscriptions.subscription", "subscriptions.subscription_update",
@@ -232,6 +234,19 @@ def load_subscription_context():
         g.company_subscription = None
         return
 
+    # Reuse access state stored in the signed Flask session for a short interval.
+    # This avoids several PostgreSQL round-trips on every iframe navigation.
+    cached_at_raw = session.get("subscription_context_cached_at")
+    if cached_at_raw and not session.get("is_super_admin"):
+        try:
+            cached_at = now_kz().fromisoformat(cached_at_raw)
+            if (now_kz() - cached_at).total_seconds() < SUBSCRIPTION_CONTEXT_TTL_SECONDS:
+                g.company_modules = set(session.get("subscription_context_modules") or [])
+                g.company_subscription = session.get("subscription_context_subscription")
+                return
+        except (TypeError, ValueError):
+            pass
+
     if session.get("is_super_admin"):
         conn = get_db()
         cur = conn.cursor()
@@ -248,3 +263,17 @@ def load_subscription_context():
     # works with Gunicorn without a separate scheduler/cron.
     g.company_subscription = sync_subscription_lifecycle(company_id)
     g.company_modules = get_company_module_codes(company_id)
+
+    subscription = g.company_subscription
+    if subscription:
+        # Store only the fields used by request access checks and templates.
+        session["subscription_context_subscription"] = {
+            "status": subscription.get("status"),
+            "trial_ends_at": subscription.get("trial_ends_at").isoformat() if subscription.get("trial_ends_at") else None,
+            "period_end": subscription.get("period_end").isoformat() if subscription.get("period_end") else None,
+            "next_payment_at": subscription.get("next_payment_at").isoformat() if subscription.get("next_payment_at") else None,
+        }
+    else:
+        session["subscription_context_subscription"] = None
+    session["subscription_context_modules"] = sorted(g.company_modules)
+    session["subscription_context_cached_at"] = now_kz().isoformat()

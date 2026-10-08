@@ -341,11 +341,15 @@ MODULE_PATHS = (
 
 @app.before_request
 def check_company_access():
-    load_subscription_context()
-    if session.get("is_super_admin"):
-        return None
+    # Static/public requests must bypass subscription DB work completely.
+    # Embedded pages load several CSS/JS/image assets; previously every asset
+    # triggered subscription/module queries before this allow-list was checked.
     allowed_paths = ("/", "/login", "/logout", "/register", "/onboarding", "/subscription", "/static/", "/desktop-offline-sw.js", "/s/", "/whatsapp/webhook")
     if any(request.path == path or request.path.startswith(path) for path in allowed_paths):
+        return None
+
+    load_subscription_context()
+    if session.get("is_super_admin"):
         return None
     if not session.get("user_id") or not session.get("company_id"):
         return None
