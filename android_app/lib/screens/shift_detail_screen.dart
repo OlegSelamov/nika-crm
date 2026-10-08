@@ -105,7 +105,7 @@ double? _moneyValue(dynamic value) {
       final coins = double.tryParse('${map['coins'] ?? 0}') ?? 0;
       return bills + coins / 100;
     }
-    for (final key in const ['total', 'sum', 'amount', 'revenue', 'net']) {
+    for (final key in const ['value', 'total', 'sum', 'amount', 'revenue', 'net']) {
       final nested = _moneyValue(map[key]);
       if (nested != null) return nested;
     }
@@ -141,19 +141,59 @@ double? shiftRevenueFrom(dynamic raw) {
   return null;
 }
 
+// reKassa supplies both ISO timestamps and structured local clock objects,
+// e.g. {"date":{"day":7,"month":10,"year":2026},
+//       "time":{"hour":10,"minute":50,"second":21}}.
 String shiftDateLabel(dynamic value, {String fallback = '—'}) {
   if (value == null || '$value'.trim().isEmpty) return fallback;
-  DateTime? date;
+
+  String two(int number) => number.toString().padLeft(2, '0');
+  int? part(dynamic raw) => int.tryParse('${raw ?? ''}');
+
+  if (value is Map) {
+    final datePart = value['date'];
+    final timePart = value['time'];
+    if (datePart is Map && timePart is Map) {
+      final year = part(datePart['year']);
+      final month = part(datePart['month']);
+      final day = part(datePart['day']);
+      final hour = part(timePart['hour']);
+      final minute = part(timePart['minute']);
+      if (year != null && month != null && day != null &&
+          hour != null && minute != null) {
+        return '${two(day)}.${two(month)}.$year ${two(hour)}:${two(minute)}';
+      }
+    }
+    for (final key in const ['value', 'dateTime', 'datetime', 'timestamp']) {
+      if (value[key] != null) {
+        return shiftDateLabel(value[key], fallback: fallback);
+      }
+    }
+    return fallback; // Never display a raw Dart Map to the cashier.
+  }
+
   if (value is num) {
     final raw = value.toInt();
-    date = DateTime.fromMillisecondsSinceEpoch(
-      raw < 100000000000 ? raw * 1000 : raw,
-    );
-  } else {
-    date = DateTime.tryParse('$value');
+    final milliseconds = raw.abs() < 100000000000 ? raw * 1000 : raw;
+    final kazakhstanTime = DateTime.fromMillisecondsSinceEpoch(
+      milliseconds,
+      isUtc: true,
+    ).add(const Duration(hours: 5));
+    return DateFormat('dd.MM.yyyy HH:mm').format(kazakhstanTime);
   }
-  if (date == null) return '$value';
-  return DateFormat('dd.MM.yyyy HH:mm').format(date.toLocal());
+
+  final raw = '$value'.trim();
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return raw;
+  // Timestamps with an explicit offset represent instants. Display them in
+  // Kazakhstan (UTC+5), regardless of the phone's timezone. Naive strings
+  // already contain the local wall-clock time and must not be shifted.
+  final hasOffset = RegExp(r'(Z|[+-]\\d{2}:?\\d{2})$', caseSensitive: false)
+      .hasMatch(raw);
+  final date = hasOffset
+      ? parsed.toUtc().add(const Duration(hours: 5))
+      : parsed;
+  return DateFormat('dd.MM.yyyy HH:mm').format(date);
 }
 
 class ShiftDetailScreen extends StatefulWidget {
@@ -656,135 +696,52 @@ class _ZReportSheetState extends State<ZReportSheet> {
     );
   }
 
+  // Mirror the fiscal Z-report rendered on the Nika Business website.
+  // reKassa keeps its detailed figures inside report.data, not the flattened
+  // "sales" / "payments" objects previously assumed by the mobile screen.
   Widget _content() {
-    final businessName = _textFrom(
-      cashRegister['business_name'] ??
-          _find(report, const {'businessname', 'organizationname'}),
-    );
-    final businessId = _textFrom(
-      cashRegister['business_id'] ??
-          _find(report, const {'businessid', 'bin', 'iin'}),
-    );
-    final address = _textFrom(
-      cashRegister['address'] ?? _find(report, const {'address'}),
-    );
-    final serial = _textFrom(
-      cashRegister['serial_number'] ??
-          _find(report, const {'serialnumber', 'znm'}),
-    );
-    final registration = _textFrom(
-      cashRegister['registration_number'] ??
-          _find(report, const {'registrationnumber', 'fnskkmid', 'rnm'}),
-    );
-    final cashier = _textFrom(
-      _find(report, const {'cashiername', 'operatorname', 'username'}),
-    );
+    final core = shiftPayloadCore(report);
+    dynamic field(String key) => core[key] ?? report[key];
 
-    final sales = _findMap(
-      report,
-      const {'sell', 'sales', 'sale', 'salesoperations'},
-    );
-    final refunds = _findMap(
-      report,
-      const {
-        'returnsale',
-        'salesreturn',
-        'sellreturn',
-        'refunds',
-        'returns',
-      },
-    );
-    final payments = _findMap(
-      report,
-      const {'payments', 'payment', 'paymenttotals'},
-    );
+    final businessName = _meta('business_name', fallback: 'Nika Business');
+    final businessId = _meta('business_id');
+    final address = _meta('address');
+    final registration = _meta('registration_number');
+    final serial = _meta('serial_number');
+    final model = _meta('model', fallback: 'reKassa 3.0');
+    final fdoTitle = _meta('fdo_title', fallback: 'ОФД ТОО «COMRUN»');
+    final fdoUrl = _meta('fdo_url', fallback: 'https://ofd.rekassa.kz');
 
-    final salesCount = _countFrom(
-      sales,
-      const {'count', 'ticketcount', 'ticketscount', 'quantity'},
-      fallbackKeys: const {'sellcount', 'salescount', 'salecount'},
-    );
-    final salesAmount = _amountFrom(
-      sales,
-      const {'amount', 'sum', 'total', 'revenue'},
-      fallbackKeys: const {'sellamount', 'sellsum', 'salesamount'},
-    );
-    final refundCount = _countFrom(
-      refunds,
-      const {'count', 'ticketcount', 'ticketscount', 'quantity'},
-      fallbackKeys: const {'refundcount', 'returncount', 'returnsalecount'},
-    );
-    final refundAmount = _amountFrom(
-      refunds,
-      const {'amount', 'sum', 'total'},
-      fallbackKeys: const {'refundamount', 'returnamount', 'returnsaleamount'},
-    );
-    final ticketCount = shiftTicketCountFrom(report) ??
-        _countFrom(
-          report,
-          const {'ticketcount', 'ticketscount', 'checkcount'},
-        );
-    final cash = _amountFrom(
-      payments,
-      const {'cash', 'cashamount'},
-      fallbackKeys: const {'cashamount', 'cashtotal'},
-    );
-    final card = _amountFrom(
-      payments,
-      const {'card', 'cashless', 'noncash', 'cardamount'},
-      fallbackKeys: const {'cardamount', 'cashlessamount', 'noncashamount'},
-    );
-    final kaspi = _amountFrom(
-      payments,
-      const {'kaspi', 'mobile', 'qr', 'kaspiamount'},
-      fallbackKeys: const {'kaspiamount', 'mobileamount', 'qramount'},
-    );
-    final startBalance = _amountFrom(
-      report,
-      const {'startbalance', 'cashstartbalance', 'openingbalance'},
-    );
-    final deposits = _amountFrom(
-      report,
-      const {'deposit', 'deposits', 'cashdeposit', 'cashin'},
-    );
-    final withdrawals = _amountFrom(
-      report,
-      const {'withdraw', 'withdrawals', 'cashwithdrawal', 'cashout'},
-    );
-    final endBalance = _amountFrom(
-      report,
-      const {'endbalance', 'cashendbalance', 'closingbalance'},
-    );
-    final taxes = _amountFrom(
-      report,
-      const {'tax', 'taxes', 'taxamount', 'vat'},
-    );
-    final revenue = shiftRevenueFrom(report) ??
-        (salesAmount == null
-            ? null
-            : salesAmount - (refundAmount ?? 0));
+    final rawOperator = field('operator');
+    final operator = rawOperator is Map ? rawOperator : const {};
+    final cashier = _firstText([operator['name'], operator['code']]);
     final opened = shiftDateLabel(
-      _find(
-            report,
-            const {'openshifttime', 'opentime', 'open_time', 'starttime'},
-          ) ??
-          shiftOpenTimeFrom(report),
-      fallback: '—',
+      report['openTime'] ?? core['openShiftTime'] ?? core['openTime'],
     );
     final closed = shiftDateLabel(
-      _find(
-            report,
-            const {'closeshifttime', 'closetime', 'close_time', 'endtime'},
-          ) ??
-          shiftCloseTimeFrom(report),
-      fallback: '—',
+      report['closeTime'] ?? core['closeShiftTime'] ?? core['closeTime'],
     );
-    final reportShiftNumber = int.tryParse(
-          '${_find(report, const {'shiftnumber', 'shift_number'}) ?? ''}',
-        ) ??
-        shiftNumberFrom(report) ??
-        widget.shiftNumber;
-    final fiscalRows = _fallbackRows(report);
+    final number = shiftNumberFrom(report) ?? widget.shiftNumber;
+    final documentNumber =
+        _firstText([report['shiftDocumentNumber'], core['shiftDocumentNumber']]);
+
+    final startSums = _mapList(field('startShiftNonNullableSums'));
+    final endSums = _mapList(field('nonNullableSums'));
+    final ticketOperations = _mapList(field('ticketOperations'))
+        .where((item) => _integer(item['ticketsCount']) > 0)
+        .toList()
+      ..sort((a, b) => _operationOrderIndex(a['operation'])
+          .compareTo(_operationOrderIndex(b['operation'])));
+    final placements = _mapList(field('moneyPlacements'))
+        .where((item) => _integer(item['operationsCount']) > 0)
+        .toList();
+
+    final ticketsCount = ticketOperations.fold<int>(
+          0, (total, item) => total + _integer(item['ticketsCount']),
+        ) +
+        placements.fold<int>(
+          0, (total, item) => total + _integer(item['operationsCount']),
+        );
 
     return SingleChildScrollView(
       child: Center(
@@ -815,117 +772,67 @@ class _ZReportSheetState extends State<ZReportSheet> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    businessName.isEmpty ? 'reKassa' : businessName,
+                    businessName,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                   ),
-                  if (businessId.isNotEmpty)
-                    Text(
-                      'БИН/ИИН: $businessId',
-                      textAlign: TextAlign.center,
-                    ),
-                  if (address.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(address, textAlign: TextAlign.center),
-                    ),
-                  _receiptDivider(strong: true),
-                  const Text(
-                    'ФИСКАЛЬНЫЙ Z‑ОТЧЁТ',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'СМЕНА №$reportShiftNumber',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  _receiptDivider(),
-                  _receiptRow('Открытие', opened),
-                  _receiptRow('Закрытие', closed),
-                  if (cashier.isNotEmpty) _receiptRow('Кассир', cashier),
-                  if (ticketCount != null)
-                    _receiptRow('Всего чеков', '$ticketCount'),
-                  _receiptDivider(),
-                  if (salesCount != null || salesAmount != null)
-                    _operationRow(
-                      'ПРОДАЖИ',
-                      salesCount,
-                      salesAmount,
-                    ),
-                  if (refundCount != null || refundAmount != null)
-                    _operationRow(
-                      'ВОЗВРАТЫ',
-                      refundCount,
-                      refundAmount,
-                      negative: true,
-                    ),
-                  if (revenue != null) ...[
-                    _receiptDivider(strong: true),
-                    _receiptRow(
-                      'ИТОГО ЗА СМЕНУ',
-                      money(revenue),
-                      bold: true,
-                      large: true,
-                    ),
-                  ],
-                  if ([cash, card, kaspi].any((value) => value != null)) ...[
-                    _receiptDivider(),
-                    const Text(
-                      'ОПЛАТА',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 5),
-                    if (cash != null) _receiptRow('Наличные', money(cash)),
-                    if (card != null) _receiptRow('Банковская карта', money(card)),
-                    if (kaspi != null) _receiptRow('Kaspi / QR', money(kaspi)),
-                  ],
-                  if ([startBalance, deposits, withdrawals, endBalance]
-                      .any((value) => value != null)) ...[
-                    _receiptDivider(),
-                    const Text(
-                      'НАЛИЧНЫЕ В КАССЕ',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 5),
-                    if (startBalance != null)
-                      _receiptRow('На начало', money(startBalance)),
-                    if (deposits != null)
-                      _receiptRow('Внесение', money(deposits)),
-                    if (withdrawals != null)
-                      _receiptRow('Изъятие', money(withdrawals)),
-                    if (endBalance != null)
-                      _receiptRow('На конец', money(endBalance), bold: true),
-                  ],
-                  if (taxes != null) ...[
-                    _receiptDivider(),
-                    _receiptRow('Налоги', money(taxes)),
-                  ],
-                  if (fiscalRows.isNotEmpty) ...[
-                    _receiptDivider(),
-                    const Text(
-                      'ДАННЫЕ ОТЧЁТА',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 5),
-                    ...fiscalRows.map(
-                      (row) => _receiptRow(row.key, row.value),
-                    ),
-                  ],
-                  _receiptDivider(strong: true),
-                  if (registration.isNotEmpty)
-                    _receiptRow('РНМ', registration),
-                  if (serial.isNotEmpty) _receiptRow('ЗНМ', serial),
+                  _centerText('БИН (ИИН): $businessId'),
+                  _centerText(address),
+                  const SizedBox(height: 10),
+                  _receiptRow('РНМ:', registration),
+                  _receiptRow('ЗНМ:', serial),
+                  _receiptRow('ККМ:', model),
                   const SizedBox(height: 12),
                   const Text(
-                    'СМЕНА ЗАКРЫТА',
+                    'Z‑отчёт',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.w900),
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
                   ),
+                  const SizedBox(height: 8),
+                  _receiptRow('Смена:', '№$number'),
+                  _receiptRow('Кассир:', cashier),
+                  _receiptRow('Начало:', _fiscalDate(opened)),
+                  _receiptRow('Время:', _fiscalTime(opened)),
+                  _receiptRow('Конец:', _fiscalDate(closed)),
+                  _receiptRow('Время:', _fiscalTime(closed)),
+                  if (documentNumber.isNotEmpty)
+                    _receiptRow('Документ:', documentNumber),
+                  _receiptDivider(),
+                  _sectionTitle('Необнуляемая сумма на начало смены'),
+                  ..._cumulativeRows(startSums),
+                  _receiptDivider(),
+                  if (ticketOperations.isEmpty && placements.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Фискальных операций в смене нет'),
+                    ),
+                  for (final item in ticketOperations) ...[
+                    _sectionTitle(_operationLabel(item['operation'])),
+                    _receiptRow('Количество чеков', '${_integer(item['ticketsCount'])}'),
+                    for (final payment in _mapList(item['payments']))
+                      _receiptRow(
+                        _paymentLabel(payment['payment']),
+                        _fiscalMoney(payment['sum']),
+                      ),
+                    _receiptRow('Сумма', _fiscalMoney(item['ticketsSum'])),
+                    const SizedBox(height: 12),
+                  ],
+                  for (final item in placements) ...[
+                    _sectionTitle(_placementLabel(item['operation'])),
+                    _receiptRow('Количество чеков', '${_integer(item['operationsCount'])}'),
+                    _receiptRow('Сумма', _fiscalMoney(item['operationsSum'])),
+                    const SizedBox(height: 12),
+                  ],
+                  _receiptRow('Количество чеков за смену', '$ticketsCount', bold: true),
+                  _receiptDivider(),
+                  _sectionTitle('Необнуляемая сумма на конец смены'),
+                  ..._cumulativeRows(endSums),
+                  const SizedBox(height: 16),
+                  _sectionTitle('Наличных в кассе'),
+                  _receiptRow('Сумма', _fiscalMoney(field('cashSum'))),
+                  _receiptDivider(),
+                  _centerText(fdoTitle),
+                  _centerText(fdoUrl),
                 ],
               ),
             ),
@@ -933,6 +840,123 @@ class _ZReportSheetState extends State<ZReportSheet> {
         ),
       ),
     );
+  }
+
+  Widget _centerText(String value) => Text(value,
+      textAlign: TextAlign.center, softWrap: true);
+
+  Widget _sectionTitle(String title) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+      );
+
+  String _meta(String key, {String fallback = '—'}) {
+    final value = cashRegister[key];
+    if (value == null || '$value'.trim().isEmpty) return fallback;
+    return '$value';
+  }
+
+  static String _firstText(List<dynamic> values) {
+    for (final value in values) {
+      if (value != null && '$value'.trim().isNotEmpty) return '$value';
+    }
+    return '—';
+  }
+
+  static List<Map<String, dynamic>> _mapList(dynamic raw) {
+    if (raw is! List) return [];
+    return raw.whereType<Map>()
+        .map((value) => Map<String, dynamic>.from(value)).toList();
+  }
+
+  static int _integer(dynamic value) =>
+      int.tryParse('${value ?? ''}') ?? 0;
+
+  static const operationOrder = [
+    'OPERATION_SELL',
+    'OPERATION_SELL_RETURN',
+    'OPERATION_BUY',
+    'OPERATION_BUY_RETURN',
+  ];
+
+  static String _operationCode(dynamic raw) {
+    const codes = [
+      'OPERATION_BUY',
+      'OPERATION_BUY_RETURN',
+      'OPERATION_SELL',
+      'OPERATION_SELL_RETURN',
+    ];
+    if (raw is String && raw.startsWith('OPERATION_')) return raw;
+    final index = int.tryParse('${raw ?? ''}');
+    return index != null && index >= 0 && index < codes.length
+        ? codes[index] : '${raw ?? ''}';
+  }
+
+  static String _operationLabel(dynamic value) {
+    switch (_operationCode(value)) {
+      case 'OPERATION_SELL': return 'Продажа';
+      case 'OPERATION_SELL_RETURN': return 'Возврат';
+      case 'OPERATION_BUY': return 'Покупка';
+      case 'OPERATION_BUY_RETURN': return 'Возврат покупки';
+      default: return '${value ?? 'Операция'}';
+    }
+  }
+
+  static int _operationOrderIndex(dynamic raw) {
+    final index = operationOrder.indexOf(_operationCode(raw));
+    return index < 0 ? operationOrder.length : index;
+  }
+
+  static String _paymentLabel(dynamic raw) {
+    const labels = [
+      'Наличные',
+      'Карта',
+      'Кредит',
+      'Тара',
+      'Мобильная оплата',
+    ];
+    const codes = [
+      'PAYMENT_CASH',
+      'PAYMENT_CARD',
+      'PAYMENT_CREDIT',
+      'PAYMENT_TARE',
+      'PAYMENT_MOBILE',
+    ];
+    final index = raw is String && raw.startsWith('PAYMENT_')
+        ? codes.indexOf(raw)
+        : (int.tryParse('${raw ?? ''}') ?? -1);
+    return index >= 0 && index < labels.length
+        ? labels[index] : '${raw ?? 'Оплата'}';
+  }
+
+  static String _placementLabel(dynamic raw) {
+    return raw == 1 || '$raw' == '1' ||
+            '$raw' == 'MONEY_PLACEMENT_WITHDRAWAL'
+        ? 'Изъятие' : 'Внесение';
+  }
+
+  static String _fiscalDate(String label) =>
+      label.contains(' ') ? label.split(' ').first : label;
+  static String _fiscalTime(String label) =>
+      label.contains(' ') ? label.split(' ').last : '—';
+
+  static String _fiscalMoney(dynamic value) {
+    final amount = _moneyValue(value) ?? 0;
+    return '${NumberFormat('#,##0.00', 'ru_RU').format(amount)} ₸';
+  }
+
+  static dynamic _sumByOperation(List<Map<String, dynamic>> sums, String code) {
+    for (final row in sums) {
+      if (_operationCode(row['operation']) == code) return row['sum'];
+    }
+    return 0;
+  }
+
+  List<Widget> _cumulativeRows(List<Map<String, dynamic>> sums) {
+    return [
+      for (final code in operationOrder)
+        _receiptRow(_operationLabel(code), _fiscalMoney(_sumByOperation(sums, code))),
+    ];
   }
 
   Widget _receiptDivider({bool strong = false}) => Padding(
@@ -979,126 +1003,4 @@ class _ZReportSheetState extends State<ZReportSheet> {
         ),
       );
 
-  Widget _operationRow(
-    String label,
-    int? count,
-    double? amount, {
-    bool negative = false,
-  }) {
-    final countText = count == null ? '' : '$count чек.';
-    final amountText = amount == null
-        ? ''
-        : '${negative && amount > 0 ? '−' : ''}${money(amount.abs())}';
-    return _receiptRow(
-      countText.isEmpty ? label : '$label ($countText)',
-      amountText,
-      bold: true,
-    );
-  }
-
-  static String _normalizeKey(dynamic value) => '$value'
-      .replaceAll(RegExp(r'[^A-Za-zА-Яа-я0-9]'), '')
-      .toLowerCase();
-
-  static dynamic _find(dynamic source, Set<String> keys) {
-    final normalized = keys.map(_normalizeKey).toSet();
-    dynamic walk(dynamic value) {
-      if (value is Map) {
-        for (final entry in value.entries) {
-          if (normalized.contains(_normalizeKey(entry.key))) {
-            return entry.value;
-          }
-        }
-        for (final nested in value.values) {
-          final found = walk(nested);
-          if (found != null) return found;
-        }
-      } else if (value is List) {
-        for (final nested in value) {
-          final found = walk(nested);
-          if (found != null) return found;
-        }
-      }
-      return null;
-    }
-
-    return walk(source);
-  }
-
-  static Map<String, dynamic> _findMap(dynamic source, Set<String> keys) {
-    final value = _find(source, keys);
-    return value is Map
-        ? Map<String, dynamic>.from(value)
-        : <String, dynamic>{};
-  }
-
-  static String _textFrom(dynamic value) {
-    if (value == null || value is Map || value is List) return '';
-    return '$value'.trim();
-  }
-
-  int? _countFrom(
-    dynamic source,
-    Set<String> keys, {
-    Set<String> fallbackKeys = const {},
-  }) {
-    dynamic value = _find(source, keys);
-    value ??= fallbackKeys.isEmpty ? null : _find(report, fallbackKeys);
-    return int.tryParse('${value ?? ''}');
-  }
-
-  double? _amountFrom(
-    dynamic source,
-    Set<String> keys, {
-    Set<String> fallbackKeys = const {},
-  }) {
-    dynamic value = _find(source, keys);
-    value ??= fallbackKeys.isEmpty ? null : _find(report, fallbackKeys);
-    return _moneyValue(value);
-  }
-
-  static List<MapEntry<String, String>> _fallbackRows(
-    Map<String, dynamic> source,
-  ) {
-    const labels = <String, String>{
-      'documentnumber': 'Номер документа',
-      'reportnumber': 'Номер отчёта',
-      'fiscaldocumentnumber': 'Фискальный документ',
-      'ofdstatus': 'Статус ОФД',
-      'offlinecount': 'Офлайн-документы',
-      'correctioncount': 'Коррекции',
-      'buycount': 'Покупки',
-      'buyamount': 'Сумма покупок',
-      'returnbuycount': 'Возвраты покупок',
-      'returnbuyamount': 'Сумма возвратов покупок',
-      'discountamount': 'Скидки',
-      'markupamount': 'Наценки',
-      'taxamount': 'Сумма налогов',
-    };
-    final result = <MapEntry<String, String>>[];
-    final used = <String>{};
-
-    void walk(dynamic value) {
-      if (result.length >= 20) return;
-      if (value is Map) {
-        for (final entry in value.entries) {
-          final key = _normalizeKey(entry.key);
-          final label = labels[key];
-          final raw = entry.value;
-          if (label != null && raw is! Map && raw is! List && raw != null) {
-            if (used.add(label)) result.add(MapEntry(label, '$raw'));
-          } else {
-            walk(raw);
-          }
-        }
-      } else if (value is List) {
-        for (final item in value) {
-          walk(item);
-        }
-      }
-    }
-
-    walk(source);
-    return result;
-  }
 }
