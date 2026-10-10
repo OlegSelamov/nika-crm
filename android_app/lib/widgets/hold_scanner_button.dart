@@ -43,7 +43,8 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
     detectionSpeed: DetectionSpeed.normal,
     detectionTimeoutMs: 90,
     formats: _quickScannerFormats,
-    autoZoom: true,
+    // Large symbols work like barcodes, without unsolicited zoom.
+    autoZoom: false,
   );
   final scannedCodes = <String>{};
   bool pressed = false;
@@ -104,8 +105,8 @@ class _HoldScannerButtonState extends State<HoldScannerButton> {
     if (!pressed || scanBusy || capture.barcodes.isEmpty) return;
     var code = '';
     for (final barcode in capture.barcodes) {
-      final value = barcode.rawValue?.trim() ?? '';
-      if (value.isNotEmpty) {
+      final value = barcode.rawValue;
+      if (value != null && value.trim().isNotEmpty) {
         code = value;
         break;
       }

@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../services/product_code_parser.dart';
 import '../services/scanner_feedback_service.dart';
+import '../services/scanner_geometry.dart';
 
 const _scannerFormats = <BarcodeFormat>[
   BarcodeFormat.dataMatrix,
@@ -32,8 +34,6 @@ class _ScannerScreenState extends State<ScannerScreen>
 
   bool scanned = false;
   bool _markingMode = false;
-  bool _zoomReady = false;
-  double _baseZoom = 0;
 
   @override
   void initState() {
@@ -45,30 +45,35 @@ class _ScannerScreenState extends State<ScannerScreen>
       detectionSpeed: DetectionSpeed.normal,
       detectionTimeoutMs: 90,
       formats: _scannerFormats,
-      autoZoom: true,
-    )..addListener(_handleScannerState);
+      // Ordinary barcodes and large DataMatrix must not trigger zoom.
+      autoZoom: false,
+    );
   }
 
-  void _handleScannerState() {
-    final state = scannerController.value;
-    if (!state.isRunning) return;
-
-    // MobileScannerState starts with zoomScale == 1 before CameraX reports
-    // the real linear zoom. Wait for the first real camera zoom value.
-    if (!_zoomReady) {
-      if (state.zoomScale < 0.95) {
-        _zoomReady = true;
-        _baseZoom = state.zoomScale;
+  // Enter marking mode only for a tiny *unreadable* DataMatrix candidate
+  // with camera-reported geometry. No zoom-trigger heuristics for EAN/QR.
+  void _checkTinyCandidate(BarcodeCapture capture) {
+    if (_markingMode || scanned) return;
+    for (final barcode in capture.barcodes) {
+      if (barcode.rawValue?.trim().isNotEmpty ?? false) continue;
+      if (isTinyDataMatrix(barcode, capture)) {
+        unawaited(_setMarkingMode(true));
+        return;
       }
-      return;
     }
+  }
 
-    // ML Kit changes zoom automatically when it sees a code that is too small
-    // to decode confidently. Use that as the automatic trigger for the
-    // dedicated marking UI instead of asking the cashier to switch modes.
-    if (!_markingMode && state.zoomScale > _baseZoom + 0.03) {
-      if (!mounted) return;
-      setState(() => _markingMode = true);
+  Future<void> _setMarkingMode(bool enabled) async {
+    if (!mounted || scanned || _markingMode == enabled) return;
+    setState(() => _markingMode = enabled);
+    try {
+      if (enabled) {
+        await scannerController.setZoomScale(0.25);
+      } else {
+        await scannerController.resetZoomScale();
+      }
+    } catch (_) {
+      // Zoom is unsupported on some cameras; scanning still works.
     }
   }
 
@@ -78,8 +83,6 @@ class _ScannerScreenState extends State<ScannerScreen>
 
     switch (state) {
       case AppLifecycleState.resumed:
-        _zoomReady = false;
-        _baseZoom = 0;
         if (mounted && _markingMode) {
           setState(() => _markingMode = false);
         }
@@ -96,35 +99,36 @@ class _ScannerScreenState extends State<ScannerScreen>
   Future<void> onDetect(BarcodeCapture capture) async {
     if (scanned || capture.barcodes.isEmpty) return;
 
-    var code = '';
+    String? rawCode;
     for (final barcode in capture.barcodes) {
-      final value = barcode.rawValue?.trim() ?? '';
-      if (value.isNotEmpty) {
-        code = value;
+      final raw = barcode.rawValue;
+      // Validate without trimming the actual GS1 payload: GS, serial and
+      // crypto symbols must reach reKassa exactly as the scanner returned.
+      if (raw != null && raw.trim().isNotEmpty) {
+        rawCode = raw;
         break;
       }
     }
 
-    if (code.isEmpty) return;
+    if (rawCode == null) {
+      _checkTinyCandidate(capture);
+      return;
+    }
 
+    final parsed = ScannedProductCode.parse(rawCode);
+    if (parsed.isEmpty) return;
     scanned = true;
-
     await ScannerFeedbackService.play();
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    Navigator.pop(context, code);
 
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Считан штрихкод: $code'),
-      ),
-    );
+    // Lookup and all visible UI use parsed.lookupCode in the caller.
+    // The complete marking is returned silently, never shown as raw text.
+    Navigator.pop(context, rawCode);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    scannerController.removeListener(_handleScannerState);
     unawaited(scannerController.dispose());
     super.dispose();
   }
@@ -155,6 +159,25 @@ class _ScannerScreenState extends State<ScannerScreen>
               MobileScanner(
                 controller: scannerController,
                 onDetect: onDetect,
+              ),
+
+              // For tiny symbols ML Kit cannot localize, allow explicit
+              // marking mode rather than zooming ordinary codes on its own.
+              Positioned(
+                top: 12,
+                right: 14,
+                child: FilledButton.tonalIcon(
+                  onPressed: () => _setMarkingMode(!_markingMode),
+                  icon: Icon(
+                    _markingMode
+                        ? Icons.zoom_out_map_rounded
+                        : Icons.center_focus_strong_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _markingMode ? 'Обычный сканер' : 'Мелкий DataMatrix',
+                  ),
+                ),
               ),
 
               if (_markingMode)
@@ -231,7 +254,7 @@ class _ScannerScreenState extends State<ScannerScreen>
 
               if (_markingMode)
                 Positioned(
-                  top: 18,
+                  top: 70,
                   left: 0,
                   right: 0,
                   child: Center(
@@ -265,8 +288,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                 child: IgnorePointer(
                   child: Text(
                     _markingMode
-                        ? 'DataMatrix обнаружен · держите код в маленьком квадрате'
-                        : 'Наведите камеру на штрихкод или DataMatrix',
+                        ? 'Наведите на маленький DataMatrix · код сохранится для чека'
+                        : 'Штрихкод и крупный DataMatrix: без увеличения',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.white,

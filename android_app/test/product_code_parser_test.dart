@@ -32,7 +32,8 @@ void main() {
       );
 
       expect(code.lookupCode, '4870001234567');
-      expect(code.markingCode, '010487000123456721SERIAL');
+      expect(code.markingCode, ']d2010487000123456721SERIAL');
+      expect(code.raw, ']d2010487000123456721SERIAL');
     });
 
     test('supports the human-readable parenthesized GS1 form', () {
