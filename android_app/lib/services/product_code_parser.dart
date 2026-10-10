@@ -18,7 +18,7 @@ class ScannedProductCode {
     // payload is only a normalized copy used for GTIN/EAN lookup.
     final raw = value;
     var payload = raw.replaceFirst(
-      RegExp(r'^[\u0000-\u001c\u001e-\u0020\u007f]+'),
+      RegExp(r'^[\u0000-\u001c\u001e-\u0020\u007f\u200b-\u200d\u2060\ufeff]+'),
       '',
     );
 
@@ -26,7 +26,7 @@ class ScannedProductCode {
     // Remove it only from the lookup copy, never from the raw marking.
     payload = payload.replaceFirst(RegExp(r'^\][A-Za-z0-9]{2}'), '');
     payload = payload.replaceFirst(
-      RegExp(r'^[\u0000-\u001c\u001e-\u0020\u007f]+'),
+      RegExp(r'^[\u0000-\u001c\u001e-\u0020\u007f\u200b-\u200d\u2060\ufeff]+'),
       '',
     );
     payload = payload.replaceFirst(

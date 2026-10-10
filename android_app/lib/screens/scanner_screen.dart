@@ -31,9 +31,14 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen>
     with WidgetsBindingObserver {
   late final MobileScannerController scannerController;
+  late final MobileScannerController _tinyMatrixController;
 
   bool scanned = false;
   bool _markingMode = false;
+  bool _changingMode = false;
+
+  MobileScannerController get _activeController =>
+      _markingMode ? _tinyMatrixController : scannerController;
 
   @override
   void initState() {
@@ -47,6 +52,15 @@ class _ScannerScreenState extends State<ScannerScreen>
       formats: _scannerFormats,
       // Ordinary barcodes and large DataMatrix must not trigger zoom.
       autoZoom: false,
+    );
+    // A separate native scanner automatically zooms only when explicitly
+    // scanning tiny marking. Regular EAN / large DataMatrix stay untouched.
+    _tinyMatrixController = MobileScannerController(
+      cameraResolution: const Size(1920, 1080),
+      detectionSpeed: DetectionSpeed.normal,
+      detectionTimeoutMs: 90,
+      formats: const [BarcodeFormat.dataMatrix],
+      autoZoom: true,
     );
   }
 
@@ -64,31 +78,34 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   Future<void> _setMarkingMode(bool enabled) async {
-    if (!mounted || scanned || _markingMode == enabled) return;
-    setState(() => _markingMode = enabled);
+    if (!mounted || scanned || _changingMode || _markingMode == enabled) return;
+    _changingMode = true;
     try {
-      if (enabled) {
-        await scannerController.setZoomScale(0.25);
-      } else {
-        await scannerController.resetZoomScale();
-      }
+      // Never run both camera controllers simultaneously.
+      await _activeController.stop();
+      if (!mounted || scanned) return;
+      setState(() => _markingMode = enabled);
+      // The newly attached MobileScanner starts its own controller.
     } catch (_) {
-      // Zoom is unsupported on some cameras; scanning still works.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось переключить камеру')),
+        );
+      }
+    } finally {
+      _changingMode = false;
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!scannerController.value.hasCameraPermission) return;
+    if (!_activeController.value.hasCameraPermission) return;
 
     switch (state) {
       case AppLifecycleState.resumed:
-        if (mounted && _markingMode) {
-          setState(() => _markingMode = false);
-        }
-        unawaited(scannerController.start());
+        if (!_changingMode) unawaited(_activeController.start());
       case AppLifecycleState.inactive:
-        unawaited(scannerController.stop());
+        unawaited(_activeController.stop());
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
@@ -97,7 +114,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   Future<void> onDetect(BarcodeCapture capture) async {
-    if (scanned || capture.barcodes.isEmpty) return;
+    if (scanned || _changingMode || capture.barcodes.isEmpty) return;
 
     String? rawCode;
     for (final barcode in capture.barcodes) {
@@ -130,6 +147,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(scannerController.dispose());
+    unawaited(_tinyMatrixController.dispose());
     super.dispose();
   }
 
@@ -145,7 +163,9 @@ class _ScannerScreenState extends State<ScannerScreen>
       body: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
-          final targetY = size.height * 0.34;
+          // ML Kit decodes DataMatrix only if it intersects the exact
+          // center of the camera input. The reticle must follow that center.
+          final targetY = size.height * 0.5;
 
           const targetSize = 82.0;
           const loupeWidth = 238.0;
@@ -157,7 +177,10 @@ class _ScannerScreenState extends State<ScannerScreen>
             fit: StackFit.expand,
             children: [
               MobileScanner(
-                controller: scannerController,
+                key: ValueKey<bool>(_markingMode),
+                controller: _activeController,
+                // mobile_scanner 7.2.0 supports tapping dense codes to focus.
+                tapToFocus: true,
                 onDetect: onDetect,
               ),
 
@@ -167,7 +190,9 @@ class _ScannerScreenState extends State<ScannerScreen>
                 top: 12,
                 right: 14,
                 child: FilledButton.tonalIcon(
-                  onPressed: () => _setMarkingMode(!_markingMode),
+                  onPressed: _changingMode
+                      ? null
+                      : () => _setMarkingMode(!_markingMode),
                   icon: Icon(
                     _markingMode
                         ? Icons.zoom_out_map_rounded
@@ -288,7 +313,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                 child: IgnorePointer(
                   child: Text(
                     _markingMode
-                        ? 'Наведите на маленький DataMatrix · код сохранится для чека'
+                        ? 'DataMatrix в центре · коснитесь квадрата для фокуса'
                         : 'Штрихкод и крупный DataMatrix: без увеличения',
                     textAlign: TextAlign.center,
                     style: const TextStyle(

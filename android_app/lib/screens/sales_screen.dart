@@ -601,9 +601,25 @@ class SalesScreenState extends State<SalesScreen> {
     String? scannedGtin,
     String? markingCode,
   }) async {
+    // The barcode stored in the catalog must be the GTIN/EAN, never the
+    // serialized GS1 DataMatrix with unique serial and cryptographic tail.
+    final parsed = ScannedProductCode.parse(markingCode ?? barcode);
+    final catalogBarcode = parsed.gtin != null
+        ? parsed.lookupCode
+        : ScannedProductCode.parse(barcode).lookupCode;
+    if (catalogBarcode.length > 18 &&
+        catalogBarcode.startsWith('01') &&
+        RegExp(r'^01\d{10}').hasMatch(catalogBarcode)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Не удалось выделить GTIN из DataMatrix. Отсканируйте его ещё раз.'),
+        ),
+      );
+      return;
+    }
     Map<String, dynamic> info = {};
     try {
-      info = await ApiService.getBarcodeInfo(barcode);
+      info = await ApiService.getBarcodeInfo(catalogBarcode);
     } catch (_) {}
     if (!mounted) return;
 
@@ -647,7 +663,7 @@ class SalesScreenState extends State<SalesScreen> {
                   onChanged: (value) => setDialogState(() => unit = value ?? 'шт'),
                 ),
                 const SizedBox(height: 12),
-                Align(alignment: Alignment.centerLeft, child: Text('Штрихкод: $barcode', style: const TextStyle(color: AppColors.muted))),
+                Align(alignment: Alignment.centerLeft, child: Text('Штрихкод: $catalogBarcode', style: const TextStyle(color: AppColors.muted))),
               ]),
             ),
           ),
@@ -660,7 +676,7 @@ class SalesScreenState extends State<SalesScreen> {
                 try {
                   final result = await ApiService.createItem(
                     name: name.text.trim(),
-                    barcode: barcode,
+                    barcode: catalogBarcode,
                     unit: unit,
                     purchasePrice: asDouble(purchase.text.replaceAll(',', '.')),
                     retailPrice: asDouble(retail.text.replaceAll(',', '.')),

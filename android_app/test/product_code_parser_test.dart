@@ -46,6 +46,23 @@ void main() {
       expect(code.isMarkingCode, isTrue);
     });
 
+    test('real cigarette GS1 code displays GTIN, preserves raw marking', () {
+      const raw = '0104607120858977215%GFCNjBvJBKw93YzG1';
+      final code = ScannedProductCode.parse(raw);
+      expect(code.gtin, '04607120858977');
+      expect(code.lookupCode, '4607120858977');
+      expect(code.lookupCandidates, ['4607120858977', '04607120858977']);
+      expect(code.markingCode, raw);
+      expect(code.matchesItem({'barcode': '4607120858977'}), isTrue);
+    });
+
+    test('invisible prefix is stripped only for catalog lookup', () {
+      const raw = '\uFEFF]d2010460712085897721SERIAL\u001d91CRYPTO';
+      final code = ScannedProductCode.parse(raw);
+      expect(code.lookupCode, '4607120858977');
+      expect(code.markingCode, raw);
+    });
+
     test('matches an item whose barcode is stored as EAN-13', () {
       final code = ScannedProductCode.parse(
         '010487000123456721SERIAL',
