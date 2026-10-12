@@ -559,10 +559,7 @@ def reports_data():
         )
         summary = _get_summary(cur, company_id, date_from, date_to)
         # Paginate JSON responses; exports and printed reports stay unchanged.
-        try:
-            page = max(1, int(request.args.get("page", 1)))
-        except (ValueError, TypeError):
-            page = 1
+        page = requested_page
         page_size = 50
         all_rows = report["rows"]
         offset = (page - 1) * page_size

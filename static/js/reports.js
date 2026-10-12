@@ -87,7 +87,7 @@ async function loadCurrentReport() {
         const status = document.getElementById('reportsPageStatus');
         if (previous) previous.disabled = currentReportPage <= 1;
         if (next) next.disabled = !reportHasNext;
-        if (status) status.textContent = 'Страница ' + currentReportPage + ' · всего ' + (data.total_rows || 0) + ' строк';
+        if (status) status.textContent = 'Страница ' + currentReportPage + (reportHasNext ? ' · есть следующая' : ' · последняя');
 
         document.getElementById('reportsTableHead').innerHTML =
             '<tr>' + data.columns.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
