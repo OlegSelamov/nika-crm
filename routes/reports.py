@@ -75,7 +75,7 @@ def _get_summary(cur, company_id, date_from, date_to):
         FROM sales
         WHERE company_id = %s
           AND status = 'Оплачено'
-          AND DATE(created_at) BETWEEN %s AND %s
+          AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
     """, (company_id, date_from, date_to))
     sales = cur.fetchone()
 
@@ -85,7 +85,7 @@ def _get_summary(cur, company_id, date_from, date_to):
         JOIN sales s ON s.id = si.sale_id
         WHERE s.company_id = %s
           AND s.status = 'Оплачено'
-          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
     """, (company_id, date_from, date_to))
     profit = cur.fetchone()["profit"] or 0
 
@@ -114,7 +114,7 @@ def _get_summary(cur, company_id, date_from, date_to):
         WHERE sm.company_id = %s
           AND sm.movement_type = 'income'
           AND COALESCE(i.item_type, 'product') = 'product'
-          AND DATE(sm.created_at) BETWEEN %s AND %s
+          AND sm.created_at >= %s AND sm.created_at < (%s::date + INTERVAL '1 day')
     """, (company_id, date_from, date_to))
     purchases = cur.fetchone()
 
@@ -157,7 +157,7 @@ def _sales_report(cur, company_id, date_from, date_to, page_limit=None, page_off
         FROM sales s
         LEFT JOIN clients c ON c.id = s.client_id
         WHERE s.company_id = %s
-          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
         ORDER BY s.created_at DESC, s.id DESC
         {page_sql}
     """, (company_id, date_from, date_to, *page_params))
@@ -245,7 +245,7 @@ def _purchases_report(cur, company_id, date_from, date_to, page_limit=None, page
         WHERE sm.company_id = %s
           AND sm.movement_type = 'income'
           AND COALESCE(i.item_type, 'product') = 'product'
-          AND DATE(sm.created_at) BETWEEN %s AND %s
+          AND sm.created_at >= %s AND sm.created_at < (%s::date + INTERVAL '1 day')
         GROUP BY DATE(sm.created_at)
         ORDER BY purchase_date DESC
         {page_sql}
@@ -284,7 +284,7 @@ def _profit_report(cur, company_id, date_from, date_to, page_limit=None, page_of
         JOIN sale_items si ON si.sale_id = s.id
         WHERE s.company_id = %s
           AND s.status = 'Оплачено'
-          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
         GROUP BY DATE(s.created_at)
         ORDER BY report_date DESC
         {page_sql}
@@ -338,7 +338,7 @@ def _item_sales_report(cur, company_id, date_from, date_to, item_type, page_limi
          AND i.company_id = s.company_id
         WHERE s.company_id = %s
           AND s.status = 'Оплачено'
-          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
           AND {type_condition}
         GROUP BY
             COALESCE(i.name, si.name, 'Без названия'),
@@ -455,7 +455,7 @@ def _clients_report(cur, company_id, date_from, date_to, page_limit=None, page_o
         LEFT JOIN sales s
           ON s.client_id = c.id
          AND s.company_id = %s
-         AND DATE(s.created_at) BETWEEN %s AND %s
+         AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
         WHERE c.company_id = %s
           AND COALESCE(c.is_deleted, FALSE) = FALSE
         GROUP BY c.id, c.company_name, c.full_name, c.phone

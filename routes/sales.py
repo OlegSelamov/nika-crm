@@ -1951,7 +1951,7 @@ def analytics():
             FROM sales
             WHERE company_id = %s
               AND status IN ('Оплачено', 'Возврат')
-              AND DATE(created_at) BETWEEN %s AND %s
+              AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
         """, (
             company_id,
             date_from,
@@ -1977,7 +1977,7 @@ def analytics():
                 ON s.id = si.sale_id
             WHERE s.company_id = %s
               AND s.status IN ('Оплачено', 'Возврат')
-              AND DATE(s.created_at) BETWEEN %s AND %s
+              AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
         """, (
             company_id,
             date_from,
@@ -2076,7 +2076,7 @@ def analytics():
             FROM sales
             WHERE company_id = %s
               AND status IN ('Оплачено', 'Возврат')
-              AND DATE(created_at) BETWEEN %s AND %s
+              AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
         """, (
             company_id,
             date_from,
@@ -2113,7 +2113,7 @@ def analytics():
                 SELECT DATE(created_at) AS date, total_amount AS amount
                 FROM sales
                 WHERE company_id = %s AND status IN ('Оплачено', 'Возврат')
-                  AND DATE(created_at) BETWEEN %s AND %s
+                  AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
                 UNION ALL
                 SELECT DATE(COALESCE(refunded_at, created_at)), -total_amount
                 FROM sales
@@ -2149,7 +2149,7 @@ def analytics():
                 LEFT JOIN sale_items si ON si.sale_id = s.id
                 WHERE s.company_id = %s
                   AND s.status IN ('Оплачено', 'Возврат')
-                  AND DATE(s.created_at) BETWEEN %s AND %s
+                  AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
                 UNION ALL
                 SELECT DATE(COALESCE(s.refunded_at, s.created_at)), -COALESCE(si.profit, 0)
                 FROM sales s
@@ -2222,7 +2222,7 @@ def analytics():
                 ON s.id = si.sale_id
             WHERE s.company_id = %s
               AND s.status = 'Оплачено'
-              AND DATE(s.created_at) BETWEEN %s AND %s
+              AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
             GROUP BY si.name
             ORDER BY total DESC
             LIMIT 5
@@ -2257,7 +2257,7 @@ def analytics():
                 ON c.id = s.client_id
             WHERE s.company_id = %s
               AND s.status = 'Оплачено'
-              AND DATE(s.created_at) BETWEEN %s AND %s
+              AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
             GROUP BY
                 c.id,
                 c.full_name
@@ -2339,7 +2339,7 @@ def analytics():
             LEFT JOIN sales s
                 ON s.user_id = u.id
                AND s.company_id = %s
-               AND DATE(s.created_at) BETWEEN %s AND %s
+               AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
 
             WHERE u.company_id = %s
 
@@ -2576,7 +2576,7 @@ def employee_analytics(user_id):
 
             WHERE company_id = %s
             AND user_id = %s
-            AND DATE(created_at) BETWEEN %s AND %s
+            AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
         """, (
             company_id,
             user_id,
@@ -2600,7 +2600,7 @@ def employee_analytics(user_id):
             WHERE company_id = %s
             AND user_id = %s
             AND status = 'Оплачено'
-            AND DATE(created_at) BETWEEN %s AND %s
+            AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
             GROUP BY DATE(created_at)
             ORDER BY date
         """, (
@@ -2636,7 +2636,7 @@ def employee_analytics(user_id):
             WHERE sales.company_id = %s
             AND sales.user_id = %s
             AND sales.status = 'Оплачено'
-            AND DATE(sales.created_at) BETWEEN %s AND %s
+            AND sales.created_at >= %s AND sales.created_at < (%s::date + INTERVAL '1 day')
 
             GROUP BY sale_items.name
 
@@ -2664,7 +2664,7 @@ def employee_analytics(user_id):
             FROM sales
             WHERE company_id = %s
             AND user_id = %s
-            AND DATE(created_at) BETWEEN %s AND %s
+            AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
             ORDER BY id DESC
             LIMIT 50
         """, (
