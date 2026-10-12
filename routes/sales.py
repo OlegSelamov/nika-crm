@@ -697,8 +697,8 @@ def sales_history():
                     OR (%s = 'invoices' AND journal.sale_type = 'invoice')
                     OR (%s = 'refunds' AND journal.sale_refunded = TRUE)
                 )
-                AND (NULLIF(%s, '') IS NULL OR journal.event_at::date >= NULLIF(%s, '')::date)
-                AND (NULLIF(%s, '') IS NULL OR journal.event_at::date <= NULLIF(%s, '')::date)
+                AND (NULLIF(%s, '') IS NULL OR journal.event_at >= NULLIF(%s, '')::date)
+                AND (NULLIF(%s, '') IS NULL OR journal.event_at < (NULLIF(%s, '')::date + INTERVAL '1 day'))
                 ORDER BY journal.event_at DESC, journal.id DESC
                 LIMIT %s OFFSET %s
                 )
