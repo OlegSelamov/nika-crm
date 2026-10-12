@@ -232,25 +232,26 @@ def stock():
     items = cur.fetchall()
 
     cur.execute("""
-        WITH stock_rows AS (
+        WITH movement_totals AS (
+            SELECT item_id,
+                SUM(CASE
+                    WHEN movement_type IN ('income', 'refund') THEN quantity
+                    WHEN movement_type IN ('sale', 'writeoff') THEN -quantity
+                    ELSE 0
+                END) AS stock
+            FROM stock_movements
+            WHERE company_id = %s
+            GROUP BY item_id
+        ), stock_rows AS (
             SELECT
                 i.id,
                 COALESCE(i.purchase_price, 0) AS purchase_price,
                 COALESCE(i.retail_price, 0) AS retail_price,
-                COALESCE(SUM(
-                    CASE
-                        WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
-                        WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
-                        ELSE 0
-                    END
-                ), 0) AS stock
+                COALESCE(mt.stock, 0) AS stock
             FROM items i
-            LEFT JOIN stock_movements sm
-                ON i.id = sm.item_id
-               AND i.company_id = sm.company_id
+            LEFT JOIN movement_totals mt ON mt.item_id = i.id
             WHERE i.company_id = %s
               AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
-            GROUP BY i.id
         )
         SELECT
             COUNT(*) AS total,
@@ -260,7 +261,7 @@ def stock():
             COALESCE(SUM(stock * purchase_price), 0) AS purchase_sum,
             COALESCE(SUM(stock * retail_price), 0) AS retail_sum
         FROM stock_rows
-    """, (company_id,))
+    """, (company_id, company_id))
     stock_stats = cur.fetchone()
 
     cur.execute("""

@@ -1,5 +1,7 @@
 import os
 import socket
+import logging
+from time import perf_counter
 from copy import deepcopy
 from dotenv import load_dotenv
 
@@ -324,6 +326,29 @@ app.register_blueprint(esf_bp)
 app.register_blueprint(bcc_bp)
 app.register_blueprint(school_bp)
 app.register_blueprint(capital_bp)
+
+# TEST-only request profiling: measures server latency without exposing user data.
+# Slow requests show up in the service journal; Server-Timing is inspectable
+# in the browser network panel. Never enable diagnostic response headers on PROD.
+if APP_MODE == "test":
+    @app.before_request
+    def _perf_start_request():
+        g._perf_started_at = perf_counter()
+
+    @app.after_request
+    def _perf_finish_request(response):
+        started = getattr(g, "_perf_started_at", None)
+        if started is None:
+            return response
+        elapsed_ms = (perf_counter() - started) * 1000
+        response.headers["Server-Timing"] = f"app;dur={elapsed_ms:.1f}"
+        if elapsed_ms >= 500 and not request.path.startswith("/static/"):
+            app.logger.warning(
+                "SLOW_REQUEST route=%s method=%s status=%s duration_ms=%.1f",
+                request.path, request.method, response.status_code, elapsed_ms,
+            )
+        return response
+
 
 @app.route("/desktop-offline-sw.js")
 def desktop_offline_service_worker():
