@@ -148,6 +148,13 @@
             </table>
         </div>
 
+        {% if not print_mode %}
+        <nav class="reports-pagination" aria-label="Страницы отчёта" style="display:flex;gap:12px;justify-content:center;align-items:center;margin:18px 0">
+            <button type="button" id="reportsPrev" onclick="changeReportPage(-1)" disabled>← Назад</button>
+            <span id="reportsPageStatus">Страница 1</span>
+            <button type="button" id="reportsNext" onclick="changeReportPage(1)" disabled>Вперёд →</button>
+        </nav>
+        {% endif %}
         <div class="reports-empty" id="reportsEmpty" {% if report and report.rows %}style="display:none"{% endif %}>
             <span>📄</span>
             <strong>Нет данных</strong>
@@ -158,5 +165,5 @@
 
 {% block page_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/reports.css', v='20260915-purchases-2') }}">{% endblock %}
 
-{% block page_js %}<script src="{{ url_for('static', filename='js/reports.js', v='20260915-purchases-2') }}"></script>{% endblock %}
+{% block page_js %}<script src="{{ url_for('static', filename='js/reports.js', v='20261012-pagination1') }}"></script>{% endblock %}
 {% endblock %}

@@ -537,6 +537,16 @@ def reports_data():
             cur, report_type, company_id, date_from, date_to
         )
         summary = _get_summary(cur, company_id, date_from, date_to)
+        # Paginate JSON responses; exports and printed reports stay unchanged.
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+        except (ValueError, TypeError):
+            page = 1
+        page_size = 50
+        all_rows = report["rows"]
+        total_rows = len(all_rows)
+        offset = (page - 1) * page_size
+        visible_rows = all_rows[offset:offset + page_size]
         return jsonify({
             "success": True,
             "reports_build": REPORTS_BUILD,
@@ -553,7 +563,11 @@ def reports_data():
                 {"key": key, "label": label}
                 for key, label in report["columns"]
             ],
-            "rows": report["rows"],
+            "rows": visible_rows,
+            "page": page,
+            "page_size": page_size,
+            "total_rows": total_rows,
+            "has_next": offset + page_size < total_rows,
         })
     finally:
         cur.close()

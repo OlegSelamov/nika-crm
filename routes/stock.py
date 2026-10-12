@@ -286,6 +286,13 @@ def stock():
     
 @stock_bp.route("/stock/movements")
 def stock_movements():
+    # Server-side pagination: never load the complete movement journal.
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    per_page = 50
+    offset = (page - 1) * per_page
 
     conn = get_db()
     
@@ -307,17 +314,22 @@ def stock_movements():
           AND COALESCE(items.item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
 
         ORDER BY stock_movements.id DESC
+        LIMIT %s OFFSET %s
     """, (
-        session.get("company_id"),
+        session.get("company_id"), per_page + 1, offset,
     ))
-    
-    rows = cur.fetchall()
 
+    rows = cur.fetchall()
+    has_next = len(rows) > per_page
+    rows = rows[:per_page]
     pool.putconn(conn)
 
     return render_template(
         "stock_movements.html",
-        rows=rows
+        rows=rows,
+        movement_page=page,
+        movement_has_next=has_next,
+        movement_has_previous=page > 1,
     )
     
 def _ensure_stock_movement_cancellations(cur):

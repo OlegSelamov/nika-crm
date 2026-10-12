@@ -347,6 +347,15 @@
 </div>
 
 {% block page_css %}
+<nav class="movement-pagination" aria-label="Страницы движений" style="display:flex;gap:12px;align-items:center;justify-content:center;margin:20px 0">
+    {% if movement_has_previous %}
+    <a href="{{ url_for('stock.stock_movements', page=movement_page-1) }}">← Предыдущие 50</a>
+    {% endif %}
+    <span>Страница {{ movement_page|default(1) }}</span>
+    {% if movement_has_next %}
+    <a href="{{ url_for('stock.stock_movements', page=movement_page+1) }}">Следующие 50 →</a>
+    {% endif %}
+</nav>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/stock_movements.css') }}">
 {% endblock %}
 
