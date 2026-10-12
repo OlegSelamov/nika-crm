@@ -1025,3 +1025,76 @@ def kaspi_webhook_placeholder():
     # 6) создание чека/документов;
     # 7) запись subscription_changes.
     return {"ok": False, "status": "not_configured"}, 501
+
+
+# Diagnostic-only endpoints. Disabled on every non-test deployment.
+import os
+import time
+from flask import jsonify
+
+_monitor_previous_cpu = None
+
+def _monitor_cpu_percent():
+    """Linux host CPU utilization between consecutive requests in this worker."""
+    global _monitor_previous_cpu
+    with open("/proc/stat", encoding="utf-8") as stream:
+        values = [int(part) for part in stream.readline().split()[1:]]
+    idle = values[3] + (values[4] if len(values) > 4 else 0)
+    total = sum(values)
+    previous = _monitor_previous_cpu
+    _monitor_previous_cpu = (total, idle)
+    if not previous or total <= previous[0]:
+        return None
+    percentage = 100 * (1 - (idle - previous[1]) / (total - previous[0]))
+    return round(max(0, min(100, percentage)), 1)
+
+
+def _monitor_memory_percent():
+    with open("/proc/meminfo", encoding="utf-8") as stream:
+        entries = {}
+        for line in stream:
+            key, _, value = line.partition(":")
+            if key in ("MemTotal", "MemAvailable"):
+                entries[key] = int(value.split()[0])
+    total = entries.get("MemTotal", 0)
+    available = entries.get("MemAvailable", 0)
+    return round(100 * (1 - available / total), 1) if total else None
+
+
+@admin_bp.route("/server-monitor")
+@super_admin_required
+def server_monitor():
+    if os.getenv("APP_MODE", "").lower() != "test":
+        return "Недоступно", 404
+    return render_template("admin/server_monitor.html")
+
+
+@admin_bp.route("/api/server-monitor")
+@super_admin_required
+def server_monitor_data():
+    if os.getenv("APP_MODE", "").lower() != "test":
+        return jsonify({"error": "Недоступно"}), 404
+    try:
+        cpu = _monitor_cpu_percent()
+        memory = _monitor_memory_percent()
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT count(*) AS connections FROM pg_stat_activity WHERE datname = current_database()")
+                db_connections = int(cur.fetchone()["connections"])
+            finally:
+                cur.close()
+        finally:
+            pool.putconn(conn)
+        response = jsonify({
+            "cpu_percent": cpu,
+            "memory_percent": memory,
+            "db_connections": db_connections,
+            "timestamp": int(time.time()),
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception:
+        return jsonify({"error": "Не удалось получить метрики сервера"}), 503
+

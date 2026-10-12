@@ -185,6 +185,9 @@ if (window.NIKA_EMBEDDED_PAGE && window.parent !== window && !window.nikaDesktop
                 <span class="text">Админка</span>
             </a>
             {% endif %}
+            {% if session.get("is_super_admin") and config.get("APP_MODE") == "test" %}
+            <a href="/admin/server-monitor"><span class="text">Мониторинг сервера</span></a>
+            {% endif %}
             {% if session.get("is_super_admin") %}
             <a href="/companies"><img src="/static/icons/company.png" class="menu-icon"><span class="text">Организации</span></a>
             {% endif %}
