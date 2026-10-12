@@ -410,14 +410,9 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                 : null,
             title: Row(
               children: [
-                Container(
+                SizedBox(
                   width: 34,
                   height: 34,
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  padding: const EdgeInsets.all(5),
                   child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
                 ),
                 const SizedBox(width: 10),
@@ -853,12 +848,10 @@ class _AppDrawer extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 child: Row(
                   children: [
-                    Container(
+                    SizedBox(
                       width: 54,
                       height: 54,
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(17)),
-                      child: Image.asset('assets/images/logo.png'),
+                      child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
