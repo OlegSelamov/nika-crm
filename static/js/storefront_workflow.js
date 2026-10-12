@@ -499,13 +499,20 @@
 
     function startPolling() {
         syncStorefrontNotifications(false);
-        window.setInterval(() => syncStorefrontNotifications(true), 20000);
+        window.setInterval(() => {
+            if (!document.hidden) syncStorefrontNotifications(true);
+        }, 30000);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        // Embedded business pages do not own the global sidebar/notifications.
+        // Keeping polling only in the persistent shell removes one extra API
+        // request on every navigation and prevents duplicate background traffic.
+        autoOpenStorefrontEntity();
+        if (window.NIKA_EMBEDDED_PAGE) return;
+
         if (storefrontAllowedInMenu()) insertStorefrontMenuLinks();
         observeNotifications();
-        autoOpenStorefrontEntity();
         startPolling();
     });
 

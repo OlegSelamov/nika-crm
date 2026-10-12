@@ -239,6 +239,24 @@ try:
     _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS conducted_at TIMESTAMP")
     _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS conducted_by INTEGER")
 
+    # Hot-path indexes: page lists, stock balance, sales history and reports.
+    # IF NOT EXISTS keeps restarts idempotent and does not change business logic.
+    for _index_sql in (
+        "CREATE INDEX IF NOT EXISTS idx_items_company_id_desc ON items(company_id, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_items_company_barcode ON items(company_id, barcode) WHERE barcode IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_item_images_item_main ON item_images(item_id, is_main DESC, id)",
+        "CREATE INDEX IF NOT EXISTS idx_categories_company_name ON categories(company_id, name)",
+        "CREATE INDEX IF NOT EXISTS idx_stock_movements_company_item_created ON stock_movements(company_id, item_id, created_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_stock_movements_company_created ON stock_movements(company_id, created_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_company_created ON sales(company_id, created_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_company_client_created ON sales(company_id, client_id, created_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_company_status_created ON sales(company_id, status, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id_id ON sale_items(sale_id, id)",
+        "CREATE INDEX IF NOT EXISTS idx_clients_company_deleted_id ON clients(company_id, is_deleted, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_company_date_id ON expenses(company_id, date DESC, id DESC)",
+    ):
+        _media_schema_cur.execute(_index_sql)
+
     _media_schema_conn.commit()
     _media_schema_cur.close()
     pool.putconn(_media_schema_conn)
@@ -396,6 +414,17 @@ def check_company_access():
 
 @app.after_request
 def inject_storefront_workflow_assets(response):
+    # Static files are requested on every embedded navigation. Versioned assets
+    # can live in the browser cache for a long time; uploads stay short-lived.
+    if request.path.startswith("/static/"):
+        if request.path.startswith("/static/uploads/"):
+            response.headers["Cache-Control"] = "public, max-age=300"
+        elif request.args.get("v"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+
     if not session.get("user_id"):
         return response
     content_type = response.headers.get("Content-Type", "")

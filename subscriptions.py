@@ -3,7 +3,7 @@ from flask import g, redirect, request, session, url_for
 from models import get_db, pool
 from utils.timezone import now_kz
 
-SUBSCRIPTION_CONTEXT_TTL_SECONDS = 15
+SUBSCRIPTION_CONTEXT_TTL_SECONDS = 60
 
 PUBLIC_ENDPOINTS = {
     "auth.login", "auth.logout", "auth.register", "auth.api_login",

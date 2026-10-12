@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 auth_bp = Blueprint("auth", __name__)
 
 ONLINE_TIMEOUT_MINUTES = 3
-HEARTBEAT_INTERVAL_SECONDS = 45
-ACCESS_REFRESH_INTERVAL_SECONDS = 15
+HEARTBEAT_INTERVAL_SECONDS = 120
+ACCESS_REFRESH_INTERVAL_SECONDS = 60
 
 
 def _skip_request_session_refresh():
