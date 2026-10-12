@@ -677,26 +677,12 @@ def sales_history():
                     FROM sales s
                     WHERE s.company_id = %s
                 )
-                SELECT
-                    journal.*,
-                    clients.full_name,
-                    clients.company_name,
-                    COALESCE(doc_mix.product_count, 0) AS product_count,
-                    COALESCE(doc_mix.service_count, 0) AS service_count,
-                    COALESCE(doc_mix.product_total, 0) AS product_total,
-                    COALESCE(doc_mix.service_total, 0) AS service_total
-                FROM journal
-                LEFT JOIN clients ON journal.client_id = clients.id
-                LEFT JOIN LATERAL (
-                    SELECT
-                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service') AS product_count,
-                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service') AS service_count,
-                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service'), 0) AS product_total,
-                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service'), 0) AS service_total
-                    FROM sale_items si
-                    LEFT JOIN items i ON i.id = si.item_id
-                    WHERE si.sale_id = journal.id
-                ) doc_mix ON TRUE
+                -- First filter/order/page sales; aggregate line items only for the returned page.
+                -- This preserves filters and result ordering while bounding LATERAL work.
+                , paged_journal AS (
+                    SELECT journal.*, clients.full_name, clients.company_name
+                    FROM journal
+                    LEFT JOIN clients ON journal.client_id = clients.id
                 WHERE (
                     %s = ''
                     OR COALESCE(journal.sale_number::TEXT, journal.id::TEXT) ILIKE '%%' || %s || '%%'
@@ -715,6 +701,25 @@ def sales_history():
                 AND (NULLIF(%s, '') IS NULL OR journal.event_at::date <= NULLIF(%s, '')::date)
                 ORDER BY journal.event_at DESC, journal.id DESC
                 LIMIT %s OFFSET %s
+                )
+                SELECT
+                    paged_journal.*,
+                    COALESCE(doc_mix.product_count, 0) AS product_count,
+                    COALESCE(doc_mix.service_count, 0) AS service_count,
+                    COALESCE(doc_mix.product_total, 0) AS product_total,
+                    COALESCE(doc_mix.service_total, 0) AS service_total
+                FROM paged_journal
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service') AS product_count,
+                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service') AS service_count,
+                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service'), 0) AS product_total,
+                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service'), 0) AS service_total
+                    FROM sale_items si
+                    LEFT JOIN items i ON i.id = si.item_id
+                    WHERE si.sale_id = paged_journal.id
+                ) doc_mix ON TRUE
+                ORDER BY paged_journal.event_at DESC, paged_journal.id DESC
             """, (
                 session.get("company_id"),
                 query, query, query, query, query,
