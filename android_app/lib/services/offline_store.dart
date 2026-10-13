@@ -684,6 +684,69 @@ class OfflineStore {
     }
   }
 
+
+  /// Read only: no API requests or changes to the saved operations.
+  /// Pending/failed sales are never hidden by a history limit.
+  /// The last 100 acknowledged operations are kept for quick review.
+  Future<OfflineSaleQueueSnapshot> localSaleQueueSnapshot() async {
+    final cid = await companyId;
+    if (cid == null) {
+      return const OfflineSaleQueueSnapshot([], {});
+    }
+
+    final db = await _db;
+    final unsent = await db.query(
+      'sync_queue',
+      where: "company_id = ? AND operation_type = 'sale' AND state <> 'synced'",
+      whereArgs: [cid],
+      orderBy: 'created_at DESC',
+    );
+    final recentSynced = await db.query(
+      'sync_queue',
+      where: "company_id = ? AND operation_type = 'sale' AND state = 'synced'",
+      whereArgs: [cid],
+      orderBy: 'created_at DESC',
+      limit: 100,
+    );
+    final counts = await db.rawQuery(
+      '''
+      SELECT state, COUNT(*) AS total
+      FROM sync_queue
+      WHERE company_id = ? AND operation_type = 'sale'
+      GROUP BY state
+      ''',
+      [cid],
+    );
+
+    final items = [...unsent, ...recentSynced].map((row) {
+      final operation = Map<String, dynamic>.from(row);
+      final raw = operation['body'];
+      if (raw is String && raw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(raw);
+          operation['body'] = decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : <String, dynamic>{};
+        } catch (_) {
+          operation['body'] = <String, dynamic>{};
+        }
+      } else {
+        operation['body'] = <String, dynamic>{};
+      }
+      return operation;
+    }).toList()
+      ..sort((a, b) => ((b['created_at'] as int?) ?? 0)
+          .compareTo((a['created_at'] as int?) ?? 0));
+
+    return OfflineSaleQueueSnapshot(
+      items,
+      {
+        for (final row in counts)
+          '${row['state']}': (row['total'] as int?) ?? 0,
+      },
+    );
+  }
+
   Future<int> pendingCount() async {
     final cid = await companyId;
     if (cid == null) return 0;
@@ -697,4 +760,13 @@ class OfflineStore {
     );
     return (rows.first['count'] as int?) ?? 0;
   }
+}
+
+
+/// A read-only snapshot of sales saved on this device (no network requests).
+class OfflineSaleQueueSnapshot {
+  final List<Map<String, dynamic>> operations;
+  final Map<String, int> counts;
+
+  const OfflineSaleQueueSnapshot(this.operations, this.counts);
 }
