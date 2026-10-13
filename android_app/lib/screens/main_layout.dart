@@ -746,7 +746,7 @@ class _MoreScreen extends StatelessWidget {
       const _SectionData('settings', 'Настройки', 'Настройки компании и интеграций', Icons.settings_outlined, AppColors.muted, SettingsScreen()),
     ];
     final visibleSections = sections.where((item) =>
-      enabledModules == null || enabledModules!.contains(item.moduleCode)
+      item.moduleCode == null || enabledModules == null || enabledModules!.contains(item.moduleCode)
     ).toList();
     final bankRole = currentRole == 'admin' ||
         currentRole == 'owner' ||
