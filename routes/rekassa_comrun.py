@@ -4,6 +4,7 @@ from models import get_db, pool
 from services.fiscal_service import fiscalize_sale, provider_context
 from utils.timezone import now_kz
 from utils.sale_amounts import normalize_sale_line
+from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from routes.rekassa import rekassa_bp
 
 
@@ -241,7 +242,7 @@ def _ensure_sale_stock_movements(conn, sale_id, company_id, normalized_cart, bef
 
 def pay_sale_comrun():
     """Compatibility entry point: Sales is provider-neutral despite old name."""
-    from routes.sales import process_sale
+    from routes.sales import process_sale, _resolve_sale_client
 
     data = request.get_json(silent=True) or {}
     company_id = session.get("company_id")
@@ -252,9 +253,8 @@ def pay_sale_comrun():
         return jsonify({"success": False, "error": "Активная организация не выбрана"}), 403
 
     client_id = data.get("client_id")
+    operation_id = str(data.get("operation_id") or "").strip()
     cart = data.get("cart") or []
-    if not client_id:
-        return jsonify({"success": False, "error": "Клиент не выбран"}), 400
     if not isinstance(cart, list) or not cart:
         return jsonify({"success": False, "error": "Корзина пуста"}), 400
 
@@ -266,6 +266,69 @@ def pay_sale_comrun():
     try:
         cur = conn.cursor()
         try:
+            # app.py maps /sales/pay to THIS function, not routes.sales.pay_sale.
+            # Persist and check operation_id so network retries never create
+            # a second sale, stock movement or paid receipt.
+            if operation_id:
+                existing = lock_and_load_offline_operation(
+                    conn, cur, company_id, operation_id
+                )
+                if existing:
+                    if existing.get("operation_type") != "sale":
+                        conn.rollback()
+                        return jsonify({
+                            "success": False,
+                            "error": "Этот operation_id уже использован другой операцией",
+                        }), 409
+                    previous_result = existing.get("result")
+                    if isinstance(previous_result, dict):
+                        conn.commit()
+                        return jsonify({**previous_result, "duplicate": True})
+
+                    existing_sale_id = existing.get("entity_id")
+                    if existing_sale_id:
+                        cur.execute("""
+                            SELECT id, rekassa_ticket_id, rekassa_ticket_number,
+                                   rekassa_shift_number, rekassa_status
+                            FROM sales WHERE id=%s AND company_id=%s
+                        """, (existing_sale_id, company_id))
+                        sale = cur.fetchone()
+                        if not sale:
+                            conn.rollback()
+                            return jsonify({
+                                "success": False,
+                                "error": "Операция зарегистрирована, но продажа не найдена",
+                            }), 409
+                        fiscalized = bool(sale.get("rekassa_ticket_id"))
+                        processing = (
+                            not fiscalized
+                            and offline_operation_age_seconds(existing) < 45
+                        )
+                        conn.commit()
+                        return jsonify({
+                            "success": True,
+                            "duplicate": True,
+                            "pending": processing,
+                            "sale_id": existing_sale_id,
+                            "fiscalized": fiscalized,
+                            "rekassa_required": True,
+                            "rekassa": {
+                                "status": "OK" if fiscalized else "PENDING",
+                                "message": "Продажа уже сохранена. Проверьте фискализацию чека отдельно.",
+                                "ticket_id": sale.get("rekassa_ticket_id"),
+                                "ticket_number": sale.get("rekassa_ticket_number"),
+                                "shift_number": sale.get("rekassa_shift_number"),
+                            },
+                        })
+
+            # For the anonymous default client the phone may have no id.
+            # Resolve it for this company instead of rejecting the queued sale.
+            try:
+                client_id = _resolve_sale_client(cur, company_id, client_id)
+            except ValueError as exc:
+                conn.rollback()
+                return jsonify({"success": False, "error": str(exc)}), 400
+
             normalized_cart = []
             for item in cart:
                 if not isinstance(item, dict):
@@ -346,6 +409,18 @@ def pay_sale_comrun():
         process_sale(conn, sale_id)
         _ensure_sale_stock_movements(conn, sale_id, company_id, normalized_cart, movement_before)
 
+        # Atomic with sale and stock: survive crash during fiscalization.
+        if operation_id:
+            op_cur = conn.cursor()
+            try:
+                save_offline_operation(
+                    op_cur, company_id=company_id,
+                    operation_id=operation_id, operation_type="sale",
+                    entity_id=sale_id,
+                )
+            finally:
+                op_cur.close()
+
         # Сначала фиксируем продажу, склад и прибыль в Nika. Внешняя
         # фискализация не должна откатывать уже принятую оплату.
         conn.commit()
@@ -416,6 +491,17 @@ def pay_sale_comrun():
             "ticket_number": response["fiscal"]["ticket_number"],
             "shift_number": response["fiscal"]["shift_number"],
         }
+        if operation_id:
+            op_cur = conn.cursor()
+            try:
+                save_offline_operation(
+                    op_cur, company_id=company_id,
+                    operation_id=operation_id, operation_type="sale",
+                    entity_id=sale_id, result=response,
+                )
+                conn.commit()
+            finally:
+                op_cur.close()
         return jsonify(response)
     except Exception as exc:
         conn.rollback()
