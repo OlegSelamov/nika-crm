@@ -57,19 +57,72 @@ def nested_value(data, *paths):
 
 
 def _sale_operation_payload(sale_id, rekassa_result):
+    """Stable response stored with an offline operation for safe replays."""
     rekassa_result = rekassa_result or {}
-    response_payload = _sale_operation_payload(sale_id, rekassa_result)
-    if operation_id:
-        save_offline_operation(
-            cur,
-            company_id=company_id,
-            operation_id=operation_id,
-            operation_type="sale",
-            entity_id=sale_id,
-            result=response_payload,
-        )
-        conn.commit()
-    return jsonify(response_payload)
+    return {
+        "success": True,
+        "sale_id": sale_id,
+        "fiscalized": rekassa_result.get("status") == "OK",
+        "rekassa_required": rekassa_result.get("status") != "SKIPPED",
+        "rekassa": {
+            "status": rekassa_result.get("status"),
+            "message": rekassa_result.get("message") or rekassa_result.get("error"),
+            "ticket_id": rekassa_result.get("id"),
+            "ticket_number": rekassa_result.get("ticketNumber"),
+            "shift_number": rekassa_result.get("shiftNumber"),
+        },
+    }
+
+
+def _resolve_sale_client(cur, company_id, raw_client_id):
+    """Resolve anonymous checkout by company, not by a cached device client ID."""
+    if raw_client_id not in (None, "", 0, "0"):
+        try:
+            client_id = int(raw_client_id)
+        except (TypeError, ValueError):
+            raise ValueError("Некорректный клиент продажи")
+        if client_id <= 0:
+            raise ValueError("Некорректный клиент продажи")
+        cur.execute("""
+            SELECT id FROM clients
+            WHERE id = %s AND company_id = %s
+              AND COALESCE(is_deleted, FALSE) = FALSE
+        """, (client_id, company_id))
+        if not cur.fetchone():
+            raise ValueError("Выбранный клиент не найден в этой организации")
+        return client_id
+
+    def find_private_client():
+        cur.execute("""
+            SELECT id FROM clients
+            WHERE company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+              AND (
+                LOWER(BTRIM(COALESCE(company_name, ''))) = 'частное лицо'
+                OR LOWER(BTRIM(COALESCE(full_name, ''))) = 'частное лицо'
+              )
+            ORDER BY id LIMIT 1
+        """, (company_id,))
+        return cur.fetchone()
+
+    existing = find_private_client()
+    if existing:
+        return existing["id"]
+
+    # Only one "Частное лицо" per company even if multiple devices first sync
+    # simultaneously. The advisory lock stays within the sale transaction.
+    cur.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+        (f"nika-private-client:{company_id}",),
+    )
+    existing = find_private_client()
+    if existing:
+        return existing["id"]
+    cur.execute("""
+        INSERT INTO clients (full_name, company_name, company_id, created_at, is_deleted)
+        VALUES ('Частное лицо', '', %s, %s, FALSE)
+        RETURNING id
+    """, (company_id, now_kz()))
+    return cur.fetchone()["id"]
 
 
 @sales_bp.route("/sales")
@@ -324,6 +377,12 @@ def pay_sale():
                     conn.commit()
                     return jsonify(resumed_payload)
 
+        try:
+            client_id = _resolve_sale_client(cur, company_id, client_id)
+        except ValueError as exc:
+            conn.rollback()
+            return jsonify({"success": False, "error": str(exc)}), 400
+
         normalized_cart = []
         for item in cart:
             cur.execute(
@@ -503,6 +562,18 @@ def pay_sale():
             """, (("ERROR: " + str(fiscal_error))[:500], sale_id))
             conn.commit()
 
+        response_payload = _sale_operation_payload(sale_id, rekassa_result)
+        if operation_id:
+            save_offline_operation(
+                cur,
+                company_id=company_id,
+                operation_id=operation_id,
+                operation_type="sale",
+                entity_id=sale_id,
+                result=response_payload,
+            )
+            conn.commit()
+
     except Exception as exc:
         conn.rollback()
         print("SALE PAYMENT ERROR:", repr(exc))
@@ -513,19 +584,7 @@ def pay_sale():
     finally:
         pool.putconn(conn)
 
-    return {
-        "success": True,
-        "sale_id": sale_id,
-        "fiscalized": rekassa_result.get("status") == "OK",
-        "rekassa_required": rekassa_result.get("status") != "SKIPPED",
-        "rekassa": {
-            "status": rekassa_result.get("status"),
-            "message": rekassa_result.get("message") or rekassa_result.get("error"),
-            "ticket_id": rekassa_result.get("id"),
-            "ticket_number": rekassa_result.get("ticketNumber"),
-            "shift_number": rekassa_result.get("shiftNumber"),
-        }
-    }
+    return jsonify(response_payload)
 
 
 @sales_bp.route("/api/sale/<int:sale_id>")

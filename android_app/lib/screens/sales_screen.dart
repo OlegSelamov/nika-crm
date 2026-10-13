@@ -1378,7 +1378,11 @@ class SalesScreenState extends State<SalesScreen> {
 
       final result = await ApiService.paySale(
         cart: cart,
-        clientId: selectedClient['id'] as int?,
+        // The offline default may have no ID (or a stale cached ID).
+        // The server resolves "Частное лицо" for this company on replay.
+        clientId: clientName(selectedClient).trim().toLowerCase() == 'частное лицо'
+            ? null
+            : int.tryParse('${selectedClient['id'] ?? ''}'),
         paymentMethod: paymentMethod,
         kaspiTransactionId: kaspiTransactionId,
         kaspiMethod: kaspiMethod,

@@ -242,6 +242,14 @@ class ApiService {
       final result = Map<String, dynamic>.from(
         await _request('POST', path, body: payload, timeout: timeout),
       );
+      // A 200 response with success:false must NEVER mark a sale sent.
+      if (result['success'] == false ||
+          (operationType == 'sale' && result['success'] != true)) {
+        throw ApiException(
+          '${result['error'] ?? result['message'] ?? 'Сервер отклонил продажу'}',
+          statusCode: 422,
+        );
+      }
       if (result['pending'] == true) {
         await OfflineStore.instance.markOperationPending(operationId);
       } else {
@@ -288,9 +296,19 @@ class ApiService {
       body: body,
       timeout: const Duration(seconds: 60),
     );
-    return result is Map
-        ? Map<String, dynamic>.from(result)
-        : <String, dynamic>{'success': true};
+    if (result is Map) {
+      final response = Map<String, dynamic>.from(result);
+      if (response['success'] == false ||
+          ('${operation['operation_type'] ?? ''}' == 'sale' &&
+              response['success'] != true)) {
+        throw ApiException(
+          '${response['error'] ?? response['message'] ?? 'Сервер отклонил продажу'}',
+          statusCode: 422,
+        );
+      }
+      return response;
+    }
+    return <String, dynamic>{'success': true};
   }
 
   static Future<Map<String, dynamic>> login(

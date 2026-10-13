@@ -85,6 +85,14 @@ class OfflineSyncService {
       await OfflineStore.instance.markOperationSyncing(operationId);
       try {
         final result = await ApiService.replayQueuedOperation(operation);
+        if (result['success'] == false ||
+            ('${operation['operation_type'] ?? ''}' == 'sale' &&
+                result['success'] != true)) {
+          throw ApiException(
+            '${result['error'] ?? 'Сервер не подтвердил операцию'}',
+            statusCode: 422,
+          );
+        }
         if (result['pending'] == true) {
           await OfflineStore.instance.markOperationPending(operationId);
         } else {

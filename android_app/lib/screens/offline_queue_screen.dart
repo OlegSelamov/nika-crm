@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/offline_store.dart';
+import '../services/offline_sync_service.dart';
 import '../theme/app_theme.dart';
 
 /// Works entirely from the on-device SQLite store, including airplane mode.
@@ -37,6 +38,44 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() { loadError = 'Не удалось прочитать локальную очередь: $error'; loading = false; });
+    }
+  }
+
+  Future<void> retryFailedSale(Map<String, dynamic> operation) async {
+    final operationId = '${operation['operation_id'] ?? ''}';
+    if (operationId.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Повторить отправку продажи?'),
+        content: const Text(
+          'Перед повтором проверьте историю продаж на сайте, оплату и чек reKassa. '
+          'Повтор будет отправлен с тем же ID операции, чтобы сервер мог '
+          'распознать уже принятую продажу. Новая продажа не создаётся вручную.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Повторить отправку'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final restarted = await OfflineStore.instance.retryFailedSale(operationId);
+      if (!restarted) return;
+      await OfflineSyncService.instance.syncNow(force: true);
+      await refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось подготовить повторную отправку: $error')),
+      );
     }
   }
 
@@ -160,6 +199,15 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
             'ID: ${operation['operation_id'] ?? ''}',
             style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
+          if (state == 'error')
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () => retryFailedSale(operation),
+                icon: const Icon(Icons.restart_alt_rounded),
+                label: const Text('Повторить отправку'),
+              ),
+            ),
           if (state == 'error' || state == 'syncing')
             const Padding(
               padding: EdgeInsets.only(top: 8),

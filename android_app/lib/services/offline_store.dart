@@ -629,6 +629,23 @@ class OfflineStore {
     );
   }
 
+  /// Explicit retry only: preserve operation_id for server-side deduplication.
+  /// Never automatically replay a rejected payment without the user's review.
+  Future<bool> retryFailedSale(String operationId) async {
+    final cid = await companyId;
+    if (cid == null || operationId.isEmpty) return false;
+    final updated = await (await _db).rawUpdate(
+      '''
+      UPDATE sync_queue
+      SET state='pending', last_error=NULL, updated_at=?
+      WHERE operation_id=? AND company_id=?
+        AND operation_type='sale' AND state='error'
+      ''',
+      [DateTime.now().millisecondsSinceEpoch, operationId, cid],
+    );
+    return updated == 1;
+  }
+
   Future<void> applyStockDelta(int itemId, double delta) async {
     final cid = await companyId;
     if (cid == null || delta == 0) return;
