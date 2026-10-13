@@ -84,7 +84,8 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       unawaited(OfflineSyncService.instance.syncNow());
     });
     offlineSyncTimer = Timer.periodic(
-      const Duration(minutes: 5),
+      // Health probe runs frequently, the full cache refresh stays throttled.
+      const Duration(seconds: 30),
       (_) => unawaited(OfflineSyncService.instance.syncNow()),
     );
     _loadModules();
@@ -465,7 +466,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                             final message = status == OfflineSyncStatus.synced
                                 ? 'Данные синхронизированы'
                                 : status == OfflineSyncStatus.offline
-                                    ? 'Нет интернета · работа продолжается офлайн'
+                                    ? 'Сервер недоступен · продажи сохраняются локально'
                                     : 'Не удалось синхронизировать данные';
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(message)),

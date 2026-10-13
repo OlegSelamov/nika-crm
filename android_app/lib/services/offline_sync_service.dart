@@ -18,6 +18,7 @@ class OfflineSyncService {
   bool _checking = false;
   bool _bulkRunning = false;
   DateTime? _lastAttempt;
+  DateTime? _lastFullRefresh;
 
   Future<void> syncNow({bool force = false}) async {
     if (_checking) return;
@@ -26,15 +27,25 @@ class OfflineSyncService {
         _lastAttempt != null &&
         now.difference(_lastAttempt!) < const Duration(seconds: 30)) return;
 
+    final wasUnavailable = status.value == OfflineSyncStatus.offline ||
+        status.value == OfflineSyncStatus.error;
     _checking = true;
     _lastAttempt = now;
     status.value = OfflineSyncStatus.syncing;
     try {
-      await ApiService.syncHealth();
+      final health = await ApiService.syncHealth();
+      if (health['success'] != true) {
+        throw const ApiException('Сервер не подтвердил доступность');
+      }
       status.value = OfflineSyncStatus.synced;
-      unawaited(_refreshInBackground());
+      final fullRefresh = force || wasUnavailable || _lastFullRefresh == null ||
+          now.difference(_lastFullRefresh!) > const Duration(minutes: 5);
+      if (fullRefresh || await OfflineStore.instance.pendingCount() > 0) {
+        unawaited(_refreshInBackground(refreshAll: fullRefresh));
+      }
     } on ApiException catch (error) {
-      status.value = error.statusCode == null
+      final code = error.statusCode;
+      status.value = code == null || code >= 500
           ? OfflineSyncStatus.offline
           : OfflineSyncStatus.error;
     } catch (_) {
@@ -44,11 +55,12 @@ class OfflineSyncService {
     }
   }
 
-  Future<void> _refreshInBackground() async {
+  Future<void> _refreshInBackground({required bool refreshAll}) async {
     if (_bulkRunning) return;
     _bulkRunning = true;
     try {
       await _flushQueue();
+      if (!refreshAll) return;
       await Future<void>.delayed(const Duration(seconds: 2));
       await Future.wait<dynamic>([
         ApiService.getModules(forceRemote: true),
@@ -69,6 +81,7 @@ class OfflineSyncService {
         'offline_last_sync_at',
         DateTime.now().millisecondsSinceEpoch,
       );
+      _lastFullRefresh = DateTime.now();
     } catch (_) {
       // Keep the last good cache and retry later.
     } finally {

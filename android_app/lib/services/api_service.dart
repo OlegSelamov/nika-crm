@@ -22,6 +22,10 @@ class ApiService {
 
   static String? _cookie;
 
+  // Phone Internet may work while the VPS is unreachable.
+  static bool _serverUnavailable = false;
+  static bool get serverUnavailable => _serverUnavailable;
+
   static String? get sessionCookie => _cookie;
 
   static Map<String, String> get _headers => {
@@ -189,7 +193,14 @@ class ApiService {
           response = await http.get(uri, headers: _headers).timeout(timeout);
       }
     } catch (_) {
-      throw const ApiException('Нет связи с сервером. Проверьте интернет');
+      _serverUnavailable = true;
+      throw const ApiException('Сервер недоступен. Продолжайте работать локально');
+    }
+
+    if (response.statusCode >= 500) {
+      _serverUnavailable = true;
+    } else if (response.statusCode >= 200 && response.statusCode < 300) {
+      _serverUnavailable = false;
     }
 
     dynamic decoded;
@@ -238,6 +249,25 @@ class ApiService {
     );
     final payload = <String, dynamic>{...body, 'operation_id': operationId};
 
+    Future<Map<String, dynamic>> savePending(String reason) async {
+      await OfflineStore.instance.markOperationPending(
+        operationId, error: reason,
+      );
+      if (onQueued != null) await onQueued();
+      return {
+        ...queuedResult,
+        'success': true,
+        'queued': true,
+        'operation_id': operationId,
+      };
+    }
+
+    // The write is already on SQLite. Don't wait for a network timeout
+    // when health checks have determined that the server is unavailable.
+    if (_serverUnavailable) {
+      return savePending('Сервер недоступен. Ожидает восстановления связи');
+    }
+
     try {
       final result = Map<String, dynamic>.from(
         await _request('POST', path, body: payload, timeout: timeout),
@@ -258,17 +288,7 @@ class ApiService {
       return result;
     } on ApiException catch (error) {
       if (_retryableQueueError(error)) {
-        await OfflineStore.instance.markOperationPending(
-          operationId,
-          error: error.message,
-        );
-        if (onQueued != null) await onQueued();
-        return {
-          ...queuedResult,
-          'success': true,
-          'queued': true,
-          'operation_id': operationId,
-        };
+        return savePending(error.message);
       }
       await OfflineStore.instance.markOperationError(
         operationId,
@@ -535,7 +555,8 @@ class ApiService {
     return _queuedPost(
       operationType: 'sale',
       path: '/sales/pay',
-      timeout: const Duration(seconds: 60),
+      // An ambiguous timeout is safe: replay uses the same operation_id.
+      timeout: const Duration(seconds: 12),
       body: {
         'client_id': clientId,
         'payment_method': paymentMethod ?? 'cash',
@@ -1629,88 +1650,121 @@ class ApiService {
   static Future<Map<String, dynamic>> mobileCto() async =>
       Map<String, dynamic>.from(await _request('GET', '/api/mobile/cto'));
 
+  // For cashiers use the on-device catalog immediately, regardless of
+  // network signal. Health checks and background sync refresh the cache.
+  static Future<Map<String, dynamic>> _localSaleClients({
+    required String query,
+    required int page,
+    required int limit,
+  }) async {
+    final items = await OfflineStore.instance.clients(
+      query: query, limit: limit, offset: (page - 1) * limit,
+    );
+    final candidates = await OfflineStore.instance.clients(
+      query: 'Частное лицо', limit: 30,
+    );
+    Map<String, dynamic>? privateClient;
+    for (final raw in candidates) {
+      if (raw is! Map) continue;
+      final client = Map<String, dynamic>.from(raw);
+      final company = '${client['company_name'] ?? ''}'.trim().toLowerCase();
+      final name = '${client['full_name'] ?? ''}'.trim().toLowerCase();
+      if (company == 'частное лицо' || name == 'частное лицо') {
+        privateClient = client;
+        break;
+      }
+    }
+    return {
+      'success': true,
+      'offline': true,
+      'items': items,
+      'page': page,
+      'has_more': items.length == limit,
+      'default_client': privateClient ?? {
+        'id': null,
+        'full_name': 'Частное лицо',
+        'company_name': '',
+      },
+    };
+  }
+
   static Future<Map<String, dynamic>> saleClients({
     String query = '',
     int page = 1,
     int limit = 30,
+    bool forceRemote = false,
   }) async {
+    final local = await _localSaleClients(
+      query: query, page: page, limit: limit,
+    );
+    if (!forceRemote &&
+        (serverUnavailable || (local['items'] as List).isNotEmpty)) {
+      return local;
+    }
     try {
       final result = Map<String, dynamic>.from(await _request(
         'GET',
         '/api/mobile/sale/clients',
+        timeout: const Duration(seconds: 5),
         query: {'q': query, 'page': '$page', 'limit': '$limit'},
       ));
       final items = List<dynamic>.from(result['items'] ?? const []);
       await OfflineStore.instance.cacheClients(items, deleted: false);
       final defaultClient = result['default_client'];
       if (defaultClient is Map) {
-        await OfflineStore.instance.cacheClients(
-          [defaultClient],
-          deleted: false,
-        );
+        await OfflineStore.instance.cacheClients([defaultClient], deleted: false);
       }
       return result;
     } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final offset = (page - 1) * limit;
-      final items = await OfflineStore.instance.clients(
-        query: query,
-        limit: limit,
-        offset: offset,
-      );
-      final all = await OfflineStore.instance.clients(deleted: false);
-      Map<String, dynamic>? defaultClient;
-      for (final raw in all) {
-        if (raw is! Map) continue;
-        final client = Map<String, dynamic>.from(raw);
-        final label = '${client['company_name'] ?? client['full_name'] ?? ''}'
-            .trim()
-            .toLowerCase();
-        if (label == 'частное лицо') {
-          defaultClient = client;
-          break;
-        }
-      }
-      return {
-        'success': true,
-        'offline': true,
-        'items': items,
-        'page': page,
-        'has_more': items.length == limit,
-        'default_client': defaultClient,
-      };
+      if (error.statusCode == 401 || error.statusCode == 403) rethrow;
+      return local;
     }
+  }
+
+  static Future<Map<String, dynamic>> _localSaleItems({
+    required String query,
+    required int page,
+    required int limit,
+  }) async {
+    final items = await OfflineStore.instance.items(
+      query: query, limit: limit, offset: (page - 1) * limit,
+    );
+    return {
+      'success': true,
+      'offline': true,
+      'items': items,
+      'page': page,
+      'has_more': items.length == limit,
+    };
   }
 
   static Future<Map<String, dynamic>> saleItems({
     String query = '',
     int page = 1,
     int limit = 30,
+    bool forceRemote = false,
   }) async {
+    final local = await _localSaleItems(
+      query: query, page: page, limit: limit,
+    );
+    if (!forceRemote &&
+        (serverUnavailable || (local['items'] as List).isNotEmpty)) {
+      return local;
+    }
     try {
       final result = Map<String, dynamic>.from(await _request(
         'GET',
         '/api/mobile/sale/items',
+        timeout: const Duration(seconds: 5),
         query: {'q': query, 'page': '$page', 'limit': '$limit'},
       ));
       final items = List<dynamic>.from(result['items'] ?? const []);
       await OfflineStore.instance.cacheItems(items);
       return result;
     } on ApiException catch (error) {
-      if (error.statusCode != null) rethrow;
-      final offset = (page - 1) * limit;
-      final items = await OfflineStore.instance.items(
-        query: query,
-        limit: limit,
-        offset: offset,
-      );
-      return {
-        'success': true,
-        'offline': true,
-        'items': items,
-        'page': page,
-        'has_more': items.length == limit,
-      };
+      if (error.statusCode == 401 || error.statusCode == 403) rethrow;
+      return local;
     }
   }
+
 }
