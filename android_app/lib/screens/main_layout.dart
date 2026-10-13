@@ -25,6 +25,7 @@ import 'income_screen.dart';
 import 'login_screen.dart';
 import 'movements_screen.dart';
 import 'notifications_screen.dart';
+import 'offline_queue_screen.dart';
 import 'reports_screen.dart';
 import 'profile_screen.dart';
 import 'school_screen.dart';
@@ -729,6 +730,7 @@ class _MoreScreen extends StatelessWidget {
     final sections = <_SectionData>[
       const _SectionData('profile', 'Профиль', 'Личный профиль и статистика', Icons.person_outline_rounded, AppColors.primary, ProfileScreen()),
       const _SectionData('dashboard', 'Главная', 'Главная панель компании', Icons.home_outlined, AppColors.primary, DashboardScreen()),
+      const _SectionData(null, 'Очередь синхронизации', 'Локальные продажи и ошибки отправки · работает без интернета', Icons.cloud_upload_outlined, AppColors.warning, OfflineQueueScreen()),
       const _SectionData('sales', 'Продажи', 'Касса и история продаж', Icons.point_of_sale_outlined, AppColors.primary, SalesScreen()),
       const _SectionData('analytics', 'Аналитика', 'Выручка и прибыль', Icons.query_stats_rounded, AppColors.primary, AnalyticsScreen()),
       const _SectionData('catalog', 'Каталог', 'Товары, услуги и цены', Icons.inventory_2_outlined, AppColors.warning, ItemsScreen()),
@@ -744,7 +746,7 @@ class _MoreScreen extends StatelessWidget {
       const _SectionData('settings', 'Настройки', 'Настройки компании и интеграций', Icons.settings_outlined, AppColors.muted, SettingsScreen()),
     ];
     final visibleSections = sections.where((item) =>
-      enabledModules == null || enabledModules!.contains(item.moduleCode)
+      item.moduleCode == null || enabledModules == null || enabledModules!.contains(item.moduleCode)
     ).toList();
     final bankRole = currentRole == 'admin' ||
         currentRole == 'owner' ||
@@ -877,6 +879,7 @@ class _AppDrawer extends StatelessWidget {
                   if (hasModule('profile')) _drawerItem(Icons.person_outline_rounded, 'Профиль', () { Navigator.pop(context); openPage(const ModulePage(title: 'Профиль', child: ProfileScreen())); }),
                   if (hasModule('dashboard')) _drawerItem(Icons.home_rounded, 'Главная', () => openCore(0), active: selectedIndex == 0),
                   if (hasModule('sales')) _drawerItem(Icons.point_of_sale_rounded, 'Продажи', () => openCore(1), active: selectedIndex == 1),
+                  _drawerItem(Icons.cloud_upload_outlined, 'Очередь синхронизации', () { Navigator.pop(context); openPage(const ModulePage(title: 'Очередь синхронизации', child: OfflineQueueScreen())); }),
                   if (hasModule('analytics')) _drawerItem(Icons.query_stats_rounded, 'Аналитика', () { Navigator.pop(context); openPage(const ModulePage(title: 'Аналитика', child: AnalyticsScreen())); }),
                   if (hasModule('catalog')) _drawerItem(Icons.inventory_2_outlined, 'Каталог', () { Navigator.pop(context); openPage(const ModulePage(title: 'Каталог', child: ItemsScreen())); }),
                   if (hasModule('storefront')) _drawerItem(Icons.storefront_outlined, 'Онлайн-витрина', () { Navigator.pop(context); openPage(const ModulePage(title: 'Онлайн-витрина', child: StorefrontScreen())); }),
