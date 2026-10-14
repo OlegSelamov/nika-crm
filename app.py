@@ -104,6 +104,32 @@ app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false"
 app.config["SESSION_COOKIE_HTTPONLY"] = os.getenv("SESSION_COOKIE_HTTPONLY", "true").lower() == "true"
 app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 
+# Add receipt tender/change fields without touching previously paid sales.
+# Safe additive migration, also executed by Gunicorn on test startup.
+try:
+    _receipt_schema_conn = get_db()
+    _receipt_schema_cur = _receipt_schema_conn.cursor()
+    _receipt_schema_cur.execute("""
+        ALTER TABLE sales
+        ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2) DEFAULT 0
+    """)
+    _receipt_schema_cur.execute("""
+        ALTER TABLE sales
+        ADD COLUMN IF NOT EXISTS change_amount NUMERIC(12,2) DEFAULT 0
+    """)
+    _receipt_schema_conn.commit()
+except Exception as _receipt_schema_error:
+    try:
+        _receipt_schema_conn.rollback()
+    except Exception:
+        pass
+    logging.warning("Receipt amount schema update failed: %s", _receipt_schema_error)
+finally:
+    try:
+        pool.putconn(_receipt_schema_conn)
+    except Exception:
+        pass
+
 # Lightweight production migration for the item media gallery.
 # Gunicorn does not call init_db(), so this must run during app import too.
 try:
