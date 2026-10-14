@@ -907,137 +907,133 @@ async function searchItems(query) {
     }
 }
 
-// шторка выбора клиента
+// Clients are queried only when the picker opens; never load the full CRM
+// directory on the initial sales page. The default client is a tiny request.
+let pickerClients = [];
+let pickerHasMore = false;
+let pickerPage = 0;
+let pickerController = null;
+let pickerTimer = null;
+let pickerSequence = 0;
+const pickerPageSize = 30;
+
+function escapePickerText(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[c]));
+}
+
 function openClientSheet() {
-    document.getElementById("clientSheet").classList.add("active");
-    loadClients();
+    const sheet = document.getElementById("clientSheet");
+    sheet.classList.add("active");
+    document.body.classList.add("sales-client-picker-open");
+    document.getElementById("clientSearchInput").value = "";
+    selectedClientData = null;
+    document.getElementById("selectedClient").innerHTML = '<div class="empty">Выберите клиента</div>';
+    loadClients(true);
+    document.getElementById("clientSearchInput").focus();
 }
 
 function closeClientSheet() {
     document.getElementById("clientSheet").classList.remove("active");
+    document.body.classList.remove("sales-client-picker-open");
+    clearTimeout(pickerTimer);
+    if (pickerController) pickerController.abort();
+    pickerSequence++;
 }
 
-function loadClients() {
+async function loadClients(reset = true) {
+    if (reset) {
+        pickerPage = 0;
+        pickerClients = [];
+        pickerHasMore = false;
+    }
+    if (pickerController) pickerController.abort();
+    pickerController = new AbortController();
+    const seq = ++pickerSequence;
+    const query = document.getElementById("clientSearchInput").value.trim();
+    const list = document.getElementById("clientList");
+    if (reset) list.innerHTML = '<div class="sales-client-state">Загружаем клиентов…</div>';
+    try {
+        const params = new URLSearchParams({page:String(pickerPage + 1),limit:String(pickerPageSize),q:query});
+        const response = await fetch('/api/clients/sales-picker?' + params, {signal:pickerController.signal});
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+        if (seq !== pickerSequence) return;
+        pickerPage++;
+        pickerHasMore = Boolean(data.has_more);
+        pickerClients.push(...(Array.isArray(data.items) ? data.items : []));
+        renderPickerClients();
+    } catch (error) {
+        if (error.name === 'AbortError' || seq !== pickerSequence) return;
+        list.innerHTML = '<div class="sales-client-state">Не удалось загрузить клиентов. <button type="button" onclick="loadClients(true)">Повторить</button></div>';
+    }
+}
 
-    fetch("/api/clients")
-    .then(res => res.json())
-    .then(data => {
-
-        let html = "<div class='table-wrapper'><table class='client-table'>";
-
-        data.forEach(c => {
-
-            const company = c.company_name || "Без компании";
-            const name = c.full_name || "";
-
-            html += `
-                <tr onclick='selectClient(${JSON.stringify(c)})'>
-                    <td>
-                        <div style="display:flex; justify-content:space-between;">
-                            
-                            <span style="font-weight:600;">
-                                ${company}
-                            </span>
-
-                            <span style="color:#64748b;">
-                                ${name}
-                            </span>
-
-                        </div>
-
-                        <div style="font-size:12px; color:#94a3b8;">
-                            ${c.phone || ""}
-                        </div>
-                    </td>
-                </tr>
-            `;
+function renderPickerClients() {
+    const list = document.getElementById("clientList");
+    const rows = pickerClients.map((c, index) => {
+        const title = c.company_name || c.full_name || 'Без названия';
+        const subtitle = c.company_name && c.full_name ? c.full_name : '';
+        return '<button type="button" class="sales-client-row" data-client-index="' + index + '">' +
+          '<span class="sales-client-row-name">' + escapePickerText(title) + '</span>' +
+          (subtitle ? '<span class="sales-client-row-subtitle">' + escapePickerText(subtitle) + '</span>' : '') +
+          (c.phone ? '<span class="sales-client-row-meta">' + escapePickerText(c.phone) + '</span>' : '') +
+          '</button>';
+    }).join('');
+    list.innerHTML = rows || '<div class="sales-client-state">Клиенты не найдены</div>';
+    if (pickerHasMore) {
+        list.insertAdjacentHTML('beforeend', '<button type="button" class="sales-client-load-more" onclick="loadClients(false)">Показать ещё</button>');
+    }
+    list.querySelectorAll('[data-client-index]').forEach(row => {
+        row.addEventListener('click', () => {
+            const c = pickerClients[Number(row.dataset.clientIndex)];
+            if (c) selectClient(c);
         });
-
-        html += "</table></div>";
-
-        document.getElementById("clientList").innerHTML = html;
-		
     });
 }
 
-function selectDefaultPrivateClient() {
-
-    fetch("/api/clients")
-    .then(res => res.json())
-    .then(clients => {
-
-        const privateClient = clients.find(client => {
-            const companyName = (client.company_name || "").trim().toLowerCase();
-            const fullName = (client.full_name || "").trim().toLowerCase();
-
-            return companyName === "частное лицо" || fullName === "частное лицо";
-        });
-
-        if (!privateClient) {
-            console.warn('Клиент "Частное лицо" не найден');
-            return;
-        }
-
+async function selectDefaultPrivateClient() {
+    try {
+        const response = await fetch('/api/clients/sales-picker?default_only=1');
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+        const privateClient = data.default_client;
+        if (!privateClient || selectedClient) return;
         selectedClientData = privateClient;
         selectedClient = privateClient.id;
-
-        const clientInput = document.getElementById("clientSearch");
-        if (clientInput) {
-            clientInput.value =
-                privateClient.company_name ||
-                privateClient.full_name ||
-                "Частное лицо";
-        }
-    })
-    .catch(error => {
-        console.error("DEFAULT CLIENT ERROR:", error);
-    });
+        const input = document.getElementById('clientSearch');
+        if (input) input.value = 'Частное лицо';
+    } catch (error) {
+        console.warn('DEFAULT CLIENT ERROR:', error);
+    }
 }
 
 function filterClients() {
-    const input = document.getElementById("clientSearchInput");
-    const query = input.value.toLowerCase().trim();
-
-    const rows = document.querySelectorAll("#clientList tr");
-
-    rows.forEach(row => {
-
-        // 🔥 берем ТОЛЬКО текст без HTML
-        const text = row.textContent.toLowerCase();
-
-        if (text.includes(query)) {
-            row.style.display = "";
-        } else {
-            row.style.display = "none";
-        }
-
-    });
+    clearTimeout(pickerTimer);
+    pickerTimer = setTimeout(() => loadClients(true), 250);
 }
 
 function selectClient(client) {
-
     selectedClientData = client;
-
-    document.getElementById("selectedClient").innerHTML = `
-        <b>${client.company_name || ""}</b><br>
-        ${client.full_name || ""}<br>
-        <span class="client-detail-line"><img src="/static/icons/phone.png" alt="">${client.phone || ""}</span>
-        <span class="client-detail-line"><img src="/static/icons/iin.png" alt="">${client.iin || ""}</span>
-        <span class="client-detail-line"><img src="/static/icons/location.png" alt="">${client.address || ""}</span>
-    `;
+    document.getElementById("selectedClient").innerHTML =
+        '<strong class="sales-client-detail-name">' + escapePickerText(client.company_name || client.full_name || 'Частное лицо') + '</strong>' +
+        (client.company_name && client.full_name ? '<div>' + escapePickerText(client.full_name) + '</div>' : '') +
+        '<div>' + escapePickerText(client.phone) + '</div>' +
+        '<div>' + escapePickerText(client.iin) + '</div>' +
+        '<div>' + escapePickerText(client.address) + '</div>';
+    document.querySelectorAll('#clientList .sales-client-row').forEach(row =>
+      row.classList.toggle('is-selected', pickerClients[Number(row.dataset.clientIndex)]?.id === client.id));
 }
 
 function confirmClient() {
-
     if (!selectedClientData) {
         alert("Выберите клиента");
         return;
     }
-
     selectedClient = selectedClientData.id;
-
-    document.getElementById("clientSearch").value = selectedClientData.full_name;
-
+    document.getElementById("clientSearch").value =
+        selectedClientData.company_name || selectedClientData.full_name || 'Частное лицо';
     closeClientSheet();
 }
 

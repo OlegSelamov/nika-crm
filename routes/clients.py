@@ -950,6 +950,68 @@ def api_clients():
         pool.putconn(conn)
 
 
+
+@clients_bp.route("/api/clients/sales-picker")
+def api_sales_client_picker():
+    """Lean, paginated sale selector. Does not load the full CRM directory.
+
+    Keep /api/clients intact for existing integrations and offline caches.
+    """
+    company_id = _company_id()
+    default_only = request.args.get("default_only") == "1"
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        if default_only:
+            cur.execute("""
+                SELECT id, full_name, company_name, phone, iin, address
+                FROM clients
+                WHERE company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+                  AND (
+                    LOWER(BTRIM(COALESCE(full_name, ''))) = 'частное лицо'
+                    OR LOWER(BTRIM(COALESCE(company_name, ''))) = 'частное лицо'
+                  )
+                ORDER BY id LIMIT 1
+            """, (company_id,))
+            client = cur.fetchone()
+            return jsonify({"default_client": _serialize_row(client) if client else None})
+
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+            limit = max(1, min(40, int(request.args.get("limit", 30))))
+        except (TypeError, ValueError):
+            page, limit = 1, 30
+        query = str(request.args.get("q") or "").strip()[:100]
+        pattern = f"%{query}%"
+        cur.execute("""
+            SELECT id, full_name, company_name, phone, iin, address
+            FROM clients
+            WHERE company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+              AND (
+                %s = ''
+                OR COALESCE(full_name, '') ILIKE %s
+                OR COALESCE(company_name, '') ILIKE %s
+                OR COALESCE(phone, '') ILIKE %s
+                OR COALESCE(iin, '') ILIKE %s
+              )
+            ORDER BY
+              CASE WHEN LOWER(BTRIM(COALESCE(full_name, ''))) = 'частное лицо'
+                     OR LOWER(BTRIM(COALESCE(company_name, ''))) = 'частное лицо'
+                   THEN 0 ELSE 1 END,
+              id DESC
+            LIMIT %s OFFSET %s
+        """, (company_id, query, pattern, pattern, pattern, pattern,
+              limit + 1, (page - 1) * limit))
+        rows = cur.fetchall()
+        return jsonify({
+            "items": [_serialize_row(row) for row in rows[:limit]],
+            "has_more": len(rows) > limit,
+            "page": page,
+        })
+    finally:
+        pool.putconn(conn)
+
+
 @clients_bp.route("/api/client/<int:client_id>/sales")
 def client_sales(client_id):
     company_id = _company_id()

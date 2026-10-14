@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20260914-cash-change-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261014-client-picker-v1') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-pos-v3') }}">
 {% endblock %}
 
@@ -326,7 +326,7 @@
 	</div>
 </div>
 
-<div id="clientSheet" class="sheet">
+<div id="clientSheet" class="sheet" role="dialog" aria-modal="true" aria-label="Выбор клиента">
     <div class="sheet-content">
 
         <div class="client-picker">
@@ -336,7 +336,7 @@
 
                 <h3>Выбор клиента</h3>
 
-                <input id="clientSearchInput" placeholder="Поиск клиента..." oninput="filterClients()">
+                <input id="clientSearchInput" type="search" placeholder="Поиск по названию, ФИО, телефону или ИИН..." autocomplete="off" oninput="filterClients()">
 
                 <div id="clientList" class="client-table-box"></div>
 
@@ -757,7 +757,7 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20260918-rekassa-skip-1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261014-client-picker-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20260923-modifiers-total-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
