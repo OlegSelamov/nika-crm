@@ -4485,3 +4485,43 @@ body.cash-change-open{overflow:hidden}
  .cash-change-cancel{order:2}
  .cash-change-notice{top:12px;border-radius:19px;padding:13px 20px}
 }
+
+/* Large client directories: full viewport picker and wrapping names. */
+body.sales-client-picker-open { overflow: hidden; }
+#clientSheet.sheet { padding: 8px; z-index: 10020; }
+#clientSheet .sheet-content {
+  width: 100%;
+  height: calc(100dvh - 16px);
+  max-height: calc(100dvh - 16px);
+  border-radius: 18px;
+}
+#clientSheet .client-picker { height: 100%; max-height: 100%; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); }
+#clientSheet .picker-left, #clientSheet .picker-right { min-height: 0; overflow: hidden; }
+#clientSheet .client-table-box { overflow-y: auto; overflow-x: hidden; }
+#clientSheet .sales-client-row {
+  display: flex; flex-direction: column; gap: 5px; width: 100%;
+  padding: 14px 16px; text-align: left; cursor: pointer;
+  border: 0; border-bottom: 1px solid #e9edf5; background: #fff;
+  color: #152238; font: inherit; white-space: normal;
+}
+#clientSheet .sales-client-row:hover, #clientSheet .sales-client-row.is-selected { background: #eef2ff; }
+#clientSheet .sales-client-row-name, #clientSheet .sales-client-detail-name {
+  display: block; min-width: 0; overflow-wrap: anywhere; word-break: normal; white-space: normal;
+  font-weight: 750; line-height: 1.4;
+}
+#clientSheet .sales-client-row-subtitle, #clientSheet .sales-client-row-meta {
+  overflow-wrap: anywhere; line-height: 1.35; color: #64748b; font-size: 13px;
+}
+#clientSheet .selected-client { overflow: auto; overflow-wrap: anywhere; line-height: 1.65; }
+#clientSheet .sales-client-state { text-align: center; color: #64748b; padding: 26px 12px; }
+#clientSheet .sales-client-load-more {
+  display: block; margin: 16px auto; border: 1px solid #c7d2fe;
+  background: #eef2ff; color: #3730a3; border-radius: 10px; padding: 12px 24px; cursor: pointer;
+}
+@media (max-width: 768px) {
+  #clientSheet.sheet { padding: 0; }
+  #clientSheet .sheet-content { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  #clientSheet .client-picker { height: 100%; max-height: 100%; }
+  #clientSheet .picker-left { min-height: 0; }
+  #clientSheet .picker-right { max-height: 36dvh; }
+}
