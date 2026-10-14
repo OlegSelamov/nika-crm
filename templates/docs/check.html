@@ -246,6 +246,13 @@
 </div>
 {% endif %}
 
+{% if client and client.iin and (client.company_name or client.full_name or '')|trim|lower != 'частное лицо' %}
+<div class="line"></div>
+<div class="info-row"><span>Покупатель:</span></div>
+<div class="item-extra">{{ client.company_name or client.full_name }}</div>
+<div class="item-extra">ИИН/БИН: {{ client.iin }}</div>
+{% endif %}
+
 <div class="line"></div>
 
 {% for i in items %}
@@ -363,10 +370,10 @@
 </div>
 {% endif %}
 
-<div class="payment">
-    <span>Сдача</span>
-    <span>0 ₸</span>
-</div>
+{% if sale.sale_type == "cash" %}
+<div class="payment"><span>Получено</span><span>{{ "%.2f"|format(cash_received|float) }} ₸</span></div>
+<div class="payment"><span>Сдача</span><span>{{ "%.2f"|format(change_amount|float) }} ₸</span></div>
+{% endif %}
 
 <div class="line"></div>
 
