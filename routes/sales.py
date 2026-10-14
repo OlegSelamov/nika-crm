@@ -366,6 +366,21 @@ def pay_sale():
             }), 400
 
         total = sum((line[5] for line in normalized_cart), start=0)
+        from decimal import Decimal, InvalidOperation
+        cash_received = total
+        change_amount = Decimal("0")
+        if payment_method == "cash":
+            try:
+                tendered = data.get("cash_received")
+                if tendered in (None, ""):
+                    tendered = data.get("cash", total)
+                cash_received = Decimal(str(tendered))
+                if not cash_received.is_finite() or cash_received < total:
+                    return jsonify({"success": False, "error": "Недостаточно наличных для оплаты"}), 400
+                cash_received = cash_received.quantize(Decimal("0.01"))
+                change_amount = cash_received - total
+            except (InvalidOperation, ValueError, TypeError):
+                return jsonify({"success": False, "error": "Некорректная сумма наличных"}), 400
         cash = total if payment_method == "cash" else 0
         card = total if payment_method == "card" else 0
         kaspi = total if payment_method == "kaspi" else 0
@@ -397,9 +412,11 @@ def pay_sale():
                 card_amount,
                 kaspi_amount,
                 kaspi_transaction_id,
-                kaspi_method
+                kaspi_method,
+                cash_received,
+                change_amount
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             client_id,
@@ -415,7 +432,9 @@ def pay_sale():
             card,
             kaspi,
             kaspi_transaction_id,
-            kaspi_method
+            kaspi_method,
+            cash_received if payment_method == "cash" else 0,
+            change_amount
         ))
 
         sale_id = cur.fetchone()["id"]
@@ -565,7 +584,14 @@ def get_sale(sale_id):
 
     company = cur.fetchone()
 
+    cur.execute(
+        "SELECT full_name, company_name, iin FROM clients WHERE id=%s AND company_id=%s",
+        (sale.get("client_id"), sale.get("company_id")),
+    )
+    buyer = cur.fetchone() or {}
     result = {
+        "client_name": buyer.get("company_name") or buyer.get("full_name") or "",
+        "client_iin": buyer.get("iin") or "",
         "id": sale["id"],
         
         "sale_number": sale.get("sale_number"),
@@ -584,6 +610,8 @@ def get_sale(sale_id):
         "sale_type": sale["sale_type"] if "sale_type" in sale.keys() else "cash",
         "created_at": sale["created_at"],
         "cash": sale["cash_amount"] if "cash_amount" in sale.keys() else 0,
+        "cash_received": sale.get("cash_received") or 0,
+        "change_amount": sale.get("change_amount") or 0,
         "card": sale["card_amount"] if "card_amount" in sale.keys() else 0,
         "kaspi": sale["kaspi_amount"] if "kaspi_amount" in sale.keys() else 0,
         "check_date":
@@ -1659,6 +1687,8 @@ def check(sale_id):
         kaspi=sale["kaspi_amount"]
             if "kaspi_amount" in sale.keys()
             else 0,
+        cash_received=sale.get("cash_received") or 0,
+        change_amount=sale.get("change_amount") or 0,
     )
 
 
