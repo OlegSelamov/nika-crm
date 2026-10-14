@@ -4525,3 +4525,89 @@ body.sales-client-picker-open { overflow: hidden; }
   #clientSheet .picker-left { min-height: 0; }
   #clientSheet .picker-right { max-height: 36dvh; }
 }
+
+/* Fullscreen client selection workspace — detached to document.body at open. */
+body > #clientSheet.sheet,
+body > #clientSheet.sheet.active {
+  position: fixed !important;
+  inset: 0 !important;
+  box-sizing: border-box !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 12px !important;
+  z-index: 2147483000 !important;
+  justify-content: center !important;
+  align-items: center !important;
+  background: rgba(8,15,33,.76) !important;
+  transform: none !important;
+}
+body > #clientSheet.sheet:not(.active) { display: none !important; }
+body > #clientSheet.sheet.active { display: flex !important; }
+body > #clientSheet .sheet-content {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  box-sizing: border-box !important;
+  border-radius: 22px !important;
+  overflow: hidden !important;
+  background: #f8faff !important;
+}
+body > #clientSheet .client-picker-header {
+  flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
+  gap: 18px; padding: 22px 28px; border-bottom: 1px solid #e5e9f4; background: white;
+}
+body > #clientSheet .client-picker-eyebrow {color:#7257ff;font-size:11px;font-weight:850;letter-spacing:.09em;}
+body > #clientSheet .client-picker-header h2 {margin:4px 0 4px;font-size:26px;color:#1c2740;}
+body > #clientSheet .client-picker-header p {margin:0;color:#7a8498;font-size:14px;}
+body > #clientSheet .client-picker-top-close {
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 16px;
+  background:#f2efff;border:0;border-radius:12px;color:#6045d5;font-size:14px;font-weight:800;cursor:pointer;
+}
+body > #clientSheet .client-picker-top-close span:first-child {font-size:24px;line-height:1;}
+body > #clientSheet .client-picker {
+  flex: 1 1 auto !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 32%) !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+body > #clientSheet .picker-left {
+  display:flex !important;flex-direction:column !important;min-height:0 !important;
+  padding:22px 28px !important;overflow:hidden !important;
+}
+body > #clientSheet .client-picker-list-heading {display:flex;align-items:baseline;justify-content:space-between;gap:12px;}
+body > #clientSheet .client-picker-list-heading h3 {margin:0 0 15px;font-size:19px;color:#1c2740;}
+body > #clientSheet .client-picker-list-heading span {font-size:12px;color:#9198aa;}
+body > #clientSheet #clientSearchInput {flex:0 0 auto;min-height:50px;margin-bottom:14px;border-radius:12px;}
+body > #clientSheet .client-table-box {flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;}
+body > #clientSheet .picker-right {
+  display:flex !important;flex-direction:column !important;min-height:0 !important;
+  max-height:none !important;padding:24px !important;background:#fff;
+}
+body > #clientSheet .selected-client {min-height:0;flex:1 1 auto;overflow:auto;overflow-wrap:anywhere;white-space:normal;}
+body > #clientSheet .client-picker-actions {display:flex;flex-direction:column;gap:10px;flex:0 0 auto;}
+body > #clientSheet .client-picker-actions .btn {width:100%;min-height:48px;margin:0;}
+@media (max-width: 768px) {
+  body > #clientSheet.sheet, body > #clientSheet.sheet.active {padding:0 !important;}
+  body > #clientSheet .sheet-content {border-radius:0 !important;}
+  body > #clientSheet .client-picker-header {padding:16px;gap:10px;}
+  body > #clientSheet .client-picker-header h2 {font-size:21px;}
+  body > #clientSheet .client-picker-header p {font-size:12px;}
+  body > #clientSheet .client-picker-top-close {padding:8px 10px;font-size:0;}
+  body > #clientSheet .client-picker-top-close span:first-child {font-size:25px;}
+  body > #clientSheet .client-picker {display:flex !important;flex-direction:column !important;}
+  body > #clientSheet .picker-left {flex:1 1 auto !important;padding:14px 16px !important;border-right:0;}
+  body > #clientSheet .picker-right {flex:0 0 auto !important;max-height:36dvh !important;padding:12px 16px !important;border-top:1px solid #e5e9f4;gap:9px;}
+  body > #clientSheet .selected-client {max-height:12dvh;}
+  body > #clientSheet .client-picker-actions {flex-direction:row;}
+  body > #clientSheet .client-picker-actions .btn {min-width:0;}
+}
