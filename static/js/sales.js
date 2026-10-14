@@ -925,11 +925,14 @@ function escapePickerText(value) {
 
 function openClientSheet() {
     const sheet = document.getElementById("clientSheet");
+    // The sales page can sit inside a transformed/scrolling app shell. Fixed
+    // descendants are then clipped to that shell. A body-level dialog isn't.
+    if (sheet.parentElement !== document.body) document.body.appendChild(sheet);
     sheet.classList.add("active");
     document.body.classList.add("sales-client-picker-open");
     document.getElementById("clientSearchInput").value = "";
     selectedClientData = null;
-    document.getElementById("selectedClient").innerHTML = '<div class="empty">Выберите клиента</div>';
+    document.getElementById("selectedClient").innerHTML = '<div class="empty">Выберите клиента из списка слева</div>';
     loadClients(true);
     document.getElementById("clientSearchInput").focus();
 }

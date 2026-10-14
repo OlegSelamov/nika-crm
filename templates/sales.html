@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261014-client-picker-v1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261014-client-fullscreen-v2') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-pos-v3') }}">
 {% endblock %}
 
@@ -326,46 +326,40 @@
 	</div>
 </div>
 
-<div id="clientSheet" class="sheet" role="dialog" aria-modal="true" aria-label="Выбор клиента">
+<div id="clientSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="clientPickerTitle">
     <div class="sheet-content">
-
-        <div class="client-picker">
-
-            <!-- ЛЕВАЯ ЧАСТЬ -->
-            <div class="picker-left">
-
-                <h3>Выбор клиента</h3>
-
-                <input id="clientSearchInput" type="search" placeholder="Поиск по названию, ФИО, телефону или ИИН..." autocomplete="off" oninput="filterClients()">
-
-                <div id="clientList" class="client-table-box"></div>
-
+        <div class="client-picker-header">
+            <div class="client-picker-header-title">
+                <span class="client-picker-eyebrow">ПРОДАЖИ · КЛИЕНТЫ</span>
+                <h2 id="clientPickerTitle">Выбор клиента</h2>
+                <p>Найдите покупателя по названию организации, ФИО, телефону или ИИН</p>
             </div>
-
-            <!-- ПРАВАЯ ЧАСТЬ -->
-            <div class="picker-right">
-
-                <div class="selected-title">Данные клиента</div>
-
-                <div id="selectedClient" class="selected-client">
-                    <div class="empty">Выберите клиента</div>
-                </div>
-
-                <button class="btn btn-primary" onclick="confirmClient()">
-                    Выбрать
-                </button>
-
-                <button onclick="closeClientSheet()" class="btn btn-close">
-                    Закрыть
-                </button>
-
-            </div>
-
+            <button type="button" class="client-picker-top-close" onclick="closeClientSheet()" aria-label="Закрыть выбор клиента">
+                <span aria-hidden="true">×</span> <span>Закрыть</span>
+            </button>
         </div>
-
+        <div class="client-picker">
+            <section class="picker-left" aria-label="Список клиентов">
+                <div class="client-picker-list-heading">
+                    <h3>Клиенты</h3>
+                    <span>Поиск по всей базе</span>
+                </div>
+                <input id="clientSearchInput" type="search" placeholder="Название, ФИО, телефон или ИИН" autocomplete="off" aria-label="Поиск клиента" oninput="filterClients()">
+                <div id="clientList" class="client-table-box" aria-live="polite"></div>
+            </section>
+            <aside class="picker-right" aria-label="Выбранный клиент">
+                <div class="selected-title">Данные клиента</div>
+                <div id="selectedClient" class="selected-client">
+                    <div class="empty">Выберите клиента из списка слева</div>
+                </div>
+                <div class="client-picker-actions">
+                    <button type="button" class="btn btn-primary" onclick="confirmClient()">Выбрать клиента</button>
+                    <button type="button" class="btn btn-close" onclick="closeClientSheet()">Отмена</button>
+                </div>
+            </aside>
+        </div>
     </div>
 </div>
-
 
 <div id="saleModal" class="modal" style="display:none;">
 
@@ -757,7 +751,7 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261014-client-picker-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261014-client-fullscreen-v2') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20260923-modifiers-total-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
