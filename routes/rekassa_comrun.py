@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 
 from models import get_db, pool
 from services.fiscal_service import fiscalize_sale, provider_context
-from utils.timezone import now_kz
+from utils.timezone import now_kz, now_kz_for_timestamp
 from utils.sale_amounts import normalize_sale_line
 from routes.rekassa import rekassa_bp
 
@@ -337,7 +337,7 @@ def pay_sale_comrun():
                 ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
                 RETURNING id
             """, (
-                client_id, company_id, user_id, sale_number, total, total, "Оплачено", now_kz(),
+                client_id, company_id, user_id, sale_number, total, total, "Оплачено", now_kz_for_timestamp(),
                 payment_method, cash, card, kaspi,
                 data.get("kaspi_transaction_id"), data.get("kaspi_method"),
                 cash_received, change_amount,
