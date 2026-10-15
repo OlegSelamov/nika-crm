@@ -67,11 +67,60 @@ def create_data(conn, sizes, company_name=None):
                     "SELECT s.id,i.id,%s||i.rn::text,500+(s.rn %% 1000),1,500+(s.rn %% 1000),"
                     "200,'product','шт' FROM perf_sales s JOIN perf_items i ON i.rn=((s.rn-1) %% %s)+1",
                     (MARKER+" Товар ",ni))
+        # The normal stock trigger recalculates one item's full ledger after EACH
+        # inserted movement. A 75,000-row synthetic insert can therefore take many
+        # minutes. Only in this validated TEST seeder, pause the exact quantity-cache
+        # trigger inside our existing transaction, then rebuild the new company's
+        # cached quantities in a single grouped UPDATE.
+        #
+        # ALTER TABLE is transactional in PostgreSQL: an error/rollback restores
+        # the original trigger state and removes ALL generated company data.
+        # It also takes a table lock, so fail quickly if other TEST requests are
+        # currently using stock_movements rather than stall the site.
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM pg_trigger
+                WHERE tgrelid = 'stock_movements'::regclass
+                  AND tgname = 'trg_nika_stock_movement_sync_quantity'
+                  AND NOT tgisinternal
+            )
+        """)
+        sync_trigger_exists = cur.fetchone()[0]
+        if sync_trigger_exists:
+            cur.execute("SET LOCAL lock_timeout = '5s'")
+            cur.execute("ALTER TABLE stock_movements DISABLE TRIGGER trg_nika_stock_movement_sync_quantity")
+            cur.execute("SET LOCAL lock_timeout = DEFAULT")
+
+        print("Loading synthetic stock movements...", flush=True)
         cur.execute("INSERT INTO stock_movements(company_id,item_id,movement_type,quantity,price,total,comment,created_at) "
                     "SELECT %s,i.id,CASE WHEN n %% 3=0 THEN 'writeoff' WHEN n %% 3=1 THEN 'income' "
                     "ELSE 'sale' END,1,300,300,%s,NOW()-(n %% 365)*INTERVAL '1 day' "
                     "FROM generate_series(1,%s) n JOIN perf_items i ON i.rn=((n-1) %% %s)+1",
                     (cid,MARKER,nm,ni))
+
+        if sync_trigger_exists:
+            cur.execute("""
+                UPDATE items i
+                   SET quantity = totals.qty
+                  FROM (
+                        SELECT item_id,
+                               COALESCE(SUM(
+                                   CASE
+                                       WHEN movement_type IN ('income', 'refund') THEN quantity
+                                       WHEN movement_type IN ('sale', 'writeoff') THEN -quantity
+                                       ELSE 0
+                                   END
+                               ), 0) AS qty
+                          FROM stock_movements
+                         WHERE company_id = %s
+                         GROUP BY item_id
+                       ) AS totals
+                 WHERE i.company_id = %s
+                   AND i.id = totals.item_id
+                   AND COALESCE(i.item_type, 'product') = 'product'
+            """, (cid, cid))
+            cur.execute("ALTER TABLE stock_movements ENABLE TRIGGER trg_nika_stock_movement_sync_quantity")
+        print("Synthetic stock movements complete.", flush=True)
         return cid
 
 
