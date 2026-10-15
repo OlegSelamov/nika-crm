@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-client-create-hidden-v2') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-sales-history-wide-v1') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-pos-v3') }}">
 {% endblock %}
 
@@ -9,6 +9,14 @@
 <script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};</script>
 
 <div class="sales-page">
+<nav class="sales-tabs sales-view-navigation" role="tablist" aria-label="Раздел продаж">
+    <button type="button" class="sales-tab active" id="cartTabBtn"
+            role="tab" aria-selected="true" aria-controls="salesGridWorkspace"
+            onclick="switchSalesTab('cart')">Продажа</button>
+    <button type="button" class="sales-tab" id="historyTabBtn"
+            role="tab" aria-selected="false" aria-controls="salesHistoryWorkspace"
+            onclick="switchSalesTab('history')">История продаж</button>
+</nav>
 <section class="shift-strip" id="shiftStrip" aria-label="Смена reKassa">
 	<div class="shift-strip-state">
 		<span class="shift-strip-dot" id="shiftStripDot"></span>
@@ -33,7 +41,7 @@
 <div hidden id="salesBusinessMode" data-mode="{{ business_mode }}"></div>
 {% endif %}
 
-<div class="sales-grid">
+<div class="sales-grid" id="salesGridWorkspace">
 
     <!-- ЛЕВАЯ ЧАСТЬ: ОБЫЧНАЯ КАССА -->
     <div class="left-side" id="retailSalesPanel">
@@ -61,25 +69,6 @@
 
 		</div>
 
-		<div class="sales-tabs">
-
-			<button
-				class="sales-tab active"
-				onclick="switchSalesTab('cart')"
-				id="cartTabBtn"
-			>
-				Продажа
-			</button>
-
-			<button
-				class="sales-tab"
-				onclick="switchSalesTab('history')"
-				id="historyTabBtn"
-			>
-				История продаж
-			</button>
-
-		</div>
 
         <!-- КОРЗИНА -->
         <div class="cart-box">
@@ -773,7 +762,7 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261015-client-create-hidden-v2') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261015-sales-history-wide-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20260923-modifiers-total-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
