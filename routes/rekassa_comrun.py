@@ -1,4 +1,5 @@
 from flask import jsonify, request, session
+from decimal import Decimal, InvalidOperation
 
 from models import get_db, pool
 from services.fiscal_service import fiscalize_sale, provider_context
@@ -311,6 +312,20 @@ def pay_sale_comrun():
                 (company_id,),
             )
             sale_number = cur.fetchone()["next_number"]
+            # Customer tender is not revenue. Persist it separately from cash_amount.
+            cash_received = Decimal("0")
+            change_amount = Decimal("0")
+            if payment_method == "cash":
+                try:
+                    raw_tender = data.get("cash_received")
+                    if raw_tender in (None, ""):
+                        raw_tender = data.get("cash", total)
+                    cash_received = Decimal(str(raw_tender)).quantize(Decimal("0.01"))
+                    if not cash_received.is_finite() or cash_received < total:
+                        return jsonify({"success": False, "error": "Недостаточно наличных для оплаты"}), 400
+                    change_amount = cash_received - total
+                except (InvalidOperation, ValueError, TypeError):
+                    return jsonify({"success": False, "error": "Некорректная сумма наличных"}), 400
             cash = total if payment_method == "cash" else 0
             card = total if payment_method == "card" else 0
             kaspi = total if payment_method == "kaspi" else 0
@@ -318,13 +333,14 @@ def pay_sale_comrun():
                 INSERT INTO sales (
                     client_id, company_id, user_id, sale_number, total_amount, paid_amount,
                     status, created_at, sale_type, cash_amount, card_amount, kaspi_amount,
-                    kaspi_transaction_id, kaspi_method, is_processed
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
+                    kaspi_transaction_id, kaspi_method, cash_received, change_amount, is_processed
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
                 RETURNING id
             """, (
                 client_id, company_id, user_id, sale_number, total, total, "Оплачено", now_kz(),
                 payment_method, cash, card, kaspi,
                 data.get("kaspi_transaction_id"), data.get("kaspi_method"),
+                cash_received, change_amount,
             ))
             sale_id = cur.fetchone()["id"]
 
