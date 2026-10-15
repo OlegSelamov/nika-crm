@@ -4611,3 +4611,35 @@ body > #clientSheet .client-picker-actions .btn {width:100%;min-height:48px;marg
   body > #clientSheet .client-picker-actions {flex-direction:row;}
   body > #clientSheet .client-picker-actions .btn {min-width:0;}
 }
+
+/* Add customer above the fullscreen sales client picker. */
+body.sales-client-create-open { overflow: hidden; }
+body > .sales-client-create-modal { display:none; position:fixed; inset:0; z-index:2147483600; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; }
+body > .sales-client-create-modal.is-open { display:flex; }
+.sales-client-create-backdrop { position:absolute; inset:0; background:rgba(10,16,35,.65); backdrop-filter:blur(3px); }
+.sales-client-create-dialog { position:relative; width:min(720px,100%); max-height:calc(100dvh - 32px); overflow:auto; border-radius:22px; background:#fff; box-shadow:0 26px 95px rgba(3,10,30,.35); color:#19243b; }
+.sales-client-create-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; padding:23px 28px; border-bottom:1px solid #e6eaf3; }
+.sales-client-create-head span { font-size:11px; letter-spacing:.09em; font-weight:850; color:#7658ed; }
+.sales-client-create-head h2 { font-size:25px; margin:5px 0; }
+.sales-client-create-head p { margin:0; color:#8992a3; font-size:13px; }
+.sales-client-create-head > button { flex:0 0 auto; border:0; border-radius:12px; background:#f1efff; color:#684bdf; font-size:26px; width:43px; height:43px; cursor:pointer; }
+.sales-client-create-fields { padding:24px 28px 10px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.sales-client-create-fields label { display:flex; flex-direction:column; gap:7px; font-size:13px; font-weight:750; color:#33415a; min-width:0; }
+.sales-client-create-fields label.wide { grid-column:1 / -1; }
+.sales-client-create-fields input, .sales-client-create-fields textarea { width:100%; min-width:0; box-sizing:border-box; border:1px solid #dbe1eb; border-radius:12px; padding:13px 14px; color:#17233b; font:inherit; font-weight:400; background:#fff; }
+.sales-client-create-fields input:focus, .sales-client-create-fields textarea:focus { outline:2px solid #a795ff; border-color:#876aff; }
+.sales-client-create-error { margin:7px 28px; padding:12px; border-radius:10px; color:#b42318; background:#fff2f1; font-size:13px; }
+.sales-client-create-dialog footer { display:flex; justify-content:flex-end; gap:12px; padding:18px 28px 26px; }
+.sales-client-create-dialog footer button { min-height:46px; padding:0 22px; border-radius:12px; border:0; font-size:14px; font-weight:800; cursor:pointer; }
+.sales-client-create-dialog footer .secondary { color:#525d72; background:#eef0f5; }
+.sales-client-create-dialog footer .primary { color:white; background:#7956f7; }
+.sales-client-create-dialog footer .primary:disabled { opacity:.6; cursor:wait; }
+@media (max-width:600px) {
+ body > .sales-client-create-modal { padding:7px; }
+ .sales-client-create-dialog { max-height:calc(100dvh - 14px); border-radius:15px; }
+ .sales-client-create-head { padding:17px; }
+ .sales-client-create-fields { grid-template-columns:1fr; padding:17px; }
+ .sales-client-create-fields label.wide { grid-column:auto; }
+ .sales-client-create-dialog footer { padding:14px 17px 20px; }
+ .sales-client-create-dialog footer button { flex:1; padding:0 12px; }
+}
