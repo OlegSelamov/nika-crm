@@ -30,11 +30,11 @@ def validate(conn):
         raise RuntimeError("DATABASE_URL matches the production URL")
 
 
-def create_data(conn, sizes):
+def create_data(conn, sizes, company_name=None):
     ni, nc, ns, nm = sizes
     with conn.cursor() as cur:
         cur.execute("INSERT INTO companies(name,is_active,business_mode) VALUES (%s,TRUE,'retail') RETURNING id",
-                    (MARKER + " Нагрузочная организация",))
+                    (company_name or MARKER + " Нагрузочная организация",))
         cid = cur.fetchone()[0]
         cur.execute("INSERT INTO company_subscriptions(company_id,status,trial_ends_at,period_end) "
                     "VALUES (%s,'active',NOW()+INTERVAL '5 years',NOW()+INTERVAL '5 years')", (cid,))
@@ -78,16 +78,41 @@ def create_data(conn, sizes):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--size", choices=list(SIZES), default="small")
+    p.add_argument("--company-name", default=None,
+                   help="Synthetic company name, must begin with [PERF-TEST]")
+    p.add_argument("--skip-existing", action="store_true",
+                   help="Do not duplicate an already seeded company of this name")
+    p.add_argument("--check-only", action="store_true",
+                   help="Verify test database and check whether the company exists")
     p.add_argument("--confirm", action="store_true")
     args = p.parse_args()
-    if not args.confirm:
+    if not args.check_only and not args.confirm:
         p.error("Explicit --confirm is required")
+    if args.skip_existing and not args.company_name:
+        p.error("--skip-existing requires --company-name")
+    if args.company_name is not None and not args.company_name.startswith(MARKER):
+        p.error("The synthetic company name must start with [PERF-TEST]")
     if not os.environ.get("DATABASE_URL"):
         p.error("DATABASE_URL is required")
     conn = psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=10)
     try:
         validate(conn)
-        company_id = create_data(conn, SIZES[args.size])
+        if args.company_name:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM companies WHERE name = %s ORDER BY id LIMIT 1",
+                            (args.company_name,))
+                existing = cur.fetchone()
+            if existing:
+                if args.check_only or args.skip_existing:
+                    print("Synthetic company already exists:", existing[0],
+                          "(skipping write)")
+                    return
+                raise RuntimeError("Synthetic company already exists; refusing duplicate load")
+        if args.check_only:
+            print("Verified isolated TEST database; requested synthetic company is absent")
+            return
+        company_id = create_data(conn, SIZES[args.size],
+                                 company_name=args.company_name)
         conn.commit()
         print("Synthetic TEST company:", company_id, "counts:", SIZES[args.size])
     except Exception:
