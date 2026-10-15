@@ -4614,8 +4614,10 @@ body > #clientSheet .client-picker-actions .btn {width:100%;min-height:48px;marg
 
 /* Add customer above the fullscreen sales client picker. */
 body.sales-client-create-open { overflow: hidden; }
-body > .sales-client-create-modal { display:none; position:fixed; inset:0; z-index:2147483600; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; }
-body > .sales-client-create-modal.is-open { display:flex; }
+/* The modal begins inside .sales-page, and moves to body on first open. */
+#salesClientCreateModal { display:none; position:fixed; inset:0; z-index:2147483600; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; }
+#salesClientCreateModal.is-open:not([hidden]) { display:flex; }
+#salesClientCreateModal[hidden], #salesClientCreateModal[aria-hidden="true"] { display:none !important; }
 .sales-client-create-backdrop { position:absolute; inset:0; background:rgba(10,16,35,.65); backdrop-filter:blur(3px); }
 .sales-client-create-dialog { position:relative; width:min(720px,100%); max-height:calc(100dvh - 32px); overflow:auto; border-radius:22px; background:#fff; box-shadow:0 26px 95px rgba(3,10,30,.35); color:#19243b; }
 .sales-client-create-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; padding:23px 28px; border-bottom:1px solid #e6eaf3; }
@@ -4635,7 +4637,7 @@ body > .sales-client-create-modal.is-open { display:flex; }
 .sales-client-create-dialog footer .primary { color:white; background:#7956f7; }
 .sales-client-create-dialog footer .primary:disabled { opacity:.6; cursor:wait; }
 @media (max-width:600px) {
- body > .sales-client-create-modal { padding:7px; }
+ #salesClientCreateModal { padding:7px; }
  .sales-client-create-dialog { max-height:calc(100dvh - 14px); border-radius:15px; }
  .sales-client-create-head { padding:17px; }
  .sales-client-create-fields { grid-template-columns:1fr; padding:17px; }
