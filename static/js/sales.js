@@ -2348,44 +2348,43 @@ window.addEventListener("load", () => {
 
 });
 
-function switchSalesTab(tab) {
-
-	const cartTable =
-		document.getElementById("cartTableWrapper");
-
-    const mobileCart =
-        document.getElementById("mobileCart");
-
-    const history =
-        document.getElementById("salesHistoryBox");
-
-    const cartBtn =
-        document.getElementById("cartTabBtn");
-
-    const historyBtn =
-        document.getElementById("historyTabBtn");
-
-    if (tab === "cart") {
-
-        cartTable.style.display = "";
-        mobileCart.style.display = "";
-        history.style.display = "none";
-
-        cartBtn.classList.add("active");
-        historyBtn.classList.remove("active");
-
-    } else {
-
-        cartTable.style.display = "none";
-        mobileCart.style.display = "none";
-        history.style.display = "block";
-
-        cartBtn.classList.remove("active");
-        historyBtn.classList.add("active");
-
-        loadSalesHistory();
+// Keep the history in its own full-width workspace, outside the cart and POS grid.
+function ensureSalesHistoryWorkspace() {
+    let workspace = document.getElementById('salesHistoryWorkspace');
+    if (!workspace) {
+        const grid = document.getElementById('salesGridWorkspace');
+        const history = document.getElementById('salesHistoryBox');
+        if (!grid || !history) return null;
+        workspace = document.createElement('section');
+        workspace.id = 'salesHistoryWorkspace';
+        workspace.className = 'sales-history-workspace';
+        workspace.setAttribute('aria-label', 'История продаж');
+        workspace.hidden = true;
+        grid.insertAdjacentElement('afterend', workspace);
+        workspace.appendChild(history);
+        history.style.display = '';
     }
+    return workspace;
 }
+
+function switchSalesTab(tab) {
+    const showHistory = tab === 'history';
+    const workspace = ensureSalesHistoryWorkspace();
+    const grid = document.getElementById('salesGridWorkspace');
+    const cartBtn = document.getElementById('cartTabBtn');
+    const historyBtn = document.getElementById('historyTabBtn');
+    if (!workspace || !grid || !cartBtn || !historyBtn) return;
+    grid.hidden = showHistory;
+    workspace.hidden = !showHistory;
+    document.querySelector('.sales-page')?.classList.toggle('sales-history-active', showHistory);
+    document.body.classList.toggle('sales-history-active', showHistory);
+    cartBtn.classList.toggle('active', !showHistory);
+    historyBtn.classList.toggle('active', showHistory);
+    cartBtn.setAttribute('aria-selected', String(!showHistory));
+    historyBtn.setAttribute('aria-selected', String(showHistory));
+    if (showHistory) loadSalesHistory();
+}
+window.addEventListener('DOMContentLoaded', ensureSalesHistoryWorkspace);
 
 const salesShiftHistoryState = {
     generation: 0,
@@ -3631,7 +3630,7 @@ async function refundSale(id, button = null) {
             $('shiftCloseBtn').disabled = !open;
             if (showMessage) toast('Состояние смены обновлено');
 
-            const historyVisible = $('salesHistoryBox')?.style.display === 'block';
+            const historyVisible = !document.getElementById('salesHistoryWorkspace')?.hidden;
             if (historyVisible) loadSalesHistory();
         } catch (error) {
             window.currentRekassaShiftNumber = null;
