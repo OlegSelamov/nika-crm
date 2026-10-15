@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-client-create-v1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-client-create-hidden-v2') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-pos-v3') }}">
 {% endblock %}
 
@@ -361,7 +361,7 @@
     </div>
 </div>
 
-<div id="salesClientCreateModal" class="sales-client-create-modal" aria-hidden="true">
+<div id="salesClientCreateModal" class="sales-client-create-modal" aria-hidden="true" hidden>
     <div class="sales-client-create-backdrop" onclick="closeSalesClientCreate()"></div>
     <section class="sales-client-create-dialog" role="dialog" aria-modal="true" aria-labelledby="salesClientCreateTitle">
         <header class="sales-client-create-head">
@@ -773,7 +773,7 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261015-client-create-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261015-client-create-hidden-v2') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20260923-modifiers-total-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
