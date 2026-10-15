@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, make_r
 from models import get_db, pool
 from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
-from utils.timezone import now_kz
+from utils.timezone import now_kz, now_kz_for_timestamp
 from utils.sale_amounts import normalize_sale_line
 from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from flask import render_template
@@ -198,7 +198,7 @@ def add_sale():
         0,
         0,
         "Новая",
-        now_kz()
+        now_kz_for_timestamp()
     ))
 
     conn.commit()
@@ -426,7 +426,7 @@ def pay_sale():
             total,
             paid,
             status,
-            now_kz(),
+            now_kz_for_timestamp(),
             payment_method,
             cash,
             card,
@@ -1030,7 +1030,7 @@ def smart_sale(payload=None):
         item["retail_price"],
         0,
         "Новая",
-        now_kz()
+        now_kz_for_timestamp()
     ))
 
     sale_id = cur.fetchone()["id"]
@@ -1129,7 +1129,7 @@ def create_invoice():
         total,
         0,
         "Счёт выставлен",
-        now_kz(),
+        now_kz_for_timestamp(),
         "invoice"
     ))
 
