@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-sales-history-wide-v1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-compact-toolbar-v1') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-pos-v3') }}">
 {% endblock %}
 
@@ -9,37 +9,39 @@
 <script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};</script>
 
 <div class="sales-page">
-<nav class="sales-tabs sales-view-navigation" role="tablist" aria-label="Раздел продаж">
-    <button type="button" class="sales-tab active" id="cartTabBtn"
-            role="tab" aria-selected="true" aria-controls="salesGridWorkspace"
-            onclick="switchSalesTab('cart')">Продажа</button>
-    <button type="button" class="sales-tab" id="historyTabBtn"
-            role="tab" aria-selected="false" aria-controls="salesHistoryWorkspace"
-            onclick="switchSalesTab('history')">История продаж</button>
-</nav>
-<section class="shift-strip" id="shiftStrip" aria-label="Смена reKassa">
-	<div class="shift-strip-state">
-		<span class="shift-strip-dot" id="shiftStripDot"></span>
-		<div>
-			<strong id="shiftStripTitle">Проверяем смену…</strong>
-			<span id="shiftStripMeta">reKassa</span>
-		</div>
-	</div>
-	<div class="shift-strip-actions">
-		<button type="button" class="shift-strip-btn" id="shiftXReportBtn" disabled>X‑отчёт</button>
-		<button type="button" class="shift-strip-btn" id="shiftHistoryBtn">История Z</button>
-		<button type="button" class="shift-strip-btn shift-strip-btn-danger" id="shiftCloseBtn" disabled>Закрыть смену</button>
-		<button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" title="Обновить смену" aria-label="Обновить смену">↻</button>
-	</div>
-</section>
-{% if business_mode == 'universal' %}
-<div class="sales-mode-switch" role="tablist" aria-label="Режим продаж">
-	<button type="button" id="salesModeRetail" class="active" role="tab" aria-selected="true">Розница</button>
-	<button type="button" id="salesModeFood" role="tab" aria-selected="false">Общепит</button>
+<div class="sales-commandbar" aria-label="Режимы продаж и кассовая смена">
+    <nav class="sales-tabs sales-view-navigation" role="tablist" aria-label="Раздел продаж">
+        <button type="button" class="sales-tab active" id="cartTabBtn"
+                role="tab" aria-selected="true" aria-controls="salesGridWorkspace"
+                onclick="switchSalesTab('cart')">Продажа</button>
+        <button type="button" class="sales-tab" id="historyTabBtn"
+                role="tab" aria-selected="false" aria-controls="salesHistoryWorkspace"
+                onclick="switchSalesTab('history')">История продаж</button>
+    </nav>
+    {% if business_mode == 'universal' %}
+    <div class="sales-mode-switch" role="tablist" aria-label="Режим продаж">
+        <button type="button" id="salesModeRetail" class="active" role="tab" aria-selected="true">Розница</button>
+        <button type="button" id="salesModeFood" role="tab" aria-selected="false">Общепит</button>
+    </div>
+    {% else %}
+    <div hidden id="salesBusinessMode" data-mode="{{ business_mode }}"></div>
+    {% endif %}
+    <section class="shift-strip" id="shiftStrip" aria-label="Смена reKassa">
+        <div class="shift-strip-state">
+            <span class="shift-strip-dot" id="shiftStripDot"></span>
+            <div>
+                <strong id="shiftStripTitle">Проверяем смену…</strong>
+                <span id="shiftStripMeta">reKassa</span>
+            </div>
+        </div>
+        <div class="shift-strip-actions">
+            <button type="button" class="shift-strip-btn" id="shiftXReportBtn" disabled>X‑отчёт</button>
+            <button type="button" class="shift-strip-btn" id="shiftHistoryBtn">История Z</button>
+            <button type="button" class="shift-strip-btn shift-strip-btn-danger" id="shiftCloseBtn" disabled>Закрыть смену</button>
+            <button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" title="Обновить смену" aria-label="Обновить смену">↻</button>
+        </div>
+    </section>
 </div>
-{% else %}
-<div hidden id="salesBusinessMode" data-mode="{{ business_mode }}"></div>
-{% endif %}
 
 <div class="sales-grid" id="salesGridWorkspace">
 
