@@ -1038,6 +1038,7 @@ function openSalesClientCreate() {
     const error = document.getElementById('salesClientCreateError');
     error.hidden = true;
     error.textContent = '';
+    modal.hidden = false;
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('sales-client-create-open');
@@ -1049,6 +1050,7 @@ function closeSalesClientCreate() {
     if (!modal || modal.dataset.saving === '1') return;
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
+    modal.hidden = true;
     document.body.classList.remove('sales-client-create-open');
 }
 
@@ -1101,6 +1103,7 @@ async function saveSalesClientCreate(event) {
         selectClient(client);
         modal.classList.remove('is-open');
         modal.setAttribute('aria-hidden', 'true');
+        modal.hidden = true;
         document.body.classList.remove('sales-client-create-open');
     } catch (error) {
         errorBox.textContent = error.message || 'Ошибка сохранения';
