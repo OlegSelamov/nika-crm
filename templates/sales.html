@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261014-client-fullscreen-v2') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-client-create-v1') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-pos-v3') }}">
 {% endblock %}
 
@@ -334,8 +334,8 @@
                 <h2 id="clientPickerTitle">Выбор клиента</h2>
                 <p>Найдите покупателя по названию организации, ФИО, телефону или ИИН</p>
             </div>
-            <button type="button" class="client-picker-top-close" onclick="closeClientSheet()" aria-label="Закрыть выбор клиента">
-                <span aria-hidden="true">×</span> <span>Закрыть</span>
+            <button type="button" class="client-picker-top-close" onclick="openSalesClientCreate()" aria-label="Добавить клиента">
+                <span aria-hidden="true">+</span> <span>Добавить клиента</span>
             </button>
         </div>
         <div class="client-picker">
@@ -359,6 +359,28 @@
             </aside>
         </div>
     </div>
+</div>
+
+<div id="salesClientCreateModal" class="sales-client-create-modal" aria-hidden="true">
+    <div class="sales-client-create-backdrop" onclick="closeSalesClientCreate()"></div>
+    <section class="sales-client-create-dialog" role="dialog" aria-modal="true" aria-labelledby="salesClientCreateTitle">
+        <header class="sales-client-create-head">
+            <div><span>ПРОДАЖИ · НОВЫЙ КЛИЕНТ</span><h2 id="salesClientCreateTitle">Добавить клиента</h2><p>Новый клиент сразу появится в выборе покупателя</p></div>
+            <button type="button" onclick="closeSalesClientCreate()" aria-label="Закрыть форму">×</button>
+        </header>
+        <form id="salesClientCreateForm" onsubmit="saveSalesClientCreate(event)">
+            <div class="sales-client-create-fields">
+                <label>Наименование ИП / Организации<input name="company_name" placeholder="Название организации" autocomplete="organization"></label>
+                <label>ФИО клиента *<input name="full_name" required placeholder="Фамилия Имя Отчество" autocomplete="name"></label>
+                <label>ИИН / БИН<input name="iin" placeholder="12 цифр" inputmode="numeric" maxlength="12"></label>
+                <label>Телефон<input name="phone" placeholder="+7..." autocomplete="tel"></label>
+                <label class="wide">Адрес<input name="address" placeholder="Адрес клиента"></label>
+                <label class="wide">Комментарий<textarea name="comment" rows="2" placeholder="Дополнительная информация"></textarea></label>
+            </div>
+            <p id="salesClientCreateError" class="sales-client-create-error" role="alert" hidden></p>
+            <footer><button type="button" onclick="closeSalesClientCreate()" class="secondary">Отмена</button><button type="submit" class="primary" id="salesClientCreateSubmit">Сохранить и выбрать</button></footer>
+        </form>
+    </section>
 </div>
 
 <div id="saleModal" class="modal" style="display:none;">
@@ -751,7 +773,7 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261014-client-fullscreen-v2') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261015-client-create-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20260923-modifiers-total-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>

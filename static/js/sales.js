@@ -1029,6 +1029,97 @@ function selectClient(client) {
       row.classList.toggle('is-selected', pickerClients[Number(row.dataset.clientIndex)]?.id === client.id));
 }
 
+
+function openSalesClientCreate() {
+    const modal = document.getElementById('salesClientCreateModal');
+    if (modal.parentElement !== document.body) document.body.appendChild(modal);
+    const form = document.getElementById('salesClientCreateForm');
+    form.reset();
+    const error = document.getElementById('salesClientCreateError');
+    error.hidden = true;
+    error.textContent = '';
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('sales-client-create-open');
+    form.elements.full_name.focus();
+}
+
+function closeSalesClientCreate() {
+    const modal = document.getElementById('salesClientCreateModal');
+    if (!modal || modal.dataset.saving === '1') return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('sales-client-create-open');
+}
+
+async function saveSalesClientCreate(event) {
+    event.preventDefault();
+    const modal = document.getElementById('salesClientCreateModal');
+    if (modal.dataset.saving === '1') return;
+    const form = document.getElementById('salesClientCreateForm');
+    const button = document.getElementById('salesClientCreateSubmit');
+    const errorBox = document.getElementById('salesClientCreateError');
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+    payload.full_name = String(payload.full_name || '').trim();
+    payload.iin = String(payload.iin || '').trim();
+    if (!payload.full_name) {
+        errorBox.textContent = 'Укажите ФИО клиента';
+        errorBox.hidden = false;
+        return;
+    }
+    if (payload.iin && !/^\d{12}$/.test(payload.iin)) {
+        errorBox.textContent = 'ИИН/БИН должен содержать 12 цифр';
+        errorBox.hidden = false;
+        return;
+    }
+    modal.dataset.saving = '1';
+    button.disabled = true;
+    button.textContent = 'Сохраняем…';
+    errorBox.hidden = true;
+    try {
+        const response = await fetch('/api/clients/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success || !data.client) {
+            throw new Error(data.message || data.error || 'Не удалось сохранить клиента');
+        }
+        // Keep the original sales picker open and select the newly created client.
+        const client = data.client;
+        const input = document.getElementById('clientSearchInput');
+        if (input) input.value = '';
+        if (pickerController) pickerController.abort();
+        pickerSequence++;
+        clearTimeout(pickerTimer);
+        pickerClients = [client];
+        pickerPage = 0;
+        pickerHasMore = false;
+        renderPickerClients();
+        selectClient(client);
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('sales-client-create-open');
+    } catch (error) {
+        errorBox.textContent = error.message || 'Ошибка сохранения';
+        errorBox.hidden = false;
+    } finally {
+        delete modal.dataset.saving;
+        button.disabled = false;
+        button.textContent = 'Сохранить и выбрать';
+    }
+}
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && document.getElementById('salesClientCreateModal')?.classList.contains('is-open')) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeSalesClientCreate();
+    }
+});
+
 function confirmClient() {
     if (!selectedClientData) {
         alert("Выберите клиента");
