@@ -4645,3 +4645,63 @@ body.sales-client-create-open { overflow: hidden; }
  .sales-client-create-dialog footer { padding:14px 17px 20px; }
  .sales-client-create-dialog footer button { flex:1; padding:0 12px; }
 }
+
+/* Full-width, independent sales history workspace. Keep the POS untouched. */
+.sales-page .sales-view-navigation {
+  flex: 0 0 auto;
+  display: flex !important;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px !important;
+  padding: 6px;
+  max-width: none;
+  border-radius: 15px;
+  background: #f3f2fa;
+  z-index: 11;
+}
+.sales-page .sales-view-navigation .sales-tab {
+  flex: 0 1 220px;
+  min-width: 130px;
+  height: 46px;
+  font-size: 14px;
+}
+#salesGridWorkspace[hidden], #salesHistoryWorkspace[hidden] { display:none !important; }
+.sales-page .sales-history-workspace {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid #e7e9f2;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(52,48,89,.08);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.sales-page .sales-history-workspace #salesHistoryBox {
+  display: block !important;
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.sales-page.sales-history-active .sales-mode-switch,
+.sales-page.sales-history-active .shift-strip { display:none !important; }
+.sales-page.sales-history-active .sales-history-workspace .sales-documents-history { width:100%; }
+.sales-page.sales-history-active #salesHistoryBox .sales-documents-table-wrap { max-height:none !important; }
+@media (max-width:768px) {
+  .sales-page .sales-view-navigation { gap:6px; margin:0 0 8px !important; }
+  .sales-page .sales-view-navigation .sales-tab { flex:1 1 0; min-width:0; font-size:13px; height:43px; }
+  .sales-page.sales-history-active { padding-bottom:16px !important; }
+  .sales-page .sales-history-workspace { padding:8px; min-height:calc(100dvh - 190px); overflow:visible; }
+  .sales-page .sales-history-workspace #salesHistoryBox { height:auto !important; overflow:visible !important; }
+  body.sales-history-active .payment-box { display:none !important; }
+}
