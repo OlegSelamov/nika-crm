@@ -48,6 +48,24 @@ def ensure_food_schema(cur):
         CREATE UNIQUE INDEX IF NOT EXISTS uq_food_orders_sale_id
         ON food_orders(sale_id) WHERE sale_id IS NOT NULL
     """)
+    # Legacy saved orders used timezone-aware datetime for a timezone-naive
+    # column. PostgreSQL converted KZ +05:00 to UTC, moving the clock -5h.
+    # Direct checkout orders were already saved with local naive wall time.
+    # Repair legacy rows once and explicitly mark all subsequent writes.
+    cur.execute("ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS kz_clock_fixed BOOLEAN")
+    cur.execute("""
+        UPDATE food_orders AS fo
+        SET created_at = CASE
+            WHEN fo.sale_id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM sales s
+                WHERE s.id = fo.sale_id AND s.company_id = fo.company_id
+                  AND ABS(EXTRACT(EPOCH FROM (fo.created_at - s.created_at))) < 120
+            ) THEN fo.created_at
+            ELSE fo.created_at + INTERVAL '5 hours'
+        END,
+        kz_clock_fixed = TRUE
+        WHERE fo.kz_clock_fixed IS NULL
+    """)
 
 
 def _item_cart(cur, company_id, source):
@@ -229,10 +247,10 @@ def food_orders():
         else:
             cur.execute("""
                 INSERT INTO food_orders(company_id, created_by, table_name, guest_name, note,
-                    client_id, cart, total_amount, created_at, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s) RETURNING *
+                    client_id, cart, total_amount, created_at, updated_at, kz_clock_fixed)
+                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,TRUE) RETURNING *
             """, (company_id, session["user_id"], table_name, guest_name, note,
-                  client_id, payload, total, now_kz(), now_kz()))
+                  client_id, payload, total, now_kz_for_timestamp(), now_kz_for_timestamp()))
         order = cur.fetchone()
         conn.commit()
         return jsonify({"success": True, "order": _serialize(order)})
@@ -267,7 +285,7 @@ def food_order_detail(order_id):
             UPDATE food_orders SET status='cancelled', updated_at=%s
             WHERE id=%s AND company_id=%s AND status='open'
             RETURNING id
-        """, (now_kz(), order_id, company_id))
+        """, (now_kz_for_timestamp(), order_id, company_id))
         if not cur.fetchone():
             conn.rollback()
             return jsonify({"success": False, "message": "Заказ уже закрыт"}), 409
@@ -288,15 +306,20 @@ def food_order_ticket(order_id, kind):
         if company_id is None:
             return "Доступно только в конфигурации Общепит", 403
         ensure_food_schema(cur)
+        conn.commit()  # Persist one-time repair before printing even on GET.
         cur.execute("SELECT * FROM food_orders WHERE id=%s AND company_id=%s",
                     (order_id, company_id))
         order = cur.fetchone()
         if not order:
             return "Заказ не найден", 404
-        cur.execute("SELECT name FROM companies WHERE id=%s", (company_id,))
+        cur.execute("""
+            SELECT name, bin, address, phone,
+                   COALESCE(to_jsonb(c)->>'legal_form', 'ip') AS legal_form
+            FROM companies c WHERE id=%s
+        """, (company_id,))
         company = cur.fetchone()
         return render_template("food_order_ticket.html",
                                kind=kind, order=_serialize(order),
-                               company_name=company["name"] if company else "Nika Business")
+                               company=company)
     finally:
         pool.putconn(conn)

@@ -2,13 +2,21 @@
 <html lang="ru"><head><meta charset="utf-8"><title>{{ "Заказ на кухню" if kind == "kitchen" else "Пречек" }} №{{ order.id }}</title>
 <style>
 @page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{margin:0 auto;padding:10px;width:76mm;max-width:100%;font:13px/1.35 Arial,sans-serif;color:#111}
-h1{font-size:17px;text-align:center;margin:8px 0}.muted{font-size:11px;color:#555}.line{border-top:1px dashed #555;margin:9px 0}
+.company-head{text-align:center;font-size:12px;line-height:1.4;overflow-wrap:anywhere}.company-head strong{font-size:15px;display:block;margin-bottom:3px}h1{font-size:17px;text-align:center;margin:8px 0}.muted{font-size:11px;color:#555}.line{border-top:1px dashed #555;margin:9px 0}
 .item{display:flex;justify-content:space-between;gap:9px;margin:7px 0}.item>div:first-child{flex:1}.total{display:flex;justify-content:space-between;font-size:17px;font-weight:700;margin:12px 0}
 .actions{display:flex;gap:8px;justify-content:center;margin:12px 0}.actions[hidden]{display:none!important}.actions button{padding:8px 14px}@media print{.actions{display:none}}
 </style></head><body>
 <div class="actions" {% if request.args.get("embed") == "1" %}hidden{% endif %}><button onclick="window.print()">Печать</button><button onclick="window.close()">Закрыть</button></div>
-<h1>{{ "ЗАКАЗ НА КУХНЮ" if kind == "kitchen" else "ПРЕДВАРИТЕЛЬНЫЙ СЧЁТ" }}</h1>
-<div style="text-align:center"><strong>{{ company_name }}</strong></div>
+{% if kind == "kitchen" %}
+<h1>ЗАКАЗ НА КУХНЮ</h1>
+{% else %}
+<div class="company-head">
+    <strong>{{ company.name if company else "Nika Business" }}</strong>
+    {% if company and company.bin %}<div>{{ "ИИН" if company.legal_form == "ip" else "БИН" }}: {{ company.bin }}</div>{% endif %}
+    {% if company and company.address %}<div>{{ company.address }}</div>{% endif %}
+    {% if company and company.phone %}<div>Тел.: {{ company.phone }}</div>{% endif %}
+</div>
+{% endif %}
 <div class="line"></div>
 <div>Заказ №{{ order.id }}</div>
 <div>Дата: {{ order.created_at_display or order.created_at.replace("T"," ")[:19] }}</div>
