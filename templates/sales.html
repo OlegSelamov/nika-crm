@@ -214,6 +214,7 @@
 					<span id="foodClientLabel">Частное лицо</span>
 				</button>
 				<div id="foodCart" class="food-cart"></div>
+                {% if business_mode == 'foodservice' %}
                 <div class="food-order-meta">
                     <input id="foodOrderTable" maxlength="80" placeholder="Стол / номер" aria-label="Стол">
                     <input id="foodOrderGuest" maxlength="100" placeholder="Имя гостя" aria-label="Имя гостя">
@@ -232,6 +233,7 @@
                     <div id="foodOrderHistoryList"></div>
                     <button type="button" id="foodOrderHistoryMore" hidden>Показать ещё</button>
                 </div>
+                {% endif %}
 				<div class="food-order-total">
 					<span>Итого</span>
 					<strong id="foodOrderTotal">0 ₸</strong>
@@ -795,7 +797,7 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261015-sales-history-wide-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261019-food-orders-1') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20261019-food-orders-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
