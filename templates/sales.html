@@ -2,7 +2,7 @@
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-compact-toolbar-v1') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-pos-v3') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261019-category-picker-1') }}">
 {% endblock %}
 
 {% block content %}
@@ -182,7 +182,19 @@
 					</div>
 					<input id="foodSearch" class="food-search" type="search" placeholder="Найти блюдо или товар..." autocomplete="off">
 				</div>
-				<div id="foodCategories" class="food-categories" aria-label="Категории меню"></div>
+				<div class="food-category-chooser" id="foodCategoryChooser">
+                    <button type="button" id="foodCategoryToggle" class="food-category-toggle" aria-expanded="false" aria-controls="foodCategoryPopover" aria-haspopup="true">
+                        <span class="food-category-toggle-icon" aria-hidden="true">☷</span>
+                        <span id="foodCategorySelected" class="food-category-toggle-label">Все категории</span>
+                        <span id="foodCategoryCount" class="food-category-count" aria-label="Количество категорий"></span>
+                        <span class="food-category-chevron" aria-hidden="true">⌄</span>
+                    </button>
+                    <div id="foodCategoryPopover" class="food-category-popover" hidden>
+                        <input id="foodCategorySearch" class="food-category-search" type="search" placeholder="Найти категорию..." aria-label="Поиск категории" autocomplete="off">
+                        <div id="foodCategories" class="food-categories" aria-label="Категории меню"></div>
+                        <div id="foodCategoryEmpty" class="food-category-empty" hidden>Категория не найдена</div>
+                    </div>
+                </div>
 				<div id="foodMenuGrid" class="food-menu-grid">
 					<div class="food-menu-loading">Загружаем меню…</div>
 				</div>
@@ -765,7 +777,7 @@
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
 <script src="{{ url_for('static', filename='js/sales.js', v='20261015-sales-history-wide-v1') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20260923-modifiers-total-1') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20261019-category-picker-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
 {% endblock %}
