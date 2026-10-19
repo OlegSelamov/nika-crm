@@ -1,40 +1,66 @@
-let currentClientsTab = 'active';
+let currentClientsTab = document.querySelector('.clients-page')?.dataset.initialTab || 'active';
+let clientsPageRequest = null;
+let clientsSearchTimer = null;
 let clientLookupTimer = null;
 let clientLookupController = null;
 
 function switchClientsTab(tab) {
-    currentClientsTab = tab;
-    document.querySelectorAll('.clients-tab').forEach(btn => btn.classList.toggle('is-active', btn.dataset.tab === tab));
-    document.querySelectorAll('.clients-panel').forEach(panel => panel.classList.toggle('is-active', panel.dataset.panel === tab));
-
-    const deleted = tab === 'deleted';
-    document.getElementById('clientsSectionTitle').textContent = deleted ? 'Удалённые клиенты' : 'Активные клиенты';
-    document.getElementById('clientsSectionNote').textContent = deleted
-        ? 'Восстановите клиента или удалите его безвозвратно'
-        : 'Откройте карточку клиента или измените данные прямо из списка';
-
-    filterClients();
+    currentClientsTab = tab === 'deleted' ? 'deleted' : 'active';
+    loadClientsPage(1);
 }
 
 function filterClients() {
-    const query = (document.getElementById('clientSearch').value || '').trim().toLowerCase();
-    const panel = document.querySelector(`.clients-panel[data-panel="${currentClientsTab}"]`);
-    const records = panel ? panel.querySelectorAll('.client-record') : [];
-    const unique = new Set();
-    let visibleCount = 0;
+    clearTimeout(clientsSearchTimer);
+    clientsSearchTimer = setTimeout(() => loadClientsPage(1), 300);
+}
 
-    records.forEach(record => {
-        const visible = !query || (record.dataset.search || '').includes(query);
-        record.style.display = visible ? '' : 'none';
-        if (visible) {
-            const key = record.dataset.id || record.querySelector('.client-main strong')?.textContent.trim() + '|' + record.querySelector('.client-main small')?.textContent.trim();
-            if (!unique.has(key)) { unique.add(key); visibleCount++; }
+async function loadClientsPage(page = 1) {
+    clearTimeout(clientsSearchTimer);
+    if (clientsPageRequest) clientsPageRequest.abort();
+    const controller = new AbortController();
+    clientsPageRequest = controller;
+    const tab = currentClientsTab;
+    const search = document.getElementById('clientSearch')?.value.trim() || '';
+    const params = new URLSearchParams({ tab, page: String(page), search });
+    const results = document.getElementById('clientsResults');
+    if (results) results.classList.add('is-loading');
+
+    try {
+        const response = await fetch('/clients?' + params + '&partial=1', {
+            signal: controller.signal,
+            headers: { 'Accept': 'text/html' }
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const html = await response.text();
+        if (clientsPageRequest !== controller) return;
+        results.innerHTML = html;
+        document.querySelectorAll('.clients-tab').forEach(button => {
+            button.classList.toggle('is-active', button.dataset.tab === tab);
+        });
+        const deleted = tab === 'deleted';
+        document.getElementById('clientsSectionTitle').textContent = deleted ? 'Удалённые клиенты' : 'Активные клиенты';
+        document.getElementById('clientsSectionNote').textContent = deleted
+            ? 'Восстановите клиента или удалите его безвозвратно'
+            : 'Откройте карточку клиента или измените данные прямо из списка';
+        const currentPanel = results.querySelector('.clients-panel.is-active');
+        const visibleCount = currentPanel?.querySelectorAll('.clients-table tbody .client-record').length || 0;
+        document.getElementById('clientsVisibleCount').textContent = visibleCount;
+        document.getElementById('clientsSearchEmpty').hidden = visibleCount > 0 || !search;
+        const address = new URL(window.location.href);
+        address.search = params.toString();
+        window.history.replaceState(null, '', address.pathname + address.search);
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            console.error('CLIENT DIRECTORY LOAD ERROR:', error);
+            if (results) results.classList.remove('is-loading');
+            document.getElementById('clientsVisibleCount').textContent = 'Ошибка загрузки';
         }
-    });
-
-    document.getElementById('clientsVisibleCount').textContent = visibleCount;
-    const empty = document.getElementById('clientsSearchEmpty');
-    empty.hidden = !(query && visibleCount === 0);
+    } finally {
+        if (clientsPageRequest === controller) {
+            clientsPageRequest = null;
+            if (results) results.classList.remove('is-loading');
+        }
+    }
 }
 
 function identifierDigits(value) {
