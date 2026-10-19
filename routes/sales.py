@@ -485,7 +485,7 @@ def pay_sale():
             ))
 
         process_sale(conn, sale_id)
-        elif data.get("food_mode") is True:
+        if not food_order_id and data.get("food_mode") is True:
             # Fast-service checkout: paid foodservice sales still appear in the
             # separate restaurant history even without a pre-saved kitchen order.
             from routes.food_orders import _food_access, ensure_food_schema, _item_cart
