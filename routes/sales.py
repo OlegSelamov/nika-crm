@@ -218,13 +218,15 @@ def sales():
             pool.putconn(conn)
 
     business_mode = "universal"
+    sales_workflow = "sales_documents"
     if company_id:
         mode_conn = get_db()
         mode_cur = mode_conn.cursor()
         try:
-            mode_cur.execute("SELECT COALESCE(business_mode, 'universal') AS business_mode FROM companies WHERE id = %s", (company_id,))
+            mode_cur.execute("SELECT COALESCE(business_mode, 'universal') AS business_mode, COALESCE(sales_workflow, 'sales_documents') AS sales_workflow FROM companies WHERE id = %s", (company_id,))
             mode_row = mode_cur.fetchone()
             business_mode = (mode_row["business_mode"] if mode_row else "universal") or "universal"
+            sales_workflow = (mode_row["sales_workflow"] if mode_row else "sales_documents") or "sales_documents"
         finally:
             mode_cur.close()
             pool.putconn(mode_conn)
@@ -234,6 +236,7 @@ def sales():
         imported_order=imported_order,
         import_error=import_error,
         business_mode=business_mode,
+        sales_workflow=sales_workflow,
     )
 
 
@@ -1094,6 +1097,27 @@ def create_invoice():
         return jsonify({
             "success": False,
             "error": "Активная организация не выбрана"
+        }), 403
+
+    # The client-side hidden button is not a security boundary.
+    # Enforce the selected company workflow for new invoice creation.
+    access_conn = get_db()
+    try:
+        access_cur = access_conn.cursor()
+        try:
+            access_cur.execute(
+                "SELECT COALESCE(sales_workflow, 'sales_documents') AS sales_workflow FROM companies WHERE id = %s",
+                (company_id,)
+            )
+            access_row = access_cur.fetchone()
+        finally:
+            access_cur.close()
+    finally:
+        pool.putconn(access_conn)
+    if not access_row or access_row["sales_workflow"] == "sales_only":
+        return jsonify({
+            "success": False,
+            "error": "Выставление счетов отключено в настройках интерфейса организации"
         }), 403
 
     if not client_id:

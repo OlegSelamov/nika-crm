@@ -1708,9 +1708,14 @@ function showDocumentError(error) {
     alert(error && error.message ? error.message : "Не удалось подготовить документ");
 }
 
+const nikaSalesDocumentsEnabled = window.NIKA_SALES_WORKFLOW !== "sales_only";
 let invoiceCreationBusy = false;
 
 function createInvoiceSale() {
+    if (!nikaSalesDocumentsEnabled) {
+        alert("Выставление счетов отключено в настройках интерфейса организации.");
+        return;
+    }
     if (window.nikaKaspiPosActive || invoiceCreationBusy || salePaymentBusy) {
         alert("Завершите текущую кассовую операцию перед выставлением счёта.");
         return;
@@ -2749,7 +2754,7 @@ function salesDocumentCenterSections(item, closeBeforeAction = false) {
                 : salesDocumentButton("Кассовый чек", "Открыть кассовый чек", `${documentPrefix}openSaleModal(${id})`, "is-primary"))]
     });
 
-    if (!pendingInvoice) {
+    if (!pendingInvoice && nikaSalesDocumentsEnabled) {
         const hasProducts = item.has_products !== undefined
             ? Boolean(item.has_products)
             : Number(item.product_count || 0) > 0;
@@ -2801,13 +2806,17 @@ function salesDocumentCenterSections(item, closeBeforeAction = false) {
         });
     }
 
-    sections.push({
-        title: "Электронные документы",
-        items: [salesDocumentButton("ЭСФ · Электронный счёт-фактура", "Сформировать электронный счёт-фактуру", `${documentPrefix}openEsfModal(${id})`, "is-esf")]
-    });
+    if (nikaSalesDocumentsEnabled) {
+        sections.push({
+            title: "Электронные документы",
+            items: [salesDocumentButton("ЭСФ · Электронный счёт-фактура", "Сформировать электронный счёт-фактуру", `${documentPrefix}openEsfModal(${id})`, "is-esf")]
+        });
+    }
 
     const operation = pendingInvoice
-        ? salesDocumentButton("Подтвердить оплату", "Подтвердить оплату счёта", `${operationPrefix}confirmInvoicePayment(${id}, this)`, "is-confirm")
+        ? (nikaSalesDocumentsEnabled
+            ? salesDocumentButton("Подтвердить оплату", "Подтвердить оплату счёта", `${operationPrefix}confirmInvoicePayment(${id}, this)`, "is-confirm")
+            : "")
         : (!refunded
             ? salesDocumentButton("Оформить возврат", "Оформить возврат продажи", `${operationPrefix}refundSale(${id})`, "is-refund")
             : "");
@@ -2833,13 +2842,13 @@ function salesDocumentActions(item) {
         : (returnedSale
             ? salesDocumentButton("Чек возврата", "Открыть чек возврата", `openRefundCheckModal(${id})`, "is-refund")
             : salesDocumentButton("Открыть чек", "Открыть кассовый чек", `openSaleModal(${id})`, "is-primary"));
-    const count = salesDocumentCenterSections(item, false).reduce((sum, section) => sum + section.items.length, 0);
+    const count = nikaSalesDocumentsEnabled ? salesDocumentCenterSections(item, false).reduce((sum, section) => sum + section.items.length, 0) : 0;
     const key = escapeHtml(salesDocumentRecordKey(item));
-    const center = `
+    const center = nikaSalesDocumentsEnabled ? `
         <button type="button" class="sales-doc-center-btn" onclick="openSalesDocumentCenter('${key}')">
             Документы <span>${count}</span>
         </button>
-    `;
+    ` : "";
     return `${primary}${center}`;
 }
 
