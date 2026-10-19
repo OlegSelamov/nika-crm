@@ -2380,6 +2380,8 @@ function switchSalesTab(tab) {
     const cartBtn = document.getElementById('cartTabBtn');
     const historyBtn = document.getElementById('historyTabBtn');
     if (!workspace || !grid || !cartBtn || !historyBtn) return;
+    // History is a full-width sibling, never a child of the hidden sales grid.
+    if (isFood && grid.contains(workspace)) grid.insertAdjacentElement('afterend', workspace);
     grid.hidden = showHistory;
     workspace.hidden = !showHistory;
     document.querySelector('.sales-page')?.classList.toggle('sales-history-active', showHistory);
