@@ -704,3 +704,21 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 @media (max-width: 480px) {
     .food-category-popover .food-categories { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Food menu incremental browsing */
+.food-menu-load-more {
+    flex: 0 0 auto;
+    align-self: center;
+    margin: 3px auto 10px;
+    padding: 9px 18px;
+    border: 1px solid #c7d2fe;
+    border-radius: 10px;
+    background: #eef2ff;
+    color: #4338ca;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 750;
+    cursor: pointer;
+}
+.food-menu-load-more:hover { background: #e0e7ff; }
+.food-menu-load-more[hidden] { display: none !important; }
