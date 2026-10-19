@@ -42,6 +42,11 @@ async function loadClientsPage(page = 1) {
         document.getElementById('clientsSectionNote').textContent = deleted
             ? 'Восстановите клиента или удалите его безвозвратно'
             : 'Откройте карточку клиента или измените данные прямо из списка';
+        const meta = results.querySelector('#clientsPageMeta');
+        if (meta) {
+            document.getElementById('activeClientsTotal').textContent = meta.dataset.activeTotal;
+            document.getElementById('deletedClientsTotal').textContent = meta.dataset.deletedTotal;
+        }
         const currentPanel = results.querySelector('.clients-panel.is-active');
         const visibleCount = currentPanel?.querySelectorAll('.clients-table tbody .client-record').length || 0;
         document.getElementById('clientsVisibleCount').textContent = visibleCount;
