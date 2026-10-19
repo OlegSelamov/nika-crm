@@ -219,6 +219,35 @@ def _catalog_item_payload(item):
     return data
 
 
+@items_bp.route("/api/catalog/food-categories")
+def api_catalog_food_categories():
+    """Only lightweight category names for items that can appear in Food POS."""
+    company_id = session.get("company_id")
+    if not company_id:
+        return jsonify({"success": False, "categories": []}), 401
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT COALESCE(NULLIF(BTRIM(category), ''), 'Без категории') AS category,
+                   COUNT(*) AS item_count
+            FROM items
+            WHERE company_id = %s
+              AND COALESCE(item_type, 'product') IN ('dish', 'product')
+            GROUP BY 1
+            ORDER BY 1
+        """, (company_id,))
+        categories = [
+            {"name": row["category"], "count": row["item_count"]}
+            for row in cur.fetchall()
+        ]
+    finally:
+        pool.putconn(conn)
+
+    return jsonify({"success": True, "categories": categories})
+
+
 @items_bp.route("/api/catalog/items")
 def api_catalog_items():
     company_id = session.get("company_id")
@@ -239,12 +268,17 @@ def api_catalog_items():
     where = ["items.company_id = %s"]
     params = [company_id]
 
-    if item_type in ("product", "service", "dish", "ingredient", "semi_finished"):
+    if item_type == "food_menu":
+        where.append("COALESCE(items.item_type, 'product') IN ('dish', 'product')")
+    elif item_type in ("product", "service", "dish", "ingredient", "semi_finished"):
         where.append("COALESCE(items.item_type, 'product') = %s")
         params.append(item_type)
 
     if category and category.lower() != "all":
-        where.append("LOWER(COALESCE(items.category, '')) = LOWER(%s)")
+        if item_type == "food_menu":
+            where.append("LOWER(COALESCE(NULLIF(BTRIM(items.category), ''), 'Без категории')) = LOWER(%s)")
+        else:
+            where.append("LOWER(COALESCE(items.category, '')) = LOWER(%s)")
         params.append(category)
 
     if query:
