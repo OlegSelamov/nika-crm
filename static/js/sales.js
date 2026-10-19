@@ -743,7 +743,11 @@ async function submitSalePayment({
                 kaspi_transaction_id: window.lastKaspiTransactionId || "",
                 kaspi_method: window.lastKaspiMethod || "",
                 company_id: null,
-                food_order_id: window.NIKA_BUSINESS_MODE === "foodservice" ? (window.NikaFoodSales?.getSavedOrderId?.() || null) : null
+                food_order_id: window.NIKA_BUSINESS_MODE === "foodservice" ? (window.NikaFoodSales?.getSavedOrderId?.() || null) : null,
+                food_mode: window.NIKA_BUSINESS_MODE === "foodservice",
+                food_table_name: document.getElementById("foodOrderTable")?.value || "",
+                food_guest_name: document.getElementById("foodOrderGuest")?.value || "",
+                food_note: document.getElementById("foodOrderNote")?.value || ""
             })
         });
         const data = await response.json().catch(() => null);
