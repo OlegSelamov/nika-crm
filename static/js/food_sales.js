@@ -103,6 +103,34 @@
         return String(item?.category || "").trim() || "Без категории";
     }
 
+    function setFoodCategoryPopover(open) {
+        const popover = document.getElementById("foodCategoryPopover");
+        const toggle = document.getElementById("foodCategoryToggle");
+        if (!popover || !toggle) return;
+        popover.hidden = !open;
+        toggle.setAttribute("aria-expanded", String(open));
+        if (open) {
+            const search = document.getElementById("foodCategorySearch");
+            if (search) {
+                search.value = "";
+                filterFoodCategories();
+                search.focus();
+            }
+        }
+    }
+
+    function filterFoodCategories() {
+        const query = String(document.getElementById("foodCategorySearch")?.value || "").trim().toLocaleLowerCase("ru");
+        let visible = 0;
+        document.querySelectorAll("#foodCategories .food-category-btn").forEach(button => {
+            const matches = button.dataset.category === "all" || button.textContent.toLocaleLowerCase("ru").includes(query);
+            button.hidden = !matches;
+            if (matches) visible++;
+        });
+        const empty = document.getElementById("foodCategoryEmpty");
+        if (empty) empty.hidden = visible > (query ? 1 : 0);
+    }
+
     function renderFoodCategories() {
         const root = document.getElementById("foodCategories");
         if (!root) return;
@@ -111,6 +139,8 @@
             .sort((a, b) => a.localeCompare(b, "ru"));
 
         root.innerHTML = "";
+        const count = document.getElementById("foodCategoryCount");
+        if (count) count.textContent = String(categories.length);
 
         const allButton = document.createElement("button");
         allButton.type = "button";
@@ -131,18 +161,25 @@
         });
 
         updateCategoryButtons();
+        filterFoodCategories();
     }
 
     function selectFoodCategory(category) {
         foodCategory = category || "all";
         updateCategoryButtons();
         renderFoodMenu();
+        setFoodCategoryPopover(false);
+        document.getElementById("foodCategoryToggle")?.focus();
     }
 
     function updateCategoryButtons() {
-        document.querySelectorAll(".food-category-btn").forEach(button => {
-            button.classList.toggle("active", button.dataset.category === foodCategory);
+        document.querySelectorAll("#foodCategories .food-category-btn").forEach(button => {
+            const active = button.dataset.category === foodCategory;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
         });
+        const selected = document.getElementById("foodCategorySelected");
+        if (selected) selected.textContent = foodCategory === "all" ? "Все категории" : foodCategory;
     }
 
     function foodQuery() {
@@ -440,6 +477,21 @@
         document.getElementById("salesModeRetail")?.addEventListener("click", () => setMode("retail"));
         document.getElementById("salesModeFood")?.addEventListener("click", () => setMode("food"));
         document.getElementById("foodSearch")?.addEventListener("input", renderFoodMenu);
+        document.getElementById("foodCategoryToggle")?.addEventListener("click", () => {
+            const popover = document.getElementById("foodCategoryPopover");
+            if (popover) setFoodCategoryPopover(popover.hidden);
+        });
+        document.getElementById("foodCategorySearch")?.addEventListener("input", filterFoodCategories);
+        document.addEventListener("click", event => {
+            const chooser = document.getElementById("foodCategoryChooser");
+            if (chooser && !chooser.contains(event.target)) setFoodCategoryPopover(false);
+        });
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && !document.getElementById("foodCategoryPopover")?.hidden) {
+                setFoodCategoryPopover(false);
+                document.getElementById("foodCategoryToggle")?.focus();
+            }
+        });
         document.getElementById("foodClearCart")?.addEventListener("click", clearFoodCart);
         document.getElementById("foodClientButton")?.addEventListener("click", () => {
             if (typeof openClientSheet === "function") openClientSheet();
