@@ -229,6 +229,7 @@ def pay_sale():
     kaspi_method = data.get("kaspi_method")
     payment_method = data.get("payment_method", "cash")
     operation_id = str(data.get("operation_id") or "").strip()
+    food_order_id = data.get("food_order_id")
 
     conn = get_db()
     
@@ -323,6 +324,17 @@ def pay_sale():
                     )
                     conn.commit()
                     return jsonify(resumed_payload)
+
+        # Restaurant order is locked and matched to its saved cart, preventing
+        # double charging and edits after the kitchen/precheck was printed.
+        if food_order_id:
+            from routes.food_orders import verify_payment_order
+            try:
+                food_order_id = int(food_order_id)
+                verify_payment_order(cur, company_id, food_order_id, cart)
+            except (TypeError, ValueError) as exc:
+                conn.rollback()
+                return jsonify({"success": False, "error": str(exc)}), 409
 
         normalized_cart = []
         for item in cart:
@@ -473,6 +485,16 @@ def pay_sale():
             ))
 
         process_sale(conn, sale_id)
+        if food_order_id:
+            cur.execute("""
+                UPDATE food_orders
+                   SET status='paid', sale_id=%s, updated_at=%s
+                 WHERE id=%s AND company_id=%s AND status='open' AND sale_id IS NULL
+                RETURNING id
+            """, (sale_id, now_kz_for_timestamp(), food_order_id, company_id))
+            if not cur.fetchone():
+                raise ValueError("Не удалось связать продажу с заказом общепита")
+
 
         if operation_id:
             save_offline_operation(
