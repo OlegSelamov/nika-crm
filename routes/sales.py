@@ -485,6 +485,27 @@ def pay_sale():
             ))
 
         process_sale(conn, sale_id)
+        elif data.get("food_mode") is True:
+            # Fast-service checkout: paid foodservice sales still appear in the
+            # separate restaurant history even without a pre-saved kitchen order.
+            from routes.food_orders import _food_access, ensure_food_schema, _item_cart
+            if _food_access(cur) == company_id:
+                ensure_food_schema(cur)
+                food_cart, food_total = _item_cart(cur, company_id, cart)
+                cur.execute("""
+                    INSERT INTO food_orders
+                        (company_id, created_by, table_name, guest_name, note,
+                         client_id, status, cart, total_amount, sale_id,
+                         created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,'paid',%s::jsonb,%s,%s,%s,%s)
+                """, (
+                    company_id, user_id,
+                    str(data.get("food_table_name") or "")[:80],
+                    str(data.get("food_guest_name") or "")[:100],
+                    str(data.get("food_note") or "")[:500],
+                    client_id, json.dumps(food_cart, ensure_ascii=False),
+                    food_total, sale_id, now_kz_for_timestamp(), now_kz_for_timestamp()
+                ))
         if food_order_id:
             cur.execute("""
                 UPDATE food_orders
