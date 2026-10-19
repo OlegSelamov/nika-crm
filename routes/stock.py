@@ -566,6 +566,79 @@ def stock_writeoff():
 
     return render_template("stock_writeoff.html")
     
+@stock_bp.route("/api/stock/sale-check", methods=["POST"])
+def api_stock_sale_check():
+    """Check only basket products: one indexed stock calculation, no catalog scans.
+
+    This is an advisory check before checkout; it never writes stock,
+    creates sales or replaces the transaction's stock/fiscal logic.
+    """
+    from decimal import Decimal, InvalidOperation
+
+    company_id = session.get("company_id")
+    if not company_id or not session.get("user_id"):
+        return jsonify({"success": False, "message": "Требуется авторизация"}), 401
+
+    body = request.get_json(silent=True) or {}
+    requested_rows = body.get("items")
+    if not isinstance(requested_rows, list) or len(requested_rows) > 200:
+        return jsonify({"success": False, "message": "Некорректная корзина"}), 400
+
+    requested = {}
+    try:
+        for row in requested_rows:
+            if not isinstance(row, dict):
+                raise ValueError()
+            item_id = int(row.get("id"))
+            quantity = Decimal(str(row.get("qty")))
+            if item_id <= 0 or not quantity.is_finite() or quantity <= 0 or quantity > 1000000:
+                raise ValueError()
+            requested[item_id] = requested.get(item_id, Decimal("0")) + quantity
+    except (TypeError, ValueError, InvalidOperation, OverflowError):
+        return jsonify({"success": False, "message": "Некорректное количество товара"}), 400
+
+    if not requested:
+        return jsonify({"success": True, "items": []})
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                i.id, i.name, i.unit,
+                COALESCE(SUM(
+                    CASE
+                        WHEN sm.movement_type IN ('income', 'refund') THEN sm.quantity
+                        WHEN sm.movement_type IN ('sale', 'writeoff') THEN -sm.quantity
+                        ELSE 0
+                    END
+                ), 0) AS stock
+            FROM items i
+            LEFT JOIN stock_movements sm
+              ON sm.company_id = i.company_id AND sm.item_id = i.id
+            WHERE i.company_id = %s
+              AND i.id = ANY(%s)
+              AND COALESCE(i.item_type, 'product') IN ('product', 'ingredient', 'semi_finished')
+            GROUP BY i.id
+        """, (company_id, list(requested)))
+        shortages = []
+        for item in cur.fetchall():
+            stock = Decimal(str(item["stock"] or 0))
+            required = requested[item["id"]]
+            if stock - required < Decimal("-0.000001"):
+                shortages.append({
+                    "id": item["id"],
+                    "name": item["name"],
+                    "unit": item["unit"] or "шт",
+                    "stock": float(stock),
+                    "requested": float(required),
+                    "projected_stock": float(stock - required),
+                })
+        return jsonify({"success": True, "items": shortages})
+    finally:
+        pool.putconn(conn)
+
+
 @stock_bp.route("/api/stock")
 def api_stock():
     company_id = session.get("company_id")
