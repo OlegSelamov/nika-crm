@@ -311,67 +311,82 @@ def _merge_lookup_data(primary, secondary):
 
 @clients_bp.route("/clients")
 def clients():
+    """Render only the requested CRM directory page, keeping cards/API intact."""
     company_id = _company_id()
-    search = request.args.get("search", "").strip()
+    search = (request.args.get("search") or "").strip()[:120]
+    tab = "deleted" if request.args.get("tab") == "deleted" else "active"
+    page_size = 50
+    try:
+        page = max(1, int(request.args.get("page", "1")))
+    except (TypeError, ValueError):
+        page = 1
+
+    search_sql = ""
+    search_params = []
+    if search:
+        search_sql = """
+            AND (
+                COALESCE(full_name, '') ILIKE %s
+                OR COALESCE(company_name, '') ILIKE %s
+                OR COALESCE(iin, '') ILIKE %s
+                OR COALESCE(phone, '') ILIKE %s
+                OR COALESCE(address, '') ILIKE %s
+                OR COALESCE(category, '') ILIKE %s
+                OR COALESCE(status, '') ILIKE %s
+            )
+        """
+        pattern = f"%{search}%"
+        search_params = [pattern] * 7
 
     conn = get_db()
     try:
         cur = conn.cursor()
+        totals = {}
+        for key, is_deleted in (("active", False), ("deleted", True)):
+            cur.execute(
+                f"""SELECT COUNT(*) AS total
+                    FROM clients
+                    WHERE company_id = %s
+                      AND COALESCE(is_deleted, FALSE) = %s
+                      {search_sql}""",
+                (company_id, is_deleted, *search_params),
+            )
+            totals[key] = cur.fetchone()["total"]
 
-        search_condition = ""
-        params = [company_id]
-
-        if search:
-            search_condition = """
-                AND (
-                    COALESCE(full_name, '') ILIKE %s
-                    OR COALESCE(phone, '') ILIKE %s
-                    OR COALESCE(company_name, '') ILIKE %s
-                    OR COALESCE(iin, '') ILIKE %s
-                )
-            """
-            pattern = f"%{search}%"
-            params.extend([pattern, pattern, pattern, pattern])
-
+        total = totals[tab]
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = min(page, total_pages)
         cur.execute(
-            f"""
-            SELECT *
-            FROM clients
-            WHERE company_id = %s
-              AND COALESCE(is_deleted, FALSE) = FALSE
-              {search_condition}
-            ORDER BY id DESC
-            """,
-            tuple(params),
+            f"""SELECT id, full_name, company_name, iin, phone, category,
+                       status, photo, contract_number, contract_date,
+                       address, payment, comment
+                FROM clients
+                WHERE company_id = %s
+                  AND COALESCE(is_deleted, FALSE) = %s
+                  {search_sql}
+                ORDER BY id DESC
+                LIMIT %s OFFSET %s""",
+            (company_id, tab == "deleted", *search_params,
+             page_size, (page - 1) * page_size),
         )
-        active_clients = cur.fetchall()
-
-        deleted_params = [company_id]
-        if search:
-            deleted_params.extend([pattern, pattern, pattern, pattern])
-
-        cur.execute(
-            f"""
-            SELECT *
-            FROM clients
-            WHERE company_id = %s
-              AND COALESCE(is_deleted, FALSE) = TRUE
-              {search_condition}
-            ORDER BY id DESC
-            """,
-            tuple(deleted_params),
-        )
-        deleted_clients = cur.fetchall()
-
-        return render_template(
-            "clients.html",
-            clients=active_clients,
-            deleted_clients=deleted_clients,
-            search=search,
-        )
+        rows = cur.fetchall()
+        context = {
+            "clients": rows if tab == "active" else [],
+            "deleted_clients": rows if tab == "deleted" else [],
+            "search": search,
+            "tab": tab,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "active_total": totals["active"],
+            "deleted_total": totals["deleted"],
+            "shown_count": len(rows),
+        }
+        if request.args.get("partial") == "1":
+            return render_template("clients_results.html", **context)
+        return render_template("clients.html", **context)
     finally:
         pool.putconn(conn)
-
 
 @clients_bp.route("/clients/add", methods=["POST"])
 def add_client():
@@ -946,6 +961,68 @@ def api_clients():
         )
         rows = cur.fetchall()
         return jsonify([_serialize_row(row) for row in rows])
+    finally:
+        pool.putconn(conn)
+
+
+
+@clients_bp.route("/api/clients/sales-picker")
+def api_sales_client_picker():
+    """Lean, paginated sale selector. Does not load the full CRM directory.
+
+    Keep /api/clients intact for existing integrations and offline caches.
+    """
+    company_id = _company_id()
+    default_only = request.args.get("default_only") == "1"
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        if default_only:
+            cur.execute("""
+                SELECT id, full_name, company_name, phone, iin, address
+                FROM clients
+                WHERE company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+                  AND (
+                    LOWER(BTRIM(COALESCE(full_name, ''))) = 'частное лицо'
+                    OR LOWER(BTRIM(COALESCE(company_name, ''))) = 'частное лицо'
+                  )
+                ORDER BY id LIMIT 1
+            """, (company_id,))
+            client = cur.fetchone()
+            return jsonify({"default_client": _serialize_row(client) if client else None})
+
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+            limit = max(1, min(40, int(request.args.get("limit", 30))))
+        except (TypeError, ValueError):
+            page, limit = 1, 30
+        query = str(request.args.get("q") or "").strip()[:100]
+        pattern = f"%{query}%"
+        cur.execute("""
+            SELECT id, full_name, company_name, phone, iin, address
+            FROM clients
+            WHERE company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+              AND (
+                %s = ''
+                OR COALESCE(full_name, '') ILIKE %s
+                OR COALESCE(company_name, '') ILIKE %s
+                OR COALESCE(phone, '') ILIKE %s
+                OR COALESCE(iin, '') ILIKE %s
+              )
+            ORDER BY
+              CASE WHEN LOWER(BTRIM(COALESCE(full_name, ''))) = 'частное лицо'
+                     OR LOWER(BTRIM(COALESCE(company_name, ''))) = 'частное лицо'
+                   THEN 0 ELSE 1 END,
+              id DESC
+            LIMIT %s OFFSET %s
+        """, (company_id, query, pattern, pattern, pattern, pattern,
+              limit + 1, (page - 1) * limit))
+        rows = cur.fetchall()
+        return jsonify({
+            "items": [_serialize_row(row) for row in rows[:limit]],
+            "has_more": len(rows) > limit,
+            "page": page,
+        })
     finally:
         pool.putconn(conn)
 

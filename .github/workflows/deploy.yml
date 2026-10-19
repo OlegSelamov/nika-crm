@@ -14,7 +14,7 @@ jobs:
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     steps:
       - name: Configure SSH
@@ -66,7 +66,75 @@ jobs:
           echo "Current commit:"
           git rev-parse --short HEAD
 
+          PREVIOUS_COMMIT="$(git rev-parse HEAD)"
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo "ERROR: unexpected production code changes; deploy blocked."
+            git status --short
+            exit 1
+          fi
+
+          # Mandatory production DB backup before changing application code.
+          # Connection details stay on the production VPS.
+          test -x venv/bin/python
+          command -v pg_dump >/dev/null
+          command -v pg_restore >/dev/null
+          BACKUP_DIR="/home/ubuntu/nika-crm-backups"
+          umask 077
+          mkdir -p "$BACKUP_DIR"
+          chmod 700 "$BACKUP_DIR"
+          BACKUP_FILE="$BACKUP_DIR/pre-deploy-$(date +%Y%m%d-%H%M%S)-$.dump"
+          eval "$(venv/bin/python - <<'PY'
+          import os, shlex
+          from dotenv import dotenv_values
+          from urllib.parse import urlsplit, unquote
+          url = dotenv_values(".env").get("DATABASE_URL") or os.environ.get("DATABASE_URL")
+          if not url:
+              raise SystemExit("ERROR: production DATABASE_URL is missing")
+          parsed = urlsplit(url)
+          if parsed.scheme not in ("postgres", "postgresql") or not parsed.hostname:
+              raise SystemExit("ERROR: unsupported production DATABASE_URL")
+          fields = {
+              "PGHOST": parsed.hostname,
+              "PGPORT": str(parsed.port or 5432),
+              "PGUSER": unquote(parsed.username or ""),
+              "PGPASSWORD": unquote(parsed.password or ""),
+              "PGDATABASE": unquote(parsed.path.lstrip("/")),
+          }
+          for name, value in fields.items():
+              print("export " + name + "=" + shlex.quote(value))
+          PY
+          )"
+          echo "Backing up production PostgreSQL database..."
+          if ! pg_dump --format=custom --no-owner --no-privileges --file="$BACKUP_FILE"; then
+            rm -f "$BACKUP_FILE"
+            echo "ERROR: backup failed; deployment cancelled."
+            exit 1
+          fi
+          if ! test -s "$BACKUP_FILE" || ! pg_restore --list "$BACKUP_FILE" >/dev/null; then
+            rm -f "$BACKUP_FILE"
+            echo "ERROR: backup verification failed; deployment cancelled."
+            exit 1
+          fi
+          unset PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
+          echo "Verified production backup: $BACKUP_FILE"
+
+          DEPLOY_STARTED=0
+          rollback_on_exit() {
+            status=$?
+            trap - EXIT
+            if [ "$status" -ne 0 ] && [ "$DEPLOY_STARTED" -eq 1 ]; then
+              echo "Production deployment failed; restoring prior code..."
+              git reset --hard "$PREVIOUS_COMMIT" || true
+              sudo systemctl restart nika-crm || true
+              echo "Prior application version restart attempted."
+              echo "Database backup preserved: $BACKUP_FILE"
+            fi
+            exit "$status"
+          }
+          trap rollback_on_exit EXIT
+
           git fetch origin main
+          DEPLOY_STARTED=1
           git checkout main
           git reset --hard origin/main
 

@@ -1,39 +1,49 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20260914-cash-change-1') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20260921-pos-v3') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-compact-toolbar-v1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261019-food-server-paging-1') }}">
 {% endblock %}
 
 {% block content %}
 <script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};</script>
 
 <div class="sales-page">
-<section class="shift-strip" id="shiftStrip" aria-label="Смена reKassa">
-	<div class="shift-strip-state">
-		<span class="shift-strip-dot" id="shiftStripDot"></span>
-		<div>
-			<strong id="shiftStripTitle">Проверяем смену…</strong>
-			<span id="shiftStripMeta">reKassa</span>
-		</div>
-	</div>
-	<div class="shift-strip-actions">
-		<button type="button" class="shift-strip-btn" id="shiftXReportBtn" disabled>X‑отчёт</button>
-		<button type="button" class="shift-strip-btn" id="shiftHistoryBtn">История Z</button>
-		<button type="button" class="shift-strip-btn shift-strip-btn-danger" id="shiftCloseBtn" disabled>Закрыть смену</button>
-		<button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" title="Обновить смену" aria-label="Обновить смену">↻</button>
-	</div>
-</section>
-{% if business_mode == 'universal' %}
-<div class="sales-mode-switch" role="tablist" aria-label="Режим продаж">
-	<button type="button" id="salesModeRetail" class="active" role="tab" aria-selected="true">Розница</button>
-	<button type="button" id="salesModeFood" role="tab" aria-selected="false">Общепит</button>
+<div class="sales-commandbar" aria-label="Режимы продаж и кассовая смена">
+    <nav class="sales-tabs sales-view-navigation" role="tablist" aria-label="Раздел продаж">
+        <button type="button" class="sales-tab active" id="cartTabBtn"
+                role="tab" aria-selected="true" aria-controls="salesGridWorkspace"
+                onclick="switchSalesTab('cart')">Продажа</button>
+        <button type="button" class="sales-tab" id="historyTabBtn"
+                role="tab" aria-selected="false" aria-controls="salesHistoryWorkspace"
+                onclick="switchSalesTab('history')">История продаж</button>
+    </nav>
+    {% if business_mode == 'universal' %}
+    <div class="sales-mode-switch" role="tablist" aria-label="Режим продаж">
+        <button type="button" id="salesModeRetail" class="active" role="tab" aria-selected="true">Розница</button>
+        <button type="button" id="salesModeFood" role="tab" aria-selected="false">Общепит</button>
+    </div>
+    {% else %}
+    <div hidden id="salesBusinessMode" data-mode="{{ business_mode }}"></div>
+    {% endif %}
+    <section class="shift-strip" id="shiftStrip" aria-label="Смена reKassa">
+        <div class="shift-strip-state">
+            <span class="shift-strip-dot" id="shiftStripDot"></span>
+            <div>
+                <strong id="shiftStripTitle">Проверяем смену…</strong>
+                <span id="shiftStripMeta">reKassa</span>
+            </div>
+        </div>
+        <div class="shift-strip-actions">
+            <button type="button" class="shift-strip-btn" id="shiftXReportBtn" disabled>X‑отчёт</button>
+            <button type="button" class="shift-strip-btn" id="shiftHistoryBtn">История Z</button>
+            <button type="button" class="shift-strip-btn shift-strip-btn-danger" id="shiftCloseBtn" disabled>Закрыть смену</button>
+            <button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" title="Обновить смену" aria-label="Обновить смену">↻</button>
+        </div>
+    </section>
 </div>
-{% else %}
-<div hidden id="salesBusinessMode" data-mode="{{ business_mode }}"></div>
-{% endif %}
 
-<div class="sales-grid">
+<div class="sales-grid" id="salesGridWorkspace">
 
     <!-- ЛЕВАЯ ЧАСТЬ: ОБЫЧНАЯ КАССА -->
     <div class="left-side" id="retailSalesPanel">
@@ -61,25 +71,6 @@
 
 		</div>
 
-		<div class="sales-tabs">
-
-			<button
-				class="sales-tab active"
-				onclick="switchSalesTab('cart')"
-				id="cartTabBtn"
-			>
-				Продажа
-			</button>
-
-			<button
-				class="sales-tab"
-				onclick="switchSalesTab('history')"
-				id="historyTabBtn"
-			>
-				История продаж
-			</button>
-
-		</div>
 
         <!-- КОРЗИНА -->
         <div class="cart-box">
@@ -191,10 +182,23 @@
 					</div>
 					<input id="foodSearch" class="food-search" type="search" placeholder="Найти блюдо или товар..." autocomplete="off">
 				</div>
-				<div id="foodCategories" class="food-categories" aria-label="Категории меню"></div>
+				<div class="food-category-chooser" id="foodCategoryChooser">
+                    <button type="button" id="foodCategoryToggle" class="food-category-toggle" aria-expanded="false" aria-controls="foodCategoryPopover" aria-haspopup="true">
+                        <span class="food-category-toggle-icon" aria-hidden="true">☷</span>
+                        <span id="foodCategorySelected" class="food-category-toggle-label">Все категории</span>
+                        <span id="foodCategoryCount" class="food-category-count" aria-label="Количество категорий"></span>
+                        <span class="food-category-chevron" aria-hidden="true">⌄</span>
+                    </button>
+                    <div id="foodCategoryPopover" class="food-category-popover" hidden>
+                        <input id="foodCategorySearch" class="food-category-search" type="search" placeholder="Найти категорию..." aria-label="Поиск категории" autocomplete="off">
+                        <div id="foodCategories" class="food-categories" aria-label="Категории меню"></div>
+                        <div id="foodCategoryEmpty" class="food-category-empty" hidden>Категория не найдена</div>
+                    </div>
+                </div>
 				<div id="foodMenuGrid" class="food-menu-grid">
 					<div class="food-menu-loading">Загружаем меню…</div>
 				</div>
+                <button type="button" id="foodMenuLoadMore" class="food-menu-load-more" hidden>Показать ещё товары</button>
 			</section>
 
 			<aside class="food-order-panel">
@@ -326,46 +330,62 @@
 	</div>
 </div>
 
-<div id="clientSheet" class="sheet">
+<div id="clientSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="clientPickerTitle">
     <div class="sheet-content">
-
-        <div class="client-picker">
-
-            <!-- ЛЕВАЯ ЧАСТЬ -->
-            <div class="picker-left">
-
-                <h3>Выбор клиента</h3>
-
-                <input id="clientSearchInput" placeholder="Поиск клиента..." oninput="filterClients()">
-
-                <div id="clientList" class="client-table-box"></div>
-
+        <div class="client-picker-header">
+            <div class="client-picker-header-title">
+                <span class="client-picker-eyebrow">ПРОДАЖИ · КЛИЕНТЫ</span>
+                <h2 id="clientPickerTitle">Выбор клиента</h2>
+                <p>Найдите покупателя по названию организации, ФИО, телефону или ИИН</p>
             </div>
-
-            <!-- ПРАВАЯ ЧАСТЬ -->
-            <div class="picker-right">
-
-                <div class="selected-title">Данные клиента</div>
-
-                <div id="selectedClient" class="selected-client">
-                    <div class="empty">Выберите клиента</div>
-                </div>
-
-                <button class="btn btn-primary" onclick="confirmClient()">
-                    Выбрать
-                </button>
-
-                <button onclick="closeClientSheet()" class="btn btn-close">
-                    Закрыть
-                </button>
-
-            </div>
-
+            <button type="button" class="client-picker-top-close" onclick="openSalesClientCreate()" aria-label="Добавить клиента">
+                <span aria-hidden="true">+</span> <span>Добавить клиента</span>
+            </button>
         </div>
-
+        <div class="client-picker">
+            <section class="picker-left" aria-label="Список клиентов">
+                <div class="client-picker-list-heading">
+                    <h3>Клиенты</h3>
+                    <span>Поиск по всей базе</span>
+                </div>
+                <input id="clientSearchInput" type="search" placeholder="Название, ФИО, телефон или ИИН" autocomplete="off" aria-label="Поиск клиента" oninput="filterClients()">
+                <div id="clientList" class="client-table-box" aria-live="polite"></div>
+            </section>
+            <aside class="picker-right" aria-label="Выбранный клиент">
+                <div class="selected-title">Данные клиента</div>
+                <div id="selectedClient" class="selected-client">
+                    <div class="empty">Выберите клиента из списка слева</div>
+                </div>
+                <div class="client-picker-actions">
+                    <button type="button" class="btn btn-primary" onclick="confirmClient()">Выбрать клиента</button>
+                    <button type="button" class="btn btn-close" onclick="closeClientSheet()">Отмена</button>
+                </div>
+            </aside>
+        </div>
     </div>
 </div>
 
+<div id="salesClientCreateModal" class="sales-client-create-modal" aria-hidden="true" hidden>
+    <div class="sales-client-create-backdrop" onclick="closeSalesClientCreate()"></div>
+    <section class="sales-client-create-dialog" role="dialog" aria-modal="true" aria-labelledby="salesClientCreateTitle">
+        <header class="sales-client-create-head">
+            <div><span>ПРОДАЖИ · НОВЫЙ КЛИЕНТ</span><h2 id="salesClientCreateTitle">Добавить клиента</h2><p>Новый клиент сразу появится в выборе покупателя</p></div>
+            <button type="button" onclick="closeSalesClientCreate()" aria-label="Закрыть форму">×</button>
+        </header>
+        <form id="salesClientCreateForm" onsubmit="saveSalesClientCreate(event)">
+            <div class="sales-client-create-fields">
+                <label>Наименование ИП / Организации<input name="company_name" placeholder="Название организации" autocomplete="organization"></label>
+                <label>ФИО клиента *<input name="full_name" required placeholder="Фамилия Имя Отчество" autocomplete="name"></label>
+                <label>ИИН / БИН<input name="iin" placeholder="12 цифр" inputmode="numeric" maxlength="12"></label>
+                <label>Телефон<input name="phone" placeholder="+7..." autocomplete="tel"></label>
+                <label class="wide">Адрес<input name="address" placeholder="Адрес клиента"></label>
+                <label class="wide">Комментарий<textarea name="comment" rows="2" placeholder="Дополнительная информация"></textarea></label>
+            </div>
+            <p id="salesClientCreateError" class="sales-client-create-error" role="alert" hidden></p>
+            <footer><button type="button" onclick="closeSalesClientCreate()" class="secondary">Отмена</button><button type="submit" class="primary" id="salesClientCreateSubmit">Сохранить и выбрать</button></footer>
+        </form>
+    </section>
+</div>
 
 <div id="saleModal" class="modal" style="display:none;">
 
@@ -757,8 +777,8 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20260918-rekassa-skip-1') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20260923-modifiers-total-1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261015-sales-history-wide-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20261019-food-server-paging-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
 {% endblock %}

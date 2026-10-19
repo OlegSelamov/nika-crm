@@ -1,5 +1,7 @@
 import os
 import socket
+import logging
+from time import perf_counter
 from copy import deepcopy
 from dotenv import load_dotenv
 
@@ -29,6 +31,7 @@ def _openai_ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
 socket.getaddrinfo = _openai_ipv4_getaddrinfo
 
 from flask import Flask, render_template, request, redirect, session, g, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 from routes.dashboard import dashboard_bp
 from routes.clients import clients_bp
 from routes.tasks import tasks_bp
@@ -93,9 +96,39 @@ def _esf_document_view_with_current_contract(row, fallback_payload):
 esf_module._document_view = _esf_document_view_with_current_contract
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"), static_folder=os.path.join(BASE_DIR, "static"))
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.getenv("SECRET_KEY", "nika_super_secret_key")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 app.config["APP_MODE"] = APP_MODE
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+app.config["SESSION_COOKIE_HTTPONLY"] = os.getenv("SESSION_COOKIE_HTTPONLY", "true").lower() == "true"
+app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+
+# Add receipt tender/change fields without touching previously paid sales.
+# Safe additive migration, also executed by Gunicorn on test startup.
+try:
+    _receipt_schema_conn = get_db()
+    _receipt_schema_cur = _receipt_schema_conn.cursor()
+    _receipt_schema_cur.execute("""
+        ALTER TABLE sales
+        ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2) DEFAULT 0
+    """)
+    _receipt_schema_cur.execute("""
+        ALTER TABLE sales
+        ADD COLUMN IF NOT EXISTS change_amount NUMERIC(12,2) DEFAULT 0
+    """)
+    _receipt_schema_conn.commit()
+except Exception as _receipt_schema_error:
+    try:
+        _receipt_schema_conn.rollback()
+    except Exception:
+        pass
+    logging.warning("Receipt amount schema update failed: %s", _receipt_schema_error)
+finally:
+    try:
+        pool.putconn(_receipt_schema_conn)
+    except Exception:
+        pass
 
 # Lightweight production migration for the item media gallery.
 # Gunicorn does not call init_db(), so this must run during app import too.
@@ -234,6 +267,24 @@ try:
     _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS conducted_at TIMESTAMP")
     _media_schema_cur.execute("ALTER TABLE school_lesson_topics ADD COLUMN IF NOT EXISTS conducted_by INTEGER")
 
+    # Hot-path indexes: page lists, stock balance, sales history and reports.
+    # IF NOT EXISTS keeps restarts idempotent and does not change business logic.
+    for _index_sql in (
+        "CREATE INDEX IF NOT EXISTS idx_items_company_id_desc ON items(company_id, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_items_company_barcode ON items(company_id, barcode) WHERE barcode IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_item_images_item_main ON item_images(item_id, is_main DESC, id)",
+        "CREATE INDEX IF NOT EXISTS idx_categories_company_name ON categories(company_id, name)",
+        "CREATE INDEX IF NOT EXISTS idx_stock_movements_company_item_created ON stock_movements(company_id, item_id, created_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_stock_movements_company_created ON stock_movements(company_id, created_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_company_created ON sales(company_id, created_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_company_client_created ON sales(company_id, client_id, created_at DESC, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_company_status_created ON sales(company_id, status, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id_id ON sale_items(sale_id, id)",
+        "CREATE INDEX IF NOT EXISTS idx_clients_company_deleted_id ON clients(company_id, is_deleted, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_company_date_id ON expenses(company_id, date DESC, id DESC)",
+    ):
+        _media_schema_cur.execute(_index_sql)
+
     _media_schema_conn.commit()
     _media_schema_cur.close()
     pool.putconn(_media_schema_conn)
@@ -302,6 +353,29 @@ app.register_blueprint(bcc_bp)
 app.register_blueprint(school_bp)
 app.register_blueprint(capital_bp)
 
+# TEST-only request profiling: measures server latency without exposing user data.
+# Slow requests show up in the service journal; Server-Timing is inspectable
+# in the browser network panel. Never enable diagnostic response headers on PROD.
+if APP_MODE == "test":
+    @app.before_request
+    def _perf_start_request():
+        g._perf_started_at = perf_counter()
+
+    @app.after_request
+    def _perf_finish_request(response):
+        started = getattr(g, "_perf_started_at", None)
+        if started is None:
+            return response
+        elapsed_ms = (perf_counter() - started) * 1000
+        response.headers["Server-Timing"] = f"app;dur={elapsed_ms:.1f}"
+        if elapsed_ms >= 500 and not request.path.startswith("/static/"):
+            app.logger.warning(
+                "SLOW_REQUEST route=%s method=%s status=%s duration_ms=%.1f",
+                request.path, request.method, response.status_code, elapsed_ms,
+            )
+        return response
+
+
 @app.route("/desktop-offline-sw.js")
 def desktop_offline_service_worker():
     response = app.send_static_file("js/desktop_offline_sw.js")
@@ -341,11 +415,15 @@ MODULE_PATHS = (
 
 @app.before_request
 def check_company_access():
-    load_subscription_context()
-    if session.get("is_super_admin"):
-        return None
+    # Static/public requests must bypass subscription DB work completely.
+    # Embedded pages load several CSS/JS/image assets; previously every asset
+    # triggered subscription/module queries before this allow-list was checked.
     allowed_paths = ("/", "/login", "/logout", "/register", "/onboarding", "/subscription", "/static/", "/desktop-offline-sw.js", "/s/", "/whatsapp/webhook")
     if any(request.path == path or request.path.startswith(path) for path in allowed_paths):
+        return None
+
+    load_subscription_context()
+    if session.get("is_super_admin"):
         return None
     if not session.get("user_id") or not session.get("company_id"):
         return None
@@ -387,6 +465,17 @@ def check_company_access():
 
 @app.after_request
 def inject_storefront_workflow_assets(response):
+    # Static files are requested on every embedded navigation. Versioned assets
+    # can live in the browser cache for a long time; uploads stay short-lived.
+    if request.path.startswith("/static/"):
+        if request.path.startswith("/static/uploads/"):
+            response.headers["Cache-Control"] = "public, max-age=300"
+        elif request.args.get("v"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+
     if not session.get("user_id"):
         return response
     content_type = response.headers.get("Content-Type", "")

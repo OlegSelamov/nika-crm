@@ -21,7 +21,7 @@ reports_bp = Blueprint("reports", __name__)
 
 # Keep this value visible in both the web page and mobile API response.  It also
 # makes it easy to verify that the updated reports module reached the server.
-REPORTS_BUILD = "2026.09.15.4"
+REPORTS_BUILD = "2026.10.12.sql-pagination"
 
 REPORT_TITLES = {
     "sales": "Отчёт по продажам",
@@ -75,7 +75,7 @@ def _get_summary(cur, company_id, date_from, date_to):
         FROM sales
         WHERE company_id = %s
           AND status = 'Оплачено'
-          AND DATE(created_at) BETWEEN %s AND %s
+          AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
     """, (company_id, date_from, date_to))
     sales = cur.fetchone()
 
@@ -85,7 +85,7 @@ def _get_summary(cur, company_id, date_from, date_to):
         JOIN sales s ON s.id = si.sale_id
         WHERE s.company_id = %s
           AND s.status = 'Оплачено'
-          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
     """, (company_id, date_from, date_to))
     profit = cur.fetchone()["profit"] or 0
 
@@ -114,7 +114,7 @@ def _get_summary(cur, company_id, date_from, date_to):
         WHERE sm.company_id = %s
           AND sm.movement_type = 'income'
           AND COALESCE(i.item_type, 'product') = 'product'
-          AND DATE(sm.created_at) BETWEEN %s AND %s
+          AND sm.created_at >= %s AND sm.created_at < (%s::date + INTERVAL '1 day')
     """, (company_id, date_from, date_to))
     purchases = cur.fetchone()
 
@@ -134,8 +134,16 @@ def _get_summary(cur, company_id, date_from, date_to):
     }
 
 
-def _sales_report(cur, company_id, date_from, date_to):
-    cur.execute("""
+def _report_page_clause(page_limit, page_offset, export_limit):
+    """Apply LIMIT/OFFSET in PostgreSQL, not to a fully fetched Python list."""
+    if page_limit is None:
+        return f"LIMIT {export_limit}", ()
+    return "LIMIT %s OFFSET %s", (page_limit, page_offset)
+
+
+def _sales_report(cur, company_id, date_from, date_to, page_limit=None, page_offset=0):
+    page_sql, page_params = _report_page_clause(page_limit, page_offset, 1000)
+    cur.execute(f"""
         SELECT
             s.id,
             s.sale_number,
@@ -149,10 +157,10 @@ def _sales_report(cur, company_id, date_from, date_to):
         FROM sales s
         LEFT JOIN clients c ON c.id = s.client_id
         WHERE s.company_id = %s
-          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
         ORDER BY s.created_at DESC, s.id DESC
-        LIMIT 1000
-    """, (company_id, date_from, date_to))
+        {page_sql}
+    """, (company_id, date_from, date_to, *page_params))
 
     rows = []
     for row in cur.fetchall():
@@ -186,7 +194,8 @@ def _sales_report(cur, company_id, date_from, date_to):
     }
 
 
-def _purchases_report(cur, company_id, date_from, date_to):
+def _purchases_report(cur, company_id, date_from, date_to, page_limit=None, page_offset=0):
+    page_sql, page_params = _report_page_clause(page_limit, page_offset, 2000)
     cur.execute("""
         SELECT
             EXISTS (
@@ -236,11 +245,11 @@ def _purchases_report(cur, company_id, date_from, date_to):
         WHERE sm.company_id = %s
           AND sm.movement_type = 'income'
           AND COALESCE(i.item_type, 'product') = 'product'
-          AND DATE(sm.created_at) BETWEEN %s AND %s
+          AND sm.created_at >= %s AND sm.created_at < (%s::date + INTERVAL '1 day')
         GROUP BY DATE(sm.created_at)
         ORDER BY purchase_date DESC
-        LIMIT 2000
-    """, (company_id, date_from, date_to))
+        {page_sql}
+    """, (company_id, date_from, date_to, *page_params))
 
     rows = []
     for row in cur.fetchall():
@@ -263,8 +272,9 @@ def _purchases_report(cur, company_id, date_from, date_to):
     }
 
 
-def _profit_report(cur, company_id, date_from, date_to):
-    cur.execute("""
+def _profit_report(cur, company_id, date_from, date_to, page_limit=None, page_offset=0):
+    page_sql, page_params = _report_page_clause(page_limit, page_offset, 2000)
+    cur.execute(f"""
         SELECT
             DATE(s.created_at) AS report_date,
             COUNT(DISTINCT s.id) AS sales_count,
@@ -274,10 +284,11 @@ def _profit_report(cur, company_id, date_from, date_to):
         JOIN sale_items si ON si.sale_id = s.id
         WHERE s.company_id = %s
           AND s.status = 'Оплачено'
-          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
         GROUP BY DATE(s.created_at)
         ORDER BY report_date DESC
-    """, (company_id, date_from, date_to))
+        {page_sql}
+    """, (company_id, date_from, date_to, *page_params))
 
     rows = []
     for row in cur.fetchall():
@@ -304,12 +315,13 @@ def _profit_report(cur, company_id, date_from, date_to):
     }
 
 
-def _item_sales_report(cur, company_id, date_from, date_to, item_type):
+def _item_sales_report(cur, company_id, date_from, date_to, item_type, page_limit=None, page_offset=0):
     type_condition = (
         "COALESCE(i.item_type, 'product') = 'service'"
         if item_type == "service"
         else "COALESCE(i.item_type, 'product') = 'product'"
     )
+    page_sql, page_params = _report_page_clause(page_limit, page_offset, 2000)
     cur.execute(f"""
         SELECT
             COALESCE(i.name, si.name, 'Без названия') AS name,
@@ -326,14 +338,14 @@ def _item_sales_report(cur, company_id, date_from, date_to, item_type):
          AND i.company_id = s.company_id
         WHERE s.company_id = %s
           AND s.status = 'Оплачено'
-          AND DATE(s.created_at) BETWEEN %s AND %s
+          AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
           AND {type_condition}
         GROUP BY
             COALESCE(i.name, si.name, 'Без названия'),
             COALESCE(i.category, 'Без категории')
         ORDER BY revenue DESC, name
-        LIMIT 2000
-    """, (company_id, date_from, date_to))
+        {page_sql}
+    """, (company_id, date_from, date_to, *page_params))
 
     rows = []
     for row in cur.fetchall():
@@ -363,16 +375,17 @@ def _item_sales_report(cur, company_id, date_from, date_to, item_type):
     }
 
 
-def _products_report(cur, company_id, date_from, date_to):
-    return _item_sales_report(cur, company_id, date_from, date_to, "product")
+def _products_report(cur, company_id, date_from, date_to, page_limit=None, page_offset=0):
+    return _item_sales_report(cur, company_id, date_from, date_to, "product", page_limit, page_offset)
 
 
-def _services_report(cur, company_id, date_from, date_to):
-    return _item_sales_report(cur, company_id, date_from, date_to, "service")
+def _services_report(cur, company_id, date_from, date_to, page_limit=None, page_offset=0):
+    return _item_sales_report(cur, company_id, date_from, date_to, "service", page_limit, page_offset)
 
 
-def _stock_report(cur, company_id, date_from, date_to):
-    cur.execute("""
+def _stock_report(cur, company_id, date_from, date_to, page_limit=None, page_offset=0):
+    page_sql, page_params = _report_page_clause(page_limit, page_offset, 2000)
+    cur.execute(f"""
         SELECT
             i.id,
             i.name,
@@ -401,8 +414,8 @@ def _stock_report(cur, company_id, date_from, date_to):
           AND COALESCE(i.item_type, 'product') = 'product'
         GROUP BY i.id
         ORDER BY i.name
-        LIMIT 2000
-    """, (company_id,))
+        {page_sql}
+    """, (company_id, *page_params))
 
     rows = []
     for row in cur.fetchall():
@@ -428,8 +441,9 @@ def _stock_report(cur, company_id, date_from, date_to):
     }
 
 
-def _clients_report(cur, company_id, date_from, date_to):
-    cur.execute("""
+def _clients_report(cur, company_id, date_from, date_to, page_limit=None, page_offset=0):
+    page_sql, page_params = _report_page_clause(page_limit, page_offset, 1000)
+    cur.execute(f"""
         SELECT
             c.id,
             COALESCE(c.company_name, c.full_name, 'Без имени') AS client,
@@ -441,13 +455,13 @@ def _clients_report(cur, company_id, date_from, date_to):
         LEFT JOIN sales s
           ON s.client_id = c.id
          AND s.company_id = %s
-         AND DATE(s.created_at) BETWEEN %s AND %s
+         AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
         WHERE c.company_id = %s
           AND COALESCE(c.is_deleted, FALSE) = FALSE
         GROUP BY c.id, c.company_name, c.full_name, c.phone
         ORDER BY total DESC, client
-        LIMIT 1000
-    """, (company_id, date_from, date_to, company_id))
+        {page_sql}
+    """, (company_id, date_from, date_to, company_id, *page_params))
 
     rows = []
     for row in cur.fetchall():
@@ -474,7 +488,7 @@ def _clients_report(cur, company_id, date_from, date_to):
     }
 
 
-def _build_report(cur, report_type, company_id, date_from, date_to):
+def _build_report(cur, report_type, company_id, date_from, date_to, page_limit=None, page_offset=0):
     builders = {
         "sales": _sales_report,
         "purchases": _purchases_report,
@@ -485,7 +499,7 @@ def _build_report(cur, report_type, company_id, date_from, date_to):
         "clients": _clients_report,
     }
     return builders.get(report_type, _sales_report)(
-        cur, company_id, date_from, date_to
+        cur, company_id, date_from, date_to, page_limit, page_offset
     )
 
 
@@ -533,10 +547,26 @@ def reports_data():
     cur = conn.cursor()
 
     try:
+        # PostgreSQL fetches only one page + one row to detect a next page.
+        # Export and print routes continue using the original report builders.
+        try:
+            requested_page = max(1, int(request.args.get("page", 1)))
+        except (ValueError, TypeError):
+            requested_page = 1
         report = _build_report(
-            cur, report_type, company_id, date_from, date_to
+            cur, report_type, company_id, date_from, date_to,
+            page_limit=51, page_offset=(requested_page - 1) * 50,
         )
         summary = _get_summary(cur, company_id, date_from, date_to)
+        # Paginate JSON responses; exports and printed reports stay unchanged.
+        page = requested_page
+        page_size = 50
+        all_rows = report["rows"]
+        offset = (page - 1) * page_size
+        has_next = len(all_rows) > page_size
+        visible_rows = all_rows[:page_size]
+        # Exact totals are not computed on every request to avoid another costly SQL query.
+        total_rows = None
         return jsonify({
             "success": True,
             "reports_build": REPORTS_BUILD,
@@ -553,7 +583,11 @@ def reports_data():
                 {"key": key, "label": label}
                 for key, label in report["columns"]
             ],
-            "rows": report["rows"],
+            "rows": visible_rows,
+            "page": page,
+            "page_size": page_size,
+            "total_rows": total_rows,
+            "has_next": has_next,
         })
     finally:
         cur.close()

@@ -40,3 +40,10 @@ body.client-modal-open{overflow:hidden}
 .nika-data-modal__close .nika-ui-icon,.client-modal-close .nika-ui-icon{width:18px;height:18px}
 .clients-btn .nika-ui-icon,.client-media-add .nika-ui-icon{width:17px;height:17px;vertical-align:-.2em}
 .client-media-add{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+
+/* CRM directory server-side pagination */
+.clients-pagination{display:flex;justify-content:center;align-items:center;gap:16px;padding:16px 4px 4px;color:#64748b;font-size:12px;font-weight:700}
+.clients-page-btn{border:1px solid #d9d2ff;border-radius:9px;background:#f4f1ff;color:#684beb;min-height:36px;padding:7px 14px;font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+.clients-page-btn:hover:not(:disabled){background:#e9e2ff}
+.clients-page-btn:disabled{opacity:.45;cursor:default}
+#clientsResults.is-loading{opacity:.65;pointer-events:none}

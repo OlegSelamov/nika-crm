@@ -1,12 +1,16 @@
 (() => {
     const MODE_KEY = "nika_sales_mode";
-    const MAX_MENU_PAGES = 10;
-    const PAGE_SIZE = 100;
-
+    const PAGE_SIZE = 36;
     let foodItems = [];
     let foodCategory = "all";
     let foodLoaded = false;
     let foodLoading = false;
+    let foodHasMore = false;
+    let foodPage = 0;
+    let foodRequestVersion = 0;
+    let foodSearchTimer = null;
+    let foodAbortController = null;
+    let foodCategoryNames = [];
 
     function money(value) {
         return Number(value || 0).toLocaleString("ru-RU", {
@@ -49,68 +53,126 @@
         }
     }
 
-    async function fetchFoodItemsPage(type, page) {
-        const response = await fetch(
-            `/api/catalog/items?type=${encodeURIComponent(type)}&limit=${PAGE_SIZE}&page=${page}`
-        );
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+    async function loadFoodCategories() {
+        try {
+            const response = await fetch("/api/catalog/food-categories");
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            const data = await response.json();
+            foodCategoryNames = (data.categories || []).map(row => row.name);
+            renderFoodCategories();
+        } catch (error) {
+            console.error("FOOD CATEGORIES ERROR:", error);
         }
-        return response.json();
     }
 
-    async function loadFoodMenu() {
-        if (foodLoaded || foodLoading) {
-            if (foodLoaded) renderFoodMenu();
-            return;
+    async function loadFoodMenu(reset = false) {
+        if (reset) {
+            foodRequestVersion++;
+            foodAbortController?.abort();
+            foodLoading = false;
+            foodLoaded = false;
+            foodItems = [];
+            foodPage = 0;
+            foodHasMore = false;
         }
+        if (foodLoading || (foodLoaded && !reset)) return;
+        if (!foodPage) loadFoodCategories();
+        await fetchFoodPage();
+    }
 
+    async function fetchFoodPage() {
+        if (foodLoading || (foodPage > 0 && !foodHasMore)) return;
+        const version = ++foodRequestVersion;
+        const controller = new AbortController();
+        foodAbortController = controller;
         foodLoading = true;
         const grid = document.getElementById("foodMenuGrid");
-        if (grid) {
-            grid.innerHTML = '<div class="food-menu-loading">Загружаем меню…</div>';
-        }
-
+        if (foodPage === 0 && grid) grid.innerHTML = '<div class="food-menu-loading">Загружаем меню…</div>';
+        renderFoodPagination();
         try {
-            const loaded = [];
-            for (const type of ["dish", "product"]) {
-                let page = 1;
-                let hasMore = true;
-                while (hasMore && page <= MAX_MENU_PAGES) {
-                    const data = await fetchFoodItemsPage(type, page);
-                    const pageItems = Array.isArray(data.items) ? data.items : [];
-                    loaded.push(...pageItems);
-                    hasMore = Boolean(data.has_more);
-                    page += 1;
-                }
-            }
-
-            foodItems = loaded;
+            const params = new URLSearchParams({
+                type: "food_menu",
+                limit: String(PAGE_SIZE),
+                page: String(foodPage + 1)
+            });
+            const query = String(document.getElementById("foodSearch")?.value || "").trim();
+            if (query) params.set("q", query);
+            if (foodCategory !== "all") params.set("category", foodCategory);
+            const response = await fetch("/api/catalog/items?" + params, { signal: controller.signal });
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            const data = await response.json();
+            if (version !== foodRequestVersion) return;
+            foodItems.push(...(data.items || []));
+            foodPage++;
+            foodHasMore = Boolean(data.has_more);
             foodLoaded = true;
-            renderFoodCategories();
             renderFoodMenu();
         } catch (error) {
+            if (error.name === "AbortError" || version !== foodRequestVersion) return;
             console.error("FOOD MENU LOAD ERROR:", error);
-            if (grid) {
-                grid.innerHTML = '<div class="food-menu-empty">Не удалось загрузить каталог. Обновите страницу или проверьте соединение.</div>';
-            }
+            if (grid && foodPage === 0) grid.innerHTML = '<div class="food-menu-empty">Не удалось загрузить каталог. Проверьте соединение и повторите поиск.</div>';
         } finally {
-            foodLoading = false;
+            if (version === foodRequestVersion) {
+                foodLoading = false;
+                renderFoodPagination();
+            }
         }
+    }
+
+    function renderFoodPagination() {
+        const button = document.getElementById("foodMenuLoadMore");
+        if (!button) return;
+        button.hidden = !foodHasMore || foodLoading;
+        button.disabled = foodLoading;
+    }
+
+    function refreshFoodMenu() {
+        clearTimeout(foodSearchTimer);
+        loadFoodMenu(true);
     }
 
     function itemCategory(item) {
         return String(item?.category || "").trim() || "Без категории";
     }
 
+    function setFoodCategoryPopover(open) {
+        const popover = document.getElementById("foodCategoryPopover");
+        const toggle = document.getElementById("foodCategoryToggle");
+        if (!popover || !toggle) return;
+        popover.hidden = !open;
+        toggle.setAttribute("aria-expanded", String(open));
+        if (open) {
+            const search = document.getElementById("foodCategorySearch");
+            if (search) {
+                search.value = "";
+                filterFoodCategories();
+                search.focus();
+            }
+        }
+    }
+
+    function filterFoodCategories() {
+        const query = String(document.getElementById("foodCategorySearch")?.value || "").trim().toLocaleLowerCase("ru");
+        let visible = 0;
+        document.querySelectorAll("#foodCategories .food-category-btn").forEach(button => {
+            const matches = button.dataset.category === "all" || button.textContent.toLocaleLowerCase("ru").includes(query);
+            button.hidden = !matches;
+            if (matches) visible++;
+        });
+        const empty = document.getElementById("foodCategoryEmpty");
+        if (empty) empty.hidden = visible > (query ? 1 : 0);
+    }
+
     function renderFoodCategories() {
         const root = document.getElementById("foodCategories");
         if (!root) return;
 
-        const categories = Array.from(new Set(foodItems.map(itemCategory)))
+        const categories = Array.from(new Set(foodCategoryNames))
             .sort((a, b) => a.localeCompare(b, "ru"));
 
         root.innerHTML = "";
+        const count = document.getElementById("foodCategoryCount");
+        if (count) count.textContent = String(categories.length);
 
         const allButton = document.createElement("button");
         allButton.type = "button";
@@ -131,46 +193,25 @@
         });
 
         updateCategoryButtons();
+        filterFoodCategories();
     }
 
     function selectFoodCategory(category) {
         foodCategory = category || "all";
         updateCategoryButtons();
-        renderFoodMenu();
+        refreshFoodMenu();
+        setFoodCategoryPopover(false);
+        document.getElementById("foodCategoryToggle")?.focus();
     }
 
     function updateCategoryButtons() {
-        document.querySelectorAll(".food-category-btn").forEach(button => {
-            button.classList.toggle("active", button.dataset.category === foodCategory);
+        document.querySelectorAll("#foodCategories .food-category-btn").forEach(button => {
+            const active = button.dataset.category === foodCategory;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
         });
-    }
-
-    function foodQuery() {
-        return String(document.getElementById("foodSearch")?.value || "")
-            .trim()
-            .toLowerCase();
-    }
-
-    function filteredFoodItems() {
-        const query = foodQuery();
-
-        return foodItems.filter(item => {
-            if (foodCategory !== "all" && itemCategory(item) !== foodCategory) {
-                return false;
-            }
-
-            if (!query) return true;
-
-            const haystack = [
-                item.name,
-                item.category,
-                item.barcode,
-                item.gtin,
-                item.ntin
-            ].map(value => String(value || "").toLowerCase()).join(" ");
-
-            return haystack.includes(query);
-        });
+        const selected = document.getElementById("foodCategorySelected");
+        if (selected) selected.textContent = foodCategory === "all" ? "Все категории" : foodCategory;
     }
 
     function menuInitial(name) {
@@ -280,21 +321,18 @@
     function renderFoodMenu() {
         const grid = document.getElementById("foodMenuGrid");
         if (!grid || !foodLoaded) return;
-
-        const items = filteredFoodItems();
         grid.innerHTML = "";
-
-        if (!items.length) {
+        if (!foodItems.length) {
             const empty = document.createElement("div");
             empty.className = "food-menu-empty";
-            empty.textContent = foodItems.length
-                ? "По этому фильтру ничего не найдено."
-                : "В каталоге пока нет товаров. Добавьте блюда в разделе «Каталог».";
+            empty.textContent = "По этому фильтру ничего не найдено.";
             grid.appendChild(empty);
             return;
         }
-
-        items.forEach(item => grid.appendChild(makeFoodCard(item)));
+        const fragment = document.createDocumentFragment();
+        foodItems.forEach(item => fragment.appendChild(makeFoodCard(item)));
+        grid.appendChild(fragment);
+        renderFoodPagination();
     }
 
     function getCart() {
@@ -439,7 +477,26 @@
     function initFoodSalesMode() {
         document.getElementById("salesModeRetail")?.addEventListener("click", () => setMode("retail"));
         document.getElementById("salesModeFood")?.addEventListener("click", () => setMode("food"));
-        document.getElementById("foodSearch")?.addEventListener("input", renderFoodMenu);
+        document.getElementById("foodSearch")?.addEventListener("input", () => {
+            clearTimeout(foodSearchTimer);
+            foodSearchTimer = setTimeout(refreshFoodMenu, 280);
+        });
+        document.getElementById("foodMenuLoadMore")?.addEventListener("click", fetchFoodPage);
+        document.getElementById("foodCategoryToggle")?.addEventListener("click", () => {
+            const popover = document.getElementById("foodCategoryPopover");
+            if (popover) setFoodCategoryPopover(popover.hidden);
+        });
+        document.getElementById("foodCategorySearch")?.addEventListener("input", filterFoodCategories);
+        document.addEventListener("click", event => {
+            const chooser = document.getElementById("foodCategoryChooser");
+            if (chooser && !chooser.contains(event.target)) setFoodCategoryPopover(false);
+        });
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && !document.getElementById("foodCategoryPopover")?.hidden) {
+                setFoodCategoryPopover(false);
+                document.getElementById("foodCategoryToggle")?.focus();
+            }
+        });
         document.getElementById("foodClearCart")?.addEventListener("click", clearFoodCart);
         document.getElementById("foodClientButton")?.addEventListener("click", () => {
             if (typeof openClientSheet === "function") openClientSheet();
@@ -455,9 +512,7 @@
     window.NikaFoodSales = {
         setMode,
         reloadMenu: () => {
-            foodLoaded = false;
-            foodItems = [];
-            return loadFoodMenu();
+            return loadFoodMenu(true);
         },
         renderCart: renderFoodCart
     };

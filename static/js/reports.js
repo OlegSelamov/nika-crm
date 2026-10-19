@@ -1,5 +1,12 @@
 const reportsPage = document.querySelector('.reports-page');
 let currentReportType = reportsPage?.dataset.activeReport || 'sales';
+let currentReportPage = 1;
+let reportHasNext = false;
+function changeReportPage(delta) {
+    if (delta > 0 && !reportHasNext) return;
+    currentReportPage = Math.max(1, currentReportPage + delta);
+    loadCurrentReport();
+}
 const defaultReportDateFrom = reportsPage?.dataset.dateFrom || '';
 const defaultReportDateTo = reportsPage?.dataset.dateTo || '';
 const reportPrintMode = reportsPage?.dataset.printMode === '1';
@@ -18,6 +25,7 @@ function selectReport(type, button) {
     currentReportType = type;
     document.querySelectorAll('.report-tool').forEach(el => el.classList.remove('is-active'));
     if (button) button.classList.add('is-active');
+    currentReportPage = 1;
     loadCurrentReport();
 }
 
@@ -63,13 +71,23 @@ async function loadCurrentReport() {
     if (loader) loader.style.display = 'inline';
 
     try {
-        const response = await fetch('/reports/data?' + reportParams().toString());
+        const params = reportParams();
+        params.set('page', String(currentReportPage));
+        const response = await fetch('/reports/data?' + params.toString());
         const data = await response.json();
 
         if (!data.success) throw new Error(data.error || 'Ошибка загрузки');
 
         document.getElementById('reportResultTitle').textContent = data.title;
         renderSummary(data.summary);
+        reportHasNext = Boolean(data.has_next);
+        currentReportPage = Number(data.page || 1);
+        const previous = document.getElementById('reportsPrev');
+        const next = document.getElementById('reportsNext');
+        const status = document.getElementById('reportsPageStatus');
+        if (previous) previous.disabled = currentReportPage <= 1;
+        if (next) next.disabled = !reportHasNext;
+        if (status) status.textContent = 'Страница ' + currentReportPage + (reportHasNext ? ' · есть следующая' : ' · последняя');
 
         document.getElementById('reportsTableHead').innerHTML =
             '<tr>' + data.columns.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
@@ -108,5 +126,9 @@ function printCurrentReport() {
 if (reportPrintMode) {
     window.addEventListener('load', () => window.print());
 } else {
-    document.addEventListener('DOMContentLoaded', loadCurrentReport);
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('reportDateFrom')?.addEventListener('change', () => { currentReportPage = 1; });
+        document.getElementById('reportDateTo')?.addEventListener('change', () => { currentReportPage = 1; });
+        loadCurrentReport();
+    });
 }

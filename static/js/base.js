@@ -397,9 +397,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     renderNikaPageContext();
     if(sessionStorage.getItem('nikaAiPanelOpen')==='1')openAiAssistant({focus:false});else syncAiAssistantState(false);
     loadNotifications();loadChatConversations(true);loadWhatsappAiStatus();loadWhatsappChats(false);pingPresence();
-    setInterval(()=>loadNotifications(true),15000);
-    setInterval(()=>{const drawerOpen=document.getElementById('chatDrawer')?.classList.contains('open');loadChatConversations(false);loadWhatsappChats(false);if(drawerOpen&&activeChatChannel==='team')loadChatMessages(false);if(drawerOpen&&activeChatChannel==='whatsapp'&&activeWhatsappChatId)loadWhatsappMessages(false)},5000);
-    setInterval(pingPresence,30000);
+    setInterval(()=>{if(!document.hidden)loadNotifications(true)},30000);
+    setInterval(()=>{if(document.hidden)return;const drawerOpen=document.getElementById('chatDrawer')?.classList.contains('open');loadChatConversations(false);loadWhatsappChats(false);if(drawerOpen&&activeChatChannel==='team')loadChatMessages(false);if(drawerOpen&&activeChatChannel==='whatsapp'&&activeWhatsappChatId)loadWhatsappMessages(false)},10000);
+    setInterval(()=>{if(!document.hidden)pingPresence()},60000);
 });
 document.addEventListener('click',event=>{const panel=document.getElementById('aiAssistantPanel'),aiButton=event.target.closest('[onclick="toggleAiAssistant()"]');if(panel&&panel.classList.contains('open')&&!panel.contains(event.target)&&!aiButton)closeAiAssistant()});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeWhatsappClientModal();closeAiAssistant()}});
