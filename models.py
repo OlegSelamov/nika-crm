@@ -1149,6 +1149,9 @@ def init_db():
         )
     """)
 
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS manual_fiscalized_at TIMESTAMP")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS manual_fiscal_receipt_url TEXT")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS manual_fiscal_note TEXT")
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS invoice_number INTEGER")
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS nakladnaya_number INTEGER")
     cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS act_number INTEGER")
