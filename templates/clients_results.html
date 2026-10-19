@@ -1,0 +1,160 @@
+<div id="clientsPageMeta" data-active-total="{{ active_total }}" data-deleted-total="{{ deleted_total }}" data-shown-count="{{ shown_count }}" hidden></div>
+        <div class="clients-panel {{ 'is-active' if tab == 'active' else '' }}" id="activeClientsPanel" data-panel="active">
+            {% if clients %}
+            <div class="clients-table-wrap">
+                <table class="clients-table">
+                    <thead>
+                    <tr>
+                        <th>Клиент</th>
+                        <th>ИИН</th>
+                        <th>Телефон</th>
+                        <th>Категория</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in clients %}
+                    <tr class="client-record active-client-record"
+                        onclick="event.stopPropagation(); openClientCard({{ c.id }}, false)"
+                        data-id="{{ c.id }}"
+                        data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}"
+                        data-company-name="{{ c.company_name or '' }}"
+                        data-full-name="{{ c.full_name or '' }}"
+                        data-iin="{{ c.iin or '' }}"
+                        data-contract-number="{{ c.contract_number or '' }}"
+                        data-contract-date="{{ c.contract_date or '' }}"
+                        data-phone="{{ c.phone or '' }}"
+                        data-address="{{ c.address or '' }}"
+                        data-status="{{ c.status or 'Новый' }}"
+                        data-category="{{ c.category or 'Клиент' }}"
+                        data-payment="{{ c.payment or 'Не оплачено' }}"
+                        data-comment="{{ c.comment or '' }}">
+                        <td>
+                            <button class="client-main client-main--button" type="button" onclick="event.stopPropagation(); openClientCard({{ c.id }}, false)">
+                                <div class="client-avatar-mini">
+                                    {% if c.photo %}
+                                    <img src="{{ c.photo }}" alt="">
+                                    {% else %}
+                                    {{ (c.full_name or c.company_name or 'К')[:1]|upper }}
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <strong>{{ c.full_name or "Без имени" }}</strong>
+                                    <small>{{ c.company_name or "Без компании" }}</small>
+                                </div>
+                            </button>
+                        </td>
+                        <td>{{ c.iin or "—" }}</td>
+                        <td>{{ c.phone or "—" }}</td>
+                        <td>{{ c.category or "—" }}</td>
+                        <td>
+                            <span class="client-status client-status--{{ (c.status or 'Новый')|lower|replace(' ', '-') }}">
+                                {{ c.status or "Новый" }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="client-actions">
+                                <button class="client-action client-action--edit" type="button"
+                                        onclick="event.stopPropagation(); openClientCard(Number(this.closest('.client-record').dataset.id), true)">
+                                    Изменить
+                                </button>
+                                <a class="client-action client-action--delete"
+                                   onclick="event.stopPropagation(); return confirm('Переместить клиента в удалённые?')"
+                                   href="/clients/{{ c.id }}/delete"
+                                   >
+                                    Удалить
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mobile-clients-list">
+                {% for c in clients %}
+                <article class="mobile-client-card client-record active-client-record"
+                         onclick="event.stopPropagation(); openClientCard({{ c.id }}, false)"
+                         data-id="{{ c.id }}"
+                         data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}"
+                         data-company-name="{{ c.company_name or '' }}"
+                         data-full-name="{{ c.full_name or '' }}"
+                         data-iin="{{ c.iin or '' }}"
+                         data-contract-number="{{ c.contract_number or '' }}"
+                         data-contract-date="{{ c.contract_date or '' }}"
+                         data-phone="{{ c.phone or '' }}"
+                         data-address="{{ c.address or '' }}"
+                         data-status="{{ c.status or 'Новый' }}"
+                         data-category="{{ c.category or 'Клиент' }}"
+                         data-payment="{{ c.payment or 'Не оплачено' }}"
+                         data-comment="{{ c.comment or '' }}">
+                    <div class="mobile-client-top">
+                        <button class="client-main client-main--button" type="button" onclick="event.stopPropagation(); openClientCard({{ c.id }}, false)">
+                            <div class="client-avatar-mini">
+                                {% if c.photo %}<img src="{{ c.photo }}" alt="">{% else %}{{ (c.full_name or c.company_name or 'К')[:1]|upper }}{% endif %}
+                            </div>
+                            <div>
+                                <strong>{{ c.full_name or "Без имени" }}</strong>
+                                <small>{{ c.company_name or "Без компании" }}</small>
+                            </div>
+                        </button>
+                        <span class="client-status client-status--{{ (c.status or 'Новый')|lower|replace(' ', '-') }}">{{ c.status or "Новый" }}</span>
+                    </div>
+                    <div class="mobile-client-info">
+                        <span><small>Телефон</small>{{ c.phone or "—" }}</span>
+                        <span><small>ИИН</small>{{ c.iin or "—" }}</span>
+                        <span><small>Категория</small>{{ c.category or "—" }}</span>
+                        <span><small>Адрес</small>{{ c.address or "—" }}</span>
+                    </div>
+                    <div class="mobile-client-actions">
+                        <button class="client-action client-action--edit" type="button" onclick="event.stopPropagation(); openClientCard(Number(this.closest('.client-record').dataset.id), true)">Изменить</button>
+                        <a class="client-action client-action--delete" href="/clients/{{ c.id }}/delete" onclick="event.stopPropagation(); return confirm('Переместить клиента в удалённые?')">Удалить</a>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="clients-empty"><span><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-users"></use></svg></span><strong>Активных клиентов пока нет</strong><p>Добавьте первого клиента, чтобы начать работу.</p></div>
+            {% endif %}
+        </div>
+
+        <div class="clients-panel {{ 'is-active' if tab == 'deleted' else '' }}" id="deletedClientsPanel" data-panel="deleted">
+            {% set deleted = deleted_clients|default([]) %}
+            {% if deleted %}
+            <div class="clients-table-wrap">
+                <table class="clients-table">
+                    <thead><tr><th>Клиент</th><th>ИИН</th><th>Телефон</th><th>Категория</th><th>Статус</th><th>Действия</th></tr></thead>
+                    <tbody>
+                    {% for c in deleted %}
+                    <tr class="client-record deleted-client-record"
+                        data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}">
+                        <td><div class="client-main"><div class="client-avatar-mini client-avatar-mini--deleted">{{ (c.full_name or c.company_name or 'К')[:1]|upper }}</div><div><strong>{{ c.full_name or "Без имени" }}</strong><small>{{ c.company_name or "Без компании" }}</small></div></div></td>
+                        <td>{{ c.iin or "—" }}</td><td>{{ c.phone or "—" }}</td><td>{{ c.category or "—" }}</td>
+                        <td><span class="client-status client-status--deleted">Удалён</span></td>
+                        <td><div class="client-actions"><a class="client-action client-action--restore" href="/clients/{{ c.id }}/restore">Восстановить</a><a class="client-action client-action--delete" href="/clients/{{ c.id }}/delete_permanently" onclick="return confirm('Удалить клиента навсегда? Это действие нельзя отменить.')">Удалить навсегда</a></div></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mobile-clients-list">
+                {% for c in deleted %}
+                <article class="mobile-client-card client-record deleted-client-record" data-search="{{ ((c.full_name or '') ~ ' ' ~ (c.company_name or '') ~ ' ' ~ (c.iin or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.address or '') ~ ' ' ~ (c.category or '') ~ ' ' ~ (c.status or ''))|lower }}">
+                    <div class="mobile-client-top"><div class="client-main"><div class="client-avatar-mini client-avatar-mini--deleted">{{ (c.full_name or c.company_name or 'К')[:1]|upper }}</div><div><strong>{{ c.full_name or "Без имени" }}</strong><small>{{ c.company_name or "Без компании" }}</small></div></div><span class="client-status client-status--deleted">Удалён</span></div>
+                    <div class="mobile-client-info"><span><small>Телефон</small>{{ c.phone or "—" }}</span><span><small>ИИН</small>{{ c.iin or "—" }}</span><span><small>Категория</small>{{ c.category or "—" }}</span><span><small>Адрес</small>{{ c.address or "—" }}</span></div>
+                    <div class="mobile-client-actions"><a class="client-action client-action--restore" href="/clients/{{ c.id }}/restore">Восстановить</a><a class="client-action client-action--delete" href="/clients/{{ c.id }}/delete_permanently" onclick="return confirm('Удалить клиента навсегда? Это действие нельзя отменить.')">Удалить навсегда</a></div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="clients-empty"><span><svg class="nika-ui-icon" aria-hidden="true"><use href="#nika-trash"></use></svg></span><strong>Удалённых клиентов нет</strong><p>Удалённые клиенты будут отображаться здесь.</p></div>
+            {% endif %}
+        </div>
+
+<nav class="clients-pagination" aria-label="Страницы клиентов">
+    <button type="button" class="clients-page-btn" onclick="loadClientsPage({{ page - 1 }})" {% if page <= 1 %}disabled{% endif %}>← Назад</button>
+    <span>Страница {{ page }} из {{ total_pages }}</span>
+    <button type="button" class="clients-page-btn" onclick="loadClientsPage({{ page + 1 }})" {% if page >= total_pages %}disabled{% endif %}>Далее →</button>
+</nav>
