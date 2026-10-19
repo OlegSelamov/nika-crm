@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};</script>
+<script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};window.NIKA_SALES_WORKFLOW={{ sales_workflow|default('sales_documents')|tojson }};</script>
 
 <div class="sales-page">
 <div class="sales-commandbar" aria-label="Режимы продаж и кассовая смена">
@@ -129,7 +129,7 @@
 					<div class="sales-documents-toolbar">
 						<div class="sales-documents-toolbar__title">
 							<strong>Журнал продаж</strong>
-							<span>Чеки, счета и документы по каждой операции</span>
+							<span>{% if sales_workflow == 'sales_only' %}История чеков, продаж и возвратов{% else %}Чеки, счета и документы по каждой операции{% endif %}</span>
 						</div>
 						<div class="sales-documents-toolbar__controls">
 							<label class="sales-history-search">
@@ -263,12 +263,14 @@
 					ОПЛАТА
 				</button>
 
-				<button class="pay-btn invoice-pay-btn"
+				{% if sales_workflow != 'sales_only' %}
+				<button type="button" class="pay-btn invoice-pay-btn"
 						onclick="createInvoiceSale()">
 
 					БЕЗНАЛ
 
 				</button>
+                {% endif %}
 				
 				<button
 					class="pay-btn kaspi-pay-btn"
@@ -777,7 +779,7 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261019-kaspi-pos-guard-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261019-sales-workflow-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20261019-food-server-paging-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
