@@ -125,7 +125,6 @@ def _serialize(order):
 
 def verify_payment_order(cur, company_id, order_id, cart):
     """Lock and validate a saved restaurant order before any sale is created."""
-    ensure_food_schema(cur)
     if not _food_access(cur) or not company_id:
         raise ValueError("Конфигурация общепита не включена")
     cur.execute("""
@@ -159,6 +158,7 @@ def food_orders():
         if company_id is None:
             return jsonify({"success": False, "message": "Доступно только в конфигурации Общепит"}), 403
         ensure_food_schema(cur)
+        conn.commit()
         if request.method == "GET":
             try:
                 page = max(1, int(request.args.get("page", "1")))
@@ -250,6 +250,7 @@ def food_order_detail(order_id):
         if company_id is None:
             return jsonify({"success": False, "message": "Доступно только в конфигурации Общепит"}), 403
         ensure_food_schema(cur)
+        conn.commit()
         cur.execute("SELECT * FROM food_orders WHERE id=%s AND company_id=%s",
                     (order_id, company_id))
         order = cur.fetchone()
