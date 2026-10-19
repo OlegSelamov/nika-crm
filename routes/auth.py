@@ -1287,6 +1287,8 @@ def save_interface_profile():
     show_catalog_images = request.form.get("show_catalog_images") == "on"
     business_mode = (request.form.get("business_mode") or "").strip()
     allowed_business_modes = {"retail", "foodservice", "universal"}
+    sales_workflow = (request.form.get("sales_workflow") or "").strip()
+    allowed_sales_workflows = {"sales_only", "sales_documents"}
 
     can_manage_business_mode = bool(
         session.get("is_super_admin") or session.get("role") == "owner"
@@ -1303,6 +1305,11 @@ def save_interface_profile():
                 (business_mode, session["company_id"])
             )
             session["business_mode"] = business_mode
+        if can_manage_business_mode and session.get("company_id") and sales_workflow in allowed_sales_workflows:
+            cur.execute(
+                "UPDATE companies SET sales_workflow = %s WHERE id = %s",
+                (sales_workflow, session["company_id"])
+            )
         cur.execute("""
             UPDATE users
             SET start_page = %s,
