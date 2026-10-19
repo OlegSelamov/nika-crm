@@ -1119,6 +1119,14 @@ def rekassa_sell(conn, sale_id):
     if not sale:
         return {"status": "ERROR", "message": "Продажа не найдена"}
 
+    # Manually fiscalized receipts must never be duplicated at the OFD.
+    if sale.get("manual_fiscalized_at"):
+        return {
+            "status": "MANUAL",
+            "message": "Фискальный чек уже зарегистрирован вручную; повтор запрещён",
+            "receipt_url": sale.get("manual_fiscal_receipt_url")
+        }
+
     cur.execute("""
         SELECT *
         FROM integrations
