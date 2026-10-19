@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <title>{{ title or "Nika Business CRM" }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="/static/img/logo-mini.png?v=20260926-neon">
-    <link rel="apple-touch-icon" href="/static/img/logo-mini.png?v=20260926-neon">
+    <link rel="icon" type="image/png" href="/static/img/logo-mini.png?v=20261012-logo">
+    <link rel="apple-touch-icon" href="/static/img/logo-mini.png?v=20261012-logo">
     <meta name="description" content="Nika Business — CRM система для продаж, клиентов и автоматизации бизнеса">
     <meta name="theme-color" content="#2d6cdf">
     <link rel="preload" href="/static/img/crm-bg.jpg" as="image">
@@ -185,9 +185,6 @@ if (window.NIKA_EMBEDDED_PAGE && window.parent !== window && !window.nikaDesktop
                 <span class="text">Админка</span>
             </a>
             {% endif %}
-            {% if session.get("is_super_admin") and config.get("APP_MODE") == "test" %}
-            <a href="/admin/server-monitor"><span class="text">Мониторинг сервера</span></a>
-            {% endif %}
             {% if session.get("is_super_admin") %}
             <a href="/companies"><img src="/static/icons/company.png" class="menu-icon"><span class="text">Организации</span></a>
             {% endif %}
@@ -240,7 +237,7 @@ if (window.NIKA_EMBEDDED_PAGE && window.parent !== window && !window.nikaDesktop
         <div class="nika-frame-wrap" id="nikaFrameWrap">
             <iframe id="nikaPageFrame" title="Рабочая область Nika Business" allow="camera; microphone; clipboard-read; clipboard-write"></iframe>
             <div class="nika-frame-loader active" id="nikaFrameLoader" aria-live="polite">
-                <img src="/static/img/logo-mini.png?v=20260926-neon" alt="">
+                <img src="/static/img/logo-mini.png?v=20261012-logo" alt="">
                 <span>Открываю раздел…</span>
             </div>
         </div>
@@ -338,8 +335,8 @@ if (window.NIKA_EMBEDDED_PAGE && window.parent !== window && !window.nikaDesktop
 {% endif %}
 
 <script>window.NIKA_APP_CONFIG = { currentUserId: {{ session.get("user_id") or 0 }} };</script>
-<script src="/static/js/base.js?v=20261012-perf1"></script>
-<script src="/static/js/storefront_workflow.js?v=20261012-perf1"></script>
+<script src="/static/js/base.js?v=20260912-2"></script>
+<script src="/static/js/storefront_workflow.js?v=20260904-4"></script>
 <script src="/static/js/media_upload.js?v=20260908-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="/static/js/app_shell.js?v=20261001-desktop-rollback1"></script>
