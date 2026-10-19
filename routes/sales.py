@@ -229,6 +229,7 @@ def pay_sale():
     kaspi_method = data.get("kaspi_method")
     payment_method = data.get("payment_method", "cash")
     operation_id = str(data.get("operation_id") or "").strip()
+    food_order_id = data.get("food_order_id")
 
     conn = get_db()
     
@@ -323,6 +324,17 @@ def pay_sale():
                     )
                     conn.commit()
                     return jsonify(resumed_payload)
+
+        # Restaurant order is locked and matched to its saved cart, preventing
+        # double charging and edits after the kitchen/precheck was printed.
+        if food_order_id:
+            from routes.food_orders import verify_payment_order
+            try:
+                food_order_id = int(food_order_id)
+                verify_payment_order(cur, company_id, food_order_id, cart)
+            except (TypeError, ValueError) as exc:
+                conn.rollback()
+                return jsonify({"success": False, "error": str(exc)}), 409
 
         normalized_cart = []
         for item in cart:
@@ -473,6 +485,37 @@ def pay_sale():
             ))
 
         process_sale(conn, sale_id)
+        if not food_order_id and data.get("food_mode") is True:
+            # Fast-service checkout: paid foodservice sales still appear in the
+            # separate restaurant history even without a pre-saved kitchen order.
+            from routes.food_orders import _food_access, ensure_food_schema, _item_cart
+            if _food_access(cur) == company_id:
+                ensure_food_schema(cur)
+                food_cart, food_total = _item_cart(cur, company_id, cart)
+                cur.execute("""
+                    INSERT INTO food_orders
+                        (company_id, created_by, table_name, guest_name, note,
+                         client_id, status, cart, total_amount, sale_id,
+                         created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,'paid',%s::jsonb,%s,%s,%s,%s)
+                """, (
+                    company_id, user_id,
+                    str(data.get("food_table_name") or "")[:80],
+                    str(data.get("food_guest_name") or "")[:100],
+                    str(data.get("food_note") or "")[:500],
+                    client_id, json.dumps(food_cart, ensure_ascii=False),
+                    food_total, sale_id, now_kz_for_timestamp(), now_kz_for_timestamp()
+                ))
+        if food_order_id:
+            cur.execute("""
+                UPDATE food_orders
+                   SET status='paid', sale_id=%s, updated_at=%s
+                 WHERE id=%s AND company_id=%s AND status='open' AND sale_id IS NULL
+                RETURNING id
+            """, (sale_id, now_kz_for_timestamp(), food_order_id, company_id))
+            if not cur.fetchone():
+                raise ValueError("Не удалось связать продажу с заказом общепита")
+
 
         if operation_id:
             save_offline_operation(
