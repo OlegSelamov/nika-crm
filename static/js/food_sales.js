@@ -439,6 +439,7 @@
 
     function clearFoodCart() {
         try {
+            resetFoodOrder();
             cart = [];
             if (typeof renderCart === "function") renderCart();
             else renderFoodCart();
