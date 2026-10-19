@@ -4,14 +4,14 @@
 @page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{margin:0 auto;padding:10px;width:76mm;max-width:100%;font:13px/1.35 Arial,sans-serif;color:#111}
 h1{font-size:17px;text-align:center;margin:8px 0}.muted{font-size:11px;color:#555}.line{border-top:1px dashed #555;margin:9px 0}
 .item{display:flex;justify-content:space-between;gap:9px;margin:7px 0}.item>div:first-child{flex:1}.total{display:flex;justify-content:space-between;font-size:17px;font-weight:700;margin:12px 0}
-.actions{display:flex;gap:8px;justify-content:center;margin:12px 0}.actions button{padding:8px 14px}@media print{.actions{display:none}}
+.actions{display:flex;gap:8px;justify-content:center;margin:12px 0}.actions[hidden]{display:none!important}.actions button{padding:8px 14px}@media print{.actions{display:none}}
 </style></head><body>
-<div class="actions"><button onclick="window.print()">Печать</button><button onclick="window.close()">Закрыть</button></div>
+<div class="actions" {% if request.args.get("embed") == "1" %}hidden{% endif %}><button onclick="window.print()">Печать</button><button onclick="window.close()">Закрыть</button></div>
 <h1>{{ "ЗАКАЗ НА КУХНЮ" if kind == "kitchen" else "ПРЕДВАРИТЕЛЬНЫЙ СЧЁТ" }}</h1>
 <div style="text-align:center"><strong>{{ company_name }}</strong></div>
 <div class="line"></div>
 <div>Заказ №{{ order.id }}</div>
-<div>Дата: {{ order.created_at.replace("T"," ")[:19] }}</div>
+<div>Дата: {{ order.created_at_display or order.created_at.replace("T"," ")[:19] }}</div>
 {% if order.table_name %}<div>Стол: <strong>{{ order.table_name }}</strong></div>{% endif %}
 {% if order.guest_name %}<div>Гость: {{ order.guest_name }}</div>{% endif %}
 <div class="line"></div>
@@ -22,5 +22,5 @@ h1{font-size:17px;text-align:center;margin:8px 0}.muted{font-size:11px;color:#55
 {% endfor %}
 {% if order.note %}<div class="line"></div><strong>Комментарий:</strong><div>{{ order.note }}</div>{% endif %}
 {% if kind == "precheck" %}<div class="line"></div><div class="total"><span>ИТОГО</span><span>{{ "%.2f"|format(order.total_amount) }} ₸</span></div>{% endif %}
-<div class="line"></div><div class="muted" style="text-align:center">НЕФИСКАЛЬНЫЙ ДОКУМЕНТ. Не является фискальным чеком или подтверждением оплаты.</div>
+{% if kind == "precheck" %}<div class="line"></div><div style="text-align:center;font-weight:700">Приятного аппетита!</div>{% endif %}
 </body></html>

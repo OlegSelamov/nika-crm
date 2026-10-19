@@ -530,13 +530,31 @@
         }
     }
 
+    function setFoodDetails(open) {
+        const modal = document.getElementById("foodOrderDetailsModal");
+        if (modal) modal.hidden = !open;
+    }
+    function openFoodTicket(orderId, kind) {
+        if (!orderId) { foodMessage("Сначала сохраните заказ"); return; }
+        const modal = document.getElementById("foodTicketModal");
+        const frame = document.getElementById("foodTicketFrame");
+        if (!modal || !frame) return;
+        document.getElementById("foodTicketHeading").textContent = kind === "kitchen" ? "Заказ на кухню" : "Пречек гостю";
+        frame.src = "/food/orders/" + encodeURIComponent(orderId) + "/ticket/" + kind + "?embed=1";
+        modal.hidden = false;
+    }
+    function closeFoodTicket() {
+        const modal = document.getElementById("foodTicketModal");
+        if (modal) modal.hidden = true;
+        const frame = document.getElementById("foodTicketFrame");
+        if (frame) frame.src = "about:blank";
+    }
     function printFoodTicket(kind) {
         if (!currentFoodOrderId || !currentFoodOrderSaved) {
             foodMessage("Сначала сохраните заказ");
             return;
         }
-        window.open("/food/orders/" + currentFoodOrderId + "/ticket/" + kind,
-                    "_blank", "noopener,noreferrer");
+        openFoodTicket(currentFoodOrderId, kind);
     }
 
     async function openFoodOrder(id) {
@@ -555,7 +573,7 @@
             document.getElementById("foodOrderTable").value = data.order.table_name || "";
             document.getElementById("foodOrderGuest").value = data.order.guest_name || "";
             document.getElementById("foodOrderNote").value = data.order.note || "";
-            document.getElementById("foodOrderHistoryPanel").hidden = true;
+            if (typeof switchSalesTab === "function") switchSalesTab("cart");
             foodMessage("Открыт заказ №" + currentFoodOrderId);
         } catch (error) {
             foodMessage(error.message || "Не удалось открыть заказ");
@@ -579,7 +597,7 @@
             title.textContent = "№" + order.id + " · " + (order.table_name || "Без стола");
             const detail = document.createElement("small");
             detail.textContent = (order.status === "paid" ? "Оплачен" : order.status === "cancelled" ? "Отменён" : "Открыт") +
-                " · " + money(order.total_amount) + " · " + order.created_at.slice(0, 16).replace("T", " ");
+                " · " + money(order.total_amount) + " · " + (order.created_at_display || order.created_at.slice(0, 16).replace("T", " "));
             label.append(title, detail);
             const buttons = document.createElement("div");
             if (order.status === "open") {
@@ -591,7 +609,7 @@
             for (const [kind, caption] of [["kitchen","Кухня"],["precheck","Пречек"]]) {
                 const print = document.createElement("button");
                 print.textContent = caption;
-                print.addEventListener("click", () => window.open("/food/orders/" + order.id + "/ticket/" + kind, "_blank", "noopener,noreferrer"));
+                print.addEventListener("click", () => openFoodTicket(order.id, kind));
                 buttons.appendChild(print);
             }
             row.append(label,buttons);
@@ -607,12 +625,15 @@
         document.getElementById("foodOrderSave")?.addEventListener("click", saveFoodOrder);
         document.getElementById("foodOrderKitchen")?.addEventListener("click", () => printFoodTicket("kitchen"));
         document.getElementById("foodOrderPrecheck")?.addEventListener("click", () => printFoodTicket("precheck"));
-        document.getElementById("foodOrderHistory")?.addEventListener("click", () => {
-            document.getElementById("foodOrderHistoryPanel").hidden = false;
-            loadFoodOrderHistory();
+        document.getElementById("foodOrderDetails")?.addEventListener("click", () => setFoodDetails(true));
+        document.querySelectorAll("[data-food-details-close]").forEach(el => el.addEventListener("click", () => setFoodDetails(false)));
+        document.querySelectorAll("[data-food-ticket-close]").forEach(el => el.addEventListener("click", closeFoodTicket));
+        document.getElementById("foodTicketPrint")?.addEventListener("click", () => {
+            document.getElementById("foodTicketFrame")?.contentWindow?.print();
         });
-        document.getElementById("foodOrderHistoryClose")?.addEventListener("click", () =>
-            document.getElementById("foodOrderHistoryPanel").hidden = true);
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape") { setFoodDetails(false); closeFoodTicket(); }
+        });
         document.getElementById("foodOrderStatusFilter")?.addEventListener("change", () => loadFoodOrderHistory());
         document.getElementById("foodOrderHistoryMore")?.addEventListener("click", () => loadFoodOrderHistory(true));
         for (const id of ["foodOrderTable", "foodOrderGuest", "foodOrderNote"]) {
@@ -663,6 +684,7 @@
             return loadFoodMenu(true);
         },
         renderCart: renderFoodCart,
+        loadHistory: () => loadFoodOrderHistory(),
         getSavedOrderId: () => currentFoodOrderSaved ? currentFoodOrderId : null,
         clearOrder: resetFoodOrder
     };

@@ -735,3 +735,33 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 .food-history-row strong{display:block}.food-history-row small{display:block;color:#64748b;margin-top:3px}
 .food-history-row button,#foodOrderHistoryMore{margin:3px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;background:#f8fafc;cursor:pointer;font-size:11px}
 @media(max-width:800px){#foodOrderHistoryPanel{inset:4%;padding:11px}.food-history-row{flex-wrap:wrap}}
+
+
+/* Food service clean workspace: cart stays tall, details and print live in modals. */
+.food-order-panel .food-cart { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.food-order-compact { display:flex; flex:0 0 auto; flex-wrap:wrap; gap:6px; padding:8px 12px 11px; border-top:1px solid #e7edf5; background:#fff; }
+.food-order-compact button { flex:1 1 0; min-width:0; padding:9px 8px; border:1px solid #c7d2fe; border-radius:9px; background:#eef2ff; color:#3730a3; font:inherit; font-size:11px; font-weight:800; cursor:pointer; }
+.food-order-compact button:hover { background:#e0e7ff; }
+.food-order-compact #foodOrderMessage { flex:1 0 100%; padding:0; font-size:11px; }
+.food-shell-modal[hidden], .food-orders-workspace[hidden] { display:none !important; }
+.food-shell-modal { position:fixed; inset:0; z-index:2147482900; display:flex; align-items:center; justify-content:center; padding:16px; }
+.food-shell-backdrop { position:absolute; inset:0; background:rgba(15,23,42,.55); }
+.food-shell-dialog { position:relative; z-index:1; width:min(460px,100%); max-height:92vh; background:#fff; border-radius:16px; box-shadow:0 25px 75px #0f172a44; overflow:hidden; display:flex; flex-direction:column; }
+.food-shell-head { display:flex; align-items:center; justify-content:space-between; padding:15px 18px; border-bottom:1px solid #e2e8f0; color:#0f172a; }
+.food-shell-head strong { font-size:16px; } .food-shell-head button { border:0; border-radius:8px; width:32px; height:32px; font-size:23px; background:#f1f5f9; cursor:pointer; color:#334155; }
+.food-shell-dialog .food-order-meta { padding:12px 8px 4px; margin:0; } .food-shell-dialog .food-order-meta input { font-size:13px; min-height:40px; }
+.food-shell-dialog .food-order-actions { padding:12px 16px 18px; }
+.food-shell-dialog .food-order-actions button { min-height:40px; font-size:12px; }
+.food-ticket-dialog { width:min(560px,100%); height:min(720px,94vh); }
+.food-ticket-dialog iframe { width:100%; flex:1 1 auto; min-height:0; border:0; background:#f8fafc; }
+.food-ticket-footer { display:flex; justify-content:center; border-top:1px solid #e2e8f0; padding:12px; }
+.food-ticket-footer button { border:0; border-radius:9px; background:#684df2; color:white; font:inherit; font-weight:800; padding:10px 30px; cursor:pointer; }
+.sales-page .food-orders-workspace { flex:1 1 auto; min-width:0; min-height:0; width:100%; overflow-y:auto; background:#fff; border:1px solid #e7e9f2; border-radius:16px; padding:18px; box-sizing:border-box; }
+.food-history-top { display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid #e2e8f0; padding-bottom:14px; margin-bottom:8px; }
+.food-history-top strong { display:block; font-size:18px; color:#0f172a; } .food-history-top span { color:#64748b; font-size:12px; }
+.food-history-top select { min-height:36px; border:1px solid #cbd5e1; border-radius:8px; padding:7px 10px; background:white; color:#334155; }
+.food-order-history-list { width:100%; }
+.food-order-history-list .food-history-row { padding:12px 4px; }
+.food-orders-workspace #foodOrderHistoryMore { display:block; margin:14px auto; padding:9px 20px; }
+.food-orders-workspace #foodOrderHistoryMore[hidden] { display:none!important; }
+@media(max-width:700px) { .food-shell-modal { padding:8px; } .food-history-top { align-items:stretch; flex-direction:column; } .sales-page .food-orders-workspace { padding:12px; } }

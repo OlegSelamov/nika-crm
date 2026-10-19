@@ -2374,11 +2374,14 @@ function ensureSalesHistoryWorkspace() {
 
 function switchSalesTab(tab) {
     const showHistory = tab === 'history';
-    const workspace = ensureSalesHistoryWorkspace();
+    const isFood = window.NIKA_BUSINESS_MODE === "foodservice";
+    const workspace = isFood ? document.getElementById('foodOrdersWorkspace') : ensureSalesHistoryWorkspace();
     const grid = document.getElementById('salesGridWorkspace');
     const cartBtn = document.getElementById('cartTabBtn');
     const historyBtn = document.getElementById('historyTabBtn');
     if (!workspace || !grid || !cartBtn || !historyBtn) return;
+    // History is a full-width sibling, never a child of the hidden sales grid.
+    if (isFood && grid.contains(workspace)) grid.insertAdjacentElement('afterend', workspace);
     grid.hidden = showHistory;
     workspace.hidden = !showHistory;
     document.querySelector('.sales-page')?.classList.toggle('sales-history-active', showHistory);
@@ -2387,7 +2390,10 @@ function switchSalesTab(tab) {
     historyBtn.classList.toggle('active', showHistory);
     cartBtn.setAttribute('aria-selected', String(!showHistory));
     historyBtn.setAttribute('aria-selected', String(showHistory));
-    if (showHistory) loadSalesHistory();
+    if (showHistory) {
+        if (isFood) window.NikaFoodSales?.loadHistory?.();
+        else loadSalesHistory();
+    }
 }
 window.addEventListener('DOMContentLoaded', ensureSalesHistoryWorkspace);
 

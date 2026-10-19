@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 from flask import Blueprint, jsonify, render_template, request, session
 from models import get_db, pool
 from utils.sale_amounts import normalize_sale_line
-from utils.timezone import now_kz
+from utils.timezone import now_kz, now_kz_for_timestamp
 
 food_orders_bp = Blueprint("food_orders", __name__)
 
@@ -116,6 +116,8 @@ def _serialize(order):
         if result.get(field):
             result[field] = result[field].isoformat()
     result["total_amount"] = float(result.get("total_amount") or 0)
+    if result.get("created_at"):
+        result["created_at_display"] = result["created_at"].replace("T", " ")[:16]
     cart = result.get("cart")
     if isinstance(cart, str):
         cart = json.loads(cart)
@@ -222,7 +224,7 @@ def food_orders():
                 UPDATE food_orders SET table_name=%s, guest_name=%s, note=%s,
                     client_id=%s, cart=%s::jsonb, total_amount=%s, updated_at=%s
                 WHERE id=%s AND company_id=%s RETURNING *
-            """, (table_name, guest_name, note, client_id, payload, total, now_kz(),
+            """, (table_name, guest_name, note, client_id, payload, total, now_kz_for_timestamp(),
                   order_id, company_id))
         else:
             cur.execute("""
