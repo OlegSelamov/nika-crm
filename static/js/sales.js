@@ -657,6 +657,11 @@ function showCashChangeNotice(value) {
 }
 
 function pay() {
+    if (window.nikaKaspiPosActive) {
+        alert("Операция Kaspi POS ещё обрабатывается. Дождитесь её завершения.");
+        return;
+    }
+    if (invoiceCreationBusy) return;
     if (!selectedClient) {
         alert("Сначала выбери клиента");
         return;
@@ -696,7 +701,7 @@ function pay() {
 }
 
 function confirmCashPayment() {
-    if (salePaymentBusy) return;
+    if (window.nikaKaspiPosActive || invoiceCreationBusy || salePaymentBusy) return;
     const total = saleCartTotal();
     const received = paymentNumber(document.getElementById("cashReceivedInput").value);
     if (received + 0.009 < total) {
@@ -719,9 +724,13 @@ async function submitSalePayment({
     cash,
     card,
     kaspi,
-    cashChange
+    cashChange,
+    checkoutCart = null,
+    checkoutClientId = null,
+    kaspiTransactionId = null,
+    kaspiMethod = null
 }) {
-    if (salePaymentBusy) return;
+    if (salePaymentBusy) return false;
     salePaymentBusy = true;
     renderCashChange();
 
@@ -732,16 +741,16 @@ async function submitSalePayment({
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                client_id: selectedClient,
-                cart: cart,
+                client_id: checkoutClientId ?? selectedClient,
+                cart: checkoutCart ?? cart,
                 payment_method: paymentMethod,
                 cash,
                 card,
                 kaspi,
                 cash_received: paymentMethod === "cash" ? cash : null,
                 change_amount: paymentMethod === "cash" ? cashChange : 0,
-                kaspi_transaction_id: window.lastKaspiTransactionId || "",
-                kaspi_method: window.lastKaspiMethod || "",
+                kaspi_transaction_id: kaspiTransactionId ?? (window.lastKaspiTransactionId || ""),
+                kaspi_method: kaspiMethod ?? (window.lastKaspiMethod || ""),
                 company_id: null
             })
         });
@@ -762,7 +771,7 @@ async function submitSalePayment({
                 "Интернет недоступен. Продажа сохранена на этом компьютере и поставлена в очередь.\n\n" +
                 "Повторно продажу не проводите. Nika отправит её на сервер и фискализирует чек reKassa после восстановления связи."
             );
-            return;
+            return true;
         }
 
         if (data.fiscalized !== true && data.fiscalization_skipped !== true) {
@@ -775,13 +784,15 @@ async function submitSalePayment({
                 reason + code + http +
                 "\n\nПовторно продажу не проводите — чек можно дофискализировать по этой продаже."
             );
-            return;
+            return true;
         }
 
         openSaleModal(data.sale_id, { autoPrint: true });
+        return true;
     } catch (error) {
         console.error("PAY ERROR:", error);
         alert(error.message || "Не удалось провести оплату");
+        return false;
     } finally {
         salePaymentBusy = false;
         renderCashChange();
@@ -1697,8 +1708,13 @@ function showDocumentError(error) {
     alert(error && error.message ? error.message : "Не удалось подготовить документ");
 }
 
-function createInvoiceSale() {
+let invoiceCreationBusy = false;
 
+function createInvoiceSale() {
+    if (window.nikaKaspiPosActive || invoiceCreationBusy || salePaymentBusy) {
+        alert("Завершите текущую кассовую операцию перед выставлением счёта.");
+        return;
+    }
     if (!selectedClient) {
         alert("Сначала выбери клиента");
         return;
@@ -1709,6 +1725,7 @@ function createInvoiceSale() {
         return;
     }
 
+    invoiceCreationBusy = true;
     fetch("/sales/create-invoice", {
         method: "POST",
         headers: {
@@ -1748,7 +1765,8 @@ function createInvoiceSale() {
     .catch(error => {
         console.error("CREATE INVOICE ERROR:", error);
         alert(error.message || "Не удалось выставить счёт");
-    });
+    })
+    .finally(() => { invoiceCreationBusy = false; });
 }
 
 let codeReader = null;
@@ -3242,78 +3260,125 @@ async function getKaspiPosPaymentStatus(processId) {
     return response.json();
 }
 
-function payKaspiPOS() {
+// A POS payment may outlive the network request. Keep its cart and client
+// immutable and never turn a confirmed terminal payment into an invoice.
+let kaspiPosCheckout = null;
+
+function setKaspiPosCheckoutLocked(checkout) {
+    kaspiPosCheckout = checkout;
+    window.nikaKaspiPosActive = Boolean(checkout);
+    document.querySelectorAll(".payment-actions .pay-btn").forEach(button => {
+        button.disabled = Boolean(checkout);
+        button.setAttribute("aria-busy", checkout ? "true" : "false");
+    });
+}
+
+async function payKaspiPOS() {
+    if (kaspiPosCheckout || invoiceCreationBusy || salePaymentBusy) {
+        alert("Сначала завершите текущую операцию оплаты.");
+        return;
+    }
     if (!selectedClient) {
         alert("Сначала выбери клиента");
         return;
     }
-
-    if (cart.length === 0) {
+    if (!cart.length) {
         alert("Корзина пустая");
         return;
     }
 
-    // Используем тот же итог, который показан в корзине и затем сохраняется
-    // в продаже. Для весового товара/ввода по сумме cartItemTotal учитывает
-    // line_total и округление, тогда как price * qty может отличаться на 1–2 ₸.
-    const total = Math.round(saleCartTotal());
-
-    startKaspiPosPayment(total)
-        .then(data => monitorKaspiPayment(data.processId, total))
-        .catch(error => {
-            console.error("KASPI POS START ERROR:", error);
-            alert(error.message || "Ошибка связи с Kaspi POS");
-        });
+    // Snapshot BEFORE contacting the terminal. A successful charge must
+    // save these same positions and the same amount, even after UI changes.
+    const checkout = {
+        clientId: selectedClient,
+        cart: JSON.parse(JSON.stringify(cart)),
+        total: Math.round(saleCartTotal()),
+        processId: null,
+        confirmed: false
+    };
+    setKaspiPosCheckoutLocked(checkout);
+    try {
+        const started = await startKaspiPosPayment(checkout.total);
+        if (!started || !started.processId) {
+            throw new Error("Kaspi POS не вернул идентификатор операции");
+        }
+        checkout.processId = started.processId;
+        monitorKaspiPayment(checkout);
+    } catch (error) {
+        // No processId means the charge was not confirmed. Do not silently
+        // change payment type; the cashier must verify the terminal.
+        setKaspiPosCheckoutLocked(null);
+        console.error("KASPI POS START ERROR:", error);
+        alert((error.message || "Ошибка Kaspi POS") +
+            "\nПроверьте историю терминала перед повторной оплатой.");
+    }
 }
 
-function monitorKaspiPayment(processId, chargedTotal = null) {
+function monitorKaspiPayment(checkout) {
     let requestInFlight = false;
+    let timer = null;
+    const finish = () => {
+        if (timer !== null) clearInterval(timer);
+        timer = null;
+    };
 
-    const timer = setInterval(async () => {
-        if (requestInFlight) return;
+    timer = setInterval(async () => {
+        if (requestInFlight || kaspiPosCheckout !== checkout) return;
         requestInFlight = true;
-
         try {
-            const data = await getKaspiPosPaymentStatus(processId);
-            console.log("KASPI STATUS:", data);
+            const data = await getKaspiPosPaymentStatus(checkout.processId);
+            console.log("KASPI POS STATUS:", data && data.status);
 
             if (data.status === "success") {
-                clearInterval(timer);
-
-                const confirmedTotal = Number(chargedTotal);
-                document.getElementById("kaspiInput").value =
-                    Number.isFinite(confirmedTotal) && confirmedTotal > 0
-                        ? String(Math.round(confirmedTotal))
-                        : String(Math.round(saleCartTotal()));
-
-                window.lastKaspiTransactionId = data.transactionId;
+                finish();
+                checkout.confirmed = true;
+                window.lastKaspiTransactionId = data.transactionId || "";
                 window.lastKaspiMethod = data.method || "qr";
+                document.getElementById("kaspiInput").value = String(checkout.total);
 
-                alert("Оплата Kaspi POS прошла успешно");
-                pay();
+                // Never call the generic pay() dispatcher here: it reads mutable
+                // form inputs and can be wrapped by other checkout handlers.
+                const saved = await submitSalePayment({
+                    paymentMethod: "kaspi",
+                    cash: 0,
+                    card: 0,
+                    kaspi: checkout.total,
+                    cashChange: 0,
+                    checkoutCart: checkout.cart,
+                    checkoutClientId: checkout.clientId,
+                    kaspiTransactionId: data.transactionId || "",
+                    kaspiMethod: data.method || "qr"
+                });
+                if (saved) {
+                    setKaspiPosCheckoutLocked(null);
+                } else {
+                    alert("Kaspi POS получил оплату, но сохранение продажи не подтверждено. " +
+                        "Не принимайте деньги повторно и не создавайте счёт. " +
+                        "Проверьте очередь синхронизации и обратитесь к администратору.");
+                }
                 return;
             }
 
             if (data.status === "fail") {
-                clearInterval(timer);
-                alert(data.message || "Оплата отменена или отклонена на терминале");
+                finish();
+                setKaspiPosCheckoutLocked(null);
+                alert(data.message || "Оплата отклонена на терминале");
                 return;
             }
 
-            if (data.status === "unknown") {
-                clearInterval(timer);
-                alert("Статус оплаты неизвестен. Проверь терминал и историю Kaspi перед повторной оплатой.");
+            if (data.status === "unknown" || data.status === "error") {
+                finish();
+                // The bank may already have accepted the charge. Keep this
+                // checkout locked rather than permitting a second sale/invoice.
+                alert("Статус Kaspi POS неизвестен. Проверьте оплату на терминале. " +
+                    "Не проводите её повторно и не выставляйте счёт по этой корзине.");
                 return;
-            }
-
-            if (data.status === "error") {
-                clearInterval(timer);
-                alert(data.message || "Ошибка связи с Kaspi POS");
             }
         } catch (error) {
-            clearInterval(timer);
+            finish();
             console.error("KASPI POS STATUS ERROR:", error);
-            alert(error.message || "Ошибка связи с Kaspi POS");
+            alert("Нет ответа от Kaspi POS. Проверьте историю терминала. " +
+                "Повторную оплату не начинайте: состояние операции неизвестно.");
         } finally {
             requestInFlight = false;
         }
