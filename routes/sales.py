@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, make_r
 from models import get_db, pool
 from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
-from utils.timezone import now_kz, now_kz_for_timestamp
+from utils.timezone import now_kz
 from utils.sale_amounts import normalize_sale_line
 from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from flask import render_template
@@ -57,19 +57,72 @@ def nested_value(data, *paths):
 
 
 def _sale_operation_payload(sale_id, rekassa_result):
+    """Stable response stored with an offline operation for safe replays."""
     rekassa_result = rekassa_result or {}
-    response_payload = _sale_operation_payload(sale_id, rekassa_result)
-    if operation_id:
-        save_offline_operation(
-            cur,
-            company_id=company_id,
-            operation_id=operation_id,
-            operation_type="sale",
-            entity_id=sale_id,
-            result=response_payload,
-        )
-        conn.commit()
-    return jsonify(response_payload)
+    return {
+        "success": True,
+        "sale_id": sale_id,
+        "fiscalized": rekassa_result.get("status") == "OK",
+        "rekassa_required": rekassa_result.get("status") != "SKIPPED",
+        "rekassa": {
+            "status": rekassa_result.get("status"),
+            "message": rekassa_result.get("message") or rekassa_result.get("error"),
+            "ticket_id": rekassa_result.get("id"),
+            "ticket_number": rekassa_result.get("ticketNumber"),
+            "shift_number": rekassa_result.get("shiftNumber"),
+        },
+    }
+
+
+def _resolve_sale_client(cur, company_id, raw_client_id):
+    """Resolve anonymous checkout by company, not by a cached device client ID."""
+    if raw_client_id not in (None, "", 0, "0"):
+        try:
+            client_id = int(raw_client_id)
+        except (TypeError, ValueError):
+            raise ValueError("Некорректный клиент продажи")
+        if client_id <= 0:
+            raise ValueError("Некорректный клиент продажи")
+        cur.execute("""
+            SELECT id FROM clients
+            WHERE id = %s AND company_id = %s
+              AND COALESCE(is_deleted, FALSE) = FALSE
+        """, (client_id, company_id))
+        if not cur.fetchone():
+            raise ValueError("Выбранный клиент не найден в этой организации")
+        return client_id
+
+    def find_private_client():
+        cur.execute("""
+            SELECT id FROM clients
+            WHERE company_id = %s AND COALESCE(is_deleted, FALSE) = FALSE
+              AND (
+                LOWER(BTRIM(COALESCE(company_name, ''))) = 'частное лицо'
+                OR LOWER(BTRIM(COALESCE(full_name, ''))) = 'частное лицо'
+              )
+            ORDER BY id LIMIT 1
+        """, (company_id,))
+        return cur.fetchone()
+
+    existing = find_private_client()
+    if existing:
+        return existing["id"]
+
+    # Only one "Частное лицо" per company even if multiple devices first sync
+    # simultaneously. The advisory lock stays within the sale transaction.
+    cur.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+        (f"nika-private-client:{company_id}",),
+    )
+    existing = find_private_client()
+    if existing:
+        return existing["id"]
+    cur.execute("""
+        INSERT INTO clients (full_name, company_name, company_id, created_at, is_deleted)
+        VALUES ('Частное лицо', '', %s, %s, FALSE)
+        RETURNING id
+    """, (company_id, now_kz()))
+    return cur.fetchone()["id"]
 
 
 @sales_bp.route("/sales")
@@ -198,7 +251,7 @@ def add_sale():
         0,
         0,
         "Новая",
-        now_kz_for_timestamp()
+        now_kz()
     ))
 
     conn.commit()
@@ -324,6 +377,12 @@ def pay_sale():
                     conn.commit()
                     return jsonify(resumed_payload)
 
+        try:
+            client_id = _resolve_sale_client(cur, company_id, client_id)
+        except ValueError as exc:
+            conn.rollback()
+            return jsonify({"success": False, "error": str(exc)}), 400
+
         normalized_cart = []
         for item in cart:
             cur.execute(
@@ -366,21 +425,6 @@ def pay_sale():
             }), 400
 
         total = sum((line[5] for line in normalized_cart), start=0)
-        from decimal import Decimal, InvalidOperation
-        cash_received = total
-        change_amount = Decimal("0")
-        if payment_method == "cash":
-            try:
-                tendered = data.get("cash_received")
-                if tendered in (None, ""):
-                    tendered = data.get("cash", total)
-                cash_received = Decimal(str(tendered))
-                if not cash_received.is_finite() or cash_received < total:
-                    return jsonify({"success": False, "error": "Недостаточно наличных для оплаты"}), 400
-                cash_received = cash_received.quantize(Decimal("0.01"))
-                change_amount = cash_received - total
-            except (InvalidOperation, ValueError, TypeError):
-                return jsonify({"success": False, "error": "Некорректная сумма наличных"}), 400
         cash = total if payment_method == "cash" else 0
         card = total if payment_method == "card" else 0
         kaspi = total if payment_method == "kaspi" else 0
@@ -412,11 +456,9 @@ def pay_sale():
                 card_amount,
                 kaspi_amount,
                 kaspi_transaction_id,
-                kaspi_method,
-                cash_received,
-                change_amount
+                kaspi_method
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             client_id,
@@ -426,15 +468,13 @@ def pay_sale():
             total,
             paid,
             status,
-            now_kz_for_timestamp(),
+            now_kz(),
             payment_method,
             cash,
             card,
             kaspi,
             kaspi_transaction_id,
-            kaspi_method,
-            cash_received if payment_method == "cash" else 0,
-            change_amount
+            kaspi_method
         ))
 
         sale_id = cur.fetchone()["id"]
@@ -522,6 +562,18 @@ def pay_sale():
             """, (("ERROR: " + str(fiscal_error))[:500], sale_id))
             conn.commit()
 
+        response_payload = _sale_operation_payload(sale_id, rekassa_result)
+        if operation_id:
+            save_offline_operation(
+                cur,
+                company_id=company_id,
+                operation_id=operation_id,
+                operation_type="sale",
+                entity_id=sale_id,
+                result=response_payload,
+            )
+            conn.commit()
+
     except Exception as exc:
         conn.rollback()
         print("SALE PAYMENT ERROR:", repr(exc))
@@ -532,19 +584,7 @@ def pay_sale():
     finally:
         pool.putconn(conn)
 
-    return {
-        "success": True,
-        "sale_id": sale_id,
-        "fiscalized": rekassa_result.get("status") == "OK",
-        "rekassa_required": rekassa_result.get("status") != "SKIPPED",
-        "rekassa": {
-            "status": rekassa_result.get("status"),
-            "message": rekassa_result.get("message") or rekassa_result.get("error"),
-            "ticket_id": rekassa_result.get("id"),
-            "ticket_number": rekassa_result.get("ticketNumber"),
-            "shift_number": rekassa_result.get("shiftNumber"),
-        }
-    }
+    return jsonify(response_payload)
 
 
 @sales_bp.route("/api/sale/<int:sale_id>")
@@ -584,14 +624,7 @@ def get_sale(sale_id):
 
     company = cur.fetchone()
 
-    cur.execute(
-        "SELECT full_name, company_name, iin FROM clients WHERE id=%s AND company_id=%s",
-        (sale.get("client_id"), sale.get("company_id")),
-    )
-    buyer = cur.fetchone() or {}
     result = {
-        "client_name": buyer.get("company_name") or buyer.get("full_name") or "",
-        "client_iin": buyer.get("iin") or "",
         "id": sale["id"],
         
         "sale_number": sale.get("sale_number"),
@@ -610,8 +643,6 @@ def get_sale(sale_id):
         "sale_type": sale["sale_type"] if "sale_type" in sale.keys() else "cash",
         "created_at": sale["created_at"],
         "cash": sale["cash_amount"] if "cash_amount" in sale.keys() else 0,
-        "cash_received": sale.get("cash_received") or 0,
-        "change_amount": sale.get("change_amount") or 0,
         "card": sale["card_amount"] if "card_amount" in sale.keys() else 0,
         "kaspi": sale["kaspi_amount"] if "kaspi_amount" in sale.keys() else 0,
         "check_date":
@@ -705,12 +736,26 @@ def sales_history():
                     FROM sales s
                     WHERE s.company_id = %s
                 )
-                -- First filter/order/page sales; aggregate line items only for the returned page.
-                -- This preserves filters and result ordering while bounding LATERAL work.
-                , paged_journal AS (
-                    SELECT journal.*, clients.full_name, clients.company_name
-                    FROM journal
-                    LEFT JOIN clients ON journal.client_id = clients.id
+                SELECT
+                    journal.*,
+                    clients.full_name,
+                    clients.company_name,
+                    COALESCE(doc_mix.product_count, 0) AS product_count,
+                    COALESCE(doc_mix.service_count, 0) AS service_count,
+                    COALESCE(doc_mix.product_total, 0) AS product_total,
+                    COALESCE(doc_mix.service_total, 0) AS service_total
+                FROM journal
+                LEFT JOIN clients ON journal.client_id = clients.id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service') AS product_count,
+                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service') AS service_count,
+                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service'), 0) AS product_total,
+                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service'), 0) AS service_total
+                    FROM sale_items si
+                    LEFT JOIN items i ON i.id = si.item_id
+                    WHERE si.sale_id = journal.id
+                ) doc_mix ON TRUE
                 WHERE (
                     %s = ''
                     OR COALESCE(journal.sale_number::TEXT, journal.id::TEXT) ILIKE '%%' || %s || '%%'
@@ -725,29 +770,10 @@ def sales_history():
                     OR (%s = 'invoices' AND journal.sale_type = 'invoice')
                     OR (%s = 'refunds' AND journal.sale_refunded = TRUE)
                 )
-                AND (NULLIF(%s, '') IS NULL OR journal.event_at >= NULLIF(%s, '')::date)
-                AND (NULLIF(%s, '') IS NULL OR journal.event_at < (NULLIF(%s, '')::date + INTERVAL '1 day'))
+                AND (NULLIF(%s, '') IS NULL OR journal.event_at::date >= NULLIF(%s, '')::date)
+                AND (NULLIF(%s, '') IS NULL OR journal.event_at::date <= NULLIF(%s, '')::date)
                 ORDER BY journal.event_at DESC, journal.id DESC
                 LIMIT %s OFFSET %s
-                )
-                SELECT
-                    paged_journal.*,
-                    COALESCE(doc_mix.product_count, 0) AS product_count,
-                    COALESCE(doc_mix.service_count, 0) AS service_count,
-                    COALESCE(doc_mix.product_total, 0) AS product_total,
-                    COALESCE(doc_mix.service_total, 0) AS service_total
-                FROM paged_journal
-                LEFT JOIN LATERAL (
-                    SELECT
-                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service') AS product_count,
-                        COUNT(*) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service') AS service_count,
-                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') <> 'service'), 0) AS product_total,
-                        COALESCE(SUM(si.total) FILTER (WHERE COALESCE(NULLIF(si.item_type, ''), i.item_type, 'product') = 'service'), 0) AS service_total
-                    FROM sale_items si
-                    LEFT JOIN items i ON i.id = si.item_id
-                    WHERE si.sale_id = paged_journal.id
-                ) doc_mix ON TRUE
-                ORDER BY paged_journal.event_at DESC, paged_journal.id DESC
             """, (
                 session.get("company_id"),
                 query, query, query, query, query,
@@ -1030,7 +1056,7 @@ def smart_sale(payload=None):
         item["retail_price"],
         0,
         "Новая",
-        now_kz_for_timestamp()
+        now_kz()
     ))
 
     sale_id = cur.fetchone()["id"]
@@ -1129,7 +1155,7 @@ def create_invoice():
         total,
         0,
         "Счёт выставлен",
-        now_kz_for_timestamp(),
+        now_kz(),
         "invoice"
     ))
 
@@ -1687,8 +1713,6 @@ def check(sale_id):
         kaspi=sale["kaspi_amount"]
             if "kaspi_amount" in sale.keys()
             else 0,
-        cash_received=sale.get("cash_received") or 0,
-        change_amount=sale.get("change_amount") or 0,
     )
 
 
@@ -1986,7 +2010,7 @@ def analytics():
             FROM sales
             WHERE company_id = %s
               AND status IN ('Оплачено', 'Возврат')
-              AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
+              AND DATE(created_at) BETWEEN %s AND %s
         """, (
             company_id,
             date_from,
@@ -2012,7 +2036,7 @@ def analytics():
                 ON s.id = si.sale_id
             WHERE s.company_id = %s
               AND s.status IN ('Оплачено', 'Возврат')
-              AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
+              AND DATE(s.created_at) BETWEEN %s AND %s
         """, (
             company_id,
             date_from,
@@ -2111,7 +2135,7 @@ def analytics():
             FROM sales
             WHERE company_id = %s
               AND status IN ('Оплачено', 'Возврат')
-              AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
+              AND DATE(created_at) BETWEEN %s AND %s
         """, (
             company_id,
             date_from,
@@ -2148,7 +2172,7 @@ def analytics():
                 SELECT DATE(created_at) AS date, total_amount AS amount
                 FROM sales
                 WHERE company_id = %s AND status IN ('Оплачено', 'Возврат')
-                  AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
+                  AND DATE(created_at) BETWEEN %s AND %s
                 UNION ALL
                 SELECT DATE(COALESCE(refunded_at, created_at)), -total_amount
                 FROM sales
@@ -2184,7 +2208,7 @@ def analytics():
                 LEFT JOIN sale_items si ON si.sale_id = s.id
                 WHERE s.company_id = %s
                   AND s.status IN ('Оплачено', 'Возврат')
-                  AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
+                  AND DATE(s.created_at) BETWEEN %s AND %s
                 UNION ALL
                 SELECT DATE(COALESCE(s.refunded_at, s.created_at)), -COALESCE(si.profit, 0)
                 FROM sales s
@@ -2257,7 +2281,7 @@ def analytics():
                 ON s.id = si.sale_id
             WHERE s.company_id = %s
               AND s.status = 'Оплачено'
-              AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
+              AND DATE(s.created_at) BETWEEN %s AND %s
             GROUP BY si.name
             ORDER BY total DESC
             LIMIT 5
@@ -2292,7 +2316,7 @@ def analytics():
                 ON c.id = s.client_id
             WHERE s.company_id = %s
               AND s.status = 'Оплачено'
-              AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
+              AND DATE(s.created_at) BETWEEN %s AND %s
             GROUP BY
                 c.id,
                 c.full_name
@@ -2374,7 +2398,7 @@ def analytics():
             LEFT JOIN sales s
                 ON s.user_id = u.id
                AND s.company_id = %s
-               AND s.created_at >= %s AND s.created_at < (%s::date + INTERVAL '1 day')
+               AND DATE(s.created_at) BETWEEN %s AND %s
 
             WHERE u.company_id = %s
 
@@ -2611,7 +2635,7 @@ def employee_analytics(user_id):
 
             WHERE company_id = %s
             AND user_id = %s
-            AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
+            AND DATE(created_at) BETWEEN %s AND %s
         """, (
             company_id,
             user_id,
@@ -2635,7 +2659,7 @@ def employee_analytics(user_id):
             WHERE company_id = %s
             AND user_id = %s
             AND status = 'Оплачено'
-            AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
+            AND DATE(created_at) BETWEEN %s AND %s
             GROUP BY DATE(created_at)
             ORDER BY date
         """, (
@@ -2671,7 +2695,7 @@ def employee_analytics(user_id):
             WHERE sales.company_id = %s
             AND sales.user_id = %s
             AND sales.status = 'Оплачено'
-            AND sales.created_at >= %s AND sales.created_at < (%s::date + INTERVAL '1 day')
+            AND DATE(sales.created_at) BETWEEN %s AND %s
 
             GROUP BY sale_items.name
 
@@ -2699,7 +2723,7 @@ def employee_analytics(user_id):
             FROM sales
             WHERE company_id = %s
             AND user_id = %s
-            AND created_at >= %s AND created_at < (%s::date + INTERVAL '1 day')
+            AND DATE(created_at) BETWEEN %s AND %s
             ORDER BY id DESC
             LIMIT 50
         """, (
