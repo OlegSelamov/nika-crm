@@ -534,6 +534,26 @@ def fiscalize_sale_comrun(sale_id):
         if not sale:
             conn.rollback()
             return jsonify({"success": False, "error": "Продажа не найдена"}), 404
+        # A manually verified fiscal receipt must never be sent again.
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT manual_fiscalized_at, manual_fiscal_receipt_url
+                FROM sales WHERE id=%s AND company_id=%s
+            """, (sale_id, company_id))
+            manual = cur.fetchone() or {}
+        finally:
+            cur.close()
+        if manual.get("manual_fiscalized_at"):
+            conn.commit()
+            return jsonify({
+                "success": True,
+                "fiscalized": True,
+                "already_fiscalized_manually": True,
+                "message": "Чек уже пробит вручную в reKassa; повторная фискализация запрещена",
+                "receipt_url": manual.get("manual_fiscal_receipt_url"),
+            })
+
         if sale.get("rekassa_ticket_id"):
             conn.commit()
             return jsonify({
