@@ -1,10 +1,10 @@
 from flask import jsonify, request, session
-from decimal import Decimal, InvalidOperation
 
 from models import get_db, pool
 from services.fiscal_service import fiscalize_sale, provider_context
-from utils.timezone import now_kz, now_kz_for_timestamp
+from utils.timezone import now_kz
 from utils.sale_amounts import normalize_sale_line
+from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from routes.rekassa import rekassa_bp
 
 
@@ -242,7 +242,7 @@ def _ensure_sale_stock_movements(conn, sale_id, company_id, normalized_cart, bef
 
 def pay_sale_comrun():
     """Compatibility entry point: Sales is provider-neutral despite old name."""
-    from routes.sales import process_sale
+    from routes.sales import process_sale, _resolve_sale_client
 
     data = request.get_json(silent=True) or {}
     company_id = session.get("company_id")
@@ -253,9 +253,8 @@ def pay_sale_comrun():
         return jsonify({"success": False, "error": "Активная организация не выбрана"}), 403
 
     client_id = data.get("client_id")
+    operation_id = str(data.get("operation_id") or "").strip()
     cart = data.get("cart") or []
-    if not client_id:
-        return jsonify({"success": False, "error": "Клиент не выбран"}), 400
     if not isinstance(cart, list) or not cart:
         return jsonify({"success": False, "error": "Корзина пуста"}), 400
 
@@ -267,6 +266,69 @@ def pay_sale_comrun():
     try:
         cur = conn.cursor()
         try:
+            # app.py maps /sales/pay to THIS function, not routes.sales.pay_sale.
+            # Persist and check operation_id so network retries never create
+            # a second sale, stock movement or paid receipt.
+            if operation_id:
+                existing = lock_and_load_offline_operation(
+                    conn, cur, company_id, operation_id
+                )
+                if existing:
+                    if existing.get("operation_type") != "sale":
+                        conn.rollback()
+                        return jsonify({
+                            "success": False,
+                            "error": "Этот operation_id уже использован другой операцией",
+                        }), 409
+                    previous_result = existing.get("result")
+                    if isinstance(previous_result, dict):
+                        conn.commit()
+                        return jsonify({**previous_result, "duplicate": True})
+
+                    existing_sale_id = existing.get("entity_id")
+                    if existing_sale_id:
+                        cur.execute("""
+                            SELECT id, rekassa_ticket_id, rekassa_ticket_number,
+                                   rekassa_shift_number, rekassa_status
+                            FROM sales WHERE id=%s AND company_id=%s
+                        """, (existing_sale_id, company_id))
+                        sale = cur.fetchone()
+                        if not sale:
+                            conn.rollback()
+                            return jsonify({
+                                "success": False,
+                                "error": "Операция зарегистрирована, но продажа не найдена",
+                            }), 409
+                        fiscalized = bool(sale.get("rekassa_ticket_id"))
+                        processing = (
+                            not fiscalized
+                            and offline_operation_age_seconds(existing) < 45
+                        )
+                        conn.commit()
+                        return jsonify({
+                            "success": True,
+                            "duplicate": True,
+                            "pending": processing,
+                            "sale_id": existing_sale_id,
+                            "fiscalized": fiscalized,
+                            "rekassa_required": True,
+                            "rekassa": {
+                                "status": "OK" if fiscalized else "PENDING",
+                                "message": "Продажа уже сохранена. Проверьте фискализацию чека отдельно.",
+                                "ticket_id": sale.get("rekassa_ticket_id"),
+                                "ticket_number": sale.get("rekassa_ticket_number"),
+                                "shift_number": sale.get("rekassa_shift_number"),
+                            },
+                        })
+
+            # For the anonymous default client the phone may have no id.
+            # Resolve it for this company instead of rejecting the queued sale.
+            try:
+                client_id = _resolve_sale_client(cur, company_id, client_id)
+            except ValueError as exc:
+                conn.rollback()
+                return jsonify({"success": False, "error": str(exc)}), 400
+
             normalized_cart = []
             for item in cart:
                 if not isinstance(item, dict):
@@ -312,20 +374,6 @@ def pay_sale_comrun():
                 (company_id,),
             )
             sale_number = cur.fetchone()["next_number"]
-            # Customer tender is not revenue. Persist it separately from cash_amount.
-            cash_received = Decimal("0")
-            change_amount = Decimal("0")
-            if payment_method == "cash":
-                try:
-                    raw_tender = data.get("cash_received")
-                    if raw_tender in (None, ""):
-                        raw_tender = data.get("cash", total)
-                    cash_received = Decimal(str(raw_tender)).quantize(Decimal("0.01"))
-                    if not cash_received.is_finite() or cash_received < total:
-                        return jsonify({"success": False, "error": "Недостаточно наличных для оплаты"}), 400
-                    change_amount = cash_received - total
-                except (InvalidOperation, ValueError, TypeError):
-                    return jsonify({"success": False, "error": "Некорректная сумма наличных"}), 400
             cash = total if payment_method == "cash" else 0
             card = total if payment_method == "card" else 0
             kaspi = total if payment_method == "kaspi" else 0
@@ -333,14 +381,13 @@ def pay_sale_comrun():
                 INSERT INTO sales (
                     client_id, company_id, user_id, sale_number, total_amount, paid_amount,
                     status, created_at, sale_type, cash_amount, card_amount, kaspi_amount,
-                    kaspi_transaction_id, kaspi_method, cash_received, change_amount, is_processed
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
+                    kaspi_transaction_id, kaspi_method, is_processed
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
                 RETURNING id
             """, (
-                client_id, company_id, user_id, sale_number, total, total, "Оплачено", now_kz_for_timestamp(),
+                client_id, company_id, user_id, sale_number, total, total, "Оплачено", now_kz(),
                 payment_method, cash, card, kaspi,
                 data.get("kaspi_transaction_id"), data.get("kaspi_method"),
-                cash_received, change_amount,
             ))
             sale_id = cur.fetchone()["id"]
 
@@ -361,6 +408,18 @@ def pay_sale_comrun():
 
         process_sale(conn, sale_id)
         _ensure_sale_stock_movements(conn, sale_id, company_id, normalized_cart, movement_before)
+
+        # Atomic with sale and stock: survive crash during fiscalization.
+        if operation_id:
+            op_cur = conn.cursor()
+            try:
+                save_offline_operation(
+                    op_cur, company_id=company_id,
+                    operation_id=operation_id, operation_type="sale",
+                    entity_id=sale_id,
+                )
+            finally:
+                op_cur.close()
 
         # Сначала фиксируем продажу, склад и прибыль в Nika. Внешняя
         # фискализация не должна откатывать уже принятую оплату.
@@ -432,6 +491,17 @@ def pay_sale_comrun():
             "ticket_number": response["fiscal"]["ticket_number"],
             "shift_number": response["fiscal"]["shift_number"],
         }
+        if operation_id:
+            op_cur = conn.cursor()
+            try:
+                save_offline_operation(
+                    op_cur, company_id=company_id,
+                    operation_id=operation_id, operation_type="sale",
+                    entity_id=sale_id, result=response,
+                )
+                conn.commit()
+            finally:
+                op_cur.close()
         return jsonify(response)
     except Exception as exc:
         conn.rollback()
