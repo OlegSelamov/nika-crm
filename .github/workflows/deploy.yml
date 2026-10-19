@@ -205,4 +205,8 @@ jobs:
 
           echo "Deployed commit:"
           git rev-parse --short HEAD
+          # Deployment is fully healthy: disable failure rollback on successful shell exit.
+          # Without this, bash may fail inside the EXIT trap after a successful deployment.
+          trap - EXIT
+          echo "Production deployment completed successfully."
           REMOTE
