@@ -21,66 +21,34 @@
 
     async function loadInsufficientStockItems() {
         const requestedById = new Map();
-
         currentCart().forEach(item => {
             const id = Number(item?.id);
-            const qty = Number(item?.qty) || 0;
-            if (!id || qty <= 0) return;
+            const qty = Number(item?.qty);
+            if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(qty) || qty <= 0) return;
             requestedById.set(id, (requestedById.get(id) || 0) + qty);
         });
-
         if (!requestedById.size) return [];
 
-        const remaining = new Set(requestedById.keys());
-        const found = [];
-        const maxRequested = Math.max(...requestedById.values());
-        let offset = 0;
-
-        while (remaining.size) {
-            const params = new URLSearchParams({
-                sort: 'stock-asc',
-                limit: '100',
-                offset: String(offset)
-            });
-
-            const response = await fetch(`/api/stock?${params.toString()}`, {
+        // Only basket IDs, never page through the full warehouse catalog.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        try {
+            const response = await fetch('/api/stock/sale-check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 cache: 'no-store',
-                headers: {'Accept': 'application/json'}
+                signal: controller.signal,
+                body: JSON.stringify({
+                    items: Array.from(requestedById, ([id, qty]) => ({ id, qty }))
+                })
             });
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            const payload = await response.json();
-            const rows = Array.isArray(payload) ? payload : (payload.items || []);
-
-            for (const item of rows) {
-                const id = Number(item.id);
-                if (!remaining.has(id)) continue;
-
-                remaining.delete(id);
-
-                const stock = Number(item.stock || 0);
-                const requested = Number(requestedById.get(id) || 0);
-                const projectedStock = stock - requested;
-
-                if (projectedStock < -0.000001) {
-                    found.push({
-                        ...item,
-                        requested,
-                        projected_stock: projectedStock
-                    });
-                }
-            }
-
-            if (!rows.length || !payload.has_more || !remaining.size) break;
-
-            const lastStock = Number(rows[rows.length - 1]?.stock || 0);
-            if (lastStock >= maxRequested) break;
-
-            offset += rows.length;
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const data = await response.json();
+            if (!data.success || !Array.isArray(data.items)) throw new Error(data.message || 'Ошибка проверки остатков');
+            return data.items;
+        } finally {
+            clearTimeout(timeout);
         }
-
-        return found;
     }
 
     function showNegativeStockWarning(items) {
