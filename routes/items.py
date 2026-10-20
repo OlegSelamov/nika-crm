@@ -587,11 +587,16 @@ def add_item():
             main_new_index = min(max(main_new_index, 0), len(images) - 1)
 
         for index, image in enumerate(images):
-            image_path = upload_image(
-                image,
-                company_id=company_id,
-                namespace=f"items/{item_id}",
-            )
+            try:
+                image_path = upload_image(
+                    image,
+                    company_id=company_id,
+                    namespace=f"items/{item_id}",
+                )
+            except ValueError as exc:
+                conn.rollback()
+                pool.putconn(conn)
+                return str(exc), 400
             cur.execute("""
                 INSERT INTO item_images (item_id, image, is_main)
                 VALUES (%s, %s, %s)
@@ -706,9 +711,17 @@ def edit_item(item_id):
                     RETURNING id, image
                 """, (item_id, image_path))
                 uploaded_rows.append(dict(cur.fetchone()))
+        except ValueError as exc:
+            conn.rollback()
+            for row in uploaded_rows:
+                delete_media(row.get("image"))
+            pool.putconn(conn)
+            return str(exc), 400
         except Exception:
             for row in uploaded_rows:
                 delete_media(row.get("image"))
+            conn.rollback()
+            pool.putconn(conn)
             raise
 
         main_existing_id = request.form.get("main_existing_id", type=int)
