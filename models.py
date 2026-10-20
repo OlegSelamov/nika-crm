@@ -88,6 +88,11 @@ def init_db():
         created_at TIMESTAMP,
         iin TEXT,
         company_name TEXT,
+        iik TEXT,
+        bank TEXT,
+        bik TEXT,
+        kbe TEXT,
+        knp TEXT,
         photo TEXT,
         comment_photos TEXT
     )
@@ -1131,6 +1136,11 @@ def init_db():
     """)
 
     cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS sales_workflow TEXT NOT NULL DEFAULT 'sales_documents'")
+    cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS iik TEXT")
+    cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bank TEXT")
+    cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bik TEXT")
+    cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS kbe TEXT")
+    cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS knp TEXT")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS start_page TEXT DEFAULT 'profile'")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_mode BOOLEAN NOT NULL DEFAULT FALSE")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
