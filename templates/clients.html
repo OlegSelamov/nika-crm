@@ -136,6 +136,11 @@
             <label><span>Номер договора</span><input name="contract_number" placeholder="Например, 15/2026"></label>
             <label><span>Дата договора</span><input type="date" name="contract_date"></label>
             <label class="client-field-wide"><span>Адрес</span><input name="address" placeholder="Адрес клиента"></label>
+            <label><span>ИИК (IBAN)</span><input name="iik" autocomplete="off"></label>
+            <label><span>Банк</span><input name="bank" autocomplete="off"></label>
+            <label><span>БИК</span><input name="bik" autocomplete="off"></label>
+            <label><span>КБе</span><input name="kbe" autocomplete="off"></label>
+            <label><span>КНП</span><input name="knp" autocomplete="off"></label>
             <label><span>Статус</span><select name="status"><option>Новый</option><option>В работе</option><option>Ожидание</option><option>Завершен</option></select></label>
             <label><span>Категория</span><select name="category"><option>Клиент</option><option>Предприниматель</option><option>Партнер</option><option>Другое</option></select></label>
             <label><span>Оплата</span><select name="payment"><option>Наличные</option><option>Безнал</option><option>Kaspi QR</option><option selected>Не оплачено</option></select></label>
@@ -213,6 +218,11 @@
                     <label><span>Номер договора</span><input data-client-field="contract_number" disabled></label>
                     <label><span>Дата договора</span><input type="date" data-client-field="contract_date" disabled></label>
                     <label class="client-card-field-wide"><span>Адрес</span><input data-client-field="address" disabled></label>
+                    <label><span>ИИК (IBAN)</span><input data-client-field="iik" disabled></label>
+                    <label><span>Банк</span><input data-client-field="bank" disabled></label>
+                    <label><span>БИК</span><input data-client-field="bik" disabled></label>
+                    <label><span>КБе</span><input data-client-field="kbe" disabled></label>
+                    <label><span>КНП</span><input data-client-field="knp" disabled></label>
                     <label class="client-card-field-full"><span>Комментарий</span><textarea data-client-field="comment" disabled></textarea></label>
                 </div>
             </section>
@@ -233,7 +243,7 @@
 {% endblock %}
 
 {% block page_js %}
-<script src="{{ url_for('static', filename='js/clients.js') }}?v=20261019-directory-pages-1"></script>
+<script src="{{ url_for('static', filename='js/clients.js') }}?v=20261020-bank-fields-1"></script>
 {% endblock %}
 
 
