@@ -99,7 +99,7 @@ td, th {
 <div class="row"><div class="label">Грузополучатель:</div><div class="value">{{ client.iin }}, {{ client.company_name or client.full_name }}, {{ client.address }}</div></div>
 <div class="row"><div class="label">Получатель:</div><div class="value">{{ client.company_name or client.full_name }}</div></div>
 <div class="row"><div class="label">БИН и адрес места нахождения получателя:</div><div class="value">ИИН/БИН: {{ client.iin }}, {{ client.address }}</div></div>
-<div class="row"><div class="label">ИИК получателя:</div><div class="value"></div></div>
+<div class="row"><div class="label">Банковские реквизиты получателя:</div><div class="value">{% if client.iik or client.bank or client.bik or client.kbe %}ИИК: {{ client.iik or '—' }}{% if client.bank %}, банк: {{ client.bank }}{% endif %}{% if client.bik %}, БИК: {{ client.bik }}{% endif %}{% if client.kbe %}, КБе: {{ client.kbe }}{% endif %}{% else %}Не указаны{% endif %}</div></div>
 
 <table class="sf-table">
 <tr>
