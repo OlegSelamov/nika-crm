@@ -63,11 +63,13 @@ def _r2_client():
 
 
 def _normalized_image(file_storage):
-    filename = secure_filename(file_storage.filename or "")
-    if "." not in filename:
+    # Keep the original Unicode filename for extension detection.
+    # secure_filename("шаурма.png") may strip the Cyrillic basename
+    # and leave "png" without a dot.
+    original_name = str(file_storage.filename or "").replace("\\", "/").rsplit("/", 1)[-1]
+    ext = Path(original_name).suffix.lstrip(".").lower()
+    if not ext:
         raise ValueError("Не удалось определить формат изображения.")
-
-    ext = filename.rsplit(".", 1)[1].lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         raise ValueError("Разрешены только JPG, JPEG, PNG и WEBP.")
 
@@ -81,6 +83,9 @@ def _normalized_image(file_storage):
 
     try:
         image = Image.open(io.BytesIO(raw))
+        detected_format = (image.format or "").upper()
+        if detected_format not in {"JPEG", "PNG", "WEBP"}:
+            raise ValueError("Файл не является поддерживаемым изображением.")
         # Restrict decoded pixel counts before expensive transformations.
         if image.width * image.height > 24_000_000:
             raise ValueError("Слишком большое разрешение изображения.")
