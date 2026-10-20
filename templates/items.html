@@ -557,7 +557,7 @@
 <div class="catalog-recipe-modal" id="recipeModal" aria-hidden="true">
   <div class="catalog-recipe-modal__backdrop" onclick="closeRecipeModal()"></div>
   <div class="catalog-recipe-modal__dialog" role="dialog" aria-modal="true">
-    <div class="catalog-modal__head"><div><h3>Техкарта</h3><p id="recipeModalDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeRecipeModal()">×</button></div>
+    <div class="catalog-modal__head"><div><h3>Техкарта</h3><p id="recipeModalDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeRecipeModal()" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button></div>
     <div class="catalog-recipe-modal__body">
       <div class="catalog-recipe-head"><div><strong>Состав блюда</strong><small>Норма ингредиентов на 1 порцию</small></div><button type="button" class="catalog-secondary-btn" onclick="addRecipeIngredient()">+ Ингредиент</button></div>
       <div id="recipeModalRows"></div>
@@ -571,7 +571,7 @@
 <div class="catalog-recipe-modal" id="modifierManager" aria-hidden="true">
   <div class="catalog-recipe-modal__backdrop" onclick="closeModifierManager()"></div>
   <div class="catalog-recipe-modal__dialog" role="dialog" aria-modal="true">
-    <div class="catalog-modal__head"><div><h3>Модификаторы</h3><p id="modifierManagerDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeModifierManager()">×</button></div>
+    <div class="catalog-modal__head"><div><h3>Модификаторы</h3><p id="modifierManagerDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeModifierManager()" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button></div>
     <div class="catalog-recipe-modal__body">
       <div class="catalog-recipe-head"><div><strong>Группы выбора</strong><small>Размер, соус, добавки и другие варианты</small></div><button type="button" class="catalog-secondary-btn" onclick="addModifierGroup()">+ Группа</button></div>
       <div id="modifierManagerGroups"></div><div class="catalog-recipe-status" id="modifierManagerStatus"></div>
