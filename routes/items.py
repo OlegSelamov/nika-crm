@@ -74,10 +74,12 @@ def _internal_barcode_for_item(item_id, occupied):
 
 
 def _ensure_item_images_main(cur):
-    cur.execute("""
-        ALTER TABLE item_images
-        ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT FALSE
-    """)
+    """Column is created by startup schema migration, not per catalog request.
+
+    An ALTER TABLE inside a request can wait for an ACCESS EXCLUSIVE lock
+    and block unrelated clients while a catalog transaction is in progress.
+    """
+    return None
 
 
 def _item_barcode(cur, value, item_type="product"):
