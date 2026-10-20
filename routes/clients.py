@@ -359,7 +359,7 @@ def clients():
         cur.execute(
             f"""SELECT id, full_name, company_name, iin, phone, category,
                        status, photo, contract_number, contract_date,
-                       address, payment, comment
+                       address, payment, comment, iik, bank, bik, kbe, knp
                 FROM clients
                 WHERE company_id = %s
                   AND COALESCE(is_deleted, FALSE) = %s
@@ -453,6 +453,11 @@ def add_client():
                 payment,
                 comment,
                 address,
+                iik,
+                bank,
+                bik,
+                kbe,
+                knp,
                 contract_number,
                 contract_date,
                 photo,
@@ -463,7 +468,7 @@ def add_client():
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, NULLIF(%s, '')::date, %s, %s, %s, %s, FALSE
+                %s, %s, %s, %s, %s, %s, %s, NULLIF(%s, '')::date, %s, %s, %s, %s, FALSE
             )
             RETURNING id
             """,
@@ -477,6 +482,11 @@ def add_client():
                 request.form.get("payment", "Не оплачено").strip() or "Не оплачено",
                 request.form.get("comment", "").strip(),
                 request.form.get("address", "").strip(),
+                request.form.get("iik", "").strip(),
+                request.form.get("bank", "").strip(),
+                request.form.get("bik", "").strip(),
+                request.form.get("kbe", "").strip(),
+                request.form.get("knp", "").strip(),
                 request.form.get("contract_number", "").strip(),
                 request.form.get("contract_date", "").strip(),
                 photo_path,
@@ -687,6 +697,7 @@ def api_update_client(client_id):
     allowed_fields = {
         "full_name", "phone", "iin", "company_name", "status", "category",
         "payment", "comment", "address", "contract_number", "contract_date",
+        "iik", "bank", "bik", "kbe", "knp",
     }
     updates = {key: data.get(key) for key in allowed_fields if key in data}
 
@@ -814,6 +825,11 @@ def edit_client(client_id):
                 payment = %s,
                 comment = %s,
                 address = %s,
+                iik = %s,
+                bank = %s,
+                bik = %s,
+                kbe = %s,
+                knp = %s,
                 contract_number = %s,
                 contract_date = NULLIF(%s, '')::date,
                 photo = %s,
@@ -830,6 +846,11 @@ def edit_client(client_id):
                 request.form.get("payment", "Не оплачено").strip() or "Не оплачено",
                 request.form.get("comment", "").strip(),
                 request.form.get("address", "").strip(),
+                request.form.get("iik", "").strip(),
+                request.form.get("bank", "").strip(),
+                request.form.get("bik", "").strip(),
+                request.form.get("kbe", "").strip(),
+                request.form.get("knp", "").strip(),
                 request.form.get("contract_number", "").strip(),
                 request.form.get("contract_date", "").strip(),
                 photo_path,
@@ -1069,6 +1090,11 @@ def api_create_client():
                 iin,
                 company_name,
                 address,
+                iik,
+                bank,
+                bik,
+                kbe,
+                knp,
                 comment,
                 status,
                 category,
@@ -1079,7 +1105,7 @@ def api_create_client():
                 company_id,
                 is_deleted
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULLIF(%s, '')::date, %s, %s, FALSE)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULLIF(%s, '')::date, %s, %s, FALSE)
             RETURNING *
             """,
             (
@@ -1088,6 +1114,11 @@ def api_create_client():
                 str(data.get("iin", "")).strip(),
                 str(data.get("company_name", "")).strip(),
                 str(data.get("address", "")).strip(),
+                str(data.get("iik", "")).strip(),
+                str(data.get("bank", "")).strip(),
+                str(data.get("bik", "")).strip(),
+                str(data.get("kbe", "")).strip(),
+                str(data.get("knp", "")).strip(),
                 str(data.get("comment", "")).strip(),
                 str(data.get("status", "Новый")).strip() or "Новый",
                 str(data.get("category", "Клиент")).strip() or "Клиент",
