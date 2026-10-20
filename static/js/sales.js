@@ -751,7 +751,13 @@ async function submitSalePayment({
                 change_amount: paymentMethod === "cash" ? cashChange : 0,
                 kaspi_transaction_id: kaspiTransactionId ?? (window.lastKaspiTransactionId || ""),
                 kaspi_method: kaspiMethod ?? (window.lastKaspiMethod || ""),
-                company_id: null
+                company_id: null,
+                food_order_id: window.NIKA_BUSINESS_MODE === "foodservice" ? (window.NikaFoodSales?.getSavedOrderId?.() || null) : null,
+                food_mode: window.NIKA_BUSINESS_MODE === "foodservice",
+                food_table_name: document.getElementById("foodOrderTable")?.value || "",
+                food_guest_name: document.getElementById("foodOrderGuest")?.value || "",
+                food_note: document.getElementById("foodOrderNote")?.value || ""
+
             })
         });
         const data = await response.json().catch(() => null);
@@ -2392,11 +2398,14 @@ function ensureSalesHistoryWorkspace() {
 
 function switchSalesTab(tab) {
     const showHistory = tab === 'history';
-    const workspace = ensureSalesHistoryWorkspace();
+    const isFood = window.NIKA_BUSINESS_MODE === "foodservice";
+    const workspace = isFood ? document.getElementById('foodOrdersWorkspace') : ensureSalesHistoryWorkspace();
     const grid = document.getElementById('salesGridWorkspace');
     const cartBtn = document.getElementById('cartTabBtn');
     const historyBtn = document.getElementById('historyTabBtn');
     if (!workspace || !grid || !cartBtn || !historyBtn) return;
+    // History is a full-width sibling, never a child of the hidden sales grid.
+    if (isFood && grid.contains(workspace)) grid.insertAdjacentElement('afterend', workspace);
     grid.hidden = showHistory;
     workspace.hidden = !showHistory;
     document.querySelector('.sales-page')?.classList.toggle('sales-history-active', showHistory);
@@ -2405,7 +2414,10 @@ function switchSalesTab(tab) {
     historyBtn.classList.toggle('active', showHistory);
     cartBtn.setAttribute('aria-selected', String(!showHistory));
     historyBtn.setAttribute('aria-selected', String(showHistory));
-    if (showHistory) loadSalesHistory();
+    if (showHistory) {
+        if (isFood) window.NikaFoodSales?.loadHistory?.();
+        else loadSalesHistory();
+    }
 }
 window.addEventListener('DOMContentLoaded', ensureSalesHistoryWorkspace);
 

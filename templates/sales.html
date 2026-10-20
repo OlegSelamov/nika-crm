@@ -2,7 +2,7 @@
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-compact-toolbar-v1') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261019-food-server-paging-1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261019-food-layout-2') }}">
 {% endblock %}
 
 {% block content %}
@@ -16,7 +16,7 @@
                 onclick="switchSalesTab('cart')">Продажа</button>
         <button type="button" class="sales-tab" id="historyTabBtn"
                 role="tab" aria-selected="false" aria-controls="salesHistoryWorkspace"
-                onclick="switchSalesTab('history')">История продаж</button>
+                onclick="switchSalesTab('history')">{{ "История заказов" if business_mode == "foodservice" else "История продаж" }}</button>
     </nav>
     {% if business_mode == 'universal' %}
     <div class="sales-mode-switch" role="tablist" aria-label="Режим продаж">
@@ -214,6 +214,13 @@
 					<span id="foodClientLabel">Частное лицо</span>
 				</button>
 				<div id="foodCart" class="food-cart"></div>
+                {% if business_mode == 'foodservice' %}
+                <div class="food-order-compact">
+                    <button type="button" id="foodOrderSave">Сохранить заказ</button>
+                    <button type="button" id="foodOrderDetails">Стол и чеки</button>
+                    <span id="foodOrderMessage" role="status"></span>
+                </div>
+                {% endif %}
 				<div class="food-order-total">
 					<span>Итого</span>
 					<strong id="foodOrderTotal">0 ₸</strong>
@@ -222,6 +229,40 @@
 		</div>
     </div>
 
+
+    {% if business_mode == 'foodservice' %}
+    <div id="foodOrderDetailsModal" class="food-shell-modal" hidden role="dialog" aria-modal="true" aria-label="Настройки заказа">
+        <div class="food-shell-backdrop" data-food-details-close></div>
+        <div class="food-shell-dialog">
+            <div class="food-shell-head"><strong>Детали заказа</strong><button type="button" data-food-details-close aria-label="Закрыть">×</button></div>
+            <div class="food-order-meta">
+                <input id="foodOrderTable" maxlength="80" placeholder="Стол / номер" aria-label="Стол">
+                <input id="foodOrderGuest" maxlength="100" placeholder="Имя гостя" aria-label="Имя гостя">
+                <input id="foodOrderNote" maxlength="500" placeholder="Комментарий на кухню" aria-label="Комментарий на кухню">
+            </div>
+            <div class="food-order-actions">
+                <button type="button" id="foodOrderKitchen">На кухню</button>
+                <button type="button" id="foodOrderPrecheck">Пречек</button>
+                <button type="button" id="foodOrderHistory" hidden>История заказов</button>
+            </div>
+        </div>
+    </div>
+    <section id="foodOrdersWorkspace" class="food-orders-workspace" hidden aria-label="История заказов">
+        <div class="food-history-top"><div><strong>История заказов</strong><span>Открытые и оплаченные заказы, печать кухни и пречеков</span></div>
+            <select id="foodOrderStatusFilter" aria-label="Статус"><option value="all">Все заказы</option><option value="open">Открытые</option><option value="paid">Оплаченные</option><option value="cancelled">Отменённые</option></select>
+        </div>
+        <div id="foodOrderHistoryList" class="food-order-history-list"></div>
+        <button type="button" id="foodOrderHistoryMore" hidden>Показать ещё</button>
+    </section>
+    <div id="foodTicketModal" class="food-shell-modal" hidden role="dialog" aria-modal="true" aria-label="Просмотр чека">
+        <div class="food-shell-backdrop" data-food-ticket-close></div>
+        <div class="food-shell-dialog food-ticket-dialog">
+            <div class="food-shell-head"><strong id="foodTicketHeading">Просмотр чека</strong><button type="button" data-food-ticket-close aria-label="Закрыть">×</button></div>
+            <iframe id="foodTicketFrame" title="Предварительный просмотр чека"></iframe>
+            <div class="food-ticket-footer"><button type="button" id="foodTicketPrint">Печать</button></div>
+        </div>
+    </div>
+    {% endif %}
     <div class="food-modifier-modal" id="foodModifierModal" hidden>
         <div class="food-modifier-backdrop" data-food-modifier-close></div>
         <div class="food-modifier-dialog" role="dialog" aria-modal="true">
@@ -784,8 +825,9 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261019-sales-workflow-v1') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20261019-food-server-paging-1') }}"></script>
-<script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20260916-negative-stock-3') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261020-production-merge-1') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20261020-production-merge-1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261020-production-merge-1') }}"></script>
+
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>
 {% endblock %}

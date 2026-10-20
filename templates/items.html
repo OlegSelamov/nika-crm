@@ -344,26 +344,26 @@
                 <div class="catalog-type-switch" data-business-mode="{{ business_mode|default('universal') }}">
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="product" id="itemTypeProduct" checked onchange="applyItemType('product')">
-                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/product.png" alt=""></span><span class="catalog-type-card__text"><strong>Товар</strong><small>Учитывается на складе</small></span></span>
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><svg class="catalog-type-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M3 11h18M9 7V4h6v3"/></svg></span><span class="catalog-type-card__text"><strong>Товар</strong><small>Учитывается на складе</small></span></span>
                     </label>
                     {% if business_mode != 'foodservice' %}
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="service" id="itemTypeService" onchange="applyItemType('service')">
-                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><img src="/static/icons/service.png" alt=""></span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><svg class="catalog-type-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg></span><span class="catalog-type-card__text"><strong>Услуга</strong><small>Не учитывается на складе</small></span></span>
                     </label>
                     {% endif %}
                     {% if business_mode != 'retail' %}
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="dish" id="itemTypeDish" onchange="applyItemType('dish')">
-                        <span class="catalog-type-card"><span class="catalog-type-card__icon">🍽</span><span class="catalog-type-card__text"><strong>Блюдо</strong><small>Списывает ингредиенты</small></span></span>
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><svg class="catalog-type-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15h16M6 15a6 6 0 0 1 12 0M12 9V7M3 19h18"/></svg></span><span class="catalog-type-card__text"><strong>Блюдо</strong><small>Списывает ингредиенты</small></span></span>
                     </label>
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="ingredient" id="itemTypeIngredient" onchange="applyItemType('ingredient')">
-                        <span class="catalog-type-card"><span class="catalog-type-card__icon">🥬</span><span class="catalog-type-card__text"><strong>Ингредиент</strong><small>Сырьё для техкарт</small></span></span>
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><svg class="catalog-type-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4c-8 0-15 3-15 11a5 5 0 0 0 5 5c8 0 11-7 10-16ZM5 19c2-5 6-8 12-11"/></svg></span><span class="catalog-type-card__text"><strong>Ингредиент</strong><small>Сырьё для техкарт</small></span></span>
                     </label>
                     <label class="catalog-type-option">
                         <input type="radio" name="item_type" value="semi_finished" id="itemTypeSemiFinished" onchange="applyItemType('semi_finished')">
-                        <span class="catalog-type-card"><span class="catalog-type-card__icon">🥣</span><span class="catalog-type-card__text"><strong>Полуфабрикат</strong><small>Заготовка со своей техкартой</small></span></span>
+                        <span class="catalog-type-card"><span class="catalog-type-card__icon"><svg class="catalog-type-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h18M5 10c0 6 3 9 7 9s7-3 7-9M9 5c0 2-2 2-2 4m6-5c0 2-2 2-2 4m6-3c0 2-2 2-2 4"/></svg></span><span class="catalog-type-card__text"><strong>Полуфабрикат</strong><small>Заготовка со своей техкартой</small></span></span>
                     </label>
                     {% endif %}
                 </div>
@@ -557,7 +557,7 @@
 <div class="catalog-recipe-modal" id="recipeModal" aria-hidden="true">
   <div class="catalog-recipe-modal__backdrop" onclick="closeRecipeModal()"></div>
   <div class="catalog-recipe-modal__dialog" role="dialog" aria-modal="true">
-    <div class="catalog-modal__head"><div><h3>Техкарта</h3><p id="recipeModalDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeRecipeModal()">×</button></div>
+    <div class="catalog-modal__head"><div><h3>Техкарта</h3><p id="recipeModalDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeRecipeModal()" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button></div>
     <div class="catalog-recipe-modal__body">
       <div class="catalog-recipe-head"><div><strong>Состав блюда</strong><small>Норма ингредиентов на 1 порцию</small></div><button type="button" class="catalog-secondary-btn" onclick="addRecipeIngredient()">+ Ингредиент</button></div>
       <div id="recipeModalRows"></div>
@@ -571,7 +571,7 @@
 <div class="catalog-recipe-modal" id="modifierManager" aria-hidden="true">
   <div class="catalog-recipe-modal__backdrop" onclick="closeModifierManager()"></div>
   <div class="catalog-recipe-modal__dialog" role="dialog" aria-modal="true">
-    <div class="catalog-modal__head"><div><h3>Модификаторы</h3><p id="modifierManagerDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeModifierManager()">×</button></div>
+    <div class="catalog-modal__head"><div><h3>Модификаторы</h3><p id="modifierManagerDishName">Блюдо</p></div><button class="catalog-modal__close" type="button" onclick="closeModifierManager()" aria-label="Закрыть"><img src="/static/icons/close.png" alt=""></button></div>
     <div class="catalog-recipe-modal__body">
       <div class="catalog-recipe-head"><div><strong>Группы выбора</strong><small>Размер, соус, добавки и другие варианты</small></div><button type="button" class="catalog-secondary-btn" onclick="addModifierGroup()">+ Группа</button></div>
       <div id="modifierManagerGroups"></div><div class="catalog-recipe-status" id="modifierManagerStatus"></div>

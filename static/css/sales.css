@@ -4766,3 +4766,10 @@ body.food-sales-mode .sales-commandbar .sales-mode-switch button {
   .sales-page .sales-commandbar .sales-mode-switch button { padding:0 7px; }
   .sales-page .sales-commandbar .shift-strip { flex-basis:100%; }
 }
+
+/* Keep shift status beside sales tabs while the desktop toolbar has room.
+   The previous 1150px breakpoint forced the shift to a second row. */
+@media (min-width:769px) and (max-width:1150px) {
+  .sales-page .sales-commandbar { flex-wrap:nowrap; }
+  .sales-page .sales-commandbar .shift-strip { flex-basis:auto; min-width:0; }
+}
