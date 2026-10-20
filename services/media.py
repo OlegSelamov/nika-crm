@@ -72,7 +72,8 @@ def _normalized_image(file_storage):
         raise ValueError("Разрешены только JPG, JPEG, PNG и WEBP.")
 
     file_storage.stream.seek(0)
-    raw = file_storage.stream.read()
+    # Stop reading at the limit, instead of buffering an arbitrarily large upload.
+    raw = file_storage.stream.read(MAX_UPLOAD_BYTES + 1)
     if len(raw) > MAX_UPLOAD_BYTES:
         raise ValueError(
             f"Изображение слишком большое. Максимум {MAX_UPLOAD_BYTES // 1024 // 1024} МБ."
@@ -80,6 +81,9 @@ def _normalized_image(file_storage):
 
     try:
         image = Image.open(io.BytesIO(raw))
+        # Restrict decoded pixel counts before expensive transformations.
+        if image.width * image.height > 24_000_000:
+            raise ValueError("Слишком большое разрешение изображения.")
 
         if (
             (image.format or "").upper() == "WEBP"
