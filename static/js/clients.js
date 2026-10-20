@@ -347,6 +347,11 @@ function openClientModal(record = null) {
         form.elements.contract_date.value = normalizeDateValue(d.contractDate || '');
         form.elements.phone.value = d.phone || '';
         form.elements.address.value = d.address || '';
+        form.elements.iik.value = d.iik || '';
+        form.elements.bank.value = d.bank || '';
+        form.elements.bik.value = d.bik || '';
+        form.elements.kbe.value = d.kbe || '';
+        form.elements.knp.value = d.knp || '';
         form.elements.status.value = d.status || 'Новый';
         form.elements.category.value = d.category || 'Клиент';
         form.elements.payment.value = d.payment || 'Не оплачено';
@@ -657,7 +662,7 @@ async function saveClientCardNow(){
 function updateClientCardAfterSave(c){
     document.getElementById('clientCardName').textContent=c.full_name||'Без имени'; document.getElementById('clientCardCompany').textContent=c.company_name||'Без организации'; updateClientCardStatus(c.status||'Новый');
     document.querySelectorAll(`.client-record[data-id="${clientCardId}"]`).forEach(record=>{
-        record.dataset.fullName=c.full_name||''; record.dataset.companyName=c.company_name||''; record.dataset.iin=c.iin||''; record.dataset.phone=c.phone||''; record.dataset.address=c.address||''; record.dataset.status=c.status||'Новый'; record.dataset.category=c.category||''; record.dataset.payment=c.payment||''; record.dataset.comment=c.comment||''; record.dataset.contractNumber=c.contract_number||''; record.dataset.contractDate=c.contract_date||'';
+        record.dataset.fullName=c.full_name||''; record.dataset.companyName=c.company_name||''; record.dataset.iin=c.iin||''; record.dataset.phone=c.phone||''; record.dataset.address=c.address||''; record.dataset.iik=c.iik||''; record.dataset.bank=c.bank||''; record.dataset.bik=c.bik||''; record.dataset.kbe=c.kbe||''; record.dataset.knp=c.knp||''; record.dataset.status=c.status||'Новый'; record.dataset.category=c.category||''; record.dataset.payment=c.payment||''; record.dataset.comment=c.comment||''; record.dataset.contractNumber=c.contract_number||''; record.dataset.contractDate=c.contract_date||'';
         record.dataset.search=[c.full_name,c.company_name,c.iin,c.phone,c.address,c.category,c.status].filter(Boolean).join(' ').toLowerCase();
         const strong=record.querySelector('.client-main strong'); const small=record.querySelector('.client-main small'); if(strong)strong.textContent=c.full_name||'Без имени'; if(small)small.textContent=c.company_name||'Без компании';
         const cells=record.querySelectorAll('td'); if(cells.length){ if(cells[1])cells[1].textContent=c.iin||'—'; if(cells[2])cells[2].textContent=c.phone||'—'; if(cells[3])cells[3].textContent=c.category||'—'; }
