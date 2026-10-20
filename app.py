@@ -170,6 +170,11 @@ try:
         ADD COLUMN IF NOT EXISTS business_mode TEXT NOT NULL DEFAULT 'universal'
     """)
     _media_schema_cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS sales_workflow TEXT NOT NULL DEFAULT 'sales_documents'")
+    _media_schema_cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS iik TEXT")
+    _media_schema_cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bank TEXT")
+    _media_schema_cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bik TEXT")
+    _media_schema_cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS kbe TEXT")
+    _media_schema_cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS knp TEXT")
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS start_page TEXT DEFAULT 'profile'")
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_mode BOOLEAN NOT NULL DEFAULT FALSE")
     _media_schema_cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
