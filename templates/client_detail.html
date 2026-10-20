@@ -63,6 +63,11 @@
 					<input id="iin" class="edit-field meta-value"
 						   value="{{ client.iin or '' }}" disabled>
                 </div>
+                <div class="meta-item"><div class="meta-label">ИИК (IBAN)</div><input id="iik" class="edit-field meta-value" value="{{ client.iik or '' }}" disabled></div>
+                <div class="meta-item"><div class="meta-label">Банк</div><input id="bank" class="edit-field meta-value" value="{{ client.bank or '' }}" disabled></div>
+                <div class="meta-item"><div class="meta-label">БИК</div><input id="bik" class="edit-field meta-value" value="{{ client.bik or '' }}" disabled></div>
+                <div class="meta-item"><div class="meta-label">КБе</div><input id="kbe" class="edit-field meta-value" value="{{ client.kbe or '' }}" disabled></div>
+                <div class="meta-item"><div class="meta-label">КНП</div><input id="knp" class="edit-field meta-value" value="{{ client.knp or '' }}" disabled></div>
             </div>
         </div>
 
@@ -1101,6 +1106,11 @@ function saveClient() {
     formData.append("payment", "{{ client.payment }}");
     formData.append("comment", document.getElementById("comment").value);
     formData.append("address", document.getElementById("address").value);
+    formData.append("iik", document.getElementById("iik").value);
+    formData.append("bank", document.getElementById("bank").value);
+    formData.append("bik", document.getElementById("bik").value);
+    formData.append("kbe", document.getElementById("kbe").value);
+    formData.append("knp", document.getElementById("knp").value);
 
     const photo = document.getElementById("photoInput").files[0];
     if (photo) {
