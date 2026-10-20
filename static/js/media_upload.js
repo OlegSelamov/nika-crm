@@ -76,7 +76,7 @@
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
-      canvas.getContext('2d', { alpha: false }).drawImage(bitmap, 0, 0, width, height);
+      canvas.getContext('2d', { alpha: true }).drawImage(bitmap, 0, 0, width, height);
 
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', QUALITY));
       if (!blob || blob.size >= file.size) return file;
