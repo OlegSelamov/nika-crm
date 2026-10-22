@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:1100px;margin:20px auto;padding:16px">
+    <h1>Мониторинг тестового сервера</h1>
+    <p style="opacity:.7">Обновление каждые 5 секунд · Только супер-администратор · Только TEST</p>
+    <div id="monitorStatus" role="status">Получаем показатели…</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-top:22px">
+        {% for key,title in [('cpu','Процессор'),('memory','Оперативная память'),('db','PostgreSQL'),('latency','Время ответа API')] %}
+        <div style="border:1px solid #8885;border-radius:14px;padding:20px">
+            <div style="opacity:.7">{{ title }}</div>
+            <div id="m-{{ key }}" style="font-size:30px;font-weight:700;margin:14px 0">—</div>
+            {% if key in ['cpu','memory'] %}
+            <div style="background:#8883;height:8px;border-radius:8px;overflow:hidden"><div id="bar-{{ key }}" style="height:100%;width:0;background:#22c55e;transition:width .3s"></div></div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <p style="margin-top:24px;opacity:.7">CPU и RAM показывают загрузку всего VPS. PostgreSQL — число соединений с тестовой БД. Время ответа — длительность запроса к API мониторинга с текущего браузера, а не P95 всей системы.</p>
+</div>
+{% endblock %}
+{% block page_js %}
+<script>
+(() => {
+  const status = document.getElementById("monitorStatus");
+  const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  let inFlight = false;
+  async function refresh() {
+    if (inFlight || document.hidden) return;
+    inFlight = true;
+    const started = performance.now();
+    try {
+      const response = await fetch("/admin/api/server-monitor", {cache:"no-store",credentials:"same-origin"});
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const data = await response.json();
+      const latency = Math.round(performance.now() - started);
+      for (const key of ["cpu", "memory"]) {
+        const value = data[key + "_percent"];
+        set("m-" + key, value === null ? "Первый замер…" : value + "%");
+        const bar = document.getElementById("bar-" + key);
+        if (bar && value !== null) {
+          bar.style.width = value + "%";
+          bar.style.background = value >= 85 ? "#ef4444" : value >= 70 ? "#eab308" : "#22c55e";
+        }
+      }
+      set("m-db", data.db_connections + " соединений");
+      set("m-latency", latency + " мс");
+      status.textContent = "Обновлено: " + new Date(data.timestamp * 1000).toLocaleTimeString("ru-RU");
+    } catch (err) {
+      status.textContent = "Ошибка получения метрик: " + err.message;
+    } finally {
+      inFlight = false;
+    }
+  }
+  refresh();
+  setInterval(refresh, 5000);
+})();
+</script>
+{% endblock %}
