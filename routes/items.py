@@ -2246,16 +2246,20 @@ def api_item_recipe(item_id):
             return jsonify({"success": True, "item": dict(dish), "ingredients": rows})
 
         payload = request.get_json(silent=True) or {}
-        ingredients = payload.get("ingredients") or []
+        ingredients = payload.get("ingredients")
+        if not isinstance(ingredients, list) or not ingredients:
+            return jsonify({"success": False, "message": "Добавьте хотя бы один ингредиент в техкарту"}), 400
         normalized = []
         seen = set()
         for value in ingredients:
+            if not isinstance(value, dict):
+                return jsonify({"success": False, "message": "Некорректный состав техкарты"}), 400
             try:
                 ingredient_id = int(value.get("item_id"))
                 quantity = Decimal(str(value.get("quantity") or 0))
             except (TypeError, ValueError, InvalidOperation):
                 return jsonify({"success": False, "message": "Некорректный состав техкарты"}), 400
-            if ingredient_id == item_id or ingredient_id in seen or quantity <= 0:
+            if ingredient_id == item_id or ingredient_id in seen or not quantity.is_finite() or quantity <= 0:
                 return jsonify({"success": False, "message": "Проверьте ингредиенты и нормы списания"}), 400
             seen.add(ingredient_id)
             normalized.append((ingredient_id, quantity))

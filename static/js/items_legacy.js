@@ -808,8 +808,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function openAddItemModal() {
     activeRecipeDishId = null;
+    ++recipeLoadVersion;
+    recipeRevision++;
     recipeIngredients = [];
     recipeProductOptions = [];
+    setRecipeStatus('', '');
     var recipeJson = document.getElementById('itemRecipeJson');
     if (recipeJson) recipeJson.value = '[]';
     setRecipeEditorVisible(false);
@@ -1041,6 +1044,56 @@ document.addEventListener('DOMContentLoaded', function () {
 var activeRecipeDishId = null;
 var recipeIngredients = [];
 var recipeProductOptions = [];
+var recipeLoadVersion = 0;
+var recipeRevision = 0;
+var recipeSaving = false;
+var recipeMoneyFormatter = new Intl.NumberFormat('ru-KZ', {maximumFractionDigits:2});
+
+function setRecipeStatus(message, kind) {
+    ['recipeStatus', 'recipeModalStatus'].forEach(function(id) {
+        var node = document.getElementById(id);
+        if (!node) return;
+        node.textContent = message || '';
+        node.className = 'catalog-recipe-status' + (kind ? ' is-' + kind : '');
+        node.setAttribute('role', 'status');
+        node.setAttribute('aria-live', 'polite');
+    });
+}
+
+function setRecipeSaveBusy(busy) {
+    recipeSaving = busy;
+    ['saveRecipeButton', 'saveRecipeModalButton'].forEach(function(id) {
+        var button = document.getElementById(id);
+        if (!button) return;
+        button.disabled = busy;
+        button.textContent = busy ? 'Сохраняем…' : 'Сохранить техкарту';
+    });
+}
+
+function markRecipeEdited() {
+    recipeRevision++;
+    setRecipeStatus('', '');
+}
+
+function validateRecipeIngredients() {
+    if (!recipeIngredients.length) return 'Добавьте хотя бы один ингредиент в техкарту.';
+    var seen = new Set();
+    for (var i = 0; i < recipeIngredients.length; i++) {
+        var row = recipeIngredients[i];
+        if (!row || !Number.isSafeInteger(Number(row.item_id)) || Number(row.item_id) <= 0) {
+            return 'Выберите ингредиент в строке №' + (i + 1) + '.';
+        }
+        var quantity = Number(row.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            return 'Укажите норму больше нуля в строке №' + (i + 1) + '.';
+        }
+        if (seen.has(Number(row.item_id))) {
+            return 'Ингредиент повторяется в техкарте. Удалите дублирующую строку.';
+        }
+        seen.add(Number(row.item_id));
+    }
+    return '';
+}
 
 function setRecipeEditorVisible(visible) {
     var editor = document.getElementById('catalogRecipeEditor');
@@ -1048,11 +1101,17 @@ function setRecipeEditorVisible(visible) {
 }
 
 async function loadItemRecipe(itemId) {
+    var loadVersion = ++recipeLoadVersion;
     activeRecipeDishId = Number(itemId);
     recipeIngredients = [];
+    recipeProductOptions = [];
+    recipeRevision++;
+    setRecipeStatus('', '');
     setRecipeEditorVisible(true);
     var rows = document.getElementById('recipeRows');
     if (rows) rows.innerHTML = '<div class="catalog-recipe-empty">Загружаем техкарту…</div>';
+    var modalRows = document.getElementById('recipeModalRows');
+    if (modalRows) modalRows.innerHTML = '<div class="catalog-recipe-empty">Загружаем техкарту…</div>';
     try {
         var responses = await Promise.all([
             fetch('/api/items/' + encodeURIComponent(itemId) + '/recipe', {headers:{'Accept':'application/json'}}),
@@ -1061,72 +1120,151 @@ async function loadItemRecipe(itemId) {
         ]);
         var recipe = await responses[0].json();
         var catalog = await responses[1].json();
-        if (!responses[0].ok || !recipe.success) throw new Error(recipe.message || 'Не удалось загрузить техкарту');
         var semiCatalog = await responses[2].json();
-        recipeProductOptions = (Array.isArray(catalog.items) ? catalog.items : []).concat(Array.isArray(semiCatalog.items) ? semiCatalog.items : []).filter(function(row){ return Number(row.id) !== Number(itemId); });
-        recipeIngredients = Array.isArray(recipe.ingredients) ? recipe.ingredients.map(function(row){ return {item_id:Number(row.item_id), name:row.name, unit:row.unit || 'шт', quantity:Number(row.quantity)||0, purchase_price:Number(row.purchase_price)||0}; }) : [];
+        if (loadVersion !== recipeLoadVersion) return;
+        if (!responses[0].ok || !recipe.success) throw new Error(recipe.message || 'Не удалось загрузить техкарту');
+        if (!responses[1].ok || !catalog.success || !responses[2].ok || !semiCatalog.success) {
+            throw new Error('Не удалось загрузить список ингредиентов');
+        }
+        recipeProductOptions = (Array.isArray(catalog.items) ? catalog.items : [])
+            .concat(Array.isArray(semiCatalog.items) ? semiCatalog.items : [])
+            .filter(function(row) { return Number(row.id) !== Number(itemId); });
+        recipeIngredients = Array.isArray(recipe.ingredients)
+            ? recipe.ingredients.map(function(row) {
+                return {item_id:Number(row.item_id), name:row.name, unit:row.unit || 'шт',
+                    quantity:Number(row.quantity) || 0, purchase_price:Number(row.purchase_price) || 0};
+            }) : [];
         renderRecipeRows();
     } catch (error) {
-        if (rows) rows.innerHTML = '<div class="catalog-recipe-empty">' + escapeCatalogHtml(error.message) + '</div>';
+        if (loadVersion !== recipeLoadVersion) return;
+        setRecipeStatus('Не удалось загрузить техкарту: ' + (error.message || 'ошибка сервера'), 'error');
+        if (rows) rows.innerHTML = '<div class="catalog-recipe-empty">Не удалось загрузить состав блюда.</div>';
+        if (modalRows) modalRows.innerHTML = '<div class="catalog-recipe-empty">Не удалось загрузить состав блюда.</div>';
     }
 }
 
 function addRecipeIngredient() {
+    if (recipeSaving) return;
     if (!activeRecipeDishId) return;
     recipeIngredients.push({item_id:0,name:'',unit:'шт',quantity:1,purchase_price:0});
+    markRecipeEdited();
     renderRecipeRows();
 }
 
 function removeRecipeIngredient(index) {
-    recipeIngredients.splice(index,1);
+    if (recipeSaving || !Number.isInteger(index) || index < 0 || index >= recipeIngredients.length) return;
+    recipeIngredients.splice(index, 1);
+    markRecipeEdited();
     renderRecipeRows();
 }
 
 function updateRecipeIngredient(index, itemId) {
-    var item = recipeProductOptions.find(function(row){ return Number(row.id) === Number(itemId); });
-    if (!item) return;
-    recipeIngredients[index].item_id = Number(item.id);
-    recipeIngredients[index].name = item.name || '';
-    recipeIngredients[index].unit = item.unit || 'шт';
-    recipeIngredients[index].purchase_price = Number(item.purchase_price) || 0;
+    if (recipeSaving || !recipeIngredients[index]) return;
+    var item = recipeProductOptions.find(function(row) { return Number(row.id) === Number(itemId); });
+    if (!item) {
+        recipeIngredients[index].item_id = 0;
+        recipeIngredients[index].name = '';
+        recipeIngredients[index].unit = 'шт';
+        recipeIngredients[index].purchase_price = 0;
+    } else {
+        recipeIngredients[index].item_id = Number(item.id);
+        recipeIngredients[index].name = item.name || '';
+        recipeIngredients[index].unit = item.unit || 'шт';
+        recipeIngredients[index].purchase_price = Number(item.purchase_price) || 0;
+    }
+    markRecipeEdited();
     renderRecipeRows();
 }
 
 function updateRecipeQuantity(index, value) {
+    if (recipeSaving || !recipeIngredients[index]) return;
     recipeIngredients[index].quantity = Math.max(0, Number(String(value).replace(',','.')) || 0);
+    markRecipeEdited();
     updateRecipeCost();
 }
 
 function updateRecipeCost() {
-    var total = recipeIngredients.reduce(function(sum,row){ return sum + (Number(row.quantity)||0)*(Number(row.purchase_price)||0); },0);
+    var total = recipeIngredients.reduce(function(sum, row) {
+        return sum + (Number(row.quantity) || 0) * (Number(row.purchase_price) || 0);
+    }, 0);
     var el = document.getElementById('recipeCost');
-    if (el) el.textContent = new Intl.NumberFormat('ru-KZ',{maximumFractionDigits:2}).format(total) + ' ₸';
-    document.querySelectorAll('[data-recipe-row-cost]').forEach(function(el){ var i=Number(el.dataset.recipeRowCost); var row=recipeIngredients[i]; el.textContent=new Intl.NumberFormat('ru-KZ',{maximumFractionDigits:2}).format((Number(row.quantity)||0)*(Number(row.purchase_price)||0))+' ₸'; });
+    if (el) el.textContent = recipeMoneyFormatter.format(total) + ' ₸';
+    // The modal contains a copied set of input rows. During deletion those old
+    // DOM nodes can briefly have indices beyond recipeIngredients.length.
+    ['recipeRows', 'recipeModalRows'].forEach(function(id) {
+        var container = document.getElementById(id);
+        if (!container) return;
+        container.querySelectorAll('[data-recipe-row-cost]').forEach(function(node) {
+            var index = Number(node.dataset.recipeRowCost);
+            var row = recipeIngredients[index];
+            var cost = row ? (Number(row.quantity) || 0) * (Number(row.purchase_price) || 0) : 0;
+            node.textContent = recipeMoneyFormatter.format(cost) + ' ₸';
+        });
+    });
 }
 
 function renderRecipeRows() {
     var box = document.getElementById('recipeRows');
     if (!box) return;
-    if (!recipeIngredients.length) { box.innerHTML='<div class="catalog-recipe-empty">Ингредиенты ещё не добавлены. Нажмите «+ Ингредиент».</div>'; updateRecipeCost(); return; }
-    box.innerHTML = recipeIngredients.map(function(row,index){
-        var options='<option value="">Выберите ингредиент</option>'+recipeProductOptions.map(function(item){ return '<option value="'+Number(item.id)+'" '+(Number(item.id)===Number(row.item_id)?'selected':'')+'>'+escapeCatalogHtml(item.name || '')+' · '+escapeCatalogHtml(item.unit || 'шт')+'</option>'; }).join('');
-        return '<div class="catalog-recipe-row"><select onchange="updateRecipeIngredient('+index+',this.value)">'+options+'</select><div class="catalog-recipe-qty"><input type="number" min="0.0001" step="0.001" value="'+(row.quantity || '')+'" oninput="updateRecipeQuantity('+index+',this.value)"><span>'+escapeCatalogHtml(row.unit || 'шт')+'</span></div><div class="catalog-recipe-price"><small>Закуп: '+new Intl.NumberFormat('ru-KZ',{maximumFractionDigits:2}).format(Number(row.purchase_price)||0)+' ₸/'+escapeCatalogHtml(row.unit || 'шт')+'</small><strong data-recipe-row-cost="'+index+'">0 ₸</strong></div><button type="button" class="catalog-recipe-remove" onclick="removeRecipeIngredient('+index+')">×</button></div>';
+    if (!recipeIngredients.length) {
+        box.innerHTML = '<div class="catalog-recipe-empty">Ингредиенты ещё не добавлены. Нажмите «+ Ингредиент».</div>';
+        updateRecipeCost();
+        return;
+    }
+    box.innerHTML = recipeIngredients.map(function(row, index) {
+        var options = '<option value="">Выберите ингредиент</option>' + recipeProductOptions.map(function(item) {
+            return '<option value="' + Number(item.id) + '" ' +
+                (Number(item.id) === Number(row.item_id) ? 'selected' : '') + '>' +
+                escapeCatalogHtml(item.name || '') + ' · ' + escapeCatalogHtml(item.unit || 'шт') + '</option>';
+        }).join('');
+        return '<div class="catalog-recipe-row">' +
+            '<select aria-label="Ингредиент ' + (index + 1) + '" onchange="updateRecipeIngredient(' + index + ',this.value)">' + options + '</select>' +
+            '<div class="catalog-recipe-qty"><input type="number" aria-label="Норма ингредиента ' + (index + 1) + '" min="0.0001" step="0.0001" value="' + (row.quantity || '') + '" oninput="updateRecipeQuantity(' + index + ',this.value)"><span>' + escapeCatalogHtml(row.unit || 'шт') + '</span></div>' +
+            '<div class="catalog-recipe-price"><small>Закуп: ' + recipeMoneyFormatter.format(Number(row.purchase_price) || 0) + ' ₸/' + escapeCatalogHtml(row.unit || 'шт') + '</small><strong data-recipe-row-cost="' + index + '">0 ₸</strong></div>' +
+            '<button type="button" class="catalog-recipe-remove" aria-label="Удалить ингредиент ' + (index + 1) + '" onclick="removeRecipeIngredient(' + index + ')">×</button></div>';
     }).join('');
     updateRecipeCost();
 }
 
 async function saveItemRecipe() {
-    if (!activeRecipeDishId) return;
-    var invalid = recipeIngredients.some(function(row){ return !row.item_id || !(Number(row.quantity)>0); });
-    var status=document.getElementById('recipeStatus');
-    if (invalid) { if(status){status.textContent='Выберите ингредиенты и укажите норму больше нуля.';status.className='catalog-recipe-status is-error';} return; }
-    var button=document.getElementById('saveRecipeButton'); if(button) button.disabled=true;
+    if (!activeRecipeDishId || recipeSaving) return false;
+    var errorMessage = validateRecipeIngredients();
+    if (errorMessage) {
+        setRecipeStatus(errorMessage, 'error');
+        return false;
+    }
+    var savedDish = activeRecipeDishId;
+    var savedRevision = recipeRevision;
+    var savedVersion = recipeLoadVersion;
+    var ingredients = recipeIngredients.map(function(row) {
+        return {item_id:Number(row.item_id), quantity:Number(row.quantity)};
+    });
+    setRecipeSaveBusy(true);
+    setRecipeStatus('Сохраняем техкарту…', 'loading');
     try {
-        var response=await fetch('/api/items/'+encodeURIComponent(activeRecipeDishId)+'/recipe',{method:'PUT',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({ingredients:recipeIngredients.map(function(row){return {item_id:row.item_id,quantity:row.quantity};})})});
-        var data=await response.json(); if(!response.ok || !data.success) throw new Error(data.message || 'Не удалось сохранить техкарту');
-        if(status){status.textContent='Техкарта сохранена. При продаже ингредиенты будут списываться автоматически.';status.className='catalog-recipe-status is-success';}
-    } catch(error) { if(status){status.textContent=error.message;status.className='catalog-recipe-status is-error';} }
-    finally { if(button) button.disabled=false; }
+        var response = await fetch('/api/items/' + encodeURIComponent(savedDish) + '/recipe', {
+            method:'PUT',
+            headers:{'Content-Type':'application/json','Accept':'application/json'},
+            body:JSON.stringify({ingredients:ingredients})
+        });
+        var data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Не удалось сохранить техкарту');
+        if (savedDish === activeRecipeDishId && savedVersion === recipeLoadVersion) {
+            if (recipeRevision === savedRevision) {
+                setRecipeStatus('✓ Техкарта сохранена. Ингредиентов: ' + ingredients.length + '.', 'success');
+            } else {
+                setRecipeStatus('Предыдущий состав сохранён. Новые изменения нужно сохранить ещё раз.', 'error');
+            }
+        }
+        return true;
+    } catch (error) {
+        if (savedDish === activeRecipeDishId && savedVersion === recipeLoadVersion) {
+            setRecipeStatus('Ошибка сохранения: ' + (error.message || 'проверьте соединение'), 'error');
+        }
+        return false;
+    } finally {
+        setRecipeSaveBusy(false);
+    }
 }
 
 function openEditItemModal(item) {
@@ -2181,61 +2319,103 @@ function openRecipeModal(itemId, itemName) {
     var name = document.getElementById('recipeModalDishName');
     if (name) name.textContent = itemName || 'Блюдо';
     if (modal) { modal.classList.add('is-open'); modal.setAttribute('aria-hidden','false'); }
-    loadItemRecipe(itemId).then(function(){ renderRecipeModalRows(); });
+    setRecipeStatus('', '');
+    loadItemRecipe(itemId);
 }
 function closeRecipeModal() {
-    var modal=document.getElementById('recipeModal');
-    if(modal){modal.classList.remove('is-open');modal.setAttribute('aria-hidden','true');}
+    var modal = document.getElementById('recipeModal');
+    if (modal) { modal.classList.remove('is-open'); modal.setAttribute('aria-hidden','true'); }
 }
 function renderRecipeModalRows() {
-    var source=document.getElementById('recipeRows'), target=document.getElementById('recipeModalRows');
-    if(target && source) target.innerHTML=source.innerHTML;
-    var cost=document.getElementById('recipeCost'), modalCost=document.getElementById('recipeModalCost');
-    if(cost && modalCost) modalCost.textContent=cost.textContent;
+    var source = document.getElementById('recipeRows');
+    var target = document.getElementById('recipeModalRows');
+    if (target && source) target.innerHTML = source.innerHTML;
+    var cost = document.getElementById('recipeCost');
+    var modalCost = document.getElementById('recipeModalCost');
+    if (cost && modalCost) modalCost.textContent = cost.textContent;
 }
-var _nikaRecipeRenderRows=renderRecipeRows;
-renderRecipeRows=function(){ _nikaRecipeRenderRows(); renderRecipeModalRows(); };
-var _nikaRecipeUpdateCost=updateRecipeCost;
-updateRecipeCost=function(){ _nikaRecipeUpdateCost(); var cost=document.getElementById('recipeCost'), modalCost=document.getElementById('recipeModalCost'); if(cost&&modalCost)modalCost.textContent=cost.textContent; };
-async function saveRecipeFromModal(){ await saveItemRecipe(); var src=document.getElementById('recipeStatus'), dst=document.getElementById('recipeModalStatus'); if(src&&dst)dst.textContent=src.textContent; }
+var _nikaRecipeRenderRows = renderRecipeRows;
+renderRecipeRows = function() {
+    _nikaRecipeRenderRows();
+    renderRecipeModalRows();
+};
+var _nikaRecipeUpdateCost = updateRecipeCost;
+updateRecipeCost = function() {
+    _nikaRecipeUpdateCost();
+    var cost = document.getElementById('recipeCost');
+    var modalCost = document.getElementById('recipeModalCost');
+    if (cost && modalCost) modalCost.textContent = cost.textContent;
+};
+
+async function saveRecipeFromModal() {
+    if (!activeRecipeDishId) {
+        var error = validateRecipeIngredients();
+        if (error) { setRecipeStatus(error, 'error'); return false; }
+        syncDraftRecipeJson();
+        setRecipeStatus('✓ Состав подготовлен. Закройте техкарту и сохраните карточку блюда.', 'success');
+        return true;
+    }
+    return saveItemRecipe();
+}
 
 async function openDraftRecipeModal() {
+    ++recipeLoadVersion;
     activeRecipeDishId = null;
     recipeIngredients = recipeIngredients || [];
-    var modal=mountRecipeModalToBody(), name=document.getElementById('recipeModalDishName');
-    if(name) name.textContent=(document.getElementById('itemName')||{}).value || 'Новое блюдо';
-    if(modal){modal.classList.add('is-open');modal.setAttribute('aria-hidden','false');}
+    var modal = mountRecipeModalToBody();
+    var name = document.getElementById('recipeModalDishName');
+    if (name) name.textContent = (document.getElementById('itemName') || {}).value || 'Новое блюдо';
+    if (modal) { modal.classList.add('is-open'); modal.setAttribute('aria-hidden','false'); }
+    setRecipeStatus('', '');
     try {
         var responses = await Promise.all([
-            fetch('/api/catalog/items?type=ingredient&page=1&limit=100',{headers:{'Accept':'application/json'}}),
-            fetch('/api/catalog/items?type=semi_finished&page=1&limit=100',{headers:{'Accept':'application/json'}})
+            fetch('/api/catalog/items?type=ingredient&page=1&limit=100', {headers:{'Accept':'application/json'}}),
+            fetch('/api/catalog/items?type=semi_finished&page=1&limit=100', {headers:{'Accept':'application/json'}})
         ]);
         var ingredientData = await responses[0].json();
         var semiFinishedData = await responses[1].json();
+        if (!responses[0].ok || !ingredientData.success || !responses[1].ok || !semiFinishedData.success) {
+            throw new Error('Не удалось загрузить список ингредиентов');
+        }
         recipeProductOptions = (Array.isArray(ingredientData.items) ? ingredientData.items : [])
             .concat(Array.isArray(semiFinishedData.items) ? semiFinishedData.items : []);
         renderRecipeRows();
-    } catch(error) {
-        var status=document.getElementById('recipeModalStatus');
-        if(status) status.textContent='Не удалось загрузить ингредиенты';
+    } catch (error) {
+        setRecipeStatus('Не удалось загрузить ингредиенты: ' + (error.message || 'ошибка сервера'), 'error');
     }
 }
-function syncDraftRecipeJson(){
-    var field=document.getElementById('itemRecipeJson');
-    if(field) field.value=JSON.stringify(recipeIngredients.filter(function(row){return Number(row.item_id)>0&&Number(row.quantity)>0;}).map(function(row){return {item_id:Number(row.item_id),quantity:Number(row.quantity)};}));
+
+function syncDraftRecipeJson() {
+    var field = document.getElementById('itemRecipeJson');
+    if (field) field.value = JSON.stringify(recipeIngredients.filter(function(row) {
+        return Number(row.item_id) > 0 && Number(row.quantity) > 0;
+    }).map(function(row) {
+        return {item_id:Number(row.item_id), quantity:Number(row.quantity)};
+    }));
 }
-var _nikaAddRecipeIngredient=addRecipeIngredient;
-addRecipeIngredient=function(){ if(activeRecipeDishId){_nikaAddRecipeIngredient();return;} recipeIngredients.push({item_id:0,name:'',unit:'шт',quantity:1,purchase_price:0}); renderRecipeRows(); syncDraftRecipeJson(); };
-var _nikaRemoveRecipeIngredient=removeRecipeIngredient;
-removeRecipeIngredient=function(index){_nikaRemoveRecipeIngredient(index);syncDraftRecipeJson();};
-var _nikaUpdateRecipeIngredient=updateRecipeIngredient;
-updateRecipeIngredient=function(index,itemId){_nikaUpdateRecipeIngredient(index,itemId);syncDraftRecipeJson();};
-var _nikaUpdateRecipeQuantity=updateRecipeQuantity;
-updateRecipeQuantity=function(index,value){_nikaUpdateRecipeQuantity(index,value);syncDraftRecipeJson();};
-var _nikaSaveRecipeFromModal=saveRecipeFromModal;
-saveRecipeFromModal=async function(){
-    if(!activeRecipeDishId){syncDraftRecipeJson();var status=document.getElementById('recipeModalStatus');if(status)status.textContent='Техкарта подготовлена — сохранится вместе с блюдом';setTimeout(closeRecipeModal,450);return;}
-    await _nikaSaveRecipeFromModal();
+var _nikaAddRecipeIngredient = addRecipeIngredient;
+addRecipeIngredient = function() {
+    if (activeRecipeDishId) { _nikaAddRecipeIngredient(); return; }
+    if (recipeSaving) return;
+    recipeIngredients.push({item_id:0,name:'',unit:'шт',quantity:1,purchase_price:0});
+    markRecipeEdited();
+    renderRecipeRows();
+    syncDraftRecipeJson();
+};
+var _nikaRemoveRecipeIngredient = removeRecipeIngredient;
+removeRecipeIngredient = function(index) {
+    _nikaRemoveRecipeIngredient(index);
+    if (!activeRecipeDishId) syncDraftRecipeJson();
+};
+var _nikaUpdateRecipeIngredient = updateRecipeIngredient;
+updateRecipeIngredient = function(index,itemId) {
+    _nikaUpdateRecipeIngredient(index,itemId);
+    if (!activeRecipeDishId) syncDraftRecipeJson();
+};
+var _nikaUpdateRecipeQuantity = updateRecipeQuantity;
+updateRecipeQuantity = function(index,value) {
+    _nikaUpdateRecipeQuantity(index,value);
+    if (!activeRecipeDishId) syncDraftRecipeJson();
 };
 
 function updateUnitOptionsForItemType(type) {
