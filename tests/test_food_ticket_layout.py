@@ -72,12 +72,29 @@ class FoodTicketLayoutTests(unittest.TestCase):
         html = render("kitchen", status="paid", payment_method="cash",
                       cash_received=2000, change_amount=450)
         for text in ("ЗАКАЗ НА КУХНЮ", "Кассир: Асем", "Стол №5",
-                     "×1", "+ Соус BBQ", "БЕЗ: Горчица", "Комментарий:"):
+                     "1 шт", "+ Соус BBQ", "БЕЗ: Горчица", "Комментарий:"):
             self.assertIn(text, html)
         for absent in ("1 550 ₸", "ИТОГО К ОПЛАТЕ", "Сдача", "Наличные",
                        "КВИТАНЦИЯ ОБ ОПЛАТЕ"):
             self.assertNotIn(absent, html)
-        self.assertIn(".kitchen-ticket .item-name { font-size:17px; }", html)
+        self.assertIn(".kitchen-ticket .item-name { font-size: 14px; font-weight: 600; }", html)
+        self.assertEqual(html.count("1 шт"), 1, "Кол-во на кухне должно быть только один раз")
+        self.assertNotIn("×1", html)
+        self.assertNotIn('class="item-meta"', html)
+        self.assertIn('class="item-qty"', html)
+
+    def test_compact_typography_is_not_all_bold(self):
+        for kind in ("kitchen", "precheck"):
+            html = render(kind)
+            self.assertIn("font: 400 13px/1.3 Arial", html)
+            self.assertIn(".item-mod { font-size: 12.5px;", html)
+            self.assertNotIn("font-weight: 900", html)
+            self.assertNotIn("font-weight: 800", html)
+            self.assertIn('class="item-head"', html)
+        guest = render("precheck")
+        self.assertEqual(guest.count("1 шт"), 1, "Гостю единица количества нужна только один раз")
+        self.assertIn('class="item-meta"', guest)
+        self.assertNotIn('class="item-qty"', guest)
 
     def test_external_payment_is_not_mislabelled_as_kaspi(self):
         html = render("precheck", status="external_paid", external_receipt_number="K-125")
