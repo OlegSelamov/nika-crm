@@ -903,6 +903,10 @@ function printFoodOrderBatch(payload = {}) {
             ["guest", "guestHtml", "receipt", "Пречек гостю №" + id],
             ["kitchen", "kitchenHtml", "kitchen", "Заказ на кухню №" + id]
         ]) {
+            if (label === "kitchen" && !settings.kitchen_printer) {
+                results[label] = {success:true, skipped:true, reason:"Принтер кухни не выбран"};
+                continue;
+            }
             if (prior[label]) {
                 results[label] = {success:true, alreadySent:true};
                 continue;
@@ -962,6 +966,15 @@ function registerPrinterIpc() {
         return printHtml({
             html: '<div style="font:700 16px Arial;text-align:center">ТЕСТ КУХНИ</div><hr><p>Тестовый заказ №001</p><p>Шаурма × 1</p><strong>Без лука</strong>',
             title: "Тест кухонного принтера",
+            kind: "kitchen"
+        });
+    });
+
+    ipcMain.handle("printer:print-kitchen", async (event, payload = {}) => {
+        requireMainWindow(event);
+        return printHtml({
+            html: payload.html,
+            title: payload.title || "Заказ на кухню",
             kind: "kitchen"
         });
     });

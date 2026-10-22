@@ -636,6 +636,7 @@
     let currentFoodOrderSaved = false;
     let foodOrderBusy = false;
     let foodCheckoutBusy = false;
+    let activeFoodTicketKind = "precheck";
     let foodOrderPage = 1;
 
     function foodMessage(message) {
@@ -687,6 +688,80 @@
         }
     }
 
+
+    function getFoodPrinterBridge() {
+        try { return window.nikaDesktop?.printers || window.parent?.nikaDesktop?.printers || null; }
+        catch (_) { return window.nikaDesktop?.printers || null; }
+    }
+
+    async function getSavedFoodTicketHtml(orderId, kind) {
+        const response = await fetch("/food/orders/" + encodeURIComponent(orderId) +
+            "/ticket/" + kind + "?embed=1", {credentials:"same-origin", cache:"no-store"});
+        if (!response.ok) throw new Error("Не удалось загрузить " +
+            (kind === "kitchen" ? "заказ на кухню" : "пречек гостю"));
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        if (!doc.body || !doc.querySelector(".item")) {
+            throw new Error("Пустой документ " + kind + ": печать не запущена");
+        }
+        const page = doc.body.cloneNode(true);
+        page.querySelectorAll(".actions,script").forEach(node => node.remove());
+        const styles = Array.from(doc.querySelectorAll("style"))
+            .map(node => node.textContent || "").join("\n")
+            .replace(/@page\s*\{[^}]*\}/gi, "");
+        // Electron's receiptPage selects the paper width from the appropriate
+        // printer setting (guest or kitchen); never force a 76mm-width ticket.
+        return '<style>' + styles +
+            '.receipt.food-ticket-paper{width:100%;max-width:100%;padding:2mm 0;margin:0;}' +
+            '.receipt.food-ticket-paper .item{min-width:0;}' +
+            '</style><main class="receipt food-ticket-paper">' + page.innerHTML + '</main>';
+    }
+
+    async function printBothFoodTickets(order) {
+        const printers = getFoodPrinterBridge();
+        if (!printers?.printFoodOrder) {
+            // Browser or an older TEST Electron: preserve the guest preview.
+            openFoodTicket(order.id, "precheck", Boolean(printers?.printReceipt));
+            if (printers?.printReceipt) {
+                foodMessage("Для двух чеков и принтера кухни обновите Nika Electron TEST");
+            }
+            return;
+        }
+
+        // All components of the fingerprint come from the saved server order,
+        // not the current unsaved cart. Same order -> no repeat accepted jobs.
+        const fingerprint = JSON.stringify({
+            cart: order.cart, table: order.table_name, guest: order.guest_name,
+            note: order.note, client: order.client_id
+        });
+        const [guestTicket, kitchenTicket] = await Promise.allSettled([
+            getSavedFoodTicketHtml(order.id, "precheck"),
+            getSavedFoodTicketHtml(order.id, "kitchen")
+        ]);
+        const results = await printers.printFoodOrder({
+            orderId: order.id,
+            fingerprint,
+            guestHtml: guestTicket.status === "fulfilled" ? guestTicket.value : "",
+            kitchenHtml: kitchenTicket.status === "fulfilled" ? kitchenTicket.value : ""
+        });
+
+        const guest = results?.guest;
+        const kitchen = results?.kitchen;
+        const guestStatus = guest?.success
+            ? (guest.alreadySent ? "гостевой чек уже отправлен" : "гостевой чек отправлен")
+            : "ГОСТЬ: " + (guest?.error || guestTicket.reason?.message || "ошибка печати");
+        const kitchenStatus = kitchen?.skipped ? "кухня не настроена"
+            : kitchen?.success
+                ? (kitchen.alreadySent ? "кухонный чек уже отправлен" : "кухонный чек отправлен")
+                : "КУХНЯ: " + (kitchen?.error || kitchenTicket.reason?.message || "ошибка печати");
+        foodMessage("Заказ №" + order.id + " сохранён · " + guestStatus + " · " + kitchenStatus);
+        if (guest?.success === false || kitchen?.success === false) {
+            // A second click retries only the failed job in Electron; the
+            // successful ticket is remembered by its order fingerprint.
+            console.warn("FOOD PRINT PARTIAL FAILURE:", results);
+        }
+    }
+
     async function createFoodPrecheck() {
         if (foodCheckoutBusy) return;
         if (!getCart().length) { foodMessage("Добавьте блюдо в заказ"); return; }
@@ -698,7 +773,12 @@
             const saved = await saveFoodOrder();
             if (saved) {
                 foodMessage("Заказ №" + saved.id + " сохранён · ожидает оплаты");
-                openFoodTicket(saved.id, "precheck", true);
+                try {
+                    await printBothFoodTickets(saved);
+                } catch (error) {
+                    console.error("DUAL FOOD PRINT ERROR:", error);
+                    foodMessage("Заказ №" + saved.id + " сохранён, но печать не удалась: " + (error.message || error));
+                }
             }
         } finally {
             foodCheckoutBusy = false;
@@ -793,6 +873,7 @@
         const modal = document.getElementById("foodTicketModal");
         const frame = document.getElementById("foodTicketFrame");
         if (!modal || !frame) return;
+        activeFoodTicketKind = kind;
         document.getElementById("foodTicketHeading").textContent = kind === "kitchen" ? "Заказ на кухню" : "Пречек гостю";
         const printButton = document.getElementById("foodTicketPrint");
         if (printButton) printButton.disabled = true;
@@ -829,11 +910,10 @@
             return;
         }
         const title = document.getElementById("foodTicketHeading")?.textContent || "Чек общепита";
-        const printBridge = (() => {
-            try { return window.nikaDesktop || window.parent?.nikaDesktop || null; }
-            catch (_) { return window.nikaDesktop || null; }
-        })();
-        if (!printBridge?.printers?.printReceipt) {
+        const printers = getFoodPrinterBridge();
+        const printMethod = activeFoodTicketKind === "kitchen"
+            ? printers?.printKitchen : printers?.printReceipt;
+        if (!printMethod) {
             frame.contentWindow?.print();
             return;
         }
@@ -850,7 +930,7 @@
                 '.receipt.food-ticket-paper{width:100%;max-width:100%;padding:2mm 0;margin:0;}' +
                 '.receipt.food-ticket-paper .item{min-width:0;}' +
                 '</style><main class="receipt food-ticket-paper">' + page.innerHTML + '</main>';
-            const result = await printBridge.printers.printReceipt({html, title});
+            const result = await printMethod({html, title});
             if (result?.success === false) throw new Error(result.error || "Принтер отклонил чек");
             foodMessage("Документ отправлен на чековый принтер");
         } catch (error) {
