@@ -19,6 +19,7 @@ on:
       - "tests/test_food_menu_cards.py"
       - "tests/test_food_dual_print.py"
       - "tests/test_food_ticket_layout.py"
+      - "tests/test_food_payment_print.js"
       - "templates/food_order_ticket.html"
       - ".github/workflows/validate-food-checkout.yml"
   workflow_dispatch:
@@ -46,7 +47,11 @@ jobs:
       - name: Verify Python syntax
         run: python -m py_compile app.py models.py routes/auth.py routes/sales.py routes/food_orders.py routes/rekassa_comrun.py
       - name: Verify JavaScript syntax
-        run: node --check static/js/food_sales.js
+        run: |
+          node --check static/js/food_sales.js
+          node --check static/js/sales.js
+      - name: Verify all restaurant payment methods print before saving sale
+        run: node tests/test_food_payment_print.js
       - name: Run food checkout regression checks
         run: python -m unittest discover -s tests -p test_food_checkout_modes.py -v
       - name: Run food menu visual and scroll regression checks
