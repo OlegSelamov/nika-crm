@@ -1,6 +1,8 @@
 (() => {
     const MODE_KEY = "nika_sales_mode";
     const PAGE_SIZE = 36;
+    const foodCheckoutMode = ["fast","orders","external"].includes(window.NIKA_FOOD_CHECKOUT_MODE)
+        ? window.NIKA_FOOD_CHECKOUT_MODE : "fast";
     let foodItems = [];
     let foodCategory = "all";
     let foodSection = "dishes";
@@ -48,6 +50,7 @@
         foodBtn?.setAttribute("aria-selected", next === "food" ? "true" : "false");
 
         document.body.classList.toggle("food-sales-mode", next === "food");
+        updateFoodCheckoutControls(next === "food");
         const historyBtn = document.getElementById("historyTabBtn");
         if (historyBtn) {
             historyBtn.textContent = next === "food" ? "История заказов" : "История продаж";
@@ -601,9 +604,28 @@
     document.getElementById('foodModifierAdd')?.addEventListener('click', confirmFoodModifiers);
 
 
+    function updateFoodCheckoutControls(isFood) {
+        const staged = isFood && foodCheckoutMode !== "fast";
+        const external = staged && foodCheckoutMode === "external";
+        document.body.classList.toggle("food-checkout-orders", staged);
+        document.body.classList.toggle("food-checkout-external", external);
+        document.querySelectorAll(".payment-actions > .pay-btn:not(.food-checkout-primary):not(.food-checkout-secondary)").forEach(button => {
+            button.hidden = staged;
+        });
+        const precheck = document.getElementById("foodPrecheckCheckout");
+        const pay = document.getElementById("foodCompletePayment");
+        const other = document.getElementById("foodExternalPayment");
+        if (precheck) precheck.hidden = !staged;
+        if (pay) pay.hidden = !staged || external;
+        if (other) other.hidden = !external;
+        const methods = document.querySelector(".payment-methods");
+        if (methods) methods.hidden = external;
+    }
+
     let currentFoodOrderId = null;
     let currentFoodOrderSaved = false;
     let foodOrderBusy = false;
+    let foodCheckoutBusy = false;
     let foodOrderPage = 1;
 
     function foodMessage(message) {
@@ -652,6 +674,103 @@
         } finally {
             foodOrderBusy = false;
             if (btn) btn.disabled = false;
+        }
+    }
+
+    async function createFoodPrecheck() {
+        if (foodCheckoutBusy) return;
+        if (!getCart().length) { foodMessage("Добавьте блюдо в заказ"); return; }
+        foodCheckoutBusy = true;
+        const button = document.getElementById("foodPrecheckCheckout");
+        if (button) button.disabled = true;
+        try {
+            // Always save the freshest cart before opening the precheck.
+            const saved = await saveFoodOrder();
+            if (saved) {
+                foodMessage("Заказ №" + saved.id + " сохранён · ожидает оплаты");
+                openFoodTicket(saved.id, "precheck");
+            }
+        } finally {
+            foodCheckoutBusy = false;
+            if (button) button.disabled = false;
+        }
+    }
+
+    async function payExistingFoodOrder() {
+        if (foodCheckoutBusy || !getCart().length) return;
+        foodCheckoutBusy = true;
+        const button = document.getElementById("foodCompletePayment");
+        if (button) button.disabled = true;
+        try {
+            const order = await saveFoodOrder();
+            if (!order) return;
+            // Only /sales/pay records real sales, recipe stock movements and reKassa.
+            const card = Number(String(document.getElementById("cardInput")?.value || "").replace(",", ".")) || 0;
+            const kaspi = Number(String(document.getElementById("kaspiInput")?.value || "").replace(",", ".")) || 0;
+            if (card > 0 || kaspi > 0) pay();
+            else openCashChangeModal();
+        } finally {
+            foodCheckoutBusy = false;
+            if (button) button.disabled = false;
+        }
+    }
+
+    function newFoodOrder() {
+        if (getCart().length && !window.confirm(currentFoodOrderSaved
+            ? "Начать новый заказ? Сохранённый останется в истории."
+            : "Текущий заказ не сохранён. Очистить корзину?")) return;
+        clearFoodCart();
+        for (const id of ["cashInput","cardInput","kaspiInput"]) {
+            const input = document.getElementById(id);
+            if (input) input.value = "";
+        }
+        foodMessage("Новый заказ");
+    }
+
+    function setExternalModal(open) {
+        const modal = document.getElementById("foodExternalModal");
+        if (modal) modal.hidden = !open;
+        if (open) {
+            const input = document.getElementById("foodExternalReceiptNumber");
+            if (input) { input.value = ""; input.focus(); }
+            const error = document.getElementById("foodExternalError");
+            if (error) error.textContent = "";
+        }
+    }
+
+    async function openExternalPayment() {
+        if (foodCheckoutBusy || foodCheckoutMode !== "external") return;
+        foodCheckoutBusy = true;
+        try {
+            const saved = await saveFoodOrder();
+            if (saved) setExternalModal(true);
+        } finally { foodCheckoutBusy = false; }
+    }
+
+    async function confirmExternalPayment() {
+        const receipt = document.getElementById("foodExternalReceiptNumber")?.value?.trim() || "";
+        const errorNode = document.getElementById("foodExternalError");
+        if (!receipt) { if (errorNode) errorNode.textContent = "Укажите номер внешнего фискального чека"; return; }
+        if (foodCheckoutBusy || !currentFoodOrderSaved || !currentFoodOrderId) return;
+        foodCheckoutBusy = true;
+        const button = document.getElementById("foodExternalConfirm");
+        if (button) button.disabled = true;
+        try {
+            const response = await fetch("/api/food/orders/" + currentFoodOrderId + "/external-payment", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({receipt_number: receipt})
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || "Не удалось подтвердить чек");
+            setExternalModal(false);
+            clearFoodCart();
+            foodMessage("Чек №" + receipt + " отмечен · учёт продаж и склада Nika не изменён");
+        } catch (error) {
+            if (errorNode) errorNode.textContent = error.message || "Ошибка внешней оплаты";
+        } finally {
+            foodCheckoutBusy = false;
+            if (button) button.disabled = false;
         }
     }
 
@@ -721,7 +840,7 @@
             const title = document.createElement("strong");
             title.textContent = "№" + order.id + " · " + (order.table_name || "Без стола");
             const detail = document.createElement("small");
-            detail.textContent = (order.status === "paid" ? "Оплачен" : order.status === "cancelled" ? "Отменён" : "Открыт") +
+            detail.textContent = (order.status === "paid" ? "Оплачен в Nika" : order.status === "external_paid" ? "Чек внешней ККМ №" + (order.external_receipt_number || "—") + " · без списания склада" : order.status === "cancelled" ? "Отменён" : "Ожидает оплаты") +
                 " · " + money(order.total_amount) + " · " + (order.created_at_display || order.created_at.slice(0, 16).replace("T", " "));
             label.append(title, detail);
             const buttons = document.createElement("div");
@@ -748,6 +867,12 @@
     function initFoodOrderControls() {
         if (!["foodservice", "universal"].includes(window.NIKA_BUSINESS_MODE)) return;
         document.getElementById("foodOrderSave")?.addEventListener("click", saveFoodOrder);
+        document.getElementById("foodOrderNew")?.addEventListener("click", newFoodOrder);
+        document.getElementById("foodPrecheckCheckout")?.addEventListener("click", createFoodPrecheck);
+        document.getElementById("foodCompletePayment")?.addEventListener("click", payExistingFoodOrder);
+        document.getElementById("foodExternalPayment")?.addEventListener("click", openExternalPayment);
+        document.getElementById("foodExternalConfirm")?.addEventListener("click", confirmExternalPayment);
+        document.querySelectorAll("[data-food-external-close]").forEach(el => el.addEventListener("click", () => setExternalModal(false)));
         document.getElementById("foodOrderKitchen")?.addEventListener("click", () => printFoodTicket("kitchen"));
         document.getElementById("foodOrderPrecheck")?.addEventListener("click", () => printFoodTicket("precheck"));
         document.getElementById("foodOrderDetails")?.addEventListener("click", () => setFoodDetails(true));
@@ -757,7 +882,7 @@
             document.getElementById("foodTicketFrame")?.contentWindow?.print();
         });
         document.addEventListener("keydown", event => {
-            if (event.key === "Escape") { setFoodDetails(false); closeFoodTicket(); }
+            if (event.key === "Escape") { setFoodDetails(false); closeFoodTicket(); setExternalModal(false); }
         });
         document.getElementById("foodOrderStatusFilter")?.addEventListener("change", () => loadFoodOrderHistory());
         document.getElementById("foodOrderHistoryMore")?.addEventListener("click", () => loadFoodOrderHistory(true));

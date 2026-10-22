@@ -2,7 +2,7 @@
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-compact-toolbar-v1') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261022-menu-container-query-v4') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261022-food-orders-checkout-v1') }}">
 {% endblock %}
 
 {% block content %}
@@ -224,6 +224,7 @@
                 <div class="food-order-compact">
                     <button type="button" id="foodOrderSave">Сохранить заказ</button>
                     <button type="button" id="foodOrderDetails">Стол и чеки</button>
+                    <button type="button" id="foodOrderNew" class="food-new-order" title="Сохранённый заказ останется в истории">Новый заказ</button>
                     <span id="foodOrderMessage" role="status"></span>
                 </div>
                 {% endif %}
@@ -255,7 +256,7 @@
     </div>
     <section id="foodOrdersWorkspace" class="food-orders-workspace" hidden aria-label="История заказов">
         <div class="food-history-top"><div><strong>История заказов</strong><span>Открытые и оплаченные заказы, печать кухни и пречеков</span></div>
-            <select id="foodOrderStatusFilter" aria-label="Статус"><option value="all">Все заказы</option><option value="open">Открытые</option><option value="paid">Оплаченные</option><option value="cancelled">Отменённые</option></select>
+            <select id="foodOrderStatusFilter" aria-label="Статус"><option value="all">Все заказы</option><option value="open">Открытые</option><option value="paid">Оплаченные</option><option value="external_paid">Внешняя ККМ</option><option value="cancelled">Отменённые</option></select>
         </div>
         <div id="foodOrderHistoryList" class="food-order-history-list"></div>
         <button type="button" id="foodOrderHistoryMore" hidden>Показать ещё</button>
@@ -266,6 +267,19 @@
             <div class="food-shell-head"><strong id="foodTicketHeading">Просмотр чека</strong><button type="button" data-food-ticket-close aria-label="Закрыть">×</button></div>
             <iframe id="foodTicketFrame" title="Предварительный просмотр чека"></iframe>
             <div class="food-ticket-footer"><button type="button" id="foodTicketPrint">Печать</button></div>
+        </div>
+    </div>
+    <div id="foodExternalModal" class="food-shell-modal" hidden role="dialog" aria-modal="true" aria-label="Чек внешней ККМ">
+        <div class="food-shell-backdrop" data-food-external-close></div>
+        <div class="food-shell-dialog">
+            <div class="food-shell-head"><strong>Чек внешней ККМ</strong><button type="button" data-food-external-close aria-label="Закрыть">×</button></div>
+            <div class="food-external-body">
+                <p>Сначала примите оплату и пробейте фискальный чек во внешней ККМ. Здесь сохранится только номер чека: Nika не спишет ингредиенты и не создаст повторную продажу.</p>
+                <label for="foodExternalReceiptNumber">Номер фискального чека</label>
+                <input id="foodExternalReceiptNumber" maxlength="120" autocomplete="off" placeholder="Номер чека внешней ККМ">
+                <span id="foodExternalError" role="alert"></span>
+                <button type="button" id="foodExternalConfirm">Подтвердить внешний чек</button>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -296,8 +310,13 @@
 			</div>
 
 			<div class="payment-actions">
+                {% if business_mode in ('foodservice','universal') %}
+                <button type="button" id="foodPrecheckCheckout" class="pay-btn food-checkout-primary" hidden>ОФОРМИТЬ ЗАКАЗ · ПРЕЧЕК</button>
+                <button type="button" id="foodCompletePayment" class="pay-btn food-checkout-secondary" hidden>ПРИНЯТЬ ОПЛАТУ</button>
+                <button type="button" id="foodExternalPayment" class="pay-btn food-checkout-secondary" hidden>ЧЕК ВНЕШНЕЙ ККМ</button>
+                {% endif %}
 
-				<button type="button" class="pay-btn" onclick="
+				<button type="button" class="pay-btn" id="normalCheckoutButton" onclick="
                     const cardAmount = Number(String(document.getElementById('cardInput').value || '').replace(',', '.')) || 0;
                     const kaspiAmount = Number(String(document.getElementById('kaspiInput').value || '').replace(',', '.')) || 0;
                     if (cardAmount > 0 || kaspiAmount > 0) {
@@ -832,7 +851,7 @@
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
 <script src="{{ url_for('static', filename='js/sales.js', v='20261022-food-universal-1') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20261022-menu-cards-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20261022-food-orders-checkout-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261020-production-merge-1') }}"></script>
 
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>

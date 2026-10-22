@@ -821,3 +821,26 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+/* Company-selected staged ordering, without modifying ordinary retail sales. */
+body.food-sales-mode.food-checkout-orders .payment-actions { display:flex; flex-direction:column; gap:8px; }
+body.food-sales-mode.food-checkout-orders .payment-actions > .food-checkout-primary,
+body.food-sales-mode.food-checkout-orders .payment-actions > .food-checkout-secondary {
+    display:block; width:100%; min-height:47px; margin:0; border:0; border-radius:11px;
+    padding:10px 11px; font:inherit; font-size:13px; font-weight:850; cursor:pointer;
+}
+body.food-sales-mode.food-checkout-orders .payment-actions > .food-checkout-primary {
+    color:#fff; background:linear-gradient(125deg,#554be8,#7770f6);
+}
+body.food-sales-mode.food-checkout-orders .payment-actions > .food-checkout-secondary {
+    color:#4338ca; background:#eae9ff; border:1px solid #c7c7f8;
+}
+body.food-sales-mode.food-checkout-orders .payment-actions > button:disabled { opacity:.6; cursor:wait; }
+.food-order-compact .food-new-order { background:#f8fafc; color:#334155; border-color:#d9e2ed; }
+.food-external-body { display:flex; flex-direction:column; gap:10px; padding:18px 20px 24px; }
+.food-external-body p { margin:0 0 6px; color:#475569; font-size:13px; line-height:1.55; }
+.food-external-body label { font-weight:800; color:#334155; font-size:13px; }
+.food-external-body input { min-height:42px; border:1px solid #cbd5e1; border-radius:10px; padding:9px 12px; font:inherit; }
+.food-external-body button { min-height:43px; border:0; border-radius:10px; background:#4f46e5; color:#fff; font:inherit; font-weight:800; cursor:pointer; }
+.food-external-body button:disabled { opacity:.6; cursor:wait; }
+#foodExternalError { font-size:12px; font-weight:700; color:#b91c1c; }
