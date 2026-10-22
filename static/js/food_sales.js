@@ -634,6 +634,7 @@
 
     let currentFoodOrderId = null;
     let currentFoodOrderSaved = false;
+    let currentSavedPlannedMethod = null;
     let foodOrderBusy = false;
     let foodCheckoutBusy = false;
     let activeFoodTicketKind = "precheck";
@@ -647,11 +648,29 @@
     function resetFoodOrder() {
         currentFoodOrderId = null;
         currentFoodOrderSaved = false;
+        currentSavedPlannedMethod = null;
         ["foodOrderTable", "foodOrderGuest", "foodOrderNote"].forEach(id => {
             const element = document.getElementById(id);
             if (element) element.value = "";
         });
         foodMessage("");
+    }
+
+    function selectedFoodPaymentMethod() {
+        const card = Number(String(document.getElementById("cardInput")?.value || "").replace(",", ".")) || 0;
+        const kaspi = Number(String(document.getElementById("kaspiInput")?.value || "").replace(",", ".")) || 0;
+        return kaspi > 0 ? "kaspi" : card > 0 ? "card" : "cash";
+    }
+
+    function applySavedFoodPaymentMethod(method, amount) {
+        for (const id of ["cashInput", "cardInput", "kaspiInput"]) {
+            const input = document.getElementById(id);
+            if (input) input.value = "";
+        }
+        if (method === "card" || method === "kaspi") {
+            const el = document.getElementById(method === "card" ? "cardInput" : "kaspiInput");
+            if (el) el.value = String(amount || 0);
+        }
     }
 
     async function saveFoodOrder() {
@@ -670,6 +689,7 @@
                     guest_name: document.getElementById("foodOrderGuest")?.value || "",
                     note: document.getElementById("foodOrderNote")?.value || "",
                     client_id: typeof selectedClient !== "undefined" ? selectedClient : null,
+                    planned_payment_method: selectedFoodPaymentMethod(),
                     cart: getCart()
                 })
             });
@@ -677,6 +697,7 @@
             if (!response.ok || !data.success) throw new Error(data.message || "Не удалось сохранить заказ");
             currentFoodOrderId = data.order.id;
             currentFoodOrderSaved = true;
+            currentSavedPlannedMethod = data.order.planned_payment_method || "cash";
             foodMessage("Заказ №" + currentFoodOrderId + " сохранён");
             return data.order;
         } catch (error) {
@@ -802,17 +823,25 @@
 
     async function payExistingFoodOrder() {
         if (foodCheckoutBusy || !getCart().length) return;
+        // Save/print first so we never charge an unsaved order or one whose
+        // payment type no longer matches the guest's printed precheck.
+        if (!currentFoodOrderId || !currentFoodOrderSaved) {
+            foodMessage("Сначала оформите заказ и напечатайте пречек");
+            return;
+        }
+        if (currentSavedPlannedMethod !== selectedFoodPaymentMethod()) {
+            foodMessage("Способ оплаты изменён — оформите обновлённый пречек перед оплатой");
+            return;
+        }
         foodCheckoutBusy = true;
         const button = document.getElementById("foodCompletePayment");
         if (button) button.disabled = true;
         try {
-            const order = await saveFoodOrder();
-            if (!order) return;
-            // Only /sales/pay records real sales, recipe stock movements and reKassa.
-            const card = Number(String(document.getElementById("cardInput")?.value || "").replace(",", ".")) || 0;
-            const kaspi = Number(String(document.getElementById("kaspiInput")?.value || "").replace(",", ".")) || 0;
-            if (card > 0 || kaspi > 0) pay();
-            else openCashChangeModal();
+            // /sales/pay is still the only source of paid sale and recipe stock
+            // movements. The shared handler controls fiscal receipt printing.
+            const method = currentSavedPlannedMethod;
+            if (method === "cash") openCashChangeModal();
+            else pay();
         } finally {
             foodCheckoutBusy = false;
             if (button) button.disabled = false;
@@ -824,10 +853,7 @@
             ? "Начать новый заказ? Сохранённый останется в истории."
             : "Текущий заказ не сохранён. Очистить корзину?")) return;
         clearFoodCart();
-        for (const id of ["cashInput","cardInput","kaspiInput"]) {
-            const input = document.getElementById(id);
-            if (input) input.value = "";
-        }
+        applySavedFoodPaymentMethod("cash", 0);
         foodMessage("Новый заказ");
         showFoodPrintStatus("");
     }
@@ -977,6 +1003,8 @@
             if (typeof renderCart === "function") renderCart();
             currentFoodOrderId = data.order.id;
             currentFoodOrderSaved = true;
+            currentSavedPlannedMethod = data.order.planned_payment_method || "cash";
+            applySavedFoodPaymentMethod(currentSavedPlannedMethod, data.order.total_amount);
             document.getElementById("foodOrderTable").value = data.order.table_name || "";
             document.getElementById("foodOrderGuest").value = data.order.guest_name || "";
             document.getElementById("foodOrderNote").value = data.order.note || "";
@@ -1101,7 +1129,11 @@
         loadHistory: () => loadFoodOrderHistory(),
         isFoodMode: () => currentMode() === "food",
         getSavedOrderId: () => currentFoodOrderSaved ? currentFoodOrderId : null,
-        clearOrder: resetFoodOrder
+        clearOrder: resetFoodOrder,
+        paymentNotice: (message) => {
+            foodMessage(message);
+            showFoodPrintStatus(message);
+        }
     };
 
     if (document.readyState === "loading") {

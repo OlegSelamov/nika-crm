@@ -54,6 +54,7 @@ def ensure_food_schema(cur):
             note TEXT NOT NULL DEFAULT '',
             client_id INTEGER,
             status TEXT NOT NULL DEFAULT 'open',
+            planned_payment_method TEXT NOT NULL DEFAULT 'cash',
             external_receipt_number TEXT,
             external_confirmed_at TIMESTAMP,
             cart JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -71,6 +72,7 @@ def ensure_food_schema(cur):
         CREATE UNIQUE INDEX IF NOT EXISTS uq_food_orders_sale_id
         ON food_orders(sale_id) WHERE sale_id IS NOT NULL
     """)
+    cur.execute("ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS planned_payment_method TEXT NOT NULL DEFAULT 'cash'")
     cur.execute("ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS external_receipt_number TEXT")
     cur.execute("ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS external_confirmed_at TIMESTAMP")
     # Legacy saved orders used timezone-aware datetime for a timezone-naive
@@ -263,7 +265,7 @@ def food_orders():
             where_sql = " AND ".join(conditions)
             cur.execute(f"""
                 SELECT id, status, table_name, guest_name, total_amount,
-                       sale_id, external_receipt_number, created_at, updated_at FROM food_orders
+                       planned_payment_method, sale_id, external_receipt_number, created_at, updated_at FROM food_orders
                 WHERE {where_sql}
                 ORDER BY id DESC LIMIT 21 OFFSET %s
             """, tuple(params + [(page - 1) * 20]))
@@ -281,6 +283,9 @@ def food_orders():
             table_name = str(data.get("table_name") or "").strip()[:80]
             guest_name = str(data.get("guest_name") or "").strip()[:100]
             note = str(data.get("note") or "").strip()[:500]
+            planned_payment_method = str(data.get("planned_payment_method") or "cash").strip().lower()
+            if planned_payment_method not in ("cash", "card", "kaspi"):
+                raise ValueError("Некорректный способ оплаты")
             cart, total = _item_cart(cur, company_id, data.get("cart"))
             client_id = int(data["client_id"]) if data.get("client_id") else None
             if client_id:
@@ -304,17 +309,17 @@ def food_orders():
                 return jsonify({"success": False, "message": "Оплаченный или отменённый заказ менять нельзя"}), 409
             cur.execute("""
                 UPDATE food_orders SET table_name=%s, guest_name=%s, note=%s,
-                    client_id=%s, cart=%s::jsonb, total_amount=%s, updated_at=%s
+                    client_id=%s, planned_payment_method=%s, cart=%s::jsonb, total_amount=%s, updated_at=%s
                 WHERE id=%s AND company_id=%s RETURNING *
-            """, (table_name, guest_name, note, client_id, payload, total, now_kz_for_timestamp(),
+            """, (table_name, guest_name, note, client_id, planned_payment_method, payload, total, now_kz_for_timestamp(),
                   order_id, company_id))
         else:
             cur.execute("""
                 INSERT INTO food_orders(company_id, created_by, table_name, guest_name, note,
-                    client_id, cart, total_amount, created_at, updated_at, kz_clock_fixed)
-                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,TRUE) RETURNING *
+                    client_id, planned_payment_method, cart, total_amount, created_at, updated_at, kz_clock_fixed)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,TRUE) RETURNING *
             """, (company_id, session["user_id"], table_name, guest_name, note,
-                  client_id, payload, total, now_kz_for_timestamp(), now_kz_for_timestamp()))
+                  client_id, planned_payment_method, payload, total, now_kz_for_timestamp(), now_kz_for_timestamp()))
         order = cur.fetchone()
         conn.commit()
         return jsonify({"success": True, "order": _serialize(order)})

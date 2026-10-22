@@ -868,3 +868,7 @@ body.food-sales-mode.food-checkout-orders .payment-actions > button:disabled { o
     color:#14532d; font-size:11px; line-height:1.45; font-weight:700; overflow-wrap:anywhere; }
 .food-print-status.is-error { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
 .food-print-status[hidden] { display:none !important; }
+
+/* In staged restaurant checkout, "Save order" duplicates the one-click
+   "Оформить заказ · пречек" action. Keep it in fast/retail modes. */
+body.food-sales-mode.food-checkout-orders #foodOrderSave { display:none !important; }

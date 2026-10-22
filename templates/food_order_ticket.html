@@ -137,6 +137,7 @@ body { width: 72mm; max-width: 100%; margin: 0 auto; padding: 1.5mm 1.5mm 2mm;
         <div class="ticket-state">ОПЛАЧЕНО ЧЕРЕЗ ВНЕШНЮЮ ККМ</div>
         {% if order.external_receipt_number %}<div class="ticket-secondary">Чек №{{ order.external_receipt_number }}</div>{% endif %}
     {% else %}
+        <div class="ticket-payment"><span>Планируемая оплата</span><strong>{{ {'cash':'Наличные','card':'Карта','kaspi':'Kaspi'}.get(order.planned_payment_method or 'cash', 'Наличные') }}</strong></div>
         <div class="ticket-state">ОЖИДАЕТ ОПЛАТЫ · НЕ ФИСКАЛЬНЫЙ ЧЕК</div>
     {% endif %}
     <hr class="ticket-line">
