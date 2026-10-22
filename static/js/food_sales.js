@@ -763,11 +763,13 @@
         // The browser cart differs from the server-normalized cart: compare
         // snapshots taken in the same representation, not raw/server JSON.
         return JSON.stringify({
-            cart: getCart(),
-            table: document.getElementById("foodOrderTable")?.value || "",
-            guest: document.getElementById("foodOrderGuest")?.value || "",
-            note: document.getElementById("foodOrderNote")?.value || "",
-            client: typeof selectedClient !== "undefined" ? selectedClient : null,
+            // Only stable checkout data belongs to the print gate. Customer
+            // fields and server-normalized metadata may change during render.
+            cart: getCart().map(item => ({
+                id: Number(item.id), qty: Number(item.qty), price: Number(item.price),
+                modifiers: item.modifiers || [],
+                excluded_ingredients: item.excluded_ingredients || []
+            })),
             payment: selectedFoodPaymentMethod()
         });
     }
@@ -877,31 +879,34 @@
             return;
         }
 
-        // Payment is a SECOND stage. The green button must have already saved
-        // the selected tender and successfully sent BOTH guest+kitchen tickets.
-        // Never save/print from this handler: otherwise one click can create
-        // duplicate tickets or accidentally turn a precheck into a paid sale.
-        if (!isFoodTicketCurrent()) {
-            const message = "Сначала нажмите «Оформить заказ · пречек» и дождитесь печати двух чеков.";
-            foodMessage(message);
-            showFoodPrintStatus("Оплата не проведена: сначала оформите и распечатайте заказ.", true);
-            return;
-        }
-
         foodCheckoutBusy = true;
         const button = document.getElementById("foodCompletePayment");
         if (button) button.disabled = true;
         try {
-            // Cash keeps the change dialog. Its stock guard is applied by the
-            // shared cash patch before the sale is submitted.
+            // Direct confirmation performs both stages, but an unchanged
+            // already-printed order must never print duplicate tickets.
+            if (!isFoodTicketCurrent()) {
+                const saved = await saveFoodOrder();
+                if (!saved) return;
+                try {
+                    if (!await printBothFoodTickets(saved)) {
+                        foodMessage("Заказ сохранён, но оба чека не распечатаны. Исправьте печать и повторите подтверждение.");
+                        return;
+                    }
+                } catch (error) {
+                    console.error("FOOD PRINT BEFORE PAYMENT:", error);
+                    foodMessage("Заказ сохранён, печать не завершена: " + (error.message || error));
+                    showFoodPrintStatus("Оплата не проведена: проверьте оба принтера.", true);
+                    return;
+                }
+            }
+
             if (currentSavedPlannedMethod === "cash") {
                 await openCashChangeModal();
                 return;
             }
-
-            // Card/Kaspi must bypass the later COMRUN window.pay override:
-            // submitSalePayment already knows food_mode + food_order_id and,
-            // without a real fiscal ticket, does NOT print a third receipt.
+            // COMRUN overrides window.pay: call the shared sale endpoint
+            // directly to preserve food_order_id and suppress a third check.
             if (typeof window.nikaConfirmNegativeStockSale === "function" &&
                 !(await window.nikaConfirmNegativeStockSale())) return;
 

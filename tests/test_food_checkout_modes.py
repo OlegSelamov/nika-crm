@@ -32,16 +32,15 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertNotIn('pay()', create)
         self.assertNotIn('submitSalePayment', create)
 
-    def test_confirm_payment_requires_precheck_and_never_reprints(self):
+    def test_confirm_payment_prints_only_if_needed(self):
         js = self.read("static/js/food_sales.js")
         pay = js.split('async function payExistingFoodOrder()', 1)[1].split('function newFoodOrder()', 1)[0]
         self.assertIn('if (!isFoodTicketCurrent())', pay)
-        self.assertIn('Оформить заказ · пречек', pay)
-        self.assertNotIn('await saveFoodOrder()', pay)
-        self.assertNotIn('printBothFoodTickets', pay)
-        self.assertNotIn('pay()', pay)
+        self.assertIn('await saveFoodOrder()', pay)
+        self.assertIn('await printBothFoodTickets(saved)', pay)
         self.assertIn('submitSalePayment({', pay)
         self.assertIn('openCashChangeModal()', pay)
+        self.assertNotIn('else pay()', pay)
         self.assertIn('window.nikaConfirmNegativeStockSale', pay)
         self.assertIn('lastFoodPrintUiSignature === currentFoodUiSignature()', js)
         self.assertIn('food_order_id:', self.read("static/js/sales.js"))
