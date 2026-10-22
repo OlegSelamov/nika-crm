@@ -772,7 +772,9 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 .food-exclusion-option:has(input:checked) { border-color:#ea580c; background:#ffedd5; }
 .food-cart-special-instructions { display:block; margin-top:4px; color:#b45309; font-size:11px; font-weight:700; line-height:1.4; }
 
-/* Menu-card redesign: deliberately overrides the former compact v2/v3 rules. */
+
+/* Food POS menu: four compact premium tiles per row on desktop.
+   Card height can grow for a long name; do not truncate dish titles. */
 .food-menu-panel .food-quick-filters { display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:2px 12px 10px; }
 .food-menu-panel .food-quick-filter { min-height:36px; padding:7px 12px; border:1px solid #dce5f3; border-radius:11px; background:#f8fafc; color:#334155; font:inherit; font-size:12px; font-weight:800; cursor:pointer; transition:background .15s,border-color .15s; }
 .food-menu-panel .food-quick-filter:hover { background:#eef2ff; border-color:#a5b4fc; }
@@ -782,20 +784,21 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 .food-category-popover .food-category-btn { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .food-category-popover .food-category-btn small { padding:2px 7px; border-radius:7px; background:#e0e7ff; color:#4338ca; font-size:10px; font-variant-numeric:tabular-nums; }
 .food-category-popover .food-category-btn.active small { background:#ffffff35; color:#fff; }
-.food-menu-panel .food-menu-grid { grid-template-columns:repeat(auto-fill,minmax(min(100%,168px),1fr)); gap:12px; padding:6px 13px 18px; }
-.food-menu-panel .food-menu-card { min-width:0; min-height:236px; padding:0; border:1px solid #e4eaf4; border-radius:17px; background:#fff; isolation:isolate; box-shadow:0 2px 9px #0f172a0b; transition:transform .15s,box-shadow .15s,border-color .15s; }
+.food-menu-panel .food-menu-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; padding:5px 9px 12px; }
+.food-menu-panel .food-menu-card { min-width:0; min-height:182px; padding:0; border:1px solid #e4eaf4; border-radius:13px; background:#fff; isolation:isolate; box-shadow:0 2px 9px #0f172a0b; transition:transform .15s,box-shadow .15s,border-color .15s; }
 .food-menu-panel .food-menu-card:hover { transform:translateY(-3px); border-color:#b8bcf5; box-shadow:0 13px 28px #2b34661f; }
 .food-menu-panel .food-menu-card:active { transform:scale(.986); }
-.food-menu-panel .food-menu-image { position:relative; flex:0 0 auto; height:122px; padding:0; background:linear-gradient(150deg,#f3f5ff,#f9fafb 54%,#f0f6ff); border-bottom:1px solid #f1f4f9; }
-.food-menu-panel .food-menu-image img { width:100%; height:100%; padding:9px 10px 7px; box-sizing:border-box; object-fit:contain; object-position:center; transition:transform .2s; }
+.food-menu-panel .food-menu-image { position:relative; flex:0 0 auto; height:82px; padding:0; background:linear-gradient(150deg,#f3f5ff,#f9fafb 54%,#f0f6ff); border-bottom:1px solid #f1f4f9; }
+.food-menu-panel .food-menu-image img { width:100%; height:100%; padding:5px 6px 4px; box-sizing:border-box; object-fit:contain; object-position:center; transition:transform .2s; }
 .food-menu-panel .food-menu-card:hover .food-menu-image img { transform:scale(1.045); }
-.food-menu-panel .food-menu-placeholder { width:60px; height:60px; border-radius:20px; font-size:27px; color:#6366f1; background:#e8eaff; }
-.food-menu-panel .food-menu-category-badge { position:absolute; top:9px; left:9px; max-width:calc(100% - 18px); padding:4px 8px; border:1px solid #e7eaf5; border-radius:8px; background:#ffffffec; font-size:10px; font-weight:750; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.food-menu-panel .food-menu-info { display:flex; flex:1 1 auto; flex-direction:column; justify-content:space-between; min-width:0; gap:11px; padding:11px 12px 12px; }
-.food-menu-panel .food-menu-name { display:block; overflow:visible; -webkit-line-clamp:unset; -webkit-box-orient:initial; min-height:0; max-height:none; color:#1e293b; font-size:13.5px; font-weight:800; line-height:1.33; word-break:normal; overflow-wrap:anywhere; white-space:normal; }
-.food-menu-panel .food-menu-card-footer { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:auto; }
-.food-menu-panel .food-menu-price { display:inline-flex; min-width:0; padding:6px 9px; border-radius:9px; color:#3730a3; background:#eeedff; font-size:14px; font-weight:900; line-height:1.2; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.food-menu-panel .food-menu-add-mark { flex:0 0 auto; display:grid; place-items:center; width:28px; height:28px; border-radius:9px; color:#fff; background:#4f46e5; font-size:21px; line-height:1; font-weight:500; }
-@media(max-width:900px) { .food-menu-panel .food-menu-grid { grid-template-columns:repeat(auto-fill,minmax(min(100%,155px),1fr)); gap:10px; } .food-menu-panel .food-menu-card { min-height:225px; } .food-menu-panel .food-menu-image { height:112px; } }
-@media(max-width:440px) { .food-menu-panel .food-quick-hint { display:none; } .food-menu-panel .food-quick-filter { flex:1 1 auto; padding:8px 9px; text-align:center; } .food-menu-panel .food-menu-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; padding:5px 10px 14px; } .food-menu-panel .food-menu-card { min-height:221px; border-radius:13px; } .food-menu-panel .food-menu-image { height:102px; } .food-menu-panel .food-menu-name { font-size:12.5px; } .food-menu-panel .food-menu-info { padding:9px 10px 10px; } .food-menu-panel .food-menu-price { font-size:12px; padding:6px; } .food-menu-panel .food-menu-add-mark { width:25px; height:25px; } }
+.food-menu-panel .food-menu-placeholder { width:45px; height:45px; border-radius:14px; font-size:21px; color:#6366f1; background:#e8eaff; }
+.food-menu-panel .food-menu-category-badge { position:absolute; top:5px; left:5px; max-width:calc(100% - 10px); padding:3px 5px; border:1px solid #e7eaf5; border-radius:7px; background:#ffffffec; font-size:9px; font-weight:750; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.food-menu-panel .food-menu-info { display:flex; flex:1 1 auto; flex-direction:column; justify-content:space-between; min-width:0; gap:6px; padding:7px 7px 8px; }
+.food-menu-panel .food-menu-name { display:block; overflow:visible; -webkit-line-clamp:unset; -webkit-box-orient:initial; min-height:0; max-height:none; color:#1e293b; font-size:11.7px; font-weight:800; line-height:1.27; word-break:normal; overflow-wrap:anywhere; white-space:normal; }
+.food-menu-panel .food-menu-card-footer { display:flex; align-items:center; justify-content:space-between; gap:3px; margin-top:auto; }
+.food-menu-panel .food-menu-price { display:inline-flex; min-width:0; padding:5px 6px; border-radius:8px; color:#3730a3; background:#eeedff; font-size:11.5px; font-weight:900; line-height:1.2; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.food-menu-panel .food-menu-add-mark { flex:0 0 auto; display:grid; place-items:center; width:23px; height:23px; border-radius:7px; color:#fff; background:#4f46e5; font-size:19px; line-height:1; font-weight:500; }
+@media(max-width:900px) { .food-menu-panel .food-menu-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; } .food-menu-panel .food-menu-card { min-height:188px; } .food-menu-panel .food-menu-image { height:85px; } }
+@media(max-width:640px) { .food-menu-panel .food-menu-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:440px) { .food-menu-panel .food-quick-hint { display:none; } .food-menu-panel .food-quick-filter { flex:1 1 auto; padding:8px 9px; text-align:center; } .food-menu-panel .food-menu-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; padding:5px 10px 14px; } .food-menu-panel .food-menu-card { min-height:190px; border-radius:13px; } .food-menu-panel .food-menu-image { height:84px; } .food-menu-panel .food-menu-name { font-size:12px; } .food-menu-panel .food-menu-info { padding:8px 8px 9px; } .food-menu-panel .food-menu-price { font-size:12px; padding:6px; } .food-menu-panel .food-menu-add-mark { width:25px; height:25px; } }
 @media(prefers-reduced-motion:reduce) { .food-menu-panel .food-menu-card,.food-menu-panel .food-menu-image img,.food-menu-panel .food-quick-filter { transition:none; } }

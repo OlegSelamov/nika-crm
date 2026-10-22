@@ -30,7 +30,9 @@ class FoodMenuCardsTests(unittest.TestCase):
         styles = (ROOT / "static/css/food_sales.css").read_text(encoding="utf-8")
         self.assertIn(".food-menu-panel .food-menu-name", styles)
         self.assertIn("-webkit-line-clamp:unset", styles)
-        self.assertIn("height:122px", styles)
+        self.assertIn("height:82px", styles)
+        self.assertIn("grid-template-columns:repeat(4,minmax(0,1fr))", styles)
+        self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", styles)
         self.assertIn("food-menu-category-badge", styles)
 
     def test_js_syntax(self):
