@@ -16,6 +16,7 @@ def sample_order(**overrides):
         "cashier_name": "Асем", "table_name": "5", "guest_name": "Гость",
         "status": "open", "note": "Острый соус отдельно",
         "total_amount": 1550, "payment_method": None,
+        "planned_payment_method": "cash",
         "cash_amount": 0, "cash_received": 0, "change_amount": 0,
         "card_amount": 0, "kaspi_amount": 0, "external_receipt_number": None,
         "cart": [
@@ -51,6 +52,15 @@ class FoodTicketLayoutTests(unittest.TestCase):
         self.assertIn("ОЖИДАЕТ ОПЛАТЫ", html)
         self.assertNotIn("Сдача", html)
         self.assertNotIn("Kaspi оплата", html)
+
+    def test_unpaid_precheck_shows_chosen_payment_but_not_paid(self):
+        for method, label in (("cash", "Наличные"), ("card", "Карта"), ("kaspi", "Kaspi")):
+            with self.subTest(method=method):
+                html = render("precheck", planned_payment_method=method)
+                self.assertIn("Планируемая оплата", html)
+                self.assertIn(label, html)
+                self.assertIn("ОЖИДАЕТ ОПЛАТЫ", html)
+                self.assertNotIn("КВИТАНЦИЯ ОБ ОПЛАТЕ", html)
 
     def test_paid_cash_displays_received_and_correct_change(self):
         html = render("precheck", status="paid", payment_method="cash",

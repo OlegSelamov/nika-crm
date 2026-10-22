@@ -35,10 +35,28 @@ class FoodCheckoutModesTests(unittest.TestCase):
     def test_paid_sale_uses_existing_pay_flow(self):
         js = self.read("static/js/food_sales.js")
         pay = js.split('async function payExistingFoodOrder()', 1)[1].split('function newFoodOrder()', 1)[0]
-        self.assertIn('await saveFoodOrder()', pay)
+        self.assertIn('if (!currentFoodOrderId || !currentFoodOrderSaved)', pay)
+        self.assertIn('currentSavedPlannedMethod !== selectedFoodPaymentMethod()', pay)
         self.assertIn('pay()', pay)
         self.assertIn('openCashChangeModal()', pay)
         self.assertIn('food_order_id:', self.read("static/js/sales.js"))
+
+    def test_precheck_remembers_payment_without_registering_sale(self):
+        js = self.read("static/js/food_sales.js")
+        backend = self.read("routes/food_orders.py")
+        sales_js = self.read("static/js/sales.js")
+        tpl = self.read("templates/food_order_ticket.html")
+        self.assertIn("planned_payment_method: selectedFoodPaymentMethod()", js)
+        self.assertIn('payment: order.planned_payment_method || "cash"', js)
+        self.assertIn('planned_payment_method TEXT NOT NULL DEFAULT', backend)
+        self.assertIn('planned_payment_method=%s', backend)
+        self.assertIn('planned_payment_method FROM food_orders', backend)
+        self.assertIn('order["planned_payment_method"] != payment_method', backend)
+        self.assertIn('food_config["food_checkout_mode"] == "orders"', self.read("routes/rekassa_comrun.py"))
+        self.assertIn("Планируемая оплата", tpl)
+        self.assertIn("fiscalization_skipped === true", sales_js)
+        self.assertIn('if (isFoodCheckout && data.fiscalization_skipped === true)', sales_js)
+        self.assertIn("openSaleModal(data.sale_id, { autoPrint: true });", sales_js)
 
     def test_external_kassa_never_fakes_internal_sale(self):
         route = self.read("routes/food_orders.py")

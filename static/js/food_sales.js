@@ -763,7 +763,8 @@
         // not the current unsaved cart. Same order -> no repeat accepted jobs.
         const fingerprint = JSON.stringify({
             cart: order.cart, table: order.table_name, guest: order.guest_name,
-            note: order.note, client: order.client_id
+            note: order.note, client: order.client_id,
+            payment: order.planned_payment_method || "cash"
         });
         const [guestTicket, kitchenTicket] = await Promise.allSettled([
             getSavedFoodTicketHtml(order.id, "precheck"),

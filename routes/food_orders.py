@@ -209,12 +209,12 @@ def _serialize(order):
     return result
 
 
-def verify_payment_order(cur, company_id, order_id, cart):
+def verify_payment_order(cur, company_id, order_id, cart, payment_method=None):
     """Lock and validate a saved restaurant order before any sale is created."""
     if not _food_access(cur) or not company_id:
         raise ValueError("Конфигурация общепита не включена")
     cur.execute("""
-        SELECT id, cart, status, sale_id FROM food_orders
+        SELECT id, cart, status, sale_id, planned_payment_method FROM food_orders
         WHERE id=%s AND company_id=%s FOR UPDATE
     """, (order_id, company_id))
     order = cur.fetchone()
@@ -222,6 +222,8 @@ def verify_payment_order(cur, company_id, order_id, cart):
         raise ValueError("Заказ общепита не найден")
     if order["status"] != "open" or order["sale_id"]:
         raise ValueError("Заказ уже оплачен или отменён. Не проводите оплату повторно")
+    if payment_method is not None and order["planned_payment_method"] != payment_method:
+        raise ValueError("Способ оплаты отличается от пречека. Оформите пречек с новой оплатой")
     saved = order["cart"]
     if isinstance(saved, str):
         saved = json.loads(saved)

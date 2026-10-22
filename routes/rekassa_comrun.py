@@ -350,7 +350,10 @@ def pay_sale_comrun():
                 if food_order_id is not None:
                     try:
                         food_order_id = int(food_order_id)
-                        verify_payment_order(cur, company_id, food_order_id, cart)
+                        verify_payment_order(
+                            cur, company_id, food_order_id, cart,
+                            payment_method if food_config and food_config["food_checkout_mode"] == "orders" else None,
+                        )
                     except (TypeError, ValueError) as exc:
                         conn.rollback()
                         return jsonify({"success": False, "error": str(exc)}), 409
