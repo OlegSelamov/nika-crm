@@ -158,6 +158,12 @@ const printers = Object.freeze({
     saveSettings: (settings) =>
         ipcRenderer.invoke("printer:save-settings", settings),
     testReceipt: () => ipcRenderer.invoke("printer:test-receipt"),
+    testKitchen: () => ipcRenderer.invoke("printer:test-kitchen"),
+    printFoodOrder: (payload) => ipcRenderer.invoke("printer:print-food-order", {
+        ...payload,
+        guestHtml: prepareReceiptPayload({html:payload.guestHtml}).html,
+        kitchenHtml: prepareReceiptPayload({html:payload.kitchenHtml}).html
+    }),
     testDocument: () => ipcRenderer.invoke("printer:test-document"),
     printReceipt: (payload) =>
         ipcRenderer.invoke("printer:print-receipt", prepareReceiptPayload(payload)),

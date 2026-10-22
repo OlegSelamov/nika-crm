@@ -112,10 +112,14 @@ function installDialogFocusGuard(contents) {
 
 const DEFAULT_PRINTER_SETTINGS = Object.freeze({
     receipt_printer: null,
+    kitchen_printer: null,
     document_printer: null,
     receipt_paper_width: 80,
     receipt_offset_mm: -2,
     receipt_copies: 1,
+    kitchen_paper_width: 80,
+    kitchen_offset_mm: -2,
+    kitchen_copies: 1,
     document_copies: 1,
     auto_print_receipt: false,
     document_landscape: false,
@@ -183,16 +187,23 @@ function normalizeKaspiIp(value) {
 
 function normalizeSettings(value = {}) {
     const paperWidth = Number(value.receipt_paper_width);
+    const kitchenWidth = Number(value.kitchen_paper_width);
     const rawOffset = Number(value.receipt_offset_mm);
+    const rawKitchenOffset = Number(value.kitchen_offset_mm);
     const receiptOffset = Number.isFinite(rawOffset)
         ? Math.max(-5, Math.min(rawOffset, 5))
         : -2;
     return {
         receipt_printer: normalizePrinterName(value.receipt_printer),
+        kitchen_printer: normalizePrinterName(value.kitchen_printer),
         document_printer: normalizePrinterName(value.document_printer),
         receipt_paper_width: paperWidth === 58 ? 58 : 80,
         receipt_offset_mm: receiptOffset,
         receipt_copies: toCopyCount(value.receipt_copies),
+        kitchen_paper_width: kitchenWidth === 58 ? 58 : 80,
+        kitchen_offset_mm: Number.isFinite(rawKitchenOffset)
+            ? Math.max(-5, Math.min(rawKitchenOffset, 5)) : -2,
+        kitchen_copies: toCopyCount(value.kitchen_copies),
         document_copies: toCopyCount(value.document_copies),
         auto_print_receipt: value.auto_print_receipt === true,
         document_landscape: value.document_landscape === true,
@@ -309,6 +320,9 @@ async function getPrinterState() {
             receipt: settings.receipt_printer
                 ? names.has(settings.receipt_printer)
                 : false,
+            kitchen: settings.kitchen_printer
+                ? names.has(settings.kitchen_printer)
+                : false,
             document: settings.document_printer
                 ? names.has(settings.document_printer)
                 : false
@@ -319,20 +333,23 @@ async function getPrinterState() {
 function ensureSelectedPrinter(deviceName, kind) {
     if (!deviceName) {
         throw new Error(
-            kind === "receipt"
-                ? "Сначала выберите чековый принтер в настройках"
-                : "Сначала выберите принтер документов в настройках"
+            kind === "kitchen"
+                ? "Сначала выберите принтер кухни в настройках"
+                : kind === "receipt"
+                    ? "Сначала выберите чековый принтер в настройках"
+                    : "Сначала выберите принтер документов в настройках"
         );
     }
 }
 
-function receiptPage(html, title = "Чек") {
-    const paperWidth = settings.receipt_paper_width === 58 ? 58 : 80;
+function receiptPage(html, title = "Чек", paper = {}) {
+    const paperWidth = paper.width === 58 ? 58 : paper.width === 80 ? 80
+        : (settings.receipt_paper_width === 58 ? 58 : 80);
     // У принтеров с лентой 80 мм реальная печатная область обычно 68–72 мм.
     // Берём безопасную ширину, чтобы правый край не обрезался драйвером.
     const contentWidth = paperWidth === 58 ? 48 : 68;
     const baseSideMargin = (paperWidth - contentWidth) / 2;
-    const offset = Number(settings.receipt_offset_mm || 0);
+    const offset = Number(paper.offset ?? settings.receipt_offset_mm ?? 0);
     const leftMargin = Math.max(0, baseSideMargin + offset);
     const rightMargin = Math.max(
         0,
@@ -509,10 +526,10 @@ async function printHtml({ html, title, kind, landscape }) {
         throw new Error("Документ слишком большой для печати");
     }
 
-    const receipt = kind === "receipt";
-    const deviceName = receipt
-        ? settings.receipt_printer
-        : settings.document_printer;
+    const kitchen = kind === "kitchen";
+    const receipt = kind === "receipt" || kitchen;
+    const deviceName = kitchen ? settings.kitchen_printer
+        : receipt ? settings.receipt_printer : settings.document_printer;
     ensureSelectedPrinter(deviceName, kind);
 
     const printers = await getPrinters();
@@ -531,7 +548,9 @@ async function printHtml({ html, title, kind, landscape }) {
 
     try {
         const page = receipt
-            ? receiptPage(html, title)
+            ? receiptPage(html, title, kitchen
+                ? {width: settings.kitchen_paper_width, offset: settings.kitchen_offset_mm}
+                : {width: settings.receipt_paper_width, offset: settings.receipt_offset_mm})
             : documentPage(
                 html,
                 title,
@@ -557,9 +576,8 @@ async function printHtml({ html, title, kind, landscape }) {
             silent: true,
             printBackground: true,
             deviceName,
-            copies: receipt
-                ? settings.receipt_copies
-                : settings.document_copies,
+            copies: kitchen ? settings.kitchen_copies
+                : receipt ? settings.receipt_copies : settings.document_copies,
             margins: { marginType: "none" }
         };
 
@@ -864,6 +882,54 @@ function registerKaspiPosIpc() {
     });
 }
 
+
+// One user action queues both documents. A persistent-in-process success set
+// prevents a failed kitchen job from reprinting an already accepted guest job.
+// These keys refer only to printer spool acceptance, not physical paper output.
+const acceptedFoodPrints = new Map();
+let foodPrintQueue = Promise.resolve();
+function printFoodOrderBatch(payload = {}) {
+    const operation = foodPrintQueue.then(async () => {
+        const id = Number(payload.orderId);
+        const fingerprint = String(payload.fingerprint || "");
+        if (!Number.isSafeInteger(id) || id <= 0 || fingerprint.length < 8 ||
+            fingerprint.length > 200000) {
+            throw new Error("Неверный идентификатор или состав заказа общепита");
+        }
+        const key = id + ":" + fingerprint;
+        const prior = acceptedFoodPrints.get(key) || {guest:false, kitchen:false};
+        const results = {};
+        for (const [label, field, kind, title] of [
+            ["guest", "guestHtml", "receipt", "Пречек гостю №" + id],
+            ["kitchen", "kitchenHtml", "kitchen", "Заказ на кухню №" + id]
+        ]) {
+            if (prior[label]) {
+                results[label] = {success:true, alreadySent:true};
+                continue;
+            }
+            try {
+                await printHtml({html: payload[field], title, kind});
+                prior[label] = true;
+                results[label] = {success:true, alreadySent:false};
+            } catch (error) {
+                results[label] = {success:false, error:error.message || String(error)};
+            }
+        }
+        acceptedFoodPrints.set(key, prior);
+        // Prevent unbounded growth on a permanently running checkout device.
+        if (acceptedFoodPrints.size > 200) {
+            acceptedFoodPrints.delete(acceptedFoodPrints.keys().next().value);
+        }
+        return {
+            success: results.guest.success && results.kitchen.success,
+            guest: results.guest,
+            kitchen: results.kitchen
+        };
+    });
+    foodPrintQueue = operation.then(() => {}, () => {});
+    return operation;
+}
+
 function registerPrinterIpc() {
     ipcMain.handle("printer:get-state", async (event) => {
         requireMainWindow(event);
@@ -889,6 +955,20 @@ function registerPrinterIpc() {
             title: "Тест чекового принтера",
             kind: "receipt"
         });
+    });
+
+    ipcMain.handle("printer:test-kitchen", async (event) => {
+        requireMainWindow(event);
+        return printHtml({
+            html: '<div style="font:700 16px Arial;text-align:center">ТЕСТ КУХНИ</div><hr><p>Тестовый заказ №001</p><p>Шаурма × 1</p><strong>Без лука</strong>',
+            title: "Тест кухонного принтера",
+            kind: "kitchen"
+        });
+    });
+
+    ipcMain.handle("printer:print-food-order", async (event, payload = {}) => {
+        requireMainWindow(event);
+        return printFoodOrderBatch(payload);
     });
 
     ipcMain.handle("printer:test-document", async (event) => {
