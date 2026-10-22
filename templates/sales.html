@@ -2,7 +2,7 @@
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-compact-toolbar-v1') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261022-food-checkout-confirm-v2') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261022-food-history-v8') }}">
 {% endblock %}
 
 {% block content %}
@@ -311,7 +311,7 @@
 
 			<div class="payment-actions">
                 {% if business_mode in ('foodservice','universal') %}
-                <button type="button" id="foodPrecheckCheckout" class="pay-btn food-checkout-primary" hidden>ОФОРМИТЬ ЗАКАЗ · ПРЕЧЕК</button>
+                <button type="button" id="foodPrecheckCheckout" class="pay-btn food-checkout-primary" hidden>ОФОРМИТЬ ЗАКАЗ</button>
                 <button type="button" id="foodCompletePayment" class="pay-btn food-checkout-secondary" hidden>ПОДТВЕРДИТЬ ОПЛАТУ</button>
                 <button type="button" id="foodExternalPayment" class="pay-btn food-checkout-secondary" hidden>ЧЕК ВНЕШНЕЙ ККМ</button>
                 <div id="foodPrintStatus" class="food-print-status" role="status" aria-live="polite" hidden></div>
@@ -852,7 +852,7 @@
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
 <script src="{{ url_for('static', filename='js/sales.js', v='20261022-food-two-tickets-fix-v5') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20261022-food-payment-stage-v7') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20261022-food-history-v8') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261022-food-payment-stage-v6') }}"></script>
 
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>

@@ -991,6 +991,9 @@
         const modal = document.getElementById("foodTicketModal");
         const frame = document.getElementById("foodTicketFrame");
         if (!modal || !frame) return;
+        // Place the overlay outside hidden sales/history containers.
+        // Otherwise history buttons open an invisible modal on the sales tab.
+        if (modal.parentElement !== document.body) document.body.appendChild(modal);
         activeFoodTicketKind = kind;
         document.getElementById("foodTicketHeading").textContent = kind === "kitchen" ? "Заказ на кухню" : "Пречек гостю";
         const printButton = document.getElementById("foodTicketPrint");
@@ -1103,30 +1106,53 @@
         if (!response.ok || !data.success) { foodMessage(data.message || "Ошибка истории"); return; }
         const list = document.getElementById("foodOrderHistoryList");
         if (!append) list.replaceChildren();
+        if (!append && !(data.orders || []).length) {
+            const empty = document.createElement("div");
+            empty.className = "food-history-empty";
+            empty.textContent = "Заказов с выбранным статусом пока нет";
+            list.appendChild(empty);
+        }
         for (const order of data.orders || []) {
             const row = document.createElement("div");
             row.className = "food-history-row";
             const label = document.createElement("div");
+            label.className = "food-history-info";
             const title = document.createElement("strong");
-            title.textContent = "№" + order.id + " · " + (order.table_name || "Без стола");
-            const detail = document.createElement("small");
-            detail.textContent = (order.status === "paid" ? "Оплачен в Nika" : order.status === "external_paid" ? "Чек внешней ККМ №" + (order.external_receipt_number || "—") + " · без списания склада" : order.status === "cancelled" ? "Отменён" : "Ожидает оплаты") +
-                " · " + money(order.total_amount) + " · " + (order.created_at_display || order.created_at.slice(0, 16).replace("T", " "));
-            label.append(title, detail);
+            title.textContent = "Заказ №" + order.id + " · " + (order.table_name || "Без стола");
+            const details = document.createElement("div");
+            details.className = "food-history-details";
+            const badge = document.createElement("span");
+            badge.className = "food-history-badge food-history-badge-" +
+                (["paid", "open", "external_paid", "cancelled"].includes(order.status) ? order.status : "open");
+            badge.textContent = order.status === "paid" ? "Оплачен"
+                : order.status === "external_paid" ? "Внешняя ККМ"
+                : order.status === "cancelled" ? "Отменён" : "Ожидает оплаты";
+            const total = document.createElement("span");
+            total.className = "food-history-amount";
+            total.textContent = money(order.total_amount);
+            const time = document.createElement("span");
+            time.className = "food-history-time";
+            time.textContent = order.created_at_display || String(order.created_at || "").slice(0, 16).replace("T", " ");
+            details.append(badge, total, time);
+            label.append(title, details);
+
             const buttons = document.createElement("div");
+            buttons.className = "food-history-actions";
             if (order.status === "open") {
                 const open = document.createElement("button");
-                open.textContent = "Открыть";
+                open.type = "button";
+                open.textContent = "Открыть заказ";
                 open.addEventListener("click", () => openFoodOrder(order.id));
                 buttons.appendChild(open);
             }
             for (const [kind, caption] of [["kitchen","Кухня"],["precheck","Пречек"]]) {
                 const print = document.createElement("button");
+                print.type = "button";
                 print.textContent = caption;
                 print.addEventListener("click", () => openFoodTicket(order.id, kind));
                 buttons.appendChild(print);
             }
-            row.append(label,buttons);
+            row.append(label, buttons);
             list.appendChild(row);
         }
         foodOrderPage += 1;
