@@ -802,3 +802,11 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 @media(max-width:640px) { .food-menu-panel .food-menu-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:440px) { .food-menu-panel .food-quick-hint { display:none; } .food-menu-panel .food-quick-filter { flex:1 1 auto; padding:8px 9px; text-align:center; } .food-menu-panel .food-menu-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; padding:5px 10px 14px; } .food-menu-panel .food-menu-card { min-height:190px; border-radius:13px; } .food-menu-panel .food-menu-image { height:84px; } .food-menu-panel .food-menu-name { font-size:12px; } .food-menu-panel .food-menu-info { padding:8px 8px 9px; } .food-menu-panel .food-menu-price { font-size:12px; padding:6px; } .food-menu-panel .food-menu-add-mark { width:25px; height:25px; } }
 @media(prefers-reduced-motion:reduce) { .food-menu-panel .food-menu-card,.food-menu-panel .food-menu-image img,.food-menu-panel .food-quick-filter { transition:none; } }
+
+/* The app's desktop sidebar grows from 100px to 240px.
+   Switch the menu grid to three comfortable cards instead of squeezing four. */
+@media (min-width: 901px) {
+    .sidebar:not(.collapsed) ~ .content .food-menu-panel .food-menu-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}

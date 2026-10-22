@@ -33,6 +33,9 @@ class FoodMenuCardsTests(unittest.TestCase):
         self.assertIn("height:82px", styles)
         self.assertIn("grid-template-columns:repeat(4,minmax(0,1fr))", styles)
         self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", styles)
+        self.assertIn(".sidebar:not(.collapsed) ~ .content .food-menu-panel .food-menu-grid", styles)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", styles)
+        self.assertIn("@media (min-width: 901px)", styles)
         self.assertIn("food-menu-category-badge", styles)
 
     def test_js_syntax(self):
