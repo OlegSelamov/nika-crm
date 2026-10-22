@@ -44,8 +44,8 @@ class FoodDualPrintTests(unittest.TestCase):
         self.assertNotIn("pay()", code)
         self.assertNotIn("fiscalize", code)
         receipt = self.read("templates/food_order_ticket.html")
-        self.assertIn('{% if kind == "precheck" %}', receipt)
-        self.assertIn('{% if kind == "kitchen" %}', receipt)
+        self.assertIn("{% if kind == 'precheck' %}", receipt)
+        self.assertIn("{% if kind == 'kitchen' %}", receipt)
 
 
 if __name__ == "__main__":
