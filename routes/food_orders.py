@@ -434,6 +434,7 @@ def food_order_ticket(order_id, kind):
         return render_template("food_order_ticket.html",
                                kind=kind, order=_serialize(order),
                                company=company,
-                               money=receipt_money, qty_text=receipt_quantity)
+                               money=receipt_money, qty_text=receipt_quantity,
+                               ticket_date=order["created_at"].strftime("%d.%m.%y %H:%M") if order.get("created_at") else "")
     finally:
         pool.putconn(conn)

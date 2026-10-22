@@ -1,35 +1,142 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><title>{{ "Заказ на кухню" if kind == "kitchen" else "Пречек" }} №{{ order.id }}</title>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>{{ 'Заказ на кухню' if kind == 'kitchen' else 'Квитанция к заказу' }} №{{ order.id }}</title>
 <style>
-@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{margin:0 auto;padding:10px;width:76mm;max-width:100%;font:13px/1.35 Arial,sans-serif;color:#111}
-.company-head{text-align:center;font-size:12px;line-height:1.4;overflow-wrap:anywhere}.company-head strong{font-size:15px;display:block;margin-bottom:3px}h1{font-size:17px;text-align:center;margin:8px 0}.muted{font-size:11px;color:#555}.line{border-top:1px dashed #555;margin:9px 0}
-.item{display:flex;justify-content:space-between;gap:9px;margin:7px 0}.item>div:first-child{flex:1}.total{display:flex;justify-content:space-between;font-size:17px;font-weight:700;margin:12px 0}
-.actions{display:flex;gap:8px;justify-content:center;margin:12px 0}.actions[hidden]{display:none!important}.actions button{padding:8px 14px}@media print{.actions{display:none}}
-</style></head><body>
-<div class="actions" {% if request.args.get("embed") == "1" %}hidden{% endif %}><button onclick="window.print()">Печать</button><button onclick="window.close()">Закрыть</button></div>
-{% if kind == "kitchen" %}
-<h1>ЗАКАЗ НА КУХНЮ</h1>
-{% else %}
-<div class="company-head">
-    <strong>{{ company.name if company else "Nika Business" }}</strong>
-    {% if company and company.bin %}<div>{{ "ИИН" if company.legal_form == "ip" else "БИН" }}: {{ company.bin }}</div>{% endif %}
-    {% if company and company.address %}<div>{{ company.address }}</div>{% endif %}
-    {% if company and company.phone %}<div>Тел.: {{ company.phone }}</div>{% endif %}
+@page { size: 80mm auto; margin: 0; }
+* { box-sizing: border-box; }
+html { margin: 0; padding: 0; background:#fff; }
+body { width: 72mm; max-width: 100%; margin: 0 auto; padding: 2mm 1.5mm 3mm;
+       font: 600 14px/1.32 Arial, Helvetica, sans-serif; color:#000; background:#fff; }
+.ticket-root { min-width:0; width:100%; color:#000; overflow-wrap:anywhere; }
+.ticket-brand { text-align:center; margin:0 0 7px; }
+.ticket-brand strong { display:block; font-size:18px; font-weight:900; line-height:1.2; }
+.ticket-brand div { margin-top:2px; font-size:13px; font-weight:600; line-height:1.28; }
+.ticket-title { font-size:15px; font-weight:900; line-height:1.27; text-align:center;
+                margin:8px 0; letter-spacing:0; }
+.ticket-line { border:0; border-top:1px dashed #000; margin:8px 0; }
+.ticket-info { display:flex; justify-content:space-between; align-items:baseline;
+               gap:5px; width:100%; margin:4px 0; font-size:14px; font-weight:700; }
+.ticket-info > :first-child { min-width:0; flex:1 1 auto; }
+.ticket-info > :last-child { min-width:0; flex:0 1 auto; text-align:right; }
+.ticket-date { white-space:nowrap; font-size:13px; }
+.ticket-secondary { font-size:13px; margin:4px 0; font-weight:600; }
+.item { padding:6px 0 7px; border-bottom:1px dashed #777; break-inside:avoid; }
+.item:last-child { border-bottom:0; }
+.item-head { display:flex; justify-content:space-between; gap:6px; align-items:flex-start; }
+.item-name { font-size:15px; line-height:1.24; font-weight:900; min-width:0; flex:1 1 auto; }
+.item-sum { font-size:14px; line-height:1.25; font-weight:900; flex:0 0 auto; white-space:nowrap; }
+.item-meta { display:flex; justify-content:space-between; gap:5px; margin-top:4px; font-size:13px; font-weight:700; }
+.item-meta > :last-child { text-align:right; white-space:nowrap; }
+.item-mod { font-size:13px; margin-top:3px; padding-left:7px; font-weight:700; line-height:1.3; }
+.item-excluded { font-size:14px; margin-top:3px; padding-left:7px; font-weight:900; line-height:1.3; }
+.ticket-note { font-size:14px; font-weight:800; margin:6px 0; }
+.ticket-note strong { display:block; font-size:13px; }
+.ticket-total { display:flex; gap:5px; align-items:baseline; justify-content:space-between; margin:8px 0 5px; font-size:17px; font-weight:900; }
+.ticket-total > :last-child { flex:0 0 auto; white-space:nowrap; text-align:right; }
+.ticket-payment { display:flex; justify-content:space-between; gap:6px;
+                  font-size:14px; font-weight:750; margin:4px 0; }
+.ticket-payment > :first-child { flex:1 1 auto; min-width:0; }
+.ticket-payment > :last-child { flex:0 0 auto; font-weight:900; white-space:nowrap; }
+.ticket-state { text-align:center; font-size:13px; font-weight:900; padding:3px 0 0; }
+.ticket-footer { text-align:center; margin-top:9px; font-size:15px; font-weight:900; }
+.ticket-actions { display:flex; justify-content:center; gap:8px; padding:10px 0; }
+.ticket-actions[hidden] { display:none !important; }
+.ticket-actions button { padding:9px 14px; font-size:14px; }
+.kitchen-ticket .ticket-title { font-size:19px; }
+.kitchen-ticket .item-name { font-size:17px; }
+.kitchen-ticket .item-sum { font-size:15px; }
+.kitchen-ticket .item-meta { font-size:14px; }
+.kitchen-ticket .item-mod, .kitchen-ticket .item-excluded { font-size:15px; }
+@media print {
+    .ticket-actions { display:none !important; }
+    body { width:100%; max-width:100%; padding:1mm 0 2mm; }
+    .ticket-root { box-shadow:none; }
+}
+</style>
+</head>
+<body>
+<div class="ticket-actions" {% if request.args.get('embed') == '1' %}hidden{% endif %}>
+    <button type="button" onclick="window.print()">Печать</button>
+    <button type="button" onclick="window.close()">Закрыть</button>
 </div>
-{% endif %}
-<div class="line"></div>
-<div>Заказ №{{ order.id }}</div>
-<div>Дата: {{ order.created_at_display or order.created_at.replace("T"," ")[:19] }}</div>
-{% if order.table_name %}<div>Стол: <strong>{{ order.table_name }}</strong></div>{% endif %}
-{% if order.guest_name %}<div>Гость: {{ order.guest_name }}</div>{% endif %}
-<div class="line"></div>
-{% for row in order.cart %}
-<div class="item"><div><strong>{{ row.name }}</strong><div class="muted">{{ row.qty }} {{ row.unit }}</div>
-{% for mod in row.modifiers %}<div class="muted">+ {{ mod.name }}</div>{% endfor %}
-{% for excluded in row.excluded_ingredients|default([]) %}<div class="muted"><strong>Без: {{ excluded.name }}</strong></div>{% endfor %}</div>
-{% if kind == "precheck" %}<strong>{{ "%.2f"|format(row.line_total) }} ₸</strong>{% endif %}</div>
-{% endfor %}
-{% if order.note %}<div class="line"></div><strong>Комментарий:</strong><div>{{ order.note }}</div>{% endif %}
-{% if kind == "precheck" %}<div class="line"></div><div class="total"><span>ИТОГО</span><span>{{ "%.2f"|format(order.total_amount) }} ₸</span></div>{% endif %}
-{% if kind == "precheck" %}<div class="line"></div><div style="text-align:center;font-weight:700">Приятного аппетита!</div>{% endif %}
-</body></html>
+<section class="ticket-root {{ 'kitchen-ticket' if kind == 'kitchen' else 'guest-ticket' }}">
+    <div class="ticket-brand">
+        <strong>{{ company.name if company else 'Nika Business' }}</strong>
+        {% if kind == 'precheck' %}
+            {% if company and company.bin %}<div>{{ 'ИИН' if company.legal_form == 'ip' else 'БИН' }}: {{ company.bin }}</div>{% endif %}
+            {% if company and company.address %}<div>{{ company.address }}</div>{% endif %}
+            {% if company and company.phone %}<div>Тел.: {{ company.phone }}</div>{% endif %}
+        {% endif %}
+    </div>
+    <hr class="ticket-line">
+    <div class="ticket-info">
+        <strong>Заказ №{{ order.id }}</strong>
+        <span class="ticket-date">{{ ticket_date }}</span>
+    </div>
+    <div class="ticket-info">
+        <span>Кассир: {{ order.cashier_name or '—' }}</span>
+        <span>Стол №{{ order.table_name or '—' }}</span>
+    </div>
+    {% if order.guest_name %}<div class="ticket-secondary">Гость: {{ order.guest_name }}</div>{% endif %}
+    <h1 class="ticket-title">
+        {% if kind == 'kitchen' %}ЗАКАЗ НА КУХНЮ
+        {% elif order.status in ('paid', 'external_paid') %}КВИТАНЦИЯ ОБ ОПЛАТЕ
+        {% else %}КВИТАНЦИЯ К ЗАКАЗУ{% endif %}
+    </h1>
+    <hr class="ticket-line">
+    {% for row in order.cart %}
+    <div class="item">
+        <div class="item-head">
+            <strong class="item-name">{{ row.name }}</strong>
+            {% if kind == 'precheck' %}
+            <strong class="item-sum">{{ money(row.line_total) }} ₸</strong>
+            {% else %}
+            <strong class="item-sum">×{{ qty_text(row.qty) }}</strong>
+            {% endif %}
+        </div>
+        <div class="item-meta">
+            <span>{{ qty_text(row.qty) }} {{ row.unit or 'шт' }}</span>
+            {% if kind == 'precheck' %}<span>× {{ money(row.price) }} ₸ / {{ row.unit or 'шт' }}</span>{% endif %}
+        </div>
+        {% for mod in row.modifiers|default([]) %}
+        <div class="item-mod">
+            + {{ mod.name }}{% if kind == 'precheck' and mod.price_delta|float != 0 %} ({{ '+' if mod.price_delta|float > 0 else '−' }}{{ money(mod.price_delta|float|abs) }} ₸){% endif %}
+        </div>
+        {% endfor %}
+        {% for excluded in row.excluded_ingredients|default([]) %}
+        <div class="item-excluded">БЕЗ: {{ excluded.name }}</div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+    {% if order.note %}
+    <div class="ticket-note"><hr class="ticket-line"><strong>Комментарий:</strong>{{ order.note }}</div>
+    {% endif %}
+    {% if kind == 'precheck' %}
+    <hr class="ticket-line">
+    <div class="ticket-total"><span>ИТОГО К ОПЛАТЕ</span><span>{{ money(order.total_amount) }} ₸</span></div>
+    {% if order.status == 'paid' %}
+        {% if order.payment_method == 'cash' %}
+        <div class="ticket-payment"><span>Наличные</span><strong>{{ money(order.cash_amount) }} ₸</strong></div>
+        <div class="ticket-payment"><span>Получено</span><strong>{{ money(order.cash_received) }} ₸</strong></div>
+        <div class="ticket-payment"><span>Сдача</span><strong>{{ money(order.change_amount) }} ₸</strong></div>
+        {% elif order.payment_method == 'card' %}
+        <div class="ticket-payment"><span>Оплата картой</span><strong>{{ money(order.card_amount) }} ₸</strong></div>
+        {% elif order.payment_method == 'kaspi' %}
+        <div class="ticket-payment"><span>Kaspi оплата</span><strong>{{ money(order.kaspi_amount) }} ₸</strong></div>
+        {% else %}
+        <div class="ticket-state">ОПЛАЧЕНО</div>
+        {% endif %}
+    {% elif order.status == 'external_paid' %}
+        <div class="ticket-state">ОПЛАЧЕНО ЧЕРЕЗ ВНЕШНЮЮ ККМ</div>
+        {% if order.external_receipt_number %}<div class="ticket-secondary">Чек №{{ order.external_receipt_number }}</div>{% endif %}
+    {% else %}
+        <div class="ticket-state">ОЖИДАЕТ ОПЛАТЫ · НЕ ФИСКАЛЬНЫЙ ЧЕК</div>
+    {% endif %}
+    <hr class="ticket-line">
+    <div class="ticket-footer">Приятного аппетита!</div>
+    {% endif %}
+</section>
+</body>
+</html>
