@@ -32,18 +32,24 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertNotIn('pay()', create)
         self.assertNotIn('submitSalePayment', create)
 
-    def test_paid_sale_uses_existing_pay_flow(self):
+    def test_confirm_payment_requires_precheck_and_never_reprints(self):
         js = self.read("static/js/food_sales.js")
         pay = js.split('async function payExistingFoodOrder()', 1)[1].split('function newFoodOrder()', 1)[0]
         self.assertIn('if (!isFoodTicketCurrent())', pay)
-        self.assertIn('if (!isFoodTicketCurrent())', pay)
-        self.assertIn('await saveFoodOrder()', pay)
-        self.assertIn('await printBothFoodTickets(saved)', pay)
-        self.assertIn('if (!await printBothFoodTickets(saved))', pay)
-        self.assertIn('lastFoodPrintUiSignature === currentFoodUiSignature()', js)
-        self.assertIn('pay()', pay)
+        self.assertIn('Оформить заказ · пречек', pay)
+        self.assertNotIn('await saveFoodOrder()', pay)
+        self.assertNotIn('printBothFoodTickets', pay)
+        self.assertNotIn('pay()', pay)
+        self.assertIn('submitSalePayment({', pay)
         self.assertIn('openCashChangeModal()', pay)
+        self.assertIn('window.nikaConfirmNegativeStockSale', pay)
+        self.assertIn('lastFoodPrintUiSignature === currentFoodUiSignature()', js)
         self.assertIn('food_order_id:', self.read("static/js/sales.js"))
+
+    def test_retail_stock_guard_never_captures_food_buttons(self):
+        patch = self.read("static/js/sales_cash_change_patch.js")
+        self.assertIn("document.getElementById('normalCheckoutButton')", patch)
+        self.assertNotIn(".payment-actions .pay-btn:not(.invoice-pay-btn):not(.kaspi-pay-btn)", patch)
 
     def test_precheck_remembers_payment_without_registering_sale(self):
         js = self.read("static/js/food_sales.js")

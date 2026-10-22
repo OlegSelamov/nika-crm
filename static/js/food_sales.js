@@ -876,32 +876,44 @@
             foodMessage("Дождитесь завершения оплаты на Kaspi POS");
             return;
         }
+
+        // Payment is a SECOND stage. The green button must have already saved
+        // the selected tender and successfully sent BOTH guest+kitchen tickets.
+        // Never save/print from this handler: otherwise one click can create
+        // duplicate tickets or accidentally turn a precheck into a paid sale.
+        if (!isFoodTicketCurrent()) {
+            const message = "Сначала нажмите «Оформить заказ · пречек» и дождитесь печати двух чеков.";
+            foodMessage(message);
+            showFoodPrintStatus("Оплата не проведена: сначала оформите и распечатайте заказ.", true);
+            return;
+        }
+
         foodCheckoutBusy = true;
         const button = document.getElementById("foodCompletePayment");
         if (button) button.disabled = true;
         try {
-            // Whatever the chosen tender, first persist and submit BOTH guest
-            // and kitchen tickets. A direct card/Kaspi click must not bypass
-            // the restaurant printing step and silently deduct ingredients.
-            if (!isFoodTicketCurrent()) {
-                const saved = await saveFoodOrder();
-                if (!saved) return;
-                try {
-                    if (!await printBothFoodTickets(saved)) {
-                        foodMessage("Заказ сохранён, но печать не завершена. Проверьте принтеры и повторите подтверждение.");
-                        return;
-                    }
-                } catch (error) {
-                    console.error("FOOD PRINT BEFORE PAYMENT:", error);
-                    foodMessage("Печать не выполнена: " + (error.message || error));
-                    showFoodPrintStatus("Повторите печать после исправления ошибки принтера", true);
-                    return;
-                }
+            // Cash keeps the change dialog. Its stock guard is applied by the
+            // shared cash patch before the sale is submitted.
+            if (currentSavedPlannedMethod === "cash") {
+                await openCashChangeModal();
+                return;
             }
-            // The existing sale endpoint handles payment, ingredient deduction
-            // and fiscalization. No second regular receipt without fiscal KKM.
-            if (currentSavedPlannedMethod === "cash") openCashChangeModal();
-            else pay();
+
+            // Card/Kaspi must bypass the later COMRUN window.pay override:
+            // submitSalePayment already knows food_mode + food_order_id and,
+            // without a real fiscal ticket, does NOT print a third receipt.
+            if (typeof window.nikaConfirmNegativeStockSale === "function" &&
+                !(await window.nikaConfirmNegativeStockSale())) return;
+
+            const card = Number(String(document.getElementById("cardInput")?.value || "").replace(",", ".")) || 0;
+            const kaspi = Number(String(document.getElementById("kaspiInput")?.value || "").replace(",", ".")) || 0;
+            await submitSalePayment({
+                paymentMethod: currentSavedPlannedMethod,
+                cash: 0,
+                card: currentSavedPlannedMethod === "card" ? card : 0,
+                kaspi: currentSavedPlannedMethod === "kaspi" ? kaspi : 0,
+                cashChange: 0
+            });
         } finally {
             foodCheckoutBusy = false;
             if (button) button.disabled = false;

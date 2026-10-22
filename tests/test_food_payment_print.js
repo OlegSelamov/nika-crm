@@ -1,5 +1,6 @@
-// Run the real payExistingFoodOrder() handler with mocked payment and print
-// providers. Confirms cash, card and Kaspi print BEFORE the sale starts.
+// Run the real payExistingFoodOrder() handler with mocked payment providers.
+// Confirms that payment is blocked until the dedicated green precheck stage
+// has already saved and printed BOTH restaurant tickets.
 const fs = require("node:fs");
 const vm = require("node:vm");
 const assert = require("node:assert/strict");
@@ -10,21 +11,41 @@ const end = src.indexOf("\n    function newFoodOrder()", start);
 assert.ok(start >= 0 && end > start, "Could not locate checkout function");
 const functionCode = src.slice(start, end);
 
-async function checkout(method, {alreadyPrinted=false, failPrint=false}={}) {
+async function checkout(method, {alreadyPrinted=false, stockAllowed=true}={}) {
     const calls = [];
     const button = {disabled:false};
+    const values = {
+        cardInput: method === "card" ? "1000" : "",
+        kaspiInput: method === "kaspi" ? "1000" : ""
+    };
     const sandbox = {
         getCart:()=>[{id:1, qty:1}],
-        window:{nikaKaspiPosActive:false},
+        window:{
+            nikaKaspiPosActive:false,
+            nikaConfirmNegativeStockSale:async()=>{
+                calls.push("stock");
+                return stockAllowed;
+            }
+        },
         foodCheckoutBusy:false,
-        document:{getElementById:()=>button},
+        document:{
+            getElementById:(id)=>{
+                if (id === "foodCompletePayment") return button;
+                return {value: values[id] || ""};
+            }
+        },
         foodMessage:(message)=>calls.push("message:"+message),
         showFoodPrintStatus:()=>{},
         isFoodTicketCurrent:()=>alreadyPrinted,
-        saveFoodOrder:async()=>{calls.push("save");return {id:42};},
-        printBothFoodTickets:async()=>{calls.push("print");return !failPrint;},
-        openCashChangeModal:()=>calls.push("cash"),
-        pay:()=>calls.push("pay"),
+        openCashChangeModal:async()=>calls.push("cash"),
+        submitSalePayment:async(options)=>{
+            assert.equal(options.paymentMethod, method);
+            assert.equal(options.cash, 0);
+            assert.equal(options.card, method === "card" ? 1000 : 0);
+            assert.equal(options.kaspi, method === "kaspi" ? 1000 : 0);
+            calls.push("submit:"+method);
+            return true;
+        },
         currentSavedPlannedMethod:method,
         console
     };
@@ -113,15 +134,21 @@ async function simulateSale(method,mode,result){
 
 (async()=>{
     for(const method of ["cash","card","kaspi"]) {
-        const result = await checkout(method);
-        assert.deepEqual(result,["save","print",method==="cash"?"cash":"pay"],
-            "First confirmation should save and print then pay for "+method);
-        assert.deepEqual(await checkout(method,{alreadyPrinted:true}),
-            [method==="cash"?"cash":"pay"],"Never reprint an unchanged order");
-        const failed = await checkout(method,{failPrint:true});
-        assert.deepEqual(failed.slice(0,2),["save","print"]);
-        assert.ok(!failed.includes("pay") && !failed.includes("cash"),
-            "Printer failure must not silently charge customer or deduct stock");
+        const blocked = await checkout(method);
+        assert.ok(blocked.some(call=>call.includes("Оформить заказ · пречек")),
+            "Blue confirmation must require the green precheck stage for "+method);
+        assert.ok(!blocked.includes("cash") && !blocked.includes("stock") &&
+            !blocked.includes("submit:"+method),
+            "Blocked confirmation must not pay or deduct stock for "+method);
+
+        const paid = await checkout(method,{alreadyPrinted:true});
+        assert.deepEqual(paid, method === "cash" ? ["cash"] : ["stock","submit:"+method],
+            "Confirmed restaurant payment must not reprint for "+method);
+
+        if (method !== "cash") {
+            assert.deepEqual(await checkout(method,{alreadyPrinted:true,stockAllowed:false}),
+                ["stock"], "Rejected stock warning must stop "+method+" payment");
+        }
     }
     for(const method of ["cash","card","kaspi"]) {
         const green=await printFromGreenButton(method);

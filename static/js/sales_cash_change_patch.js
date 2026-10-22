@@ -168,9 +168,11 @@
     // browsers that inline handler resolves the original global pay() binding
     // before our window.pay wrapper. Capture card/Kaspi clicks first so a
     // fiscal receipt can never be created before the stock warning.
-    const mainPaymentButton = document.querySelector(
-        '.payment-actions .pay-btn:not(.invoice-pay-btn):not(.kaspi-pay-btn)'
-    );
+    // IMPORTANT: bind only the real retail checkout button.
+    // Foodservice adds its own .pay-btn buttons before it; a generic selector
+    // used to attach this capture handler to "Оформить заказ · пречек", so
+    // card/Kaspi clicks immediately called originalPay() and deducted stock.
+    const mainPaymentButton = document.getElementById('normalCheckoutButton');
 
     if (mainPaymentButton && typeof originalPay === 'function') {
         mainPaymentButton.addEventListener('click', async event => {
