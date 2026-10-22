@@ -49,6 +49,7 @@ jobs:
           Set-Content -Path desktop/nika-electron-test.json -Value '{"environment":"test","url":"https://test.nikabusiness.com"}' -NoNewline
           node --check desktop/main.js
           node --check desktop/preload.js
+          node desktop/test_dialog_focus.js
           if (!(Select-String -Path desktop/main.js -Pattern '"persist:nika-business-test"' -Quiet)) { throw "Missing isolated test partition" }
           if (!(Select-String -Path desktop/main.js -Pattern '"https://test.nikabusiness.com"' -Quiet)) { throw "Missing test server URL" }
 

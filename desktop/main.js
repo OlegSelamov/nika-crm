@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, session, webFrameMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const fs = require("fs");
 const path = require("path");
@@ -30,6 +30,70 @@ if (TEST_MODE) {
     const testUserData = path.join(app.getPath("appData"), "Nika Business TEST");
     fs.mkdirSync(testUserData, {recursive:true});
     app.setPath("userData", testUserData);
+}
+
+
+// Electron 22/30 on Windows can lose the renderer's IME/character-input
+// focus after native JavaScript dialogs. This runs in the MAIN JS world of
+// every same-origin frame, including #nikaPageFrame (preload alone does not).
+// The native dialog remains synchronous with its original return value.
+const NIKA_NATIVE_DIALOG_FOCUS_GUARD = String.raw`(() => {
+    if (window.__nikaNativeDialogFocusGuard) return;
+    window.__nikaNativeDialogFocusGuard = true;
+
+    ["alert", "confirm", "prompt"].forEach((name) => {
+        const original = window[name];
+        if (typeof original !== "function") return;
+        window[name] = function (...args) {
+            try {
+                return original.apply(window, args);
+            } finally {
+                // Notify only AFTER the blocking native dialog is dismissed.
+                // A delayed main-process blur/focus repairs Blink's missing
+                // IME client, which ordinary element.focus() cannot repair.
+                window.setTimeout(() => {
+                    try {
+                        const host = window.top && window.top.nikaDesktop;
+                        if (host && typeof host.recoverKeyboardFocus === "function") {
+                            host.recoverKeyboardFocus();
+                        }
+                    } catch (_) { /* Ignore cross-origin/closed windows. */ }
+                }, 40);
+            }
+        };
+    });
+})();`;
+
+let focusRecoveryTimer = null;
+function registerNativeDialogFocusRecovery() {
+    ipcMain.on("nika:recover-keyboard-focus", (event) => {
+        if (!win || win.isDestroyed() || event.sender !== win.webContents) return;
+        const frameUrl = event.senderFrame && event.senderFrame.url;
+        try {
+            if (new URL(frameUrl).origin !== new URL(APP_URL).origin) return;
+        } catch (_) { return; }
+        if (focusRecoveryTimer) clearTimeout(focusRecoveryTimer);
+        focusRecoveryTimer = setTimeout(() => {
+            focusRecoveryTimer = null;
+            // Never interrupt a user who switched to another program.
+            if (!win || win.isDestroyed() || win.isMinimized() || !win.isFocused()) return;
+            win.blur();
+            win.focus();
+        }, 70);
+    });
+}
+
+function installDialogFocusGuard(contents) {
+    contents.on("did-frame-finish-load", (_event, _main, processId, routingId) => {
+        const frame = webFrameMain.fromId(processId, routingId);
+        if (!frame || frame.isDestroyed()) return;
+        try {
+            if (new URL(frame.url).origin !== new URL(APP_URL).origin) return;
+        } catch (_) { return; }
+        frame.executeJavaScript(NIKA_NATIVE_DIALOG_FOCUS_GUARD).catch((error) => {
+            console.error("Не удалось установить защиту фокуса Electron:", error);
+        });
+    });
 }
 
 const DEFAULT_PRINTER_SETTINGS = Object.freeze({
@@ -919,6 +983,7 @@ function createWindow() {
         }
     });
 
+    installDialogFocusGuard(win.webContents);
     if (DEV_MODE) setTimeout(() => win.loadURL(APP_URL), 5000);
     else win.loadURL(APP_URL);
 
@@ -1023,6 +1088,7 @@ app.whenReady().then(async () => {
     settings = loadPrinterSettings();
     registerPrinterIpc();
     registerKaspiPosIpc();
+    registerNativeDialogFocusRecovery();
     await clearRetiredDesktopOfflineState();
     if (DEV_MODE) startFlask();
     createWindow();
@@ -1035,6 +1101,7 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
     if (updateCheckTimer) clearInterval(updateCheckTimer);
+    if (focusRecoveryTimer) clearTimeout(focusRecoveryTimer);
     if (DEV_MODE && flaskProcess) {
         flaskProcess.kill();
         flaskProcess = null;

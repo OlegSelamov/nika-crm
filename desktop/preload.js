@@ -168,6 +168,8 @@ const printers = Object.freeze({
 contextBridge.exposeInMainWorld("nikaDesktop", Object.freeze({
     isElectron: true,
     platform: process.platform,
+    // Called from all same-origin frames after alert(), confirm() or prompt().
+    recoverKeyboardFocus: () => ipcRenderer.send("nika:recover-keyboard-focus"),
     printers,
     kaspiPos
 }));
