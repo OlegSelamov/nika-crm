@@ -30,8 +30,9 @@ def _alatau_current_company():
     if not (
         session.get("is_super_admin")
         or session.get("role") in ("owner", "admin", "creator")
+        or "banks" in session.get("employee_modules", [])
     ):
-        return None, (jsonify({"success": False, "error": "Доступ разрешён владельцу"}), 403)
+        return None, (jsonify({"success": False, "error": "Нет доступа к модулю «Мои Банки»"}), 403)
     return company_id, None
 
 

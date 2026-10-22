@@ -142,7 +142,7 @@ if (window.NIKA_EMBEDDED_PAGE && window.parent !== window && !window.nikaDesktop
             <a href="/accounting"><img src="/static/icons/buh.png" class="menu-icon"><span class="text">Бухгалтерия</span></a>
             {% endif %}
 
-            {% if session.get("is_super_admin") or session.get("role") in ["owner", "admin", "creator"] %}
+            {% if session.get("is_super_admin") or session.get("role") in ["owner", "admin", "creator"] or "banks" in session.get("employee_modules", []) %}
             <a href="/banks" class="{% if request.path == '/banks' or request.path.startswith('/banks/') %}active-menu-item{% endif %}">
                 <img src="/static/icons/buh.png" class="menu-icon"><span class="text">Мои банки</span>
             </a>
