@@ -6,9 +6,9 @@ const vm = require("node:vm");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const src = fs.readFileSync(path.join(__dirname, "../static/js/food_sales.js"), "utf8");
-const start = src.indexOf("    async function payExistingFoodOrder() {");
+const start = src.indexOf("    async function finalizeFoodPaymentAfterChecks(");
 const end = src.indexOf("\n    function newFoodOrder()", start);
-assert.ok(start >= 0 && end > start, "Could not locate checkout function");
+assert.ok(start >= 0 && end > start, "Could not locate checkout functions");
 const functionCode = src.slice(start, end);
 
 async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowed=true}={}) {
@@ -16,10 +16,11 @@ async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowe
     const button = {disabled:false};
     const values = {
         cardInput: method === "card" ? "1000" : "",
-        kaspiInput: method === "kaspi" ? "1000" : ""
+        kaspiInput: method === "kaspi" ? "1000" : "",
+        cashReceivedInput: "1100"
     };
     const sandbox = {
-        getCart:()=>[{id:1,qty:1}],
+        getCart:()=>[{id:1,qty:1,price:1000}],
         window:{
             nikaKaspiPosActive:false,
             nikaConfirmNegativeStockSale:async()=>{
@@ -28,26 +29,36 @@ async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowe
             }
         },
         foodCheckoutBusy:false,
-        document:{getElementById:(id)=>id==="foodCompletePayment"?button:{value:values[id]||""}},
+        pendingFoodCashConfirmation:false,
+        currentMode:()=>"food",
+        document:{getElementById:(id)=>id==="foodCompletePayment"||id==="cashChangeConfirm"
+            ? button:{value:values[id]||""}},
         foodMessage:(msg)=>calls.push("message:"+msg),
         showFoodPrintStatus:()=>{},
         isFoodTicketCurrent:()=>alreadyPrinted,
         saveFoodOrder:async()=>{calls.push("save");return {id:42};},
         printBothFoodTickets:async()=>{calls.push("print");return printOK;},
-        openCashChangeModal:async()=>calls.push("cash"),
+        openCashChangeModal:()=>calls.push("cash-modal"),
+        renderCashChange:()=>{},
+        closeCashChangeModal:()=>calls.push("cash-close"),
+        selectedFoodPaymentMethod:()=>method,
         submitSalePayment:async(options)=>{
             assert.equal(options.paymentMethod,method);
-            assert.equal(options.cash,0);
+            assert.equal(options.cash,method==="cash"?1100:0);
+            assert.equal(options.cashChange,method==="cash"?100:0);
             assert.equal(options.card,method==="card"?1000:0);
             assert.equal(options.kaspi,method==="kaspi"?1000:0);
             calls.push("submit:"+method);
             return true;
         },
-        currentSavedPlannedMethod:method,
         console
     };
-    vm.runInNewContext(functionCode+"\nthis.handler=payExistingFoodOrder;",sandbox);
+    vm.runInNewContext(functionCode+
+        "\nthis.handler=payExistingFoodOrder;this.cashHandler=confirmFoodCashPayment;",sandbox);
     await sandbox.handler();
+    if(method==="cash" && calls.includes("cash-modal")) {
+        await sandbox.cashHandler({preventDefault(){},stopImmediatePropagation(){}});
+    }
     assert.equal(button.disabled,false);
     return calls;
 }
@@ -133,16 +144,19 @@ async function simulateSale(method,mode,result){
     for(const method of ["cash","card","kaspi"]) {
         const first=await checkout(method);
         assert.deepEqual(first,method==="cash"
-            ? ["save","print","cash"]:["save","print","stock","submit:"+method]);
+            ? ["stock","cash-modal","save","print","submit:cash","cash-close"]
+            : ["stock","save","print","submit:"+method],
+            "Confirm must check stock and cash before printing for "+method);
         const already=await checkout(method,{alreadyPrinted:true});
         assert.deepEqual(already,method==="cash"
-            ? ["cash"]:["stock","submit:"+method],
+            ? ["stock","cash-modal","submit:cash","cash-close"]
+            : ["stock","submit:"+method],
             "Preprinted order must not print again for "+method);
         const failed=await checkout(method,{printOK:false});
-        assert.deepEqual(failed.slice(0,2),["save","print"]);
-        assert.ok(!failed.includes("cash")&&!failed.includes("submit:"+method),
-            "Payment must be blocked after print failure");
-        if(method!=="cash") assert.deepEqual(await checkout(method,{alreadyPrinted:true,stockAllowed:false}),["stock"]);
+        assert.ok(failed.includes("save")&&failed.includes("print"));
+        assert.ok(!failed.includes("submit:"+method),"Printer failure must block payment");
+        const stockDenied=await checkout(method,{stockAllowed:false});
+        assert.deepEqual(stockDenied,["stock"],"Declined stock warning must not print or charge");
     }
     for(const method of ["cash","card","kaspi"]) {
         const green=await printFromGreenButton(method);
