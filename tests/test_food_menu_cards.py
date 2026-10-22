@@ -33,6 +33,9 @@ class FoodMenuCardsTests(unittest.TestCase):
         self.assertIn("height:82px", styles)
         self.assertIn("grid-template-columns:repeat(4,minmax(0,1fr))", styles)
         self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", styles)
+        self.assertIn("overscroll-behavior-y: contain", styles)
+        self.assertIn("touch-action: pan-y", styles)
+        self.assertIn("contain: layout paint", styles)
         # The POS renders in a separate iframe. Sidebar DOM selectors will never match.
         self.assertNotIn(".sidebar:not(.collapsed) ~ .content .food-menu-panel .food-menu-grid", styles)
         self.assertIn("container-name: nika-food-menu", styles)
@@ -40,8 +43,22 @@ class FoodMenuCardsTests(unittest.TestCase):
         self.assertIn("@container nika-food-menu (max-width: 505px)", styles)
         self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", styles)
         self.assertIn("@container nika-food-menu (max-width: 335px)", styles)
-        self.assertIn("menu-container-query-v4", (ROOT / "templates/sales.html").read_text(encoding="utf-8"))
+        self.assertIn("menu-scroll-optimized-v4", (ROOT / "templates/sales.html").read_text(encoding="utf-8"))
         self.assertIn("food-menu-category-badge", styles)
+
+    def test_menu_labels_and_idle_scrolling(self):
+        markup = (ROOT / "templates/sales.html").read_text(encoding="utf-8")
+        script = (ROOT / "static/js/food_sales.js").read_text(encoding="utf-8")
+        self.assertIn('aria-pressed="true">Блюда</button>', markup)
+        self.assertIn('aria-pressed="false" hidden>Напитки</button>', markup)
+        self.assertNotIn("🍽", markup)
+        self.assertNotIn("🥤", markup)
+        self.assertIn('img.loading = "eager"', script)
+        self.assertIn('img.decoding = "async"', script)
+        self.assertNotIn('img.loading = "lazy"', script)
+        self.assertIn('renderFoodMenu(append, newItems);', script)
+        self.assertIn('if (!append) grid.replaceChildren();', script)
+        self.assertIn('newItems.forEach(item => fragment.appendChild(makeFoodCard(item)))', script)
 
     def test_js_syntax(self):
         if not shutil.which("node"):

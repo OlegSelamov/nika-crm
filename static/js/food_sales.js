@@ -124,11 +124,14 @@
             if (!response.ok) throw new Error("HTTP " + response.status);
             const data = await response.json();
             if (version !== foodRequestVersion) return;
-            foodItems.push(...(data.items || []));
+            const newItems = Array.isArray(data.items) ? data.items : [];
+            const append = foodPage > 0;
+            foodItems.push(...newItems);
             foodPage++;
             foodHasMore = Boolean(data.has_more);
             foodLoaded = true;
-            renderFoodMenu();
+            // Preserve decoded images and scroll position on pagination.
+            renderFoodMenu(append, newItems);
         } catch (error) {
             if (error.name === "AbortError" || version !== foodRequestVersion) return;
             console.error("FOOD MENU LOAD ERROR:", error);
@@ -387,9 +390,14 @@
         const showImages = window.NIKA_SHOW_CATALOG_IMAGES !== false;
         if (showImages && item.image) {
             const img = document.createElement("img");
-            img.src = item.image;
             img.alt = "";
-            img.loading = "lazy";
+            // Lazy decoding on the first wheel movement after a long idle
+            // produces visible stalls in nested Electron menu scrollers.
+            // Begin loading this small page ahead of the user's scroll.
+            img.loading = "eager";
+            img.decoding = "async";
+            img.fetchPriority = "low";
+            img.src = item.image;
             img.addEventListener("error", () => {
                 media.innerHTML = "";
                 const placeholder = document.createElement("span");
@@ -436,19 +444,21 @@
         return button;
     }
 
-    function renderFoodMenu() {
+    function renderFoodMenu(append = false, newItems = foodItems) {
         const grid = document.getElementById("foodMenuGrid");
         if (!grid || !foodLoaded) return;
-        grid.innerHTML = "";
+        if (!append) grid.replaceChildren();
         if (!foodItems.length) {
             const empty = document.createElement("div");
             empty.className = "food-menu-empty";
             empty.textContent = "По этому фильтру ничего не найдено.";
             grid.appendChild(empty);
+            renderFoodPagination();
             return;
         }
+        // Append just the new page, without rebuilding all existing cards.
         const fragment = document.createDocumentFragment();
-        foodItems.forEach(item => fragment.appendChild(makeFoodCard(item)));
+        newItems.forEach(item => fragment.appendChild(makeFoodCard(item)));
         grid.appendChild(fragment);
         renderFoodPagination();
     }

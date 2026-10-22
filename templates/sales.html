@@ -2,7 +2,7 @@
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261015-compact-toolbar-v1') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261022-food-orders-checkout-v1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261022-menu-scroll-optimized-v2') }}">
 {% endblock %}
 
 {% block content %}
@@ -183,9 +183,9 @@
 					<input id="foodSearch" class="food-search" type="search" placeholder="Найти блюдо или товар..." autocomplete="off">
 				</div>
 				<div class="food-quick-filters" role="group" aria-label="Раздел меню">
-                        <button type="button" data-food-section="dishes" class="food-quick-filter active" aria-pressed="true">🍽 Блюда</button>
+                        <button type="button" data-food-section="dishes" class="food-quick-filter active" aria-pressed="true">Блюда</button>
                         <button type="button" data-food-section="all" class="food-quick-filter" aria-pressed="false">Всё меню</button>
-                        <button type="button" data-food-section="drinks" class="food-quick-filter" aria-pressed="false" hidden>🥤 Напитки</button>
+                        <button type="button" data-food-section="drinks" class="food-quick-filter" aria-pressed="false" hidden>Напитки</button>
                         <span id="foodMenuSectionHint" class="food-quick-hint">Основные блюда</span>
                     </div>
                     <div class="food-category-chooser" id="foodCategoryChooser">
@@ -851,7 +851,7 @@
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
 <script src="{{ url_for('static', filename='js/sales.js', v='20261022-food-universal-1') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20261022-food-orders-checkout-v3') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20261022-menu-scroll-optimized-v4') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261020-production-merge-1') }}"></script>
 
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>

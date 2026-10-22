@@ -844,3 +844,20 @@ body.food-sales-mode.food-checkout-orders .payment-actions > button:disabled { o
 .food-external-body button { min-height:43px; border:0; border-radius:10px; background:#4f46e5; color:#fff; font:inherit; font-weight:800; cursor:pointer; }
 .food-external-body button:disabled { opacity:.6; cursor:wait; }
 #foodExternalError { font-size:12px; font-weight:700; color:#b91c1c; }
+
+/* Decouple menu wheel/touch gestures from the outer sales iframe.
+   Preserve four/three-column appearance and independent cart scrolling. */
+.food-menu-panel .food-menu-grid {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    scrollbar-gutter: stable;
+}
+.food-menu-panel .food-menu-card { contain: layout paint; }
+@media (hover: none) {
+    .food-menu-panel .food-menu-card:hover,
+    .food-menu-panel .food-menu-card:hover .food-menu-image img {
+        transform: none;
+    }
+}
