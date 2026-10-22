@@ -635,6 +635,7 @@
     let currentFoodOrderId = null;
     let currentFoodOrderSaved = false;
     let currentSavedPlannedMethod = null;
+    let lastFoodPrintFingerprint = null;
     let foodOrderBusy = false;
     let foodCheckoutBusy = false;
     let activeFoodTicketKind = "precheck";
@@ -649,6 +650,7 @@
         currentFoodOrderId = null;
         currentFoodOrderSaved = false;
         currentSavedPlannedMethod = null;
+        lastFoodPrintFingerprint = null;
         ["foodOrderTable", "foodOrderGuest", "foodOrderNote"].forEach(id => {
             const element = document.getElementById(id);
             if (element) element.value = "";
@@ -746,26 +748,44 @@
             '</style><main class="receipt food-ticket-paper">' + page.innerHTML + '</main>';
     }
 
-    async function printBothFoodTickets(order) {
-        const printers = getFoodPrinterBridge();
-        if (!printers?.printFoodOrder) {
-            // Browser or an older TEST Electron: preserve the guest preview.
-            openFoodTicket(order.id, "precheck", Boolean(printers?.printReceipt));
-            if (printers?.printReceipt) {
-                const msg = "Для автоматической печати двух чеков обновите Nika Electron TEST";
-                foodMessage(msg);
-                showFoodPrintStatus(msg, true);
-            }
-            return;
-        }
-
-        // All components of the fingerprint come from the saved server order,
-        // not the current unsaved cart. Same order -> no repeat accepted jobs.
-        const fingerprint = JSON.stringify({
+    function savedFoodTicketFingerprint(order) {
+        return JSON.stringify({
             cart: order.cart, table: order.table_name, guest: order.guest_name,
             note: order.note, client: order.client_id,
             payment: order.planned_payment_method || "cash"
         });
+    }
+
+    function isFoodTicketCurrent() {
+        if (!currentFoodOrderId || !currentFoodOrderSaved ||
+            lastFoodPrintFingerprint === null ||
+            currentSavedPlannedMethod !== selectedFoodPaymentMethod()) return false;
+        // The cart and the small order header can change after the receipt is printed.
+        // Recheck both instead of processing a payment for a stale printed precheck.
+        return lastFoodPrintFingerprint === JSON.stringify({
+            cart: getCart(),
+            table: document.getElementById("foodOrderTable")?.value || "",
+            guest: document.getElementById("foodOrderGuest")?.value || "",
+            note: document.getElementById("foodOrderNote")?.value || "",
+            client: typeof selectedClient !== "undefined" ? selectedClient : null,
+            payment: selectedFoodPaymentMethod()
+        });
+    }
+
+    async function printBothFoodTickets(order) {
+        const printers = getFoodPrinterBridge();
+        if (!printers?.printFoodOrder) {
+            // Browser or an older TEST Electron: the guest preview is manual.
+            // Do not claim both tickets reached printers when they did not.
+            openFoodTicket(order.id, "precheck", false);
+            const msg = "Двойная автоматическая печать доступна в Nika Electron TEST. Распечатайте пречек и кухню отдельно.";
+            foodMessage(msg);
+            showFoodPrintStatus(msg, true);
+            return false;
+        }
+
+        // Same order and payment => no duplicated ticket jobs.
+        const fingerprint = savedFoodTicketFingerprint(order);
         const [guestTicket, kitchenTicket] = await Promise.allSettled([
             getSavedFoodTicketHtml(order.id, "precheck"),
             getSavedFoodTicketHtml(order.id, "kitchen")
@@ -789,11 +809,13 @@
         const message = "Заказ №" + order.id + " сохранён · " + guestStatus + " · " + kitchenStatus;
         foodMessage(message);
         showFoodPrintStatus(message, guest?.success === false || kitchen?.success === false);
-        if (guest?.success === false || kitchen?.success === false) {
-            // A second click retries only the failed job in Electron; the
-            // successful ticket is remembered by its order fingerprint.
+        if (!results?.success || !guest?.success || !kitchen?.success) {
+            // A second click retries only the failed spool job.
             console.warn("FOOD PRINT PARTIAL FAILURE:", results);
+            return false;
         }
+        lastFoodPrintFingerprint = fingerprint;
+        return true;
     }
 
     async function createFoodPrecheck() {
@@ -806,7 +828,7 @@
             // Always save the freshest cart before opening the precheck.
             const saved = await saveFoodOrder();
             if (saved) {
-                foodMessage("Заказ №" + saved.id + " сохранён · ожидает оплаты");
+                foodMessage("Заказ №" + saved.id + " оформлен");
                 try {
                     await printBothFoodTickets(saved);
                 } catch (error) {
@@ -824,24 +846,35 @@
 
     async function payExistingFoodOrder() {
         if (foodCheckoutBusy || !getCart().length) return;
-        // Save/print first so we never charge an unsaved order or one whose
-        // payment type no longer matches the guest's printed precheck.
-        if (!currentFoodOrderId || !currentFoodOrderSaved) {
-            foodMessage("Сначала оформите заказ и напечатайте пречек");
-            return;
-        }
-        if (currentSavedPlannedMethod !== selectedFoodPaymentMethod()) {
-            foodMessage("Способ оплаты изменён — оформите обновлённый пречек перед оплатой");
+        if (window.nikaKaspiPosActive) {
+            foodMessage("Дождитесь завершения оплаты на Kaspi POS");
             return;
         }
         foodCheckoutBusy = true;
         const button = document.getElementById("foodCompletePayment");
         if (button) button.disabled = true;
         try {
-            // /sales/pay is still the only source of paid sale and recipe stock
-            // movements. The shared handler controls fiscal receipt printing.
-            const method = currentSavedPlannedMethod;
-            if (method === "cash") openCashChangeModal();
+            // Whatever the chosen tender, first persist and submit BOTH guest
+            // and kitchen tickets. A direct card/Kaspi click must not bypass
+            // the restaurant printing step and silently deduct ingredients.
+            if (!isFoodTicketCurrent()) {
+                const saved = await saveFoodOrder();
+                if (!saved) return;
+                try {
+                    if (!await printBothFoodTickets(saved)) {
+                        foodMessage("Заказ сохранён, но печать не завершена. Проверьте принтеры и повторите подтверждение.");
+                        return;
+                    }
+                } catch (error) {
+                    console.error("FOOD PRINT BEFORE PAYMENT:", error);
+                    foodMessage("Печать не выполнена: " + (error.message || error));
+                    showFoodPrintStatus("Повторите печать после исправления ошибки принтера", true);
+                    return;
+                }
+            }
+            // The existing sale endpoint handles payment, ingredient deduction
+            // and fiscalization. No second regular receipt without fiscal KKM.
+            if (currentSavedPlannedMethod === "cash") openCashChangeModal();
             else pay();
         } finally {
             foodCheckoutBusy = false;
@@ -1005,6 +1038,7 @@
             currentFoodOrderId = data.order.id;
             currentFoodOrderSaved = true;
             currentSavedPlannedMethod = data.order.planned_payment_method || "cash";
+            lastFoodPrintFingerprint = null; // Reopened order: never assume the printer ran.
             applySavedFoodPaymentMethod(currentSavedPlannedMethod, data.order.total_amount);
             document.getElementById("foodOrderTable").value = data.order.table_name || "";
             document.getElementById("foodOrderGuest").value = data.order.guest_name || "";
