@@ -765,3 +765,9 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 .food-orders-workspace #foodOrderHistoryMore { display:block; margin:14px auto; padding:9px 20px; }
 .food-orders-workspace #foodOrderHistoryMore[hidden] { display:none!important; }
 @media(max-width:700px) { .food-shell-modal { padding:8px; } .food-history-top { align-items:stretch; flex-direction:column; } .sales-page .food-orders-workspace { padding:12px; } }
+
+/* Per-dish exclusions are kitchen instructions, never extra charges. */
+.food-exclusions-group { padding:12px; background:#fff8f0; border:1px solid #fed7aa; border-radius:12px; }
+.food-exclusions-group .food-modifier-group-title { flex-wrap:wrap; }
+.food-exclusion-option:has(input:checked) { border-color:#ea580c; background:#ffedd5; }
+.food-cart-special-instructions { display:block; margin-top:4px; color:#b45309; font-size:11px; font-weight:700; line-height:1.4; }

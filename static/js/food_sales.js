@@ -229,52 +229,107 @@
 
     let pendingModifierItem = null;
     let pendingModifierGroups = [];
+    let pendingRecipeIngredients = [];
+    let foodChoiceRequest = 0;
 
     async function addFoodItem(item) {
-        if ((item.item_type || "product") === "product") {
+        if ((item.item_type || "product") !== "dish") {
             selectItemForSale(Number(item.id), item.name || "Товар", Number(item.retail_price || 0), item.unit || "шт", item.gtin || "", item.ntin || "");
             renderFoodCart();
             return;
         }
+        const requestVersion = ++foodChoiceRequest;
         try {
-            const response = await fetch('/api/items/' + encodeURIComponent(item.id) + '/modifiers', {headers:{Accept:'application/json'}});
-            const data = response.ok ? await response.json() : null;
-            if (data && data.success && Array.isArray(data.groups) && data.groups.length) {
-                openFoodModifierModal(item, data.groups);
-                return;
+            const [modifierResponse, recipeResponse] = await Promise.all([
+                fetch('/api/items/' + encodeURIComponent(item.id) + '/modifiers', {headers:{Accept:'application/json'}}),
+                fetch('/api/items/' + encodeURIComponent(item.id) + '/recipe', {headers:{Accept:'application/json'}})
+            ]);
+            if (!modifierResponse.ok || !recipeResponse.ok) throw new Error('Не удалось загрузить настройки блюда');
+            const modifierData = await modifierResponse.json();
+            const recipeData = await recipeResponse.json();
+            if (requestVersion !== foodChoiceRequest) return;
+            if (!modifierData.success || !recipeData.success) throw new Error('Не удалось загрузить состав блюда');
+            if (!Array.isArray(recipeData.ingredients) || !recipeData.ingredients.length) {
+                throw new Error('Для этого блюда не заполнена техкарта. Заполните её перед продажей.');
             }
-        } catch (error) { console.error('MODIFIER LOAD ERROR:', error); }
-        selectItemForSale(Number(item.id), item.name || 'Блюдо', Number(item.retail_price || 0), item.unit || 'шт', item.gtin || '', item.ntin || '');
-        renderFoodCart();
+            openFoodModifierModal(item, modifierData.groups || [], recipeData.ingredients);
+        } catch (error) {
+            if (requestVersion === foodChoiceRequest) alert(error.message || 'Не удалось открыть настройки блюда');
+        }
     }
 
-    function openFoodModifierModal(item, groups) {
-        pendingModifierItem=item; pendingModifierGroups=groups;
-        const modal=document.getElementById('foodModifierModal'), root=document.getElementById('foodModifierGroups');
-        document.getElementById('foodModifierTitle').textContent=item.name || 'Блюдо';
-        root.innerHTML='';
-        groups.forEach(group=>{
-            const section=document.createElement('section'); section.className='food-modifier-group';
-            section.innerHTML='<div class="food-modifier-group-title"><strong>'+escapeFood(group.name)+'</strong><small>'+(group.min_select>0?'Выберите обязательно':'По желанию')+(group.max_select>1?' · до '+group.max_select:'')+'</small></div>';
-            (group.options||[]).forEach(option=>{
-                const label=document.createElement('label'); label.className='food-modifier-option';
-                const input=document.createElement('input'); input.type='checkbox'; input.name='food-modifier-'+group.id; input.value=option.id; input.dataset.groupId=group.id;
-                input.addEventListener('change',()=>{const checked=section.querySelectorAll('input:checked');const max=Number(group.max_select||0);if(max>0&&checked.length>max){input.checked=false;return;} renderFoodModifierTotal();});
-                const text=document.createElement('span'); text.innerHTML='<b>'+escapeFood(option.name)+'</b>'+(Number(option.price_delta)?'<small>+'+money(option.price_delta)+'</small>':'');
-                label.append(input,text); section.appendChild(label);
-            }); root.appendChild(section);
+    function openFoodModifierModal(item, groups, ingredients) {
+        pendingModifierItem = item;
+        pendingModifierGroups = groups;
+        pendingRecipeIngredients = ingredients;
+        const modal = document.getElementById('foodModifierModal');
+        const root = document.getElementById('foodModifierGroups');
+        document.getElementById('foodModifierTitle').textContent = item.name || 'Блюдо';
+        root.innerHTML = '';
+        if (ingredients.length) {
+            const section = document.createElement('section');
+            section.className = 'food-modifier-group food-exclusions-group';
+            const heading = document.createElement('div');
+            heading.className = 'food-modifier-group-title';
+            heading.innerHTML = '<strong>Убрать из состава</strong><small>Без доплаты, цена не меняется</small>';
+            section.appendChild(heading);
+            ingredients.forEach(ingredient => {
+                const label = document.createElement('label');
+                label.className = 'food-modifier-option food-exclusion-option';
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.dataset.excludedIngredientId = String(ingredient.item_id);
+                const name = document.createElement('span');
+                name.textContent = 'Без ' + (ingredient.name || 'ингредиента');
+                label.append(input, name);
+                section.appendChild(label);
+            });
+            root.appendChild(section);
+        }
+        groups.forEach(group => {
+            const section = document.createElement('section');
+            section.className = 'food-modifier-group';
+            section.innerHTML = '<div class="food-modifier-group-title"><strong>' + escapeFood(group.name) + '</strong><small>' +
+                (group.min_select > 0 ? 'Выберите обязательно' : 'По желанию') +
+                (group.max_select > 1 ? ' · до ' + group.max_select : '') + '</small></div>';
+            (group.options || []).forEach(option => {
+                const label = document.createElement('label');
+                label.className = 'food-modifier-option';
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.name = 'food-modifier-' + group.id;
+                input.value = option.id;
+                input.dataset.groupId = group.id;
+                input.addEventListener('change', () => {
+                    const checked = section.querySelectorAll('input:checked');
+                    const max = Number(group.max_select || 0);
+                    if (max > 0 && checked.length > max) { input.checked = false; return; }
+                    renderFoodModifierTotal();
+                });
+                const text = document.createElement('span');
+                text.innerHTML = '<b>' + escapeFood(option.name) + '</b>' +
+                    (Number(option.price_delta) ? '<small>+' + money(option.price_delta) + '</small>' : '');
+                label.append(input, text);
+                section.appendChild(label);
+            });
+            root.appendChild(section);
         });
-        modal.hidden=false; renderFoodModifierTotal();
+        modal.hidden = false;
+        renderFoodModifierTotal();
     }
     function escapeFood(v){const d=document.createElement('div');d.textContent=String(v||'');return d.innerHTML;}
     function selectedFoodModifiers(){const selected=[];document.querySelectorAll('#foodModifierGroups input:checked').forEach(input=>{const g=pendingModifierGroups.find(x=>String(x.id)===String(input.dataset.groupId));const o=g?.options?.find(x=>String(x.id)===String(input.value));if(o)selected.push(o)});return selected}
     function renderFoodModifierTotal(){const extra=selectedFoodModifiers().reduce((s,o)=>s+Number(o.price_delta||0),0);const total=Number(pendingModifierItem?.retail_price||0)+extra;const n=document.getElementById('foodModifierTotal');if(n)n.textContent=money(total)}
-    function closeFoodModifierModal(){const m=document.getElementById('foodModifierModal');if(m)m.hidden=true;pendingModifierItem=null;pendingModifierGroups=[]}
+    function closeFoodModifierModal(){const m=document.getElementById('foodModifierModal');if(m)m.hidden=true;pendingModifierItem=null;pendingModifierGroups=[];pendingRecipeIngredients=[]}
     function confirmFoodModifiers(){
         if(!pendingModifierItem)return;
         for(const group of pendingModifierGroups){const count=document.querySelectorAll('#foodModifierGroups input[data-group-id="'+group.id+'"]:checked').length;if(count<Number(group.min_select||0)){alert('Выберите: '+group.name);return}}
         const mods=selectedFoodModifiers(); const price=Number(pendingModifierItem.retail_price||0)+mods.reduce((s,o)=>s+Number(o.price_delta||0),0);
-        cart.push({id:Number(pendingModifierItem.id),name:pendingModifierItem.name||'Блюдо',price:price,qty:1,gtin:pendingModifierItem.gtin||'',ntin:pendingModifierItem.ntin||'',unit:pendingModifierItem.unit||'шт',item_type:'dish',modifiers:mods.map(o=>({id:o.id,name:o.name,price_delta:Number(o.price_delta||0)}))});
+        const excludedIngredients = Array.from(document.querySelectorAll('#foodModifierGroups input[data-excluded-ingredient-id]:checked')).map(input => {
+            const ingredient = pendingRecipeIngredients.find(row => String(row.item_id) === input.dataset.excludedIngredientId);
+            return {id:Number(ingredient.item_id),name:ingredient.name};
+        });
+        cart.push({id:Number(pendingModifierItem.id),name:pendingModifierItem.name||'Блюдо',price:price,qty:1,gtin:pendingModifierItem.gtin||'',ntin:pendingModifierItem.ntin||'',unit:pendingModifierItem.unit||'шт',item_type:'dish',modifiers:mods.map(o=>({id:o.id,name:o.name,price_delta:Number(o.price_delta||0)})),excluded_ingredients:excludedIngredients});
         closeFoodModifierModal(); renderCart(); renderFoodCart();
     }
 
@@ -396,6 +451,16 @@
                 price.textContent = money(cartLineTotal(item));
 
                 top.append(name, price);
+                const notes = [
+                    ...(Array.isArray(item.modifiers) ? item.modifiers.map(mod => '+ ' + mod.name) : []),
+                    ...(Array.isArray(item.excluded_ingredients) ? item.excluded_ingredients.map(ing => 'Без ' + ing.name) : [])
+                ];
+                if (notes.length) {
+                    const note = document.createElement('small');
+                    note.className = 'food-cart-special-instructions';
+                    note.textContent = notes.join(' · ');
+                    name.appendChild(note);
+                }
 
                 const bottom = document.createElement("div");
                 bottom.className = "food-cart-row-bottom";
