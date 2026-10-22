@@ -1,0 +1,24 @@
+appId: com.nikabusiness.app.test
+productName: Nika Business TEST
+directories:
+  output: dist-test
+files:
+  - "**/*"
+  - "!dist/**"
+  - "!dist-test/**"
+  - "nika-electron-test.json"
+extraMetadata:
+  name: nika-business-test
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Nika Business TEST
+  artifactName: NikaBusiness-TEST-Setup.${ext}

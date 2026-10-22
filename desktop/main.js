@@ -10,12 +10,27 @@ let flaskProcess;
 let updatePromptOpen = false;
 let updateCheckTimer;
 
+// The TEST installer contains this file only during the isolated TEST build.
+// Production/Legacy installers never include the marker.
+const TEST_MODE = fs.existsSync(path.join(__dirname, "nika-electron-test.json")) ||
+    process.env.NIKA_ELECTRON_TEST === "1";
 const APP_MODE = process.env.NIKA_MODE || "vps";
-const DEV_MODE = APP_MODE === "local";
-const LEGACY_MODE = process.env.NIKA_LEGACY === "1" || /legacy/i.test(app.getName());
-const APP_URL = DEV_MODE
-    ? "http://127.0.0.1:5000"
-    : "https://nikabusiness.com";
+const DEV_MODE = !TEST_MODE && APP_MODE === "local";
+const LEGACY_MODE = !TEST_MODE && (process.env.NIKA_LEGACY === "1" || /legacy/i.test(app.getName()));
+const APP_URL = TEST_MODE
+    ? "https://test.nikabusiness.com"
+    : (DEV_MODE ? "http://127.0.0.1:5000" : "https://nikabusiness.com");
+const PERSISTENT_PARTITION = TEST_MODE
+    ? "persist:nika-business-test"
+    : (LEGACY_MODE ? "persist:nika-business-legacy" : "persist:nika-business");
+
+// Printer preferences, local cookies, sessions and offline cache must never be
+// shared with the production Electron installation.
+if (TEST_MODE) {
+    const testUserData = path.join(app.getPath("appData"), "Nika Business TEST");
+    fs.mkdirSync(testUserData, {recursive:true});
+    app.setPath("userData", testUserData);
+}
 
 const DEFAULT_PRINTER_SETTINGS = Object.freeze({
     receipt_printer: null,
@@ -432,7 +447,7 @@ async function printHtml({ html, title, kind, landscape }) {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            partition: "persist:nika-business"
+            partition: PERSISTENT_PARTITION
         }
     });
 
@@ -630,6 +645,9 @@ function registerKaspiPosIpc() {
 
     ipcMain.handle("kaspi:payment", async (event, payload = {}) => {
         requireMainWindow(event);
+        if (TEST_MODE) {
+            return {success:false, error:"Kaspi POS отключён в тестовой сборке: реальное списание денег запрещено"};
+        }
         const amount = Math.round(Number(payload.amount || 0));
         if (!Number.isFinite(amount) || amount <= 0) {
             return { success: false, error: "Некорректная сумма оплаты" };
@@ -678,6 +696,9 @@ function registerKaspiPosIpc() {
 
     ipcMain.handle("kaspi:refund", async (event, payload = {}) => {
         requireMainWindow(event);
+        if (TEST_MODE) {
+            return {success:false, error:"Kaspi POS отключён в тестовой сборке: реальный возврат денег запрещён"};
+        }
 
         const transactionId = String(payload.transactionId || "").trim();
         const method = String(payload.method || "qr").trim() || "qr";
@@ -869,10 +890,7 @@ async function clearRetiredDesktopOfflineState() {
     const marker = path.join(app.getPath("userData"), "desktop-offline-retired-v1");
     if (fs.existsSync(marker)) return;
 
-    const partition = LEGACY_MODE
-        ? "persist:nika-business-legacy"
-        : "persist:nika-business";
-    const ses = session.fromPartition(partition);
+    const ses = session.fromPartition(PERSISTENT_PARTITION);
 
     try {
         await ses.clearStorageData({
@@ -891,18 +909,25 @@ function createWindow() {
         width: 1400,
         height: 900,
         backgroundColor: "#f4f7fb",
+        title: TEST_MODE ? "Nika Business TEST" : "Nika Business",
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             spellcheck: false,
             preload: path.join(__dirname, "preload.js"),
-            partition: LEGACY_MODE ? "persist:nika-business-legacy" : "persist:nika-business"
+            partition: PERSISTENT_PARTITION
         }
     });
 
     if (DEV_MODE) setTimeout(() => win.loadURL(APP_URL), 5000);
     else win.loadURL(APP_URL);
 
+    if (TEST_MODE) {
+        win.webContents.on("page-title-updated", (event) => {
+            event.preventDefault();
+            win.setTitle("Nika Business TEST — test.nikabusiness.com");
+        });
+    }
     win.maximize();
     win.setMenu(null);
 
@@ -920,6 +945,10 @@ function createWindow() {
 }
 
 function configureAutoUpdates() {
+    if (TEST_MODE) {
+        console.log("Тестовый Electron: обновления рабочей версии отключены");
+        return;
+    }
     if (!app.isPackaged) {
         console.log("Автообновление отключено в режиме разработки");
         return;
