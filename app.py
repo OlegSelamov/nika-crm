@@ -234,6 +234,7 @@ try:
     # can therefore lack the item_type snapshot required by sales history and receipts.
     _media_schema_cur.execute("ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS item_type TEXT")
     _media_schema_cur.execute("ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS modifiers JSONB NOT NULL DEFAULT '[]'::jsonb")
+    _media_schema_cur.execute("ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS excluded_ingredients JSONB NOT NULL DEFAULT '[]'::jsonb")
     _media_schema_cur.execute("""
         CREATE TABLE IF NOT EXISTS school_students (
             id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL,

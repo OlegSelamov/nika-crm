@@ -398,6 +398,7 @@ def pay_sale():
                 return jsonify({"success": False, "error": str(exc)}), 409
 
 
+        from routes.food_orders import normalize_excluded_ingredients
         normalized_cart = []
         for item in cart:
             cur.execute(
@@ -426,7 +427,10 @@ def pay_sale():
                         "error": "Маркированная единица должна продаваться отдельно. Отсканируйте DataMatrix каждой упаковки.",
                     }), 400
 
-            normalized_cart.append((item, unit, item_type, price, qty, line_total))
+            excluded_ingredients = normalize_excluded_ingredients(
+                cur, company_id, int(item["id"]), item_type, item.get("excluded_ingredients")
+            )
+            normalized_cart.append((item, unit, item_type, price, qty, line_total, excluded_ingredients))
 
         marking_codes = [
             line[0].get("excise_stamp")
@@ -494,7 +498,7 @@ def pay_sale():
 
         sale_id = cur.fetchone()["id"]
 
-        for item, unit, item_type, price, qty, line_total in normalized_cart:
+        for item, unit, item_type, price, qty, line_total, excluded_ingredients in normalized_cart:
 
             cur.execute("""
                 INSERT INTO sale_items (
@@ -509,9 +513,10 @@ def pay_sale():
                     ntin,
                     excise_stamp,
                     item_type,
-                    modifiers
+                    modifiers,
+                    excluded_ingredients
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 sale_id,
                 item.get("id"),
@@ -524,7 +529,8 @@ def pay_sale():
                 item.get("ntin"),
                 item.get("excise_stamp"),
                 item_type,
-                json.dumps(item.get("modifiers") or [], ensure_ascii=False)
+                json.dumps(item.get("modifiers") or [], ensure_ascii=False),
+                json.dumps(excluded_ingredients, ensure_ascii=False)
             ))
 
         process_sale(conn, sale_id)
@@ -1348,7 +1354,7 @@ def process_sale(conn, sale_id):
 
         # Retail keeps the historical purchase-price calculation. For dishes
         # the real COGS is built from the recipe and selected modifiers below.
-        line_cost = purchase_price * item["quantity"]
+        line_cost = 0 if item_type == "dish" else purchase_price * item["quantity"]
 
         if item_type == "product":
             # Existing retail behavior must stay isolated from food-service recipes.
@@ -1382,7 +1388,32 @@ def process_sale(conn, sale_id):
             if not recipe_rows:
                 raise ValueError("Для блюда не заполнена техкарта")
 
+            raw_exclusions = item.get("excluded_ingredients") or []
+            if isinstance(raw_exclusions, str):
+                try:
+                    raw_exclusions = json.loads(raw_exclusions)
+                except (ValueError, TypeError):
+                    raise ValueError("Некорректные исключения из техкарты")
+            if not isinstance(raw_exclusions, list):
+                raise ValueError("Некорректные исключения из техкарты")
+            excluded_ids = set()
+            for exclusion in raw_exclusions:
+                if not isinstance(exclusion, dict):
+                    raise ValueError("Некорректный ингредиент для исключения")
+                try:
+                    ingredient_id = int(exclusion["id"])
+                except (KeyError, ValueError, TypeError):
+                    raise ValueError("Некорректный ингредиент для исключения")
+                if ingredient_id in excluded_ids or ingredient_id <= 0:
+                    raise ValueError("Некорректные исключения из техкарты")
+                excluded_ids.add(ingredient_id)
+            available_ids = {int(recipe["ingredient_item_id"]) for recipe in recipe_rows}
+            if not excluded_ids.issubset(available_ids):
+                raise ValueError("Исключённый ингредиент отсутствует в техкарте блюда")
+
             for recipe in recipe_rows:
+                if int(recipe["ingredient_item_id"]) in excluded_ids:
+                    continue
                 ingredient_qty = recipe["quantity"] * item["quantity"]
                 ingredient_price = recipe["purchase_price"] or 0
                 cur.execute("""

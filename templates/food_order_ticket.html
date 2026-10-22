@@ -25,7 +25,8 @@
 <div class="line"></div>
 {% for row in order.cart %}
 <div class="item"><div><strong>{{ row.name }}</strong><div class="muted">{{ row.qty }} {{ row.unit }}</div>
-{% for mod in row.modifiers %}<div class="muted">+ {{ mod.name }}</div>{% endfor %}</div>
+{% for mod in row.modifiers %}<div class="muted">+ {{ mod.name }}</div>{% endfor %}
+{% for excluded in row.excluded_ingredients|default([]) %}<div class="muted"><strong>Без: {{ excluded.name }}</strong></div>{% endfor %}</div>
 {% if kind == "precheck" %}<strong>{{ "%.2f"|format(row.line_total) }} ₸</strong>{% endif %}</div>
 {% endfor %}
 {% if order.note %}<div class="line"></div><strong>Комментарий:</strong><div>{{ order.note }}</div>{% endif %}

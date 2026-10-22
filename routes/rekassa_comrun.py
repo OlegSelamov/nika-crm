@@ -347,6 +347,7 @@ def pay_sale_comrun():
                         conn.rollback()
                         return jsonify({"success": False, "error": str(exc)}), 409
 
+            from routes.food_orders import normalize_excluded_ingredients
             normalized_cart = []
             for item in cart:
                 if not isinstance(item, dict):
@@ -365,11 +366,15 @@ def pay_sale_comrun():
                 # ingredients, not the dish item itself.
                 item_type = raw_item_type if raw_item_type in ("service", "dish") else "product"
                 price, qty, line_total = normalize_sale_line(item, unit)
+                removed_ingredients = normalize_excluded_ingredients(
+                    cur, company_id, int(item_id), item_type, item.get("excluded_ingredients")
+                )
                 normalized_cart.append({
                     "source": item,
                     "item_id": item_id,
                     "unit": unit,
                     "item_type": item_type,
+                    "excluded_ingredients": removed_ingredients,
                     "price": price,
                     "qty": qty,
                     "total": line_total,
@@ -428,13 +433,14 @@ def pay_sale_comrun():
                 item_id = normalized["item_id"]
                 cur.execute("""
                     INSERT INTO sale_items (
-                        sale_id,item_id,name,price,quantity,total,unit,gtin,ntin,excise_stamp,item_type,modifiers
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        sale_id,item_id,name,price,quantity,total,unit,gtin,ntin,excise_stamp,item_type,modifiers,excluded_ingredients
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """, (
                     sale_id, item_id, item.get("name") or f"Товар #{item_id}",
                     normalized["price"], normalized["qty"], normalized["total"], normalized["unit"],
                     item.get("gtin"), item.get("ntin"), item.get("excise_stamp"), normalized["item_type"],
                     json.dumps(item.get("modifiers") or [], ensure_ascii=False),
+                    json.dumps(normalized["excluded_ingredients"], ensure_ascii=False),
                 ))
         finally:
             cur.close()
@@ -570,6 +576,9 @@ def pay_sale_comrun():
             finally:
                 op_cur.close()
         return jsonify(response)
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
     except Exception as exc:
         conn.rollback()
         current_app.logger.exception("SALE FISCAL LAYER ERROR")

@@ -68,6 +68,41 @@ def ensure_food_schema(cur):
     """)
 
 
+def normalize_excluded_ingredients(cur, company_id, item_id, item_type, raw):
+    """Canonical recipe exclusions; never trust names or ingredient ids from the browser."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) > 50:
+        raise ValueError("Некорректный список исключённых ингредиентов")
+    if not raw:
+        return []
+    if item_type != "dish":
+        raise ValueError("Убирать ингредиенты можно только из блюда")
+    ids = []
+    for value in raw:
+        raw_id = value.get("id") if isinstance(value, dict) else value
+        if isinstance(raw_id, bool):
+            raise ValueError("Некорректный ингредиент для исключения")
+        try:
+            ingredient_id = int(raw_id)
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("Некорректный ингредиент для исключения")
+        if ingredient_id <= 0 or ingredient_id in ids:
+            raise ValueError("Повторяющийся или неверный ингредиент в исключениях")
+        ids.append(ingredient_id)
+    cur.execute("""
+        SELECT r.ingredient_item_id AS id, i.name
+        FROM item_recipes r
+        JOIN items i ON i.id = r.ingredient_item_id AND i.company_id = r.company_id
+        WHERE r.company_id = %s AND r.item_id = %s
+          AND r.ingredient_item_id = ANY(%s)
+    """, (company_id, item_id, ids))
+    existing = {int(row["id"]): str(row["name"] or "Ингредиент") for row in cur.fetchall()}
+    if len(existing) != len(ids):
+        raise ValueError("Исключённый ингредиент отсутствует в техкарте блюда")
+    return [{"id": ingredient_id, "name": existing[ingredient_id]} for ingredient_id in ids]
+
+
 def _item_cart(cur, company_id, source):
     if not isinstance(source, list) or not 0 < len(source) <= 100:
         raise ValueError("Добавьте от 1 до 100 позиций в заказ")
@@ -81,7 +116,7 @@ def _item_cart(cur, company_id, source):
         except (TypeError, ValueError):
             raise ValueError("Некорректный товар в заказе")
         cur.execute("""
-            SELECT id, name, unit, gtin, ntin
+            SELECT id, name, unit, gtin, ntin, COALESCE(item_type, 'product') AS item_type
             FROM items
             WHERE company_id=%s AND id=%s
               AND COALESCE(item_type,'product') IN ('product','dish')
@@ -107,6 +142,9 @@ def _item_cart(cur, company_id, source):
                 "name": str(modifier.get("name") or "")[:120],
                 "price_delta": float(modifier.get("price_delta") or 0)
             })
+        removed_ingredients = normalize_excluded_ingredients(
+            cur, company_id, item_id, db_item["item_type"], raw.get("excluded_ingredients")
+        )
         row = {
             "id": item_id,
             "name": db_item["name"] or "Позиция",
@@ -117,6 +155,7 @@ def _item_cart(cur, company_id, source):
             "qty": float(qty),
             "line_total": float(line_total),
             "modifiers": clean_modifiers,
+            "excluded_ingredients": removed_ingredients,
         }
         # The fiscal flow must receive original marking codes when relevant.
         if raw.get("excise_stamp"):
@@ -163,7 +202,7 @@ def verify_payment_order(cur, company_id, order_id, cart):
     if len(saved) != len(given):
         raise ValueError("Заказ изменён: сохраните его перед оплатой")
     for left, right in zip(saved, given):
-        for field in ("id", "price", "qty", "line_total", "modifiers", "excise_stamp"):
+        for field in ("id", "price", "qty", "line_total", "modifiers", "excluded_ingredients", "excise_stamp"):
             if left.get(field) != right.get(field):
                 raise ValueError("Заказ изменён: сохраните его перед оплатой")
     return order
