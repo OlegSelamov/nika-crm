@@ -1769,6 +1769,10 @@ def check(sale_id):
         client=client,
         company=company,
         check_date=check_date,
+        # Legacy cash receipts have no explicit tender amount. Preserve their
+        # displayed payment amount instead of rendering an undefined template var.
+        cash_received=sale.get("cash_received") or sale.get("cash_amount") or 0,
+        change_amount=sale.get("change_amount") or 0,
         cash=sale["cash_amount"]
             if "cash_amount" in sale.keys()
             else 0,

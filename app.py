@@ -230,6 +230,9 @@ try:
             active BOOLEAN NOT NULL DEFAULT TRUE, sort_order INTEGER NOT NULL DEFAULT 0
         )
     """)
+    # The model initializer does not run in Gunicorn. Older production databases
+    # can therefore lack the item_type snapshot required by sales history and receipts.
+    _media_schema_cur.execute("ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS item_type TEXT")
     _media_schema_cur.execute("ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS modifiers JSONB NOT NULL DEFAULT '[]'::jsonb")
     _media_schema_cur.execute("""
         CREATE TABLE IF NOT EXISTS school_students (
