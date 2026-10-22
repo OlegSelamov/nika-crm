@@ -784,6 +784,9 @@
         const frame = document.getElementById("foodTicketFrame");
         if (!modal || !frame) return;
         document.getElementById("foodTicketHeading").textContent = kind === "kitchen" ? "Заказ на кухню" : "Пречек гостю";
+        const printButton = document.getElementById("foodTicketPrint");
+        if (printButton) printButton.disabled = true;
+        frame.onload = () => { if (printButton) printButton.disabled = false; };
         frame.src = "/food/orders/" + encodeURIComponent(orderId) + "/ticket/" + kind + "?embed=1";
         modal.hidden = false;
     }
@@ -793,6 +796,48 @@
         const frame = document.getElementById("foodTicketFrame");
         if (frame) frame.src = "about:blank";
     }
+    async function printFoodTicketFromModal() {
+        const frame = document.getElementById("foodTicketFrame");
+        const button = document.getElementById("foodTicketPrint");
+        if (!frame || !frame.contentDocument?.body || button?.disabled) return;
+        const doc = frame.contentDocument;
+        if (!doc.querySelector(".item")) {
+            foodMessage("Чек ещё загружается, повторите печать");
+            return;
+        }
+        const title = document.getElementById("foodTicketHeading")?.textContent || "Чек общепита";
+        const printBridge = (() => {
+            try { return window.nikaDesktop || window.parent?.nikaDesktop || null; }
+            catch (_) { return window.nikaDesktop || null; }
+        })();
+        if (!printBridge?.printers?.printReceipt) {
+            frame.contentWindow?.print();
+            return;
+        }
+        if (button) button.disabled = true;
+        try {
+            // Keep the ticket's existing design, but use Electron's chosen
+            // 58/80 mm receipt printer and paper-width formatting.
+            const page = doc.body.cloneNode(true);
+            page.querySelectorAll(".actions,script").forEach(node => node.remove());
+            const styles = Array.from(doc.querySelectorAll("style"))
+                .map(node => node.textContent || "").join("\n")
+                .replace(/@page\s*\{[^}]*\}/gi, "");
+            const html = '<style>' + styles +
+                '.receipt.food-ticket-paper{width:100%;max-width:100%;padding:2mm 0;margin:0;}' +
+                '.receipt.food-ticket-paper .item{min-width:0;}' +
+                '</style><main class="receipt food-ticket-paper">' + page.innerHTML + '</main>';
+            const result = await printBridge.printers.printReceipt({html, title});
+            if (result?.success === false) throw new Error(result.error || "Принтер отклонил чек");
+            foodMessage("Документ отправлен на чековый принтер");
+        } catch (error) {
+            console.error("FOOD RECEIPT PRINTER:", error);
+            foodMessage(error.message || "Ошибка печати через Electron");
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
     function printFoodTicket(kind) {
         if (!currentFoodOrderId || !currentFoodOrderSaved) {
             foodMessage("Сначала сохраните заказ");
@@ -878,9 +923,7 @@
         document.getElementById("foodOrderDetails")?.addEventListener("click", () => setFoodDetails(true));
         document.querySelectorAll("[data-food-details-close]").forEach(el => el.addEventListener("click", () => setFoodDetails(false)));
         document.querySelectorAll("[data-food-ticket-close]").forEach(el => el.addEventListener("click", closeFoodTicket));
-        document.getElementById("foodTicketPrint")?.addEventListener("click", () => {
-            document.getElementById("foodTicketFrame")?.contentWindow?.print();
-        });
+        document.getElementById("foodTicketPrint")?.addEventListener("click", printFoodTicketFromModal);
         document.addEventListener("keydown", event => {
             if (event.key === "Escape") { setFoodDetails(false); closeFoodTicket(); setExternalModal(false); }
         });

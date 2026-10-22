@@ -339,6 +339,14 @@ def pay_sale_comrun():
                     conn.rollback()
                     return jsonify({"success": False, "error": "Режим общепита не включён"}), 403
                 ensure_food_schema(cur)
+                cur.execute("SELECT food_checkout_mode FROM companies WHERE id=%s", (company_id,))
+                food_config = cur.fetchone()
+                if food_config and food_config["food_checkout_mode"] == "external":
+                    conn.rollback()
+                    return jsonify({
+                        "success": False,
+                        "error": "Выбрана внешняя ККМ. Внутреннюю оплату и фискализацию общепита здесь выполнять нельзя."
+                    }), 409
                 if food_order_id is not None:
                     try:
                         food_order_id = int(food_order_id)
