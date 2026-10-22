@@ -12,9 +12,11 @@ on:
       - "routes/food_orders.py"
       - "routes/rekassa_comrun.py"
       - "static/js/food_sales.js"
+      - "static/css/food_sales.css"
       - "templates/profile.html"
       - "templates/sales.html"
       - "tests/test_food_checkout_modes.py"
+      - "tests/test_food_menu_cards.py"
       - ".github/workflows/validate-food-checkout.yml"
   workflow_dispatch:
 
@@ -42,3 +44,5 @@ jobs:
         run: node --check static/js/food_sales.js
       - name: Run food checkout regression checks
         run: python -m unittest discover -s tests -p test_food_checkout_modes.py -v
+      - name: Run food menu visual and scroll regression checks
+        run: python -m unittest discover -s tests -p test_food_menu_cards.py -v
