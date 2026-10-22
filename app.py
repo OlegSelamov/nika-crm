@@ -105,6 +105,43 @@ app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false"
 app.config["SESSION_COOKIE_HTTPONLY"] = os.getenv("SESSION_COOKIE_HTTPONLY", "true").lower() == "true"
 app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 
+# Sync the optional banking module for Gunicorn deployments. init_db()
+# only runs under direct Python execution, not the production WSGI server.
+# This does not enable a paid subscription or grant employee permissions.
+_banks_module_conn = None
+try:
+    _banks_module_conn = get_db()
+    _banks_module_cur = _banks_module_conn.cursor()
+    _banks_module_cur.execute("""
+        INSERT INTO modules (
+            code, name, description, category, monthly_price,
+            route_prefix, icon, is_core, is_active, sort_order
+        ) VALUES (
+            'banks', 'Мои Банки',
+            'Банковские счета, выписки, переводы и интеграции с банками.',
+            'Финансы', 1500, '/banks', '/static/icons/buh.png',
+            FALSE, TRUE, 85
+        )
+        ON CONFLICT (code) DO UPDATE SET
+            name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            category = EXCLUDED.category,
+            monthly_price = EXCLUDED.monthly_price,
+            route_prefix = EXCLUDED.route_prefix,
+            icon = EXCLUDED.icon,
+            is_core = EXCLUDED.is_core,
+            is_active = TRUE,
+            sort_order = EXCLUDED.sort_order
+    """)
+    _banks_module_conn.commit()
+except Exception as _banks_module_error:
+    if _banks_module_conn is not None:
+        _banks_module_conn.rollback()
+    logging.warning("My Banks module registration failed: %s", _banks_module_error)
+finally:
+    if _banks_module_conn is not None:
+        pool.putconn(_banks_module_conn)
+
 # Add receipt tender/change fields without touching previously paid sales.
 # Safe additive migration, also executed by Gunicorn on test startup.
 try:
