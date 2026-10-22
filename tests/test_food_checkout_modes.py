@@ -28,7 +28,7 @@ class FoodCheckoutModesTests(unittest.TestCase):
         js = self.read("static/js/food_sales.js")
         create = js.split('async function createFoodPrecheck()', 1)[1].split('async function payExistingFoodOrder()', 1)[0]
         self.assertIn('await saveFoodOrder()', create)
-        self.assertIn('openFoodTicket(saved.id, "precheck")', create)
+        self.assertIn('openFoodTicket(saved.id, "precheck", true)', create)
         self.assertNotIn('pay()', create)
         self.assertNotIn('submitSalePayment', create)
 
@@ -56,6 +56,8 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn('printBridge.printers.printReceipt({html, title})', js)
         self.assertIn('frame.contentWindow?.print()', js)
         self.assertIn('frame.onload =', js)
+        self.assertIn('if (autoPrint && kind === "precheck")', js)
+        self.assertIn('void printFoodTicketFromModal()', js)
 
     def test_all_edited_python_modules_parse(self):
         for path in ("app.py", "models.py", "routes/auth.py", "routes/sales.py",

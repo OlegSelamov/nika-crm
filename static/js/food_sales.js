@@ -688,7 +688,7 @@
             const saved = await saveFoodOrder();
             if (saved) {
                 foodMessage("Заказ №" + saved.id + " сохранён · ожидает оплаты");
-                openFoodTicket(saved.id, "precheck");
+                openFoodTicket(saved.id, "precheck", true);
             }
         } finally {
             foodCheckoutBusy = false;
@@ -778,7 +778,7 @@
         const modal = document.getElementById("foodOrderDetailsModal");
         if (modal) modal.hidden = !open;
     }
-    function openFoodTicket(orderId, kind) {
+    function openFoodTicket(orderId, kind, autoPrint = false) {
         if (!orderId) { foodMessage("Сначала сохраните заказ"); return; }
         const modal = document.getElementById("foodTicketModal");
         const frame = document.getElementById("foodTicketFrame");
@@ -786,7 +786,20 @@
         document.getElementById("foodTicketHeading").textContent = kind === "kitchen" ? "Заказ на кухню" : "Пречек гостю";
         const printButton = document.getElementById("foodTicketPrint");
         if (printButton) printButton.disabled = true;
-        frame.onload = () => { if (printButton) printButton.disabled = false; };
+        frame.onload = () => {
+            if (printButton) printButton.disabled = false;
+            if (autoPrint && kind === "precheck") {
+                // An explicit "Оформить заказ · пречек" action prints immediately
+                // when an Electron receipt printer is available. In a browser
+                // the preview stays open, so no surprise print dialog is shown.
+                let bridge = null;
+                try { bridge = window.nikaDesktop || window.parent?.nikaDesktop; }
+                catch (_) { bridge = window.nikaDesktop; }
+                if (bridge?.printers?.printReceipt) {
+                    void printFoodTicketFromModal();
+                }
+            }
+        };
         frame.src = "/food/orders/" + encodeURIComponent(orderId) + "/ticket/" + kind + "?embed=1";
         modal.hidden = false;
     }
