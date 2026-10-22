@@ -219,14 +219,16 @@ def sales():
 
     business_mode = "universal"
     sales_workflow = "sales_documents"
+    food_checkout_mode = "fast"
     if company_id:
         mode_conn = get_db()
         mode_cur = mode_conn.cursor()
         try:
-            mode_cur.execute("SELECT COALESCE(business_mode, 'universal') AS business_mode, COALESCE(sales_workflow, 'sales_documents') AS sales_workflow FROM companies WHERE id = %s", (company_id,))
+            mode_cur.execute("SELECT COALESCE(business_mode, 'universal') AS business_mode, COALESCE(sales_workflow, 'sales_documents') AS sales_workflow, COALESCE(food_checkout_mode, 'fast') AS food_checkout_mode FROM companies WHERE id = %s", (company_id,))
             mode_row = mode_cur.fetchone()
             business_mode = (mode_row["business_mode"] if mode_row else "universal") or "universal"
             sales_workflow = (mode_row["sales_workflow"] if mode_row else "sales_documents") or "sales_documents"
+            food_checkout_mode = (mode_row["food_checkout_mode"] if mode_row else "fast") or "fast"
         finally:
             mode_cur.close()
             pool.putconn(mode_conn)
@@ -237,6 +239,7 @@ def sales():
         import_error=import_error,
         business_mode=business_mode,
         sales_workflow=sales_workflow,
+        food_checkout_mode=food_checkout_mode,
     )
 
 

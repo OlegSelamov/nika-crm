@@ -171,6 +171,7 @@ try:
         ADD COLUMN IF NOT EXISTS business_mode TEXT NOT NULL DEFAULT 'universal'
     """)
     _media_schema_cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS sales_workflow TEXT NOT NULL DEFAULT 'sales_documents'")
+    _media_schema_cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS food_checkout_mode TEXT NOT NULL DEFAULT 'fast'")
     _media_schema_cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS iik TEXT")
     _media_schema_cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bank TEXT")
     _media_schema_cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bik TEXT")

@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};window.NIKA_SALES_WORKFLOW={{ sales_workflow|default('sales_documents')|tojson }};</script>
+<script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};window.NIKA_SALES_WORKFLOW={{ sales_workflow|default('sales_documents')|tojson }};window.NIKA_FOOD_CHECKOUT_MODE={{ food_checkout_mode|default('fast')|tojson }};</script>
 
 <div class="sales-page">
 <div class="sales-commandbar" aria-label="Режимы продаж и кассовая смена">

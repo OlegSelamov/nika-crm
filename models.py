@@ -1136,6 +1136,7 @@ def init_db():
     """)
 
     cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS sales_workflow TEXT NOT NULL DEFAULT 'sales_documents'")
+    cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS food_checkout_mode TEXT NOT NULL DEFAULT 'fast'")
     cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS iik TEXT")
     cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bank TEXT")
     cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bik TEXT")

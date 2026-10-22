@@ -120,6 +120,15 @@
 </select>
 <small style="color:#818899">В режиме «Только продажи» убираются кнопки выставления счетов и оформления документов. Ранее созданные документы остаются в истории и доступны для просмотра.</small></div>
 {% endif %}
+{% if can_manage_company and (user.role == 'owner' or user.is_super_admin) %}
+<div class="field wide"><label>Оформление заказов в общепите</label>
+<select name="food_checkout_mode">
+<option value="fast" {% if not company or company.food_checkout_mode not in ('orders','external') %}selected{% endif %}>Быстрая продажа — оплата и фискализация сразу</option>
+<option value="orders" {% if company and company.food_checkout_mode=='orders' %}selected{% endif %}>Заказы и пречек — сначала заказ, затем отдельная оплата</option>
+<option value="external" {% if company and company.food_checkout_mode=='external' %}selected{% endif %}>Внешняя ККМ — пречек в Nika, фискальный чек в другой кассе</option>
+</select>
+<small style="color:#818899">Настройка действует только в режиме общепита. Пречек не заменяет фискальный чек. Во внешнем режиме подтверждение чека не создаёт продажу и не списывает остатки в Nika.</small></div>
+{% endif %}
 <div class="field wide"><label>Стартовый раздел после входа</label><select name="start_page"><option value="profile" {% if user.start_page=='profile' %}selected{% endif %}>Профиль</option><option value="analytics" {% if user.start_page=='analytics' %}selected{% endif %}>Аналитика</option><option value="sales" {% if user.start_page=='sales' %}selected{% endif %}>Продажи</option><option value="tasks" {% if user.start_page=='tasks' %}selected{% endif %}>Задачи</option><option value="catalog" {% if user.start_page=='catalog' %}selected{% endif %}>Каталог</option></select></div>
 <div class="switch-row wide"><div><b>Компактный интерфейс</b><small>Уменьшает отступы и плотнее размещает информацию.</small></div><label class="switch"><input type="checkbox" name="compact_mode" {% if user.compact_mode %}checked{% endif %}><span class="slider"></span></label></div>
 <div class="switch-row wide"><div><b>Показывать фотографии товаров</b><small>Выключите, чтобы каталог, продажи и склад отображались компактным списком без фотографий.</small></div><label class="switch"><input type="checkbox" name="show_catalog_images" {% if user.show_catalog_images %}checked{% endif %}><span class="slider"></span></label></div>

@@ -33,6 +33,8 @@ def ensure_food_schema(cur):
             note TEXT NOT NULL DEFAULT '',
             client_id INTEGER,
             status TEXT NOT NULL DEFAULT 'open',
+            external_receipt_number TEXT,
+            external_confirmed_at TIMESTAMP,
             cart JSONB NOT NULL DEFAULT '[]'::jsonb,
             total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
             sale_id INTEGER,
@@ -48,6 +50,8 @@ def ensure_food_schema(cur):
         CREATE UNIQUE INDEX IF NOT EXISTS uq_food_orders_sale_id
         ON food_orders(sale_id) WHERE sale_id IS NOT NULL
     """)
+    cur.execute("ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS external_receipt_number TEXT")
+    cur.execute("ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS external_confirmed_at TIMESTAMP")
     # Legacy saved orders used timezone-aware datetime for a timezone-naive
     # column. PostgreSQL converted KZ +05:00 to UTC, moving the clock -5h.
     # Direct checkout orders were already saved with local naive wall time.
@@ -224,7 +228,7 @@ def food_orders():
             except (ValueError, TypeError):
                 page = 1
             status = request.args.get("status", "all")
-            if status not in ("all", "open", "paid", "cancelled"):
+            if status not in ("all", "open", "paid", "external_paid", "cancelled"):
                 status = "all"
             query = (request.args.get("q") or "").strip()[:70]
             conditions = ["company_id=%s"]
@@ -238,7 +242,7 @@ def food_orders():
             where_sql = " AND ".join(conditions)
             cur.execute(f"""
                 SELECT id, status, table_name, guest_name, total_amount,
-                       sale_id, created_at, updated_at FROM food_orders
+                       sale_id, external_receipt_number, created_at, updated_at FROM food_orders
                 WHERE {where_sql}
                 ORDER BY id DESC LIMIT 21 OFFSET %s
             """, tuple(params + [(page - 1) * 20]))
@@ -330,6 +334,46 @@ def food_order_detail(order_id):
             return jsonify({"success": False, "message": "Заказ уже закрыт"}), 409
         conn.commit()
         return jsonify({"success": True})
+    finally:
+        pool.putconn(conn)
+
+
+@food_orders_bp.route("/api/food/orders/<int:order_id>/external-payment", methods=["POST"])
+def food_order_external_payment(order_id):
+    """Log manual external fiscal receipt confirmation, never fake a Nika sale."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        company_id = _food_access(cur)
+        if company_id is None:
+            return jsonify({"success": False, "message": "Нет доступа к заказам общепита"}), 403
+        cur.execute("SELECT food_checkout_mode FROM companies WHERE id=%s", (company_id,))
+        config = cur.fetchone()
+        if not config or config["food_checkout_mode"] != "external":
+            return jsonify({"success": False, "message": "Внешняя ККМ не выбрана в профиле"}), 403
+        data = request.get_json(silent=True) or {}
+        receipt = str(data.get("receipt_number") or "").strip()[:120]
+        if not receipt:
+            return jsonify({"success": False, "message": "Укажите номер фискального чека внешней ККМ"}), 400
+        ensure_food_schema(cur)
+        conn.commit()
+        cur.execute("""
+            UPDATE food_orders
+               SET status='external_paid', external_receipt_number=%s,
+                   external_confirmed_at=%s, updated_at=%s
+             WHERE id=%s AND company_id=%s AND status='open' AND sale_id IS NULL
+            RETURNING id, status, external_receipt_number
+        """, (receipt, now_kz_for_timestamp(), now_kz_for_timestamp(), order_id, company_id))
+        updated = cur.fetchone()
+        if not updated:
+            conn.rollback()
+            return jsonify({"success": False, "message": "Заказ уже закрыт или не найден"}), 409
+        conn.commit()
+        return jsonify({"success": True, "order": dict(updated),
+                        "message": "Номер внешнего чека сохранён; продажи и склад Nika не изменены"})
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         pool.putconn(conn)
 

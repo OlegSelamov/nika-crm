@@ -1289,6 +1289,8 @@ def save_interface_profile():
     allowed_business_modes = {"retail", "foodservice", "universal"}
     sales_workflow = (request.form.get("sales_workflow") or "").strip()
     allowed_sales_workflows = {"sales_only", "sales_documents"}
+    food_checkout_mode = (request.form.get("food_checkout_mode") or "").strip()
+    allowed_food_checkout_modes = {"fast", "orders", "external"}
 
     can_manage_business_mode = bool(
         session.get("is_super_admin") or session.get("role") == "owner"
@@ -1310,6 +1312,9 @@ def save_interface_profile():
                 "UPDATE companies SET sales_workflow = %s WHERE id = %s",
                 (sales_workflow, session["company_id"])
             )
+        if can_manage_business_mode and session.get("company_id") and food_checkout_mode in allowed_food_checkout_modes:
+            cur.execute("UPDATE companies SET food_checkout_mode=%s WHERE id=%s",
+                        (food_checkout_mode, session["company_id"]))
         cur.execute("""
             UPDATE users
             SET start_page = %s,
