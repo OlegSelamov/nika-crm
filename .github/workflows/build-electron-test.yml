@@ -8,6 +8,7 @@ on:
     paths:
       - "desktop/main.js"
       - "desktop/preload.js"
+      - "desktop/test_food_dual_print.js"
       - "desktop/package.json"
       - "desktop/package-lock.json"
       - "desktop/electron-test.config.yml"
@@ -50,6 +51,7 @@ jobs:
           node --check desktop/main.js
           node --check desktop/preload.js
           node desktop/test_dialog_focus.js
+          node desktop/test_food_dual_print.js
           if (!(Select-String -Path desktop/main.js -Pattern '"persist:nika-business-test"' -Quiet)) { throw "Missing isolated test partition" }
           if (!(Select-String -Path desktop/main.js -Pattern '"https://test.nikabusiness.com"' -Quiet)) { throw "Missing test server URL" }
 

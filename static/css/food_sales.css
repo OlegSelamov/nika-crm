@@ -861,3 +861,10 @@ body.food-sales-mode.food-checkout-orders .payment-actions > button:disabled { o
         transform: none;
     }
 }
+
+/* Two-ticket result is visible by the checkout button, not only in the cart. */
+.food-print-status { display:block; margin-top:5px; padding:9px 11px;
+    border-radius:10px; border:1px solid #d0e6d8; background:#eefaf3;
+    color:#14532d; font-size:11px; line-height:1.45; font-weight:700; overflow-wrap:anywhere; }
+.food-print-status.is-error { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
+.food-print-status[hidden] { display:none !important; }

@@ -689,6 +689,14 @@
     }
 
 
+    function showFoodPrintStatus(text, hasError = false) {
+        const status = document.getElementById("foodPrintStatus");
+        if (!status) return;
+        status.hidden = !text;
+        status.textContent = text || "";
+        status.classList.toggle("is-error", hasError);
+    }
+
     function getFoodPrinterBridge() {
         try { return window.nikaDesktop?.printers || window.parent?.nikaDesktop?.printers || null; }
         catch (_) { return window.nikaDesktop?.printers || null; }
@@ -723,7 +731,9 @@
             // Browser or an older TEST Electron: preserve the guest preview.
             openFoodTicket(order.id, "precheck", Boolean(printers?.printReceipt));
             if (printers?.printReceipt) {
-                foodMessage("Для двух чеков и принтера кухни обновите Nika Electron TEST");
+                const msg = "Для автоматической печати двух чеков обновите Nika Electron TEST";
+                foodMessage(msg);
+                showFoodPrintStatus(msg, true);
             }
             return;
         }
@@ -754,7 +764,9 @@
             : kitchen?.success
                 ? (kitchen.alreadySent ? "кухонный чек уже отправлен" : "кухонный чек отправлен")
                 : "КУХНЯ: " + (kitchen?.error || kitchenTicket.reason?.message || "ошибка печати");
-        foodMessage("Заказ №" + order.id + " сохранён · " + guestStatus + " · " + kitchenStatus);
+        const message = "Заказ №" + order.id + " сохранён · " + guestStatus + " · " + kitchenStatus;
+        foodMessage(message);
+        showFoodPrintStatus(message, guest?.success === false || kitchen?.success === false);
         if (guest?.success === false || kitchen?.success === false) {
             // A second click retries only the failed job in Electron; the
             // successful ticket is remembered by its order fingerprint.
@@ -777,7 +789,9 @@
                     await printBothFoodTickets(saved);
                 } catch (error) {
                     console.error("DUAL FOOD PRINT ERROR:", error);
-                    foodMessage("Заказ №" + saved.id + " сохранён, но печать не удалась: " + (error.message || error));
+                    const message = "Заказ №" + saved.id + " сохранён, но печать не удалась: " + (error.message || error);
+                    foodMessage(message);
+                    showFoodPrintStatus(message, true);
                 }
             }
         } finally {
@@ -815,6 +829,7 @@
             if (input) input.value = "";
         }
         foodMessage("Новый заказ");
+        showFoodPrintStatus("");
     }
 
     function setExternalModal(open) {

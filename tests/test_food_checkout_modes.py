@@ -28,7 +28,7 @@ class FoodCheckoutModesTests(unittest.TestCase):
         js = self.read("static/js/food_sales.js")
         create = js.split('async function createFoodPrecheck()', 1)[1].split('async function payExistingFoodOrder()', 1)[0]
         self.assertIn('await saveFoodOrder()', create)
-        self.assertIn('openFoodTicket(saved.id, "precheck", true)', create)
+        self.assertIn('await printBothFoodTickets(saved)', create)
         self.assertNotIn('pay()', create)
         self.assertNotIn('submitSalePayment', create)
 
@@ -53,7 +53,9 @@ class FoodCheckoutModesTests(unittest.TestCase):
 
     def test_ticket_uses_electron_receipt_printer(self):
         js = self.read("static/js/food_sales.js")
-        self.assertIn('printBridge.printers.printReceipt({html, title})', js)
+        self.assertIn('printers?.printKitchen', js)
+        self.assertIn('printMethod({html, title})', js)
+        self.assertIn('printers.printFoodOrder({', js)
         self.assertIn('frame.contentWindow?.print()', js)
         self.assertIn('frame.onload =', js)
         self.assertIn('if (autoPrint && kind === "precheck")', js)

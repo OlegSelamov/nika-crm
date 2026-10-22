@@ -17,6 +17,7 @@ on:
       - "templates/sales.html"
       - "tests/test_food_checkout_modes.py"
       - "tests/test_food_menu_cards.py"
+      - "tests/test_food_dual_print.py"
       - ".github/workflows/validate-food-checkout.yml"
   workflow_dispatch:
 
@@ -46,3 +47,5 @@ jobs:
         run: python -m unittest discover -s tests -p test_food_checkout_modes.py -v
       - name: Run food menu visual and scroll regression checks
         run: python -m unittest discover -s tests -p test_food_menu_cards.py -v
+      - name: Run dual receipt checkout checks
+        run: python -m unittest discover -s tests -p test_food_dual_print.py -v
