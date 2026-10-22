@@ -723,20 +723,20 @@ def users():
             )
 
             if not new_is_super_admin and company_id:
-                cur.execute("""
-                    SELECT m.id
-                    FROM modules m
-                    JOIN company_modules cm ON cm.module_id = m.id
-                    WHERE cm.company_id = %s
-                      AND cm.enabled = TRUE
-                      AND m.is_active = TRUE
-                """, (company_id,))
-
-                company_module_ids = {
+                # Persist the administrator's selected permissions for all
+                # active modules, even if a subscription is not enabled yet.
+                # Actual employee access is still intersected with the
+                # company's enabled subscriptions by _employee_modules().
+                cur.execute("SELECT id FROM modules WHERE is_active = TRUE AND code <> 'cto'")
+                assignable_module_ids = {
                     str(row["id"]) for row in cur.fetchall()
                 }
+                unknown_modules = selected_module_ids - assignable_module_ids
+                if unknown_modules:
+                    conn.rollback()
+                    return "Выбраны неизвестные или недоступные модули", 400
 
-                for module_id in company_module_ids:
+                for module_id in assignable_module_ids:
                     cur.execute("""
                         INSERT INTO employee_module_permissions (
                             employee_id,
@@ -846,18 +846,13 @@ def users():
 
             cur.execute("""
                 SELECT
-                    m.id,
-                    m.code,
-                    m.name,
-                    m.description,
-                    m.category,
-                    m.icon,
-                    m.is_core
+                    m.id, m.code, m.name, m.description, m.category,
+                    m.icon, m.is_core,
+                    COALESCE(cm.enabled, FALSE) AS subscription_enabled
                 FROM modules m
-                JOIN company_modules cm ON cm.module_id = m.id
-                WHERE cm.company_id = %s
-                  AND cm.enabled = TRUE
-                  AND m.is_active = TRUE
+                LEFT JOIN company_modules cm
+                  ON cm.module_id = m.id AND cm.company_id = %s
+                WHERE m.is_active = TRUE AND m.code <> 'cto'
                 ORDER BY m.sort_order, m.name
             """, (current_company_id,))
             available_modules = cur.fetchall()

@@ -682,6 +682,8 @@
                             </span>
                             {% if module.is_core %}
                                 <em>Базовый</em>
+                            {% elif module.subscription_enabled is defined and not module.subscription_enabled %}
+                                <em title="Право сохранится, доступ откроется после подключения подписки">Нужна подписка</em>
                             {% endif %}
                         </label>
                         {% endfor %}
