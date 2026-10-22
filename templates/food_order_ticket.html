@@ -138,6 +138,10 @@ body { width: 72mm; max-width: 100%; margin: 0 auto; padding: 1.5mm 1.5mm 2mm;
         {% if order.external_receipt_number %}<div class="ticket-secondary">Чек №{{ order.external_receipt_number }}</div>{% endif %}
     {% else %}
         <div class="ticket-payment"><span>Оплата:</span><strong>{{ {'cash':'Наличные','card':'Карта','kaspi':'Kaspi'}.get(order.planned_payment_method or 'cash', 'Наличные') }}</strong></div>
+        {% if order.planned_payment_method == 'cash' and cash_preview_received is not none %}
+        <div class="ticket-payment"><span>Получено</span><strong>{{ money(cash_preview_received) }} ₸</strong></div>
+        <div class="ticket-payment"><span>Сдача</span><strong>{{ money(cash_preview_received - order.total_amount) }} ₸</strong></div>
+        {% endif %}
     {% endif %}
     <hr class="ticket-line">
     <div class="ticket-footer">Приятного аппетита!</div>

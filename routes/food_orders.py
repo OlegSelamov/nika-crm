@@ -438,7 +438,18 @@ def food_order_ticket(order_id, kind):
             FROM companies c WHERE id=%s
         """, (company_id,))
         company = cur.fetchone()
+        cash_preview_received = None
+        if kind == "precheck" and order["status"] == "open":
+            raw_cash = request.args.get("cash_received")
+            if raw_cash is not None:
+                try:
+                    candidate = Decimal(raw_cash)
+                    if candidate.is_finite() and candidate >= Decimal(str(order["total_amount"])) and candidate <= Decimal("999999999999"):
+                        cash_preview_received = candidate
+                except (InvalidOperation, ValueError):
+                    pass
         return render_template("food_order_ticket.html",
+                               cash_preview_received=cash_preview_received,
                                kind=kind, order=_serialize(order),
                                company=company,
                                money=receipt_money, qty_text=receipt_quantity,

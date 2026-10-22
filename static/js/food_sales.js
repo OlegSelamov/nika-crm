@@ -639,6 +639,8 @@
     let lastFoodPrintUiSignature = null;
     let foodOrderBusy = false;
     let foodCheckoutBusy = false;
+    let foodCashPrintReceived = null;
+    let pendingFoodCashConfirmation = false;
     let activeFoodTicketKind = "precheck";
     let foodOrderPage = 1;
 
@@ -650,6 +652,7 @@
     function resetFoodOrder() {
         currentFoodOrderId = null;
         currentFoodOrderSaved = false;
+        pendingFoodCashConfirmation = false;
         currentSavedPlannedMethod = null;
         lastFoodPrintFingerprint = null;
         lastFoodPrintUiSignature = null;
@@ -729,8 +732,10 @@
     }
 
     async function getSavedFoodTicketHtml(orderId, kind) {
+        const cashReceived = kind === "precheck" ? Number(foodCashPrintReceived || 0) : 0;
+        const suffix = cashReceived > 0 ? "&cash_received=" + encodeURIComponent(cashReceived) : "";
         const response = await fetch("/food/orders/" + encodeURIComponent(orderId) +
-            "/ticket/" + kind + "?embed=1", {credentials:"same-origin", cache:"no-store"});
+            "/ticket/" + kind + "?embed=1" + suffix, {credentials:"same-origin", cache:"no-store"});
         if (!response.ok) throw new Error("Не удалось загрузить " +
             (kind === "kitchen" ? "заказ на кухню" : "пречек гостю"));
         const html = await response.text();
@@ -870,6 +875,46 @@
         }
     }
 
+    async function finalizeFoodPaymentAfterChecks(method, received = 0) {
+        if (!isFoodTicketCurrent()) {
+            const saved = await saveFoodOrder();
+            if (!saved) return false;
+            foodCashPrintReceived = method === "cash" ? received : null;
+            try {
+                if (!await printBothFoodTickets(saved)) {
+                    foodMessage("Заказ сохранён, но оба чека не распечатаны. Оплата не проведена.");
+                    return false;
+                }
+            } catch (error) {
+                foodMessage("Заказ сохранён, ошибка печати: " + (error.message || error));
+                showFoodPrintStatus("Оплата не проведена: проверьте принтеры.", true);
+                return false;
+            } finally {
+                foodCashPrintReceived = null;
+            }
+        }
+
+        const total = getCart().reduce((sum, item) =>
+            sum + Number(item.price || 0) * Number(item.qty || 0), 0);
+        if (method === "cash") {
+            if (received + 0.009 < total) {
+                foodMessage("Полученная сумма меньше суммы заказа");
+                return false;
+            }
+            return await submitSalePayment({
+                paymentMethod:"cash", cash:received, card:0, kaspi:0,
+                cashChange:Math.max(0, received-total)
+            });
+        }
+        const card = Number(String(document.getElementById("cardInput")?.value || "").replace(",", ".")) || 0;
+        const kaspi = Number(String(document.getElementById("kaspiInput")?.value || "").replace(",", ".")) || 0;
+        return await submitSalePayment({
+            paymentMethod:method, cash:0,
+            card:method === "card" ? card : 0,
+            kaspi:method === "kaspi" ? kaspi : 0, cashChange:0
+        });
+    }
+
     async function payExistingFoodOrder() {
         if (foodCheckoutBusy) return;
         showFoodPrintStatus("");
@@ -878,47 +923,50 @@
             foodMessage("Дождитесь завершения оплаты на Kaspi POS");
             return;
         }
-
         foodCheckoutBusy = true;
         const button = document.getElementById("foodCompletePayment");
         if (button) button.disabled = true;
         try {
-            // Direct confirmation performs both stages, but an unchanged
-            // already-printed order must never print duplicate tickets.
-            if (!isFoodTicketCurrent()) {
-                const saved = await saveFoodOrder();
-                if (!saved) return;
-                try {
-                    if (!await printBothFoodTickets(saved)) {
-                        foodMessage("Заказ сохранён, но оба чека не распечатаны. Исправьте печать и повторите подтверждение.");
-                        return;
-                    }
-                } catch (error) {
-                    console.error("FOOD PRINT BEFORE PAYMENT:", error);
-                    foodMessage("Заказ сохранён, печать не завершена: " + (error.message || error));
-                    showFoodPrintStatus("Оплата не проведена: проверьте оба принтера.", true);
-                    return;
-                }
-            }
-
-            if (currentSavedPlannedMethod === "cash") {
-                await openCashChangeModal();
-                return;
-            }
-            // COMRUN overrides window.pay: call the shared sale endpoint
-            // directly to preserve food_order_id and suppress a third check.
+            // Stock warning precedes any new print job for ALL tenders.
             if (typeof window.nikaConfirmNegativeStockSale === "function" &&
                 !(await window.nikaConfirmNegativeStockSale())) return;
+            const method = selectedFoodPaymentMethod();
+            if (method === "cash") {
+                // Cash amount must be known before rendering the guest precheck.
+                // The modal's confirm handler continues through the same checkout.
+                pendingFoodCashConfirmation = true;
+                openCashChangeModal();
+                return;
+            }
+            await finalizeFoodPaymentAfterChecks(method);
+        } finally {
+            foodCheckoutBusy = false;
+            if (button) button.disabled = false;
+        }
+    }
 
-            const card = Number(String(document.getElementById("cardInput")?.value || "").replace(",", ".")) || 0;
-            const kaspi = Number(String(document.getElementById("kaspiInput")?.value || "").replace(",", ".")) || 0;
-            await submitSalePayment({
-                paymentMethod: currentSavedPlannedMethod,
-                cash: 0,
-                card: currentSavedPlannedMethod === "card" ? card : 0,
-                kaspi: currentSavedPlannedMethod === "kaspi" ? kaspi : 0,
-                cashChange: 0
-            });
+    async function confirmFoodCashPayment(event) {
+        if (!pendingFoodCashConfirmation || currentMode() !== "food") return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (foodCheckoutBusy) return;
+        const received = Number(String(document.getElementById("cashReceivedInput")?.value || "").replace(",", ".")) || 0;
+        const total = getCart().reduce((sum, item) =>
+            sum + Number(item.price || 0) * Number(item.qty || 0), 0);
+        if (received + 0.009 < total) {
+            renderCashChange();
+            return;
+        }
+        foodCheckoutBusy = true;
+        const button = document.getElementById("cashChangeConfirm");
+        if (button) button.disabled = true;
+        try {
+            document.getElementById("cashInput").value = String(received);
+            const successful = await finalizeFoodPaymentAfterChecks("cash", received);
+            if (successful) {
+                pendingFoodCashConfirmation = false;
+                closeCashChangeModal(true);
+            }
         } finally {
             foodCheckoutBusy = false;
             if (button) button.disabled = false;
@@ -1171,6 +1219,7 @@
         document.getElementById("foodOrderNew")?.addEventListener("click", newFoodOrder);
         document.getElementById("foodPrecheckCheckout")?.addEventListener("click", createFoodPrecheck);
         document.getElementById("foodCompletePayment")?.addEventListener("click", payExistingFoodOrder);
+        document.getElementById("cashChangeConfirm")?.addEventListener("click", confirmFoodCashPayment, true);
         document.getElementById("foodExternalPayment")?.addEventListener("click", openExternalPayment);
         document.getElementById("foodExternalConfirm")?.addEventListener("click", confirmExternalPayment);
         document.querySelectorAll("[data-food-external-close]").forEach(el => el.addEventListener("click", () => setExternalModal(false)));
