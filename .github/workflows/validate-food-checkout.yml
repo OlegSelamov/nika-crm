@@ -1,0 +1,44 @@
+name: Validate Food Checkout TEST
+
+on:
+  push:
+    branches:
+      - test
+    paths:
+      - "app.py"
+      - "models.py"
+      - "routes/auth.py"
+      - "routes/sales.py"
+      - "routes/food_orders.py"
+      - "routes/rekassa_comrun.py"
+      - "static/js/food_sales.js"
+      - "templates/profile.html"
+      - "templates/sales.html"
+      - "tests/test_food_checkout_modes.py"
+      - ".github/workflows/validate-food-checkout.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Food POS code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify Python syntax
+        run: python -m py_compile app.py models.py routes/auth.py routes/sales.py routes/food_orders.py routes/rekassa_comrun.py
+      - name: Verify JavaScript syntax
+        run: node --check static/js/food_sales.js
+      - name: Run food checkout regression checks
+        run: python -m unittest discover -s tests -p test_food_checkout_modes.py -v
