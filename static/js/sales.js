@@ -796,12 +796,19 @@ async function submitSalePayment({
             return true;
         }
 
-        // Restaurant precheck was already printed when the order was created.
-        // Only an actually fiscalized payment needs another customer receipt.
-        // Retail retains its original checkout printing behavior.
-        if (isFoodCheckout && data.fiscalization_skipped === true) {
-            window.NikaFoodSales?.paymentNotice?.("Оплата подтверждена · ингредиенты списаны. Пречек уже выдан, повторная печать не нужна.");
-            return true;
+        // Foodservice has already printed a guest check and kitchen order.
+        // Never auto-print a THIRD retail-like receipt merely because the
+        // payment was accepted. Print an extra check only if the fiscal
+        // provider confirms a real ticket with an identifier/number.
+        // Keep ordinary retail printing behavior unchanged.
+        if (isFoodCheckout) {
+            const fiscalTicket = data.fiscal || data.rekassa || {};
+            const realFiscalTicket = data.fiscalized === true &&
+                Boolean(fiscalTicket.ticket_id || fiscalTicket.ticket_number);
+            if (!realFiscalTicket) {
+                window.NikaFoodSales?.paymentNotice?.("Оплата подтверждена · ингредиенты списаны.");
+                return true;
+            }
         }
         openSaleModal(data.sale_id, { autoPrint: true });
         return true;

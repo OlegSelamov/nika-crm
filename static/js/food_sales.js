@@ -658,6 +658,7 @@
             if (element) element.value = "";
         });
         foodMessage("");
+        showFoodPrintStatus("");
     }
 
     function selectedFoodPaymentMethod() {
@@ -801,11 +802,18 @@
             getSavedFoodTicketHtml(order.id, "precheck"),
             getSavedFoodTicketHtml(order.id, "kitchen")
         ]);
+        // If either template could not be built, do not spool a misleading
+        // partial order, especially when the same device prints both receipts.
+        if (guestTicket.status !== "fulfilled" || kitchenTicket.status !== "fulfilled") {
+            const cause = guestTicket.status === "rejected"
+                ? guestTicket.reason : kitchenTicket.reason;
+            throw new Error(cause?.message || "Не удалось подготовить оба чека");
+        }
         const results = await printers.printFoodOrder({
             orderId: order.id,
             fingerprint,
-            guestHtml: guestTicket.status === "fulfilled" ? guestTicket.value : "",
-            kitchenHtml: kitchenTicket.status === "fulfilled" ? kitchenTicket.value : ""
+            guestHtml: guestTicket.value,
+            kitchenHtml: kitchenTicket.value
         });
 
         const guest = results?.guest;
@@ -832,6 +840,7 @@
 
     async function createFoodPrecheck() {
         if (foodCheckoutBusy) return;
+        showFoodPrintStatus("");
         if (!getCart().length) { foodMessage("Добавьте блюдо в заказ"); return; }
         foodCheckoutBusy = true;
         const button = document.getElementById("foodPrecheckCheckout");
@@ -842,7 +851,10 @@
             if (saved) {
                 foodMessage("Заказ №" + saved.id + " оформлен");
                 try {
-                    await printBothFoodTickets(saved, {manualAllowed: true});
+                    const completed = await printBothFoodTickets(saved, {manualAllowed: true});
+                    if (!completed) {
+                        foodMessage("Заказ №" + saved.id + " сохранён, но печать не завершена. Проверьте настройки принтеров.");
+                    }
                 } catch (error) {
                     console.error("DUAL FOOD PRINT ERROR:", error);
                     const message = "Заказ №" + saved.id + " сохранён, но печать не удалась: " + (error.message || error);
@@ -857,7 +869,9 @@
     }
 
     async function payExistingFoodOrder() {
-        if (foodCheckoutBusy || !getCart().length) return;
+        if (foodCheckoutBusy) return;
+        showFoodPrintStatus("");
+        if (!getCart().length) { foodMessage("Сначала добавьте блюда в корзину"); return; }
         if (window.nikaKaspiPosActive) {
             foodMessage("Дождитесь завершения оплаты на Kaspi POS");
             return;
@@ -1106,6 +1120,11 @@
     function initFoodOrderControls() {
         if (!["foodservice", "universal"].includes(window.NIKA_BUSINESS_MODE)) return;
         document.getElementById("foodOrderSave")?.addEventListener("click", saveFoodOrder);
+        for (const id of ["cashInput", "cardInput", "kaspiInput"]) {
+            document.getElementById(id)?.addEventListener("click", () => {
+                if (!getCart().length) showFoodPrintStatus("");
+            });
+        }
         document.getElementById("foodOrderNew")?.addEventListener("click", newFoodOrder);
         document.getElementById("foodPrecheckCheckout")?.addEventListener("click", createFoodPrecheck);
         document.getElementById("foodCompletePayment")?.addEventListener("click", payExistingFoodOrder);
@@ -1179,8 +1198,14 @@
         getSavedOrderId: () => currentFoodOrderSaved ? currentFoodOrderId : null,
         clearOrder: resetFoodOrder,
         paymentNotice: (message) => {
+            // Do not leave a permanent green "already paid" badge on the next
+            // empty/new order. Printed receipts remain accessible in history.
+            showFoodPrintStatus("");
             foodMessage(message);
-            showFoodPrintStatus(message);
+            window.setTimeout(() => {
+                const node = document.getElementById("foodOrderMessage");
+                if (node && node.textContent === message) node.textContent = "";
+            }, 5500);
         }
     };
 

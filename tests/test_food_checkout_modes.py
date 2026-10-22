@@ -60,8 +60,10 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn("Оплата:", tpl)
         self.assertNotIn("Планируемая оплата", tpl)
         self.assertNotIn("НЕ ФИСКАЛЬНЫЙ ЧЕК", tpl)
-        self.assertIn("fiscalization_skipped === true", sales_js)
-        self.assertIn('if (isFoodCheckout && data.fiscalization_skipped === true)', sales_js)
+        self.assertIn('if (isFoodCheckout) {', sales_js)
+        self.assertIn('const realFiscalTicket = data.fiscalized === true', sales_js)
+        self.assertIn('fiscalTicket.ticket_id || fiscalTicket.ticket_number', sales_js)
+        self.assertIn('if (!realFiscalTicket)', sales_js)
         self.assertIn("openSaleModal(data.sale_id, { autoPrint: true });", sales_js)
 
     def test_external_kassa_never_fakes_internal_sale(self):
