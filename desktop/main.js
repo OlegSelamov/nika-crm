@@ -75,24 +75,38 @@ function registerNativeDialogFocusRecovery() {
         if (focusRecoveryTimer) clearTimeout(focusRecoveryTimer);
         focusRecoveryTimer = setTimeout(() => {
             focusRecoveryTimer = null;
-            // Never interrupt a user who switched to another program.
-            if (!win || win.isDestroyed() || win.isMinimized() || !win.isFocused()) return;
+            // The window often reports isFocused()=false just after a
+            // native alert closes, even though the user is still here.
+            // Do not skip recovery based on that unreliable flag.
+            if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) return;
             win.blur();
             win.focus();
-        }, 70);
+            if (win.webContents && !win.webContents.isDestroyed()) {
+                win.webContents.focus();
+            }
+        }, 30);
     });
 }
 
 function installDialogFocusGuard(contents) {
     contents.on("did-frame-finish-load", (_event, _main, processId, routingId) => {
-        const frame = webFrameMain.fromId(processId, routingId);
-        if (!frame || frame.isDestroyed()) return;
+        // WebFrameMain implementations vary between Electron versions.
+        // In particular, older builds may not expose isDestroyed().
+        // Never let a lifecycle hook throw an uncaught main-process error.
         try {
+            const frame = webFrameMain.fromId(processId, routingId);
+            if (!frame) return;
+            if (typeof frame.isDestroyed === "function" && frame.isDestroyed()) return;
             if (new URL(frame.url).origin !== new URL(APP_URL).origin) return;
-        } catch (_) { return; }
-        frame.executeJavaScript(NIKA_NATIVE_DIALOG_FOCUS_GUARD).catch((error) => {
-            console.error("Не удалось установить защиту фокуса Electron:", error);
-        });
+            if (typeof frame.executeJavaScript !== "function") return;
+            Promise.resolve(frame.executeJavaScript(NIKA_NATIVE_DIALOG_FOCUS_GUARD))
+                .catch((error) => {
+                    // A frame might navigate away before injection completes.
+                    console.warn("Пропуск защиты фокуса при смене страницы:", error.message);
+                });
+        } catch (error) {
+            console.warn("Пропуск защиты фокуса в закрытом frame:", error.message);
+        }
     });
 }
 

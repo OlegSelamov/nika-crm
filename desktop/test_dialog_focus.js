@@ -39,4 +39,39 @@ assert.match(source, /did-frame-finish-load/, "Nested frames must receive the wo
 assert.match(source, /win\.blur\(\);\s*win\.focus\(\);/, "Restore native IME focus");
 assert.match(fs.readFileSync(path.join(__dirname, "preload.js"), "utf8"),
     /recoverKeyboardFocus:\s*\(\)\s*=>\s*ipcRenderer\.send/);
+// Regression for production-reported crash in Electron 30:
+ // TypeError: frame.isDestroyed is not a function.
+const mainFunction = source.match(/function installDialogFocusGuard\(contents\) \{[\s\S]*?\n\}/);
+assert.ok(mainFunction, "Main-process frame installation handler exists");
+function testFrameInstall(frame) {
+    let handler;
+    let injections = 0;
+    const wrapped = {
+        ...frame,
+        executeJavaScript: () => { injections += 1; return Promise.resolve(); }
+    };
+    const sandbox = {
+        webFrameMain: {fromId: () => wrapped},
+        NIKA_NATIVE_DIALOG_FOCUS_GUARD: "focus-guard",
+        APP_URL: "https://test.nikabusiness.com",
+        console: {warn: () => {}},
+        URL,
+        Promise
+    };
+    const install = vm.runInNewContext("(" + mainFunction[0] + ")", sandbox);
+    install({on: (event, callback) => {
+        assert.equal(event, "did-frame-finish-load");
+        handler = callback;
+    }});
+    assert.doesNotThrow(() => handler(null, true, 1, 2));
+    return injections;
+}
+assert.equal(testFrameInstall({url:"https://test.nikabusiness.com/sales"}), 1,
+    "Frames missing isDestroyed must still be injected without crashing");
+assert.equal(testFrameInstall({url:"https://external.example/"}), 0,
+    "Never inject into third-party pages");
+assert.equal(testFrameInstall({url:"https://test.nikabusiness.com", isDestroyed:()=>true}), 0,
+    "Respect isDestroyed on Electron versions where it exists");
+assert.match(source, /win\.webContents\.focus\(\)/,
+    "After the native modal closes, focus both BrowserWindow and WebContents");
 console.log("Electron native dialog focus regression checks passed");
