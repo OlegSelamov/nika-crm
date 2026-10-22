@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, make_r
 from models import get_db, pool
 from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
-from utils.timezone import now_kz
+from utils.timezone import now_kz, now_kz_for_timestamp
 from utils.sale_amounts import normalize_sale_line
 from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from flask import render_template

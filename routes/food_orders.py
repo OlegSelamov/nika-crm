@@ -19,7 +19,7 @@ def _food_access(cur):
         return None
     cur.execute("SELECT business_mode FROM companies WHERE id=%s", (company_id,))
     row = cur.fetchone()
-    return company_id if row and row["business_mode"] == "foodservice" else None
+    return company_id if row and row["business_mode"] in ("foodservice", "universal") else None
 
 
 def ensure_food_schema(cur):
@@ -176,7 +176,7 @@ def food_orders():
         cur = conn.cursor()
         company_id = _food_access(cur)
         if company_id is None:
-            return jsonify({"success": False, "message": "Доступно только в конфигурации Общепит"}), 403
+            return jsonify({"success": False, "message": "Доступно в конфигурациях Общепит и Универсальный"}), 403
         ensure_food_schema(cur)
         conn.commit()
         if request.method == "GET":
@@ -268,7 +268,7 @@ def food_order_detail(order_id):
         cur = conn.cursor()
         company_id = _food_access(cur)
         if company_id is None:
-            return jsonify({"success": False, "message": "Доступно только в конфигурации Общепит"}), 403
+            return jsonify({"success": False, "message": "Доступно в конфигурациях Общепит и Универсальный"}), 403
         ensure_food_schema(cur)
         conn.commit()
         cur.execute("SELECT * FROM food_orders WHERE id=%s AND company_id=%s",
@@ -304,7 +304,7 @@ def food_order_ticket(order_id, kind):
         cur = conn.cursor()
         company_id = _food_access(cur)
         if company_id is None:
-            return "Доступно только в конфигурации Общепит", 403
+            return "Доступно в конфигурациях Общепит и Универсальный", 403
         ensure_food_schema(cur)
         conn.commit()  # Persist one-time repair before printing even on GET.
         cur.execute("SELECT * FROM food_orders WHERE id=%s AND company_id=%s",

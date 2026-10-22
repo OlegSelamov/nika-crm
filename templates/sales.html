@@ -214,7 +214,7 @@
 					<span id="foodClientLabel">Частное лицо</span>
 				</button>
 				<div id="foodCart" class="food-cart"></div>
-                {% if business_mode == 'foodservice' %}
+                {% if business_mode in ('foodservice', 'universal') %}
                 <div class="food-order-compact">
                     <button type="button" id="foodOrderSave">Сохранить заказ</button>
                     <button type="button" id="foodOrderDetails">Стол и чеки</button>
@@ -230,7 +230,7 @@
     </div>
 
 
-    {% if business_mode == 'foodservice' %}
+    {% if business_mode in ('foodservice', 'universal') %}
     <div id="foodOrderDetailsModal" class="food-shell-modal" hidden role="dialog" aria-modal="true" aria-label="Настройки заказа">
         <div class="food-shell-backdrop" data-food-details-close></div>
         <div class="food-shell-dialog">
@@ -825,8 +825,8 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261020-production-merge-1') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20261020-production-merge-1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261022-food-universal-1') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20261022-food-universal-1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261020-production-merge-1') }}"></script>
 
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20260904-1') }}"></script>

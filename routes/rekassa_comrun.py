@@ -1,8 +1,10 @@
-from flask import jsonify, request, session
+import json
+from decimal import Decimal, InvalidOperation
+from flask import current_app, jsonify, request, session
 
 from models import get_db, pool
 from services.fiscal_service import fiscalize_sale, provider_context
-from utils.timezone import now_kz
+from utils.timezone import now_kz, now_kz_for_timestamp
 from utils.sale_amounts import normalize_sale_line
 from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from routes.rekassa import rekassa_bp
@@ -329,6 +331,22 @@ def pay_sale_comrun():
                 conn.rollback()
                 return jsonify({"success": False, "error": str(exc)}), 400
 
+            food_order_id = data.get("food_order_id") or None
+            food_mode = data.get("food_mode") is True or food_order_id is not None
+            if food_mode:
+                from routes.food_orders import _food_access, ensure_food_schema, verify_payment_order
+                if _food_access(cur) != company_id:
+                    conn.rollback()
+                    return jsonify({"success": False, "error": "Режим общепита не включён"}), 403
+                ensure_food_schema(cur)
+                if food_order_id is not None:
+                    try:
+                        food_order_id = int(food_order_id)
+                        verify_payment_order(cur, company_id, food_order_id, cart)
+                    except (TypeError, ValueError) as exc:
+                        conn.rollback()
+                        return jsonify({"success": False, "error": str(exc)}), 409
+
             normalized_cart = []
             for item in cart:
                 if not isinstance(item, dict):
@@ -343,7 +361,9 @@ def pay_sale_comrun():
                     continue
                 unit = db_item["unit"] if db_item.get("unit") else "шт"
                 raw_item_type = str(db_item.get("item_type") or "product").strip().lower()
-                item_type = "service" if raw_item_type == "service" else "product"
+                # Dish sales must retain their type so process_sale consumes recipe
+                # ingredients, not the dish item itself.
+                item_type = raw_item_type if raw_item_type in ("service", "dish") else "product"
                 price, qty, line_total = normalize_sale_line(item, unit)
                 normalized_cart.append({
                     "source": item,
@@ -377,17 +397,29 @@ def pay_sale_comrun():
             cash = total if payment_method == "cash" else 0
             card = total if payment_method == "card" else 0
             kaspi = total if payment_method == "kaspi" else 0
+            cash_received = Decimal("0")
+            change_amount = Decimal("0")
+            if payment_method == "cash":
+                try:
+                    cash_received = Decimal(str(data.get("cash_received") or total))
+                except (ValueError, InvalidOperation, TypeError):
+                    cash_received = total
+                if not cash_received.is_finite() or cash_received < total:
+                    cash_received = total
+                change_amount = cash_received - total
             cur.execute("""
                 INSERT INTO sales (
                     client_id, company_id, user_id, sale_number, total_amount, paid_amount,
                     status, created_at, sale_type, cash_amount, card_amount, kaspi_amount,
-                    kaspi_transaction_id, kaspi_method, is_processed
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE)
+                    kaspi_transaction_id, kaspi_method, is_processed,
+                    cash_received, change_amount
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,FALSE,%s,%s)
                 RETURNING id
             """, (
                 client_id, company_id, user_id, sale_number, total, total, "Оплачено", now_kz(),
                 payment_method, cash, card, kaspi,
                 data.get("kaspi_transaction_id"), data.get("kaspi_method"),
+                cash_received, change_amount,
             ))
             sale_id = cur.fetchone()["id"]
 
@@ -396,18 +428,53 @@ def pay_sale_comrun():
                 item_id = normalized["item_id"]
                 cur.execute("""
                     INSERT INTO sale_items (
-                        sale_id,item_id,name,price,quantity,total,unit,gtin,ntin,excise_stamp,item_type
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        sale_id,item_id,name,price,quantity,total,unit,gtin,ntin,excise_stamp,item_type,modifiers
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """, (
                     sale_id, item_id, item.get("name") or f"Товар #{item_id}",
                     normalized["price"], normalized["qty"], normalized["total"], normalized["unit"],
                     item.get("gtin"), item.get("ntin"), item.get("excise_stamp"), normalized["item_type"],
+                    json.dumps(item.get("modifiers") or [], ensure_ascii=False),
                 ))
         finally:
             cur.close()
 
         process_sale(conn, sale_id)
         _ensure_sale_stock_movements(conn, sale_id, company_id, normalized_cart, movement_before)
+
+        # Keep the food-order journal consistent with the paid sale and recipe
+        # deductions. This is one database transaction; no second sale is made.
+        if food_mode:
+            from routes.food_orders import _item_cart
+            food_cur = conn.cursor()
+            try:
+                if food_order_id is None:
+                    food_cart, food_total = _item_cart(food_cur, company_id, cart)
+                    food_cur.execute("""
+                        INSERT INTO food_orders
+                            (company_id, created_by, table_name, guest_name, note,
+                             client_id, status, cart, total_amount, sale_id,
+                             created_at, updated_at, kz_clock_fixed)
+                        VALUES (%s,%s,%s,%s,%s,%s,'paid',%s::jsonb,%s,%s,%s,%s,TRUE)
+                    """, (
+                        company_id, user_id,
+                        str(data.get("food_table_name") or "")[:80],
+                        str(data.get("food_guest_name") or "")[:100],
+                        str(data.get("food_note") or "")[:500],
+                        client_id, json.dumps(food_cart, ensure_ascii=False),
+                        food_total, sale_id, now_kz_for_timestamp(), now_kz_for_timestamp(),
+                    ))
+                else:
+                    food_cur.execute("""
+                        UPDATE food_orders SET status='paid', sale_id=%s,
+                            updated_at=%s, kz_clock_fixed=TRUE
+                        WHERE id=%s AND company_id=%s AND status='open' AND sale_id IS NULL
+                        RETURNING id
+                    """, (sale_id, now_kz_for_timestamp(), food_order_id, company_id))
+                    if not food_cur.fetchone():
+                        raise ValueError("Заказ уже оплачен или отменён")
+            finally:
+                food_cur.close()
 
         # Atomic with sale and stock: survive crash during fiscalization.
         if operation_id:
@@ -505,8 +572,13 @@ def pay_sale_comrun():
         return jsonify(response)
     except Exception as exc:
         conn.rollback()
-        print("SALE FISCAL LAYER ERROR:", repr(exc))
-        return jsonify({"success": False, "error": "Не удалось сохранить продажу"}), 500
+        current_app.logger.exception("SALE FISCAL LAYER ERROR")
+        # Detailed diagnostics are only available on the isolated TEST server.
+        # Production clients always receive the generic error without SQL data.
+        message = "Не удалось сохранить продажу"
+        if current_app.config.get("APP_MODE") == "test":
+            message += f": {type(exc).__name__}: {str(exc)[:240]}"
+        return jsonify({"success": False, "error": message}), 500
     finally:
         pool.putconn(conn)
 

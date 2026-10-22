@@ -45,6 +45,14 @@
         foodBtn?.setAttribute("aria-selected", next === "food" ? "true" : "false");
 
         document.body.classList.toggle("food-sales-mode", next === "food");
+        const historyBtn = document.getElementById("historyTabBtn");
+        if (historyBtn) {
+            historyBtn.textContent = next === "food" ? "История заказов" : "История продаж";
+            if (historyBtn.getAttribute("aria-selected") === "true" &&
+                typeof switchSalesTab === "function") {
+                switchSalesTab("history");
+            }
+        }
 
         if (next === "food") {
             loadFoodMenu();
@@ -621,7 +629,7 @@
     }
 
     function initFoodOrderControls() {
-        if (window.NIKA_BUSINESS_MODE !== "foodservice") return;
+        if (!["foodservice", "universal"].includes(window.NIKA_BUSINESS_MODE)) return;
         document.getElementById("foodOrderSave")?.addEventListener("click", saveFoodOrder);
         document.getElementById("foodOrderKitchen")?.addEventListener("click", () => printFoodTicket("kitchen"));
         document.getElementById("foodOrderPrecheck")?.addEventListener("click", () => printFoodTicket("precheck"));
@@ -685,6 +693,7 @@
         },
         renderCart: renderFoodCart,
         loadHistory: () => loadFoodOrderHistory(),
+        isFoodMode: () => currentMode() === "food",
         getSavedOrderId: () => currentFoodOrderSaved ? currentFoodOrderId : null,
         clearOrder: resetFoodOrder
     };

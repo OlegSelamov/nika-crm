@@ -735,6 +735,9 @@ async function submitSalePayment({
     renderCashChange();
 
     try {
+        const isFoodCheckout = window.NIKA_BUSINESS_MODE === "foodservice" ||
+            (window.NIKA_BUSINESS_MODE === "universal" &&
+                window.NikaFoodSales?.isFoodMode?.() === true);
         const response = await fetch("/sales/pay", {
             method: "POST",
             headers: {
@@ -752,8 +755,8 @@ async function submitSalePayment({
                 kaspi_transaction_id: kaspiTransactionId ?? (window.lastKaspiTransactionId || ""),
                 kaspi_method: kaspiMethod ?? (window.lastKaspiMethod || ""),
                 company_id: null,
-                food_order_id: window.NIKA_BUSINESS_MODE === "foodservice" ? (window.NikaFoodSales?.getSavedOrderId?.() || null) : null,
-                food_mode: window.NIKA_BUSINESS_MODE === "foodservice",
+                food_order_id: isFoodCheckout ? (window.NikaFoodSales?.getSavedOrderId?.() || null) : null,
+                food_mode: isFoodCheckout,
                 food_table_name: document.getElementById("foodOrderTable")?.value || "",
                 food_guest_name: document.getElementById("foodOrderGuest")?.value || "",
                 food_note: document.getElementById("foodOrderNote")?.value || ""
@@ -2398,16 +2401,21 @@ function ensureSalesHistoryWorkspace() {
 
 function switchSalesTab(tab) {
     const showHistory = tab === 'history';
-    const isFood = window.NIKA_BUSINESS_MODE === "foodservice";
-    const workspace = isFood ? document.getElementById('foodOrdersWorkspace') : ensureSalesHistoryWorkspace();
+    const isFood = window.NIKA_BUSINESS_MODE === "foodservice" ||
+        (window.NIKA_BUSINESS_MODE === "universal" &&
+            window.NikaFoodSales?.isFoodMode?.() === true);
+    const retailWorkspace = ensureSalesHistoryWorkspace();
+    const foodWorkspace = document.getElementById('foodOrdersWorkspace');
+    const workspace = isFood ? foodWorkspace : retailWorkspace;
     const grid = document.getElementById('salesGridWorkspace');
     const cartBtn = document.getElementById('cartTabBtn');
     const historyBtn = document.getElementById('historyTabBtn');
     if (!workspace || !grid || !cartBtn || !historyBtn) return;
-    // History is a full-width sibling, never a child of the hidden sales grid.
-    if (isFood && grid.contains(workspace)) grid.insertAdjacentElement('afterend', workspace);
+    // Both histories are siblings of the sales grid; show only the active mode.
+    if (foodWorkspace && grid.contains(foodWorkspace)) grid.insertAdjacentElement('afterend', foodWorkspace);
     grid.hidden = showHistory;
-    workspace.hidden = !showHistory;
+    if (retailWorkspace) retailWorkspace.hidden = !showHistory || isFood;
+    if (foodWorkspace) foodWorkspace.hidden = !showHistory || !isFood;
     document.querySelector('.sales-page')?.classList.toggle('sales-history-active', showHistory);
     document.body.classList.toggle('sales-history-active', showHistory);
     cartBtn.classList.toggle('active', !showHistory);
