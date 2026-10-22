@@ -636,6 +636,7 @@
     let currentFoodOrderSaved = false;
     let currentSavedPlannedMethod = null;
     let lastFoodPrintFingerprint = null;
+    let lastFoodPrintUiSignature = null;
     let foodOrderBusy = false;
     let foodCheckoutBusy = false;
     let activeFoodTicketKind = "precheck";
@@ -651,6 +652,7 @@
         currentFoodOrderSaved = false;
         currentSavedPlannedMethod = null;
         lastFoodPrintFingerprint = null;
+        lastFoodPrintUiSignature = null;
         ["foodOrderTable", "foodOrderGuest", "foodOrderNote"].forEach(id => {
             const element = document.getElementById(id);
             if (element) element.value = "";
@@ -756,13 +758,10 @@
         });
     }
 
-    function isFoodTicketCurrent() {
-        if (!currentFoodOrderId || !currentFoodOrderSaved ||
-            lastFoodPrintFingerprint === null ||
-            currentSavedPlannedMethod !== selectedFoodPaymentMethod()) return false;
-        // The cart and the small order header can change after the receipt is printed.
-        // Recheck both instead of processing a payment for a stale printed precheck.
-        return lastFoodPrintFingerprint === JSON.stringify({
+    function currentFoodUiSignature() {
+        // The browser cart differs from the server-normalized cart: compare
+        // snapshots taken in the same representation, not raw/server JSON.
+        return JSON.stringify({
             cart: getCart(),
             table: document.getElementById("foodOrderTable")?.value || "",
             guest: document.getElementById("foodOrderGuest")?.value || "",
@@ -770,6 +769,13 @@
             client: typeof selectedClient !== "undefined" ? selectedClient : null,
             payment: selectedFoodPaymentMethod()
         });
+    }
+
+    function isFoodTicketCurrent() {
+        return Boolean(currentFoodOrderId && currentFoodOrderSaved &&
+            lastFoodPrintFingerprint && lastFoodPrintUiSignature &&
+            currentSavedPlannedMethod === selectedFoodPaymentMethod() &&
+            lastFoodPrintUiSignature === currentFoodUiSignature());
     }
 
     async function printBothFoodTickets(order) {
@@ -815,6 +821,7 @@
             return false;
         }
         lastFoodPrintFingerprint = fingerprint;
+        lastFoodPrintUiSignature = currentFoodUiSignature();
         return true;
     }
 
@@ -1039,6 +1046,7 @@
             currentFoodOrderSaved = true;
             currentSavedPlannedMethod = data.order.planned_payment_method || "cash";
             lastFoodPrintFingerprint = null; // Reopened order: never assume the printer ran.
+            lastFoodPrintUiSignature = null;
             applySavedFoodPaymentMethod(currentSavedPlannedMethod, data.order.total_amount);
             document.getElementById("foodOrderTable").value = data.order.table_name || "";
             document.getElementById("foodOrderGuest").value = data.order.guest_name || "";

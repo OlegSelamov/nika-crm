@@ -49,7 +49,11 @@ class FoodTicketLayoutTests(unittest.TestCase):
                      "1 шт", "× 1 550", "+ Соус BBQ", "БЕЗ: Горчица",
                      "ИТОГО К ОПЛАТЕ", "1 550 ₸", "Приятного аппетита!"):
             self.assertIn(text, html)
-        self.assertIn("ОЖИДАЕТ ОПЛАТЫ", html)
+        self.assertIn("Оплата:", html)
+        self.assertIn("Наличные", html)
+        self.assertNotIn("НЕ ФИСКАЛЬНЫЙ ЧЕК", html)
+        self.assertNotIn("ОЖИДАЕТ ОПЛАТЫ", html)
+        self.assertNotIn("Планируемая оплата", html)
         self.assertNotIn("Сдача", html)
         self.assertNotIn("Kaspi оплата", html)
 
@@ -57,9 +61,11 @@ class FoodTicketLayoutTests(unittest.TestCase):
         for method, label in (("cash", "Наличные"), ("card", "Карта"), ("kaspi", "Kaspi")):
             with self.subTest(method=method):
                 html = render("precheck", planned_payment_method=method)
-                self.assertIn("Планируемая оплата", html)
+                self.assertIn("Оплата:", html)
                 self.assertIn(label, html)
-                self.assertIn("ОЖИДАЕТ ОПЛАТЫ", html)
+                self.assertNotIn("ОЖИДАЕТ ОПЛАТЫ", html)
+                self.assertNotIn("НЕ ФИСКАЛЬНЫЙ ЧЕК", html)
+                self.assertNotIn("Планируемая оплата", html)
                 self.assertNotIn("КВИТАНЦИЯ ОБ ОПЛАТЕ", html)
 
     def test_paid_cash_displays_received_and_correct_change(self):

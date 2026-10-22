@@ -36,7 +36,11 @@ class FoodCheckoutModesTests(unittest.TestCase):
         js = self.read("static/js/food_sales.js")
         pay = js.split('async function payExistingFoodOrder()', 1)[1].split('function newFoodOrder()', 1)[0]
         self.assertIn('if (!currentFoodOrderId || !currentFoodOrderSaved)', pay)
-        self.assertIn('currentSavedPlannedMethod !== selectedFoodPaymentMethod()', pay)
+        self.assertIn('if (!isFoodTicketCurrent())', pay)
+        self.assertIn('await saveFoodOrder()', pay)
+        self.assertIn('await printBothFoodTickets(saved)', pay)
+        self.assertIn('if (!await printBothFoodTickets(saved))', pay)
+        self.assertIn('lastFoodPrintUiSignature === currentFoodUiSignature()', js)
         self.assertIn('pay()', pay)
         self.assertIn('openCashChangeModal()', pay)
         self.assertIn('food_order_id:', self.read("static/js/sales.js"))
