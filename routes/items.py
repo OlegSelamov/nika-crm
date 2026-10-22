@@ -233,7 +233,8 @@ def api_catalog_food_categories():
         cur = conn.cursor()
         cur.execute("""
             SELECT COALESCE(NULLIF(BTRIM(category), ''), 'Без категории') AS category,
-                   COUNT(*) AS item_count
+                   COUNT(*) AS item_count,
+                   COUNT(*) FILTER (WHERE items.item_type = 'dish') AS dish_count
             FROM items
             WHERE company_id = %s
               AND COALESCE(item_type, 'product') IN ('dish', 'product')
@@ -241,7 +242,7 @@ def api_catalog_food_categories():
             ORDER BY 1
         """, (company_id,))
         categories = [
-            {"name": row["category"], "count": row["item_count"]}
+            {"name": row["category"], "count": row["item_count"], "dish_count": row["dish_count"]}
             for row in cur.fetchall()
         ]
     finally:
@@ -306,6 +307,12 @@ def api_catalog_items():
         )
         total = cur.fetchone()["total"]
 
+        # Sorting must run before LIMIT/OFFSET to keep dishes first on
+        # every page, not just among the already loaded client-side cards.
+        order_by = (
+            "CASE WHEN COALESCE(items.item_type, 'product') = 'dish' THEN 0 ELSE 1 END, items.id DESC"
+            if item_type == "food_menu" else "items.id DESC"
+        )
         cur.execute(f"""
             SELECT
                 items.*,
@@ -315,7 +322,7 @@ def api_catalog_items():
                  LIMIT 1) AS image
             FROM items
             WHERE {where_sql}
-            ORDER BY items.id DESC
+            ORDER BY {order_by}
             LIMIT %s OFFSET %s
         """, tuple(params + [limit, offset]))
         rows = [_catalog_item_payload(row) for row in cur.fetchall()]

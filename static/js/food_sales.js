@@ -3,6 +3,9 @@
     const PAGE_SIZE = 36;
     let foodItems = [];
     let foodCategory = "all";
+    let foodSection = "dishes";
+    let foodDrinkCategory = null;
+    let foodCategoryRows = [];
     let foodLoaded = false;
     let foodLoading = false;
     let foodHasMore = false;
@@ -66,7 +69,12 @@
             const response = await fetch("/api/catalog/food-categories");
             if (!response.ok) throw new Error("HTTP " + response.status);
             const data = await response.json();
-            foodCategoryNames = (data.categories || []).map(row => row.name);
+            if (!data.success) throw new Error("Не удалось загрузить категории");
+            foodCategoryRows = Array.isArray(data.categories) ? data.categories : [];
+            foodCategoryNames = foodCategoryRows.map(row => row.name);
+            const drinks = foodCategoryRows.find(row => /напит|drink|beverage/i.test(String(row.name || "")));
+            foodDrinkCategory = drinks ? drinks.name : null;
+            updateFoodQuickFilters();
             renderFoodCategories();
         } catch (error) {
             console.error("FOOD CATEGORIES ERROR:", error);
@@ -82,6 +90,8 @@
             foodItems = [];
             foodPage = 0;
             foodHasMore = false;
+            const grid = document.getElementById("foodMenuGrid");
+            if (grid) grid.scrollTop = 0;
         }
         if (foodLoading || (foodLoaded && !reset)) return;
         if (!foodPage) loadFoodCategories();
@@ -99,7 +109,8 @@
         renderFoodPagination();
         try {
             const params = new URLSearchParams({
-                type: "food_menu",
+                // Preserve global menu search even though dishes are the default.
+                type: foodSection === "dishes" && !String(document.getElementById("foodSearch")?.value || "").trim() ? "dish" : "food_menu",
                 limit: String(PAGE_SIZE),
                 page: String(foodPage + 1)
             });
@@ -132,6 +143,7 @@
         if (!button) return;
         button.hidden = !foodHasMore || foodLoading;
         button.disabled = foodLoading;
+        button.textContent = foodSection === "dishes" && !String(document.getElementById("foodSearch")?.value || "").trim() ? "Показать ещё блюда" : "Показать ещё позиции";
     }
 
     function refreshFoodMenu() {
@@ -171,14 +183,35 @@
         if (empty) empty.hidden = visible > (query ? 1 : 0);
     }
 
+    function updateFoodQuickFilters() {
+        const drinksTab = document.querySelector('[data-food-section="drinks"]');
+        if (drinksTab) drinksTab.hidden = !foodDrinkCategory;
+        document.querySelectorAll("[data-food-section]").forEach(button => {
+            const active = button.dataset.foodSection === foodSection;
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        const hint = document.getElementById("foodMenuSectionHint");
+        if (hint) hint.textContent = foodSection === "dishes" ? "Основные блюда" : foodSection === "drinks" ? "Напитки" : "Всё меню";
+    }
+
+    function selectFoodSection(section) {
+        if (section === "drinks" && !foodDrinkCategory) return;
+        foodSection = section;
+        foodCategory = section === "drinks" ? foodDrinkCategory : "all";
+        updateFoodQuickFilters();
+        updateCategoryButtons();
+        setFoodCategoryPopover(false);
+        refreshFoodMenu();
+    }
+
     function renderFoodCategories() {
         const root = document.getElementById("foodCategories");
         if (!root) return;
-
-        const categories = Array.from(new Set(foodCategoryNames))
-            .sort((a, b) => a.localeCompare(b, "ru"));
-
-        root.innerHTML = "";
+        const categories = [...foodCategoryRows].sort((a, b) =>
+            Number(b.dish_count || 0) - Number(a.dish_count || 0) ||
+            String(a.name || "").localeCompare(String(b.name || ""), "ru"));
+        root.replaceChildren();
         const count = document.getElementById("foodCategoryCount");
         if (count) count.textContent = String(categories.length);
 
@@ -186,7 +219,7 @@
         allButton.type = "button";
         allButton.className = "food-category-btn";
         allButton.dataset.category = "all";
-        allButton.textContent = "Все";
+        allButton.textContent = "Все категории";
         allButton.addEventListener("click", () => selectFoodCategory("all"));
         root.appendChild(allButton);
 
@@ -194,18 +227,23 @@
             const button = document.createElement("button");
             button.type = "button";
             button.className = "food-category-btn";
-            button.dataset.category = category;
-            button.textContent = category;
-            button.addEventListener("click", () => selectFoodCategory(category));
+            button.dataset.category = category.name;
+            const label = document.createElement("span");
+            label.textContent = category.name;
+            const amount = document.createElement("small");
+            amount.textContent = String(category.count || 0);
+            button.append(label, amount);
+            button.addEventListener("click", () => selectFoodCategory(category.name));
             root.appendChild(button);
         });
-
         updateCategoryButtons();
         filterFoodCategories();
     }
 
     function selectFoodCategory(category) {
         foodCategory = category || "all";
+        foodSection = "all";
+        updateFoodQuickFilters();
         updateCategoryButtons();
         refreshFoodMenu();
         setFoodCategoryPopover(false);
@@ -219,7 +257,7 @@
             button.setAttribute("aria-pressed", String(active));
         });
         const selected = document.getElementById("foodCategorySelected");
-        if (selected) selected.textContent = foodCategory === "all" ? "Все категории" : foodCategory;
+        if (selected) selected.textContent = foodCategory === "all" ? "Категории меню" : foodCategory;
     }
 
     function menuInitial(name) {
@@ -337,6 +375,8 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "food-menu-card";
+        button.title = item.name || "Без названия";
+        button.setAttribute("aria-label", "Добавить в заказ: " + (item.name || "Без названия") + ", " + money(item.retail_price));
 
         const media = document.createElement("div");
         media.className = "food-menu-image";
@@ -362,6 +402,11 @@
             media.appendChild(placeholder);
         }
 
+        const categoryBadge = document.createElement("span");
+        categoryBadge.className = "food-menu-category-badge";
+        categoryBadge.textContent = itemCategory(item);
+        media.appendChild(categoryBadge);
+
         const info = document.createElement("div");
         info.className = "food-menu-info";
 
@@ -369,11 +414,18 @@
         name.className = "food-menu-name";
         name.textContent = item.name || "Без названия";
 
-        const price = document.createElement("div");
+        const footer = document.createElement("div");
+        footer.className = "food-menu-card-footer";
+        const price = document.createElement("span");
         price.className = "food-menu-price";
         price.textContent = money(item.retail_price);
+        const addMark = document.createElement("span");
+        addMark.className = "food-menu-add-mark";
+        addMark.textContent = "+";
+        addMark.setAttribute("aria-hidden", "true");
+        footer.append(price, addMark);
 
-        info.append(name, price);
+        info.append(name, footer);
         button.append(media, info);
 
         button.addEventListener("click", () => addFoodItem(item));
@@ -723,6 +775,9 @@
             foodSearchTimer = setTimeout(refreshFoodMenu, 280);
         });
         document.getElementById("foodMenuLoadMore")?.addEventListener("click", fetchFoodPage);
+        document.querySelectorAll("[data-food-section]").forEach(button =>
+            button.addEventListener("click", () => selectFoodSection(button.dataset.foodSection)));
+        updateFoodQuickFilters();
         document.getElementById("foodCategoryToggle")?.addEventListener("click", () => {
             const popover = document.getElementById("foodCategoryPopover");
             if (popover) setFoodCategoryPopover(popover.hidden);
