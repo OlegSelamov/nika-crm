@@ -28,7 +28,7 @@ class FoodCheckoutModesTests(unittest.TestCase):
         js = self.read("static/js/food_sales.js")
         create = js.split('async function createFoodPrecheck()', 1)[1].split('async function payExistingFoodOrder()', 1)[0]
         self.assertIn('await saveFoodOrder()', create)
-        self.assertIn('await printBothFoodTickets(saved)', create)
+        self.assertIn('await printBothFoodTickets(saved, {manualAllowed: true})', create)
         self.assertNotIn('pay()', create)
         self.assertNotIn('submitSalePayment', create)
 
