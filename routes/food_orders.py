@@ -4,13 +4,34 @@ These orders DO NOT create sales, move stock or fiscalize receipts until the
 existing /sales/pay pipeline commits the linked payment.
 """
 import json
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import Blueprint, jsonify, render_template, request, session
 from models import get_db, pool
 from utils.sale_amounts import normalize_sale_line
 from utils.timezone import now_kz, now_kz_for_timestamp
 
 food_orders_bp = Blueprint("food_orders", __name__)
+
+
+def receipt_money(value):
+    """Compact, readable tenge amounts, without dropping nonzero tiyins."""
+    try:
+        amount = Decimal(str(value if value is not None else 0))
+        if not amount.is_finite():
+            return "0"
+        text = f"{amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f}"
+        return text.rstrip("0").rstrip(".").replace(",", " ").replace(".", "," )
+    except (InvalidOperation, ValueError, TypeError):
+        return "0"
+
+
+def receipt_quantity(value):
+    """Avoid tiny '1.0' or '1.00' labels on thermal checks."""
+    try:
+        quantity = Decimal(str(value if value is not None else 0))
+        return format(quantity.normalize(), "f").replace(".", ",") if quantity.is_finite() else "0"
+    except (InvalidOperation, ValueError, TypeError):
+        return "0"
 
 
 def _food_access(cur):
@@ -390,8 +411,17 @@ def food_order_ticket(order_id, kind):
             return "Доступно в конфигурациях Общепит и Универсальный", 403
         ensure_food_schema(cur)
         conn.commit()  # Persist one-time repair before printing even on GET.
-        cur.execute("SELECT * FROM food_orders WHERE id=%s AND company_id=%s",
-                    (order_id, company_id))
+        cur.execute("""
+            SELECT fo.*,
+                   COALESCE(NULLIF(TRIM(u.full_name), ''), u.username, 'Кассир') AS cashier_name,
+                   s.sale_type AS payment_method,
+                   s.cash_received, s.change_amount,
+                   s.cash_amount, s.card_amount, s.kaspi_amount
+            FROM food_orders fo
+            LEFT JOIN users u ON u.id=fo.created_by AND u.company_id=fo.company_id
+            LEFT JOIN sales s ON s.id=fo.sale_id AND s.company_id=fo.company_id
+            WHERE fo.id=%s AND fo.company_id=%s
+        """, (order_id, company_id))
         order = cur.fetchone()
         if not order:
             return "Заказ не найден", 404
@@ -403,6 +433,7 @@ def food_order_ticket(order_id, kind):
         company = cur.fetchone()
         return render_template("food_order_ticket.html",
                                kind=kind, order=_serialize(order),
-                               company=company)
+                               company=company,
+                               money=receipt_money, qty_text=receipt_quantity)
     finally:
         pool.putconn(conn)
