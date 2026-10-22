@@ -778,20 +778,25 @@
             lastFoodPrintUiSignature === currentFoodUiSignature());
     }
 
-    async function printBothFoodTickets(order) {
+    async function printBothFoodTickets(order, {manualAllowed = false} = {}) {
         const printers = getFoodPrinterBridge();
+        const fingerprint = savedFoodTicketFingerprint(order);
+        const uiSnapshotBeforePrint = currentFoodUiSignature();
         if (!printers?.printFoodOrder) {
-            // Browser or an older TEST Electron: the guest preview is manual.
-            // Do not claim both tickets reached printers when they did not.
+            // A browser cannot silently choose TWO different local printers.
+            // Explicit "Оформить" keeps manual preview workflow available,
+            // while direct payment confirmation never bypasses the print step.
             openFoodTicket(order.id, "precheck", false);
-            const msg = "Двойная автоматическая печать доступна в Nika Electron TEST. Распечатайте пречек и кухню отдельно.";
+            const msg = "В браузере распечатайте пречек и кухню вручную. Для двух принтеров автоматически используйте Electron TEST.";
             foodMessage(msg);
             showFoodPrintStatus(msg, true);
-            return false;
+            if (!manualAllowed || printers?.printReceipt) return false;
+            lastFoodPrintFingerprint = fingerprint;
+            lastFoodPrintUiSignature = uiSnapshotBeforePrint;
+            return true;
         }
 
         // Same order and payment => no duplicated ticket jobs.
-        const fingerprint = savedFoodTicketFingerprint(order);
         const [guestTicket, kitchenTicket] = await Promise.allSettled([
             getSavedFoodTicketHtml(order.id, "precheck"),
             getSavedFoodTicketHtml(order.id, "kitchen")
@@ -821,7 +826,7 @@
             return false;
         }
         lastFoodPrintFingerprint = fingerprint;
-        lastFoodPrintUiSignature = currentFoodUiSignature();
+        lastFoodPrintUiSignature = uiSnapshotBeforePrint;
         return true;
     }
 
@@ -837,7 +842,7 @@
             if (saved) {
                 foodMessage("Заказ №" + saved.id + " оформлен");
                 try {
-                    await printBothFoodTickets(saved);
+                    await printBothFoodTickets(saved, {manualAllowed: true});
                 } catch (error) {
                     console.error("DUAL FOOD PRINT ERROR:", error);
                     const message = "Заказ №" + saved.id + " сохранён, но печать не удалась: " + (error.message || error);
