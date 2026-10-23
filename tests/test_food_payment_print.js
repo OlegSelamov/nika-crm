@@ -1,6 +1,6 @@
 // Run the real payExistingFoodOrder() handler with mocked payment providers.
-// Confirms that payment is blocked until the dedicated green precheck stage
-// has already saved and printed BOTH restaurant tickets.
+// Electron requires BOTH restaurant receipts before payment.
+// Web checkout saves and may preview receipts, never requires a local printer.
 const fs = require("node:fs");
 const vm = require("node:vm");
 const assert = require("node:assert/strict");
@@ -11,7 +11,7 @@ const end = src.indexOf("\n    function newFoodOrder()", start);
 assert.ok(start >= 0 && end > start, "Could not locate checkout functions");
 const functionCode = src.slice(start, end);
 
-async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowed=true}={}) {
+async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowed=true, runtime="electron"}={}) {
     const calls = [];
     const button = {disabled:false};
     const values = {
@@ -36,6 +36,9 @@ async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowe
         foodMessage:(msg)=>calls.push("message:"+msg),
         showFoodPrintStatus:()=>{},
         isFoodTicketCurrent:()=>alreadyPrinted,
+        isElectronFoodCheckout:()=>runtime==="electron",
+        currentFoodOrderId:42,
+        openFoodTicketPair:(id)=>calls.push("preview:"+id),
         saveFoodOrder:async()=>{calls.push("save");return {id:42};},
         printBothFoodTickets:async()=>{calls.push("print");return printOK;},
         openCashChangeModal:()=>calls.push("cash-modal"),
@@ -155,6 +158,16 @@ async function simulateSale(method,mode,result){
         const failed=await checkout(method,{printOK:false});
         assert.ok(failed.includes("save")&&failed.includes("print"));
         assert.ok(!failed.includes("submit:"+method),"Printer failure must block payment");
+        const website=await checkout(method,{runtime:"website",printOK:false});
+        assert.deepEqual(website,method==="cash"
+            ? ["stock","cash-modal","save","submit:cash","preview:42","cash-close"]
+            : ["stock","save","submit:"+method,"preview:42"],
+            "Browser must complete "+method+" without printer or false printing errors");
+        const websiteSaved=await checkout(method,{runtime:"website",alreadyPrinted:true});
+        assert.deepEqual(websiteSaved,method==="cash"
+            ? ["stock","cash-modal","submit:cash","cash-close"]
+            : ["stock","submit:"+method],
+            "Existing browser precheck must not create another sale or receipt");
         const stockDenied=await checkout(method,{stockAllowed:false});
         assert.deepEqual(stockDenied,["stock"],"Declined stock warning must not print or charge");
     }
@@ -180,5 +193,5 @@ async function simulateSale(method,mode,result){
         });
         assert.ok(real.includes("THIRD_RECEIPT"),"Real fiscal ticket should still be printed");
     }
-    console.log("Restaurant cash/card/Kaspi green prechecks and fiscal/nonfiscal printing passed");
+    console.log("Electron mandatory dual printing and browser printer-free cash/card/Kaspi checkout passed");
 })().catch(err=>{console.error(err);process.exitCode=1});
