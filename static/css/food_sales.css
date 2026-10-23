@@ -1013,3 +1013,62 @@ body.food-sales-mode.food-checkout-orders #foodOrderSave { display:none !importa
         grid-column: 1 / -1;
     }
 }
+
+
+/* Mobile modifier is a full-height page, not a bottom sheet.
+   Once mounted at document.body it sits above the fixed payment dock.
+   Only the options middle area scrolls; the confirm button stays visible. */
+body.food-modifier-open { overflow: hidden !important; }
+@media (max-width: 768px) {
+    body > #foodModifierModal:not([hidden]) {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100dvh !important;
+        min-height: 0 !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        align-items: stretch !important;
+        justify-content: stretch !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        z-index: 2147483500 !important;
+    }
+    body > #foodModifierModal .food-modifier-backdrop {
+        inset: 0;
+    }
+    body > #foodModifierModal .food-modifier-dialog {
+        flex: 1 1 auto;
+        width: 100% !important;
+        max-width: none !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        border-radius: 0 !important;
+        overflow: hidden !important;
+    }
+    body > #foodModifierModal .food-modifier-head {
+        flex: 0 0 auto;
+        padding: 18px 18px 16px;
+        padding-top: calc(18px + env(safe-area-inset-top, 0px));
+        background: #fff;
+    }
+    body > #foodModifierModal .food-modifier-groups {
+        flex: 1 1 auto;
+        min-height: 0;
+        padding: 16px 18px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+    body > #foodModifierModal .food-modifier-footer {
+        flex: 0 0 auto;
+        gap: 8px;
+        padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+    body > #foodModifierModal .food-modifier-footer button {
+        min-height: 48px;
+        padding: 10px 12px;
+    }
+}
