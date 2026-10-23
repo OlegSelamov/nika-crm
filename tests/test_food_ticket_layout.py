@@ -37,7 +37,8 @@ def render(kind, **changes):
         order=sample_order(**changes), kind=kind, company=company,
         money=lambda value: f"{float(value):,.0f}".replace(",", " "),
         qty_text=lambda value: str(int(value)) if float(value).is_integer() else str(value),
-        ticket_date="22.10.26 19:46", request=SimpleNamespace(args={"embed": "1"})
+        ticket_date="22.10.26 19:46", cash_preview_received=None, cash_preview_change=None,
+        request=SimpleNamespace(args={"embed": "1"})
     )
 
 
