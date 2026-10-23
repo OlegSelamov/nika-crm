@@ -4773,3 +4773,29 @@ body.food-sales-mode .sales-commandbar .sales-mode-switch button {
   .sales-page .sales-commandbar { flex-wrap:nowrap; }
   .sales-page .sales-commandbar .shift-strip { flex-basis:auto; min-width:0; }
 }
+
+
+/* Mobile POS: keep the checkout docked to the actual visible screen.
+   The older 58vh cap plus overflow:visible clipped staged food-order buttons. */
+@media (max-width: 768px) {
+    body.sales-mobile-payment-mounted:not(.sales-mobile-menu-open) > .payment-box {
+        position: fixed !important;
+        inset: auto 0 0 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: calc(100dvh - 72px) !important;
+        margin: 0 !important;
+        padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        transform: none !important;
+        z-index: 10000 !important;
+    }
+    .sales-page:not(.sales-history-active) {
+        padding-bottom: var(--nika-mobile-payment-space, 340px) !important;
+    }
+}
