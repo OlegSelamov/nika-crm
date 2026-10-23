@@ -3853,6 +3853,8 @@ def _validate_retail_draft_cart(raw):
             if isinstance(value, list) and len(value) <= 50:
                 row[key] = value
         cart.append(row)
+    if len(json.dumps(cart, ensure_ascii=False)) > 250000:
+        raise ValueError("Слишком большой состав корзины")
     return cart
 
 
@@ -3911,6 +3913,18 @@ def retail_cart_drafts():
         except (TypeError, ValueError, OverflowError) as exc:
             conn.rollback()
             return jsonify({"success": False, "error": str(exc)}), 400
+
+        # A saved cart may only contain products from the active company.
+        # This also prevents cross-organization draft import through the API.
+        if cart:
+            ids = sorted({row["id"] for row in cart})
+            cur.execute("SELECT id FROM items WHERE company_id=%s AND id=ANY(%s)",
+                        (company_id, ids))
+            found = {row["id"] for row in cur.fetchall()}
+            if set(ids) != found:
+                conn.rollback()
+                return jsonify({"success": False,
+                                "error": "Некоторые товары больше не принадлежат этой организации"}), 409
 
         if auto and not cart:
             cur.execute("""
