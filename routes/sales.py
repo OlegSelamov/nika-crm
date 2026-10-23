@@ -3776,3 +3776,309 @@ def search_items():
         "items": items[:30],
         "has_more": has_more
     })
+
+
+# Retail cart drafts are distinct from paid sales and restaurant food_orders.
+# They never reserve inventory, create sales, or interact with reKassa.
+def _retail_draft_identity():
+    company_id, user_id = session.get("company_id"), session.get("user_id")
+    if not company_id or not user_id:
+        return None
+    return int(company_id), int(user_id)
+
+
+def _ensure_retail_cart_drafts(cur):
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS retail_cart_drafts (
+            id BIGSERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            client_id INTEGER,
+            cart JSONB NOT NULL DEFAULT '[]'::jsonb,
+            is_auto BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_retail_cart_drafts_autosave
+        ON retail_cart_drafts(company_id, user_id) WHERE is_auto
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_retail_cart_drafts_owner
+        ON retail_cart_drafts(company_id, user_id, updated_at DESC)
+    """)
+
+
+def _validate_retail_draft_cart(raw):
+    import math
+    if not isinstance(raw, list) or len(raw) > 300:
+        raise ValueError("Корзина должна содержать не более 300 позиций")
+    cart = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("Некорректная позиция корзины")
+        try:
+            item_id = int(item.get("id"))
+            qty = float(item.get("qty"))
+            price = float(item.get("price"))
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("Некорректное количество или цена")
+        if (item_id <= 0 or not math.isfinite(qty) or not math.isfinite(price)
+                or qty <= 0 or qty > 10000000 or price < 0 or price > 100000000000):
+            raise ValueError("Некорректное количество или цена")
+        row = {
+            "id": item_id,
+            "name": str(item.get("name") or ("Товар #" + str(item_id)))[:250],
+            "qty": qty,
+            "price": price,
+            "unit": str(item.get("unit") or "шт")[:30],
+            "gtin": str(item.get("gtin") or "")[:100],
+            "ntin": str(item.get("ntin") or "")[:100],
+            "excise_stamp": str(item.get("excise_stamp") or "")[:350],
+        }
+        if item.get("line_total") is not None:
+            try:
+                line_total = float(item["line_total"])
+            except (ValueError, TypeError, OverflowError):
+                raise ValueError("Некорректная сумма позиции")
+            if not math.isfinite(line_total) or line_total < 0:
+                raise ValueError("Некорректная сумма позиции")
+            row["line_total"] = line_total
+        # Selected recipe adjustments are part of the item; never trust them
+        # for stock/payment: those flows independently validate the order.
+        for key in ("modifiers", "excluded_ingredients"):
+            value = item.get(key)
+            if isinstance(value, list) and len(value) <= 50:
+                row[key] = value
+        cart.append(row)
+    return cart
+
+
+@sales_bp.route("/api/sales/cart-drafts", methods=["GET", "POST"])
+def retail_cart_drafts():
+    identity = _retail_draft_identity()
+    if identity is None:
+        return jsonify({"success": False, "error": "Нужна авторизация"}), 401
+    company_id, user_id = identity
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_retail_cart_drafts(cur)
+        if request.method == "GET":
+            conn.commit()
+            cur.execute("""
+                SELECT id, title, client_id, is_auto, updated_at,
+                       jsonb_array_length(cart) AS items_count
+                FROM retail_cart_drafts
+                WHERE company_id=%s AND user_id=%s
+                ORDER BY is_auto DESC, updated_at DESC, id DESC
+                LIMIT 100
+            """, (company_id, user_id))
+            rows = cur.fetchall()
+            return jsonify({"success": True, "drafts": [
+                {**dict(row), "updated_at": row["updated_at"].isoformat()
+                 if row["updated_at"] else ""}
+                for row in rows
+            ]})
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"success": False, "error": "Некорректные данные"}), 400
+        try:
+            cart = _validate_retail_draft_cart(data.get("cart"))
+            auto = data.get("is_auto") is True
+            if not cart and not auto:
+                raise ValueError("Нечего сохранять: корзина пуста")
+            client_id = data.get("client_id")
+            if client_id not in (None, "", 0, "0"):
+                client_id = int(client_id)
+                if client_id <= 0:
+                    raise ValueError("Некорректный клиент")
+                cur.execute("""
+                    SELECT id FROM clients
+                    WHERE id=%s AND company_id=%s
+                      AND COALESCE(is_deleted, FALSE)=FALSE
+                """, (client_id, company_id))
+                if not cur.fetchone():
+                    raise ValueError("Клиент не найден в организации")
+            else:
+                client_id = None
+            title = str(data.get("title") or "Сохранённая корзина").strip()[:120]
+            draft_id = int(data.get("id") or 0)
+            if draft_id < 0:
+                raise ValueError("Некорректная корзина")
+        except (TypeError, ValueError, OverflowError) as exc:
+            conn.rollback()
+            return jsonify({"success": False, "error": str(exc)}), 400
+
+        if auto and not cart:
+            cur.execute("""
+                DELETE FROM retail_cart_drafts
+                WHERE company_id=%s AND user_id=%s AND is_auto=TRUE
+            """, (company_id, user_id))
+            conn.commit()
+            return jsonify({"success": True, "cleared": True})
+
+        if auto:
+            cur.execute("""
+                INSERT INTO retail_cart_drafts
+                    (company_id,user_id,title,client_id,cart,is_auto,created_at,updated_at)
+                VALUES (%s,%s,'Текущая корзина',%s,%s::jsonb,TRUE,%s,%s)
+                ON CONFLICT (company_id,user_id) WHERE is_auto
+                DO UPDATE SET client_id=EXCLUDED.client_id,cart=EXCLUDED.cart,
+                              updated_at=EXCLUDED.updated_at
+                RETURNING id
+            """, (company_id,user_id,client_id,json.dumps(cart,ensure_ascii=False),
+                  now_kz_for_timestamp(),now_kz_for_timestamp()))
+        elif draft_id:
+            cur.execute("""
+                UPDATE retail_cart_drafts
+                SET cart=%s::jsonb,client_id=%s,title=%s,updated_at=%s
+                WHERE id=%s AND company_id=%s AND user_id=%s AND is_auto=FALSE
+                RETURNING id
+            """, (json.dumps(cart,ensure_ascii=False),client_id,title,
+                  now_kz_for_timestamp(),draft_id,company_id,user_id))
+            if not cur.fetchone():
+                conn.rollback()
+                return jsonify({"success": False, "error": "Корзина не найдена"}), 404
+            conn.commit()
+            return jsonify({"success": True, "id": draft_id})
+        else:
+            cur.execute("""
+                INSERT INTO retail_cart_drafts
+                    (company_id,user_id,title,client_id,cart,is_auto,created_at,updated_at)
+                VALUES (%s,%s,%s,%s,%s::jsonb,FALSE,%s,%s)
+                RETURNING id
+            """, (company_id,user_id,title,client_id,json.dumps(cart,ensure_ascii=False),
+                  now_kz_for_timestamp(),now_kz_for_timestamp()))
+        saved = cur.fetchone()
+        conn.commit()
+        return jsonify({"success": True, "id": saved["id"]})
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception("Ошибка сохранения корзины")
+        return jsonify({"success": False, "error": "Не удалось сохранить корзину"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@sales_bp.route("/api/sales/cart-drafts/<int:draft_id>", methods=["GET", "DELETE"])
+def retail_cart_draft_detail(draft_id):
+    identity = _retail_draft_identity()
+    if identity is None:
+        return jsonify({"success": False, "error": "Нужна авторизация"}), 401
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_retail_cart_drafts(cur)
+        conn.commit()
+        company_id,user_id = identity
+        if request.method == "DELETE":
+            cur.execute("""
+                DELETE FROM retail_cart_drafts
+                WHERE id=%s AND company_id=%s AND user_id=%s
+                RETURNING id
+            """, (draft_id,company_id,user_id))
+            found=cur.fetchone()
+            conn.commit()
+            return jsonify({"success": True, "deleted": bool(found)})
+        cur.execute("""
+            SELECT id,title,client_id,cart,is_auto,updated_at
+            FROM retail_cart_drafts
+            WHERE id=%s AND company_id=%s AND user_id=%s
+        """, (draft_id,company_id,user_id))
+        row=cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Корзина не найдена"}), 404
+        return jsonify({"success": True, "draft": {
+            **dict(row), "updated_at": row["updated_at"].isoformat()
+            if row["updated_at"] else ""
+        }})
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception("Ошибка загрузки корзины")
+        return jsonify({"success": False, "error": "Не удалось загрузить корзину"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@sales_bp.route("/api/sales/cart-drafts/active", methods=["DELETE"])
+def clear_retail_active_draft():
+    identity = _retail_draft_identity()
+    if identity is None:
+        return jsonify({"success": False, "error": "Нужна авторизация"}), 401
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_retail_cart_drafts(cur)
+        cur.execute("""
+            DELETE FROM retail_cart_drafts
+            WHERE company_id=%s AND user_id=%s AND is_auto=TRUE
+        """, identity)
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception("Ошибка сброса текущей корзины")
+        return jsonify({"success": False, "error": "Не удалось очистить корзину"}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
+@sales_bp.route("/api/sales/<int:sale_id>/repeat-cart")
+def retail_repeat_sale_cart(sale_id):
+    """Create an editable NEW cart from a completed sale, never reopen payment."""
+    identity = _retail_draft_identity()
+    if identity is None:
+        return jsonify({"success": False, "error": "Нужна авторизация"}), 401
+    company_id, _ = identity
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT s.id,s.client_id,c.full_name,c.company_name
+            FROM sales s
+            LEFT JOIN clients c ON c.id=s.client_id AND c.company_id=s.company_id
+                AND COALESCE(c.is_deleted,FALSE)=FALSE
+            WHERE s.id=%s AND s.company_id=%s
+        """, (sale_id,company_id))
+        sale=cur.fetchone()
+        if not sale:
+            return jsonify({"success": False, "error": "Продажа не найдена"}), 404
+        cur.execute("""
+            SELECT si.item_id,si.name,si.price,si.quantity,si.unit,
+                   si.gtin,si.ntin,si.excise_stamp,si.total,
+                   i.id AS current_item_id
+            FROM sale_items si
+            LEFT JOIN items i ON i.id=si.item_id AND i.company_id=%s
+                AND COALESCE(i.is_deleted,FALSE)=FALSE
+            WHERE si.sale_id=%s
+            ORDER BY si.id
+        """, (company_id,sale_id))
+        rows=cur.fetchall()
+        cart=[]
+        skipped=[]
+        for row in rows:
+            if not row.get("current_item_id"):
+                skipped.append(str(row.get("name") or "Удалённая позиция") + ": нет в каталоге")
+                continue
+            if row.get("excise_stamp"):
+                skipped.append(str(row.get("name") or "Маркированный товар") + ": нужен новый DataMatrix")
+                continue
+            cart.append({
+                "id": row["current_item_id"], "name":row["name"],
+                "price": float(row["price"] or 0),
+                "qty": float(row["quantity"] or 0),
+                "unit": row["unit"] or "шт",
+                "gtin":row["gtin"] or "", "ntin":row["ntin"] or "",
+            })
+        return jsonify({"success": True, "cart":cart,"skipped":skipped,
+                        "client_id":sale.get("client_id") if (sale.get("full_name") or sale.get("company_name")) else None,
+                        "client_name": sale.get("company_name") or sale.get("full_name") or "Частное лицо"})
+    finally:
+        cur.close()
+        pool.putconn(conn)
