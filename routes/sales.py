@@ -4055,7 +4055,6 @@ def retail_repeat_sale_cart(sale_id):
                    i.id AS current_item_id
             FROM sale_items si
             LEFT JOIN items i ON i.id=si.item_id AND i.company_id=%s
-                AND COALESCE(i.is_deleted,FALSE)=FALSE
             WHERE si.sale_id=%s
             ORDER BY si.id
         """, (company_id,sale_id))
