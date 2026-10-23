@@ -5,7 +5,8 @@ existing /sales/pay pipeline commits the linked payment.
 """
 import json
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, jsonify, render_template, request, session, current_app, make_response, send_file
+from io import BytesIO
 from models import get_db, pool
 from utils.sale_amounts import normalize_sale_line
 from utils.timezone import now_kz, now_kz_for_timestamp
@@ -459,3 +460,39 @@ def food_order_ticket(order_id, kind):
                                ticket_date=order["created_at"].strftime("%d.%m.%y %H:%M") if order.get("created_at") else "")
     finally:
         pool.putconn(conn)
+
+
+@food_orders_bp.route("/food/orders/<int:order_id>/ticket-pdf/<kind>")
+def food_order_ticket_pdf(order_id, kind):
+    """Download/share the same company-scoped guest or kitchen ticket as a PDF.
+
+    Reuse the HTML route's access checks, data and template. Never create a
+    sale or fiscal receipt here: this is only a downloadable copy.
+    """
+    if kind not in ("kitchen", "precheck"):
+        return jsonify({"error": "Документ не найден"}), 404
+
+    rendered = make_response(food_order_ticket(order_id, kind))
+    if rendered.status_code >= 400:
+        return rendered
+
+    try:
+        from weasyprint import HTML
+    except ImportError:
+        return jsonify({"error": "Формирование PDF недоступно на сервере"}), 503
+
+    try:
+        pdf = HTML(
+            string=rendered.get_data(as_text=True),
+            base_url=request.url_root,
+            media_type="print",
+        ).write_pdf()
+        name = "kitchen" if kind == "kitchen" else "guest"
+        return send_file(
+            BytesIO(pdf), mimetype="application/pdf",
+            as_attachment=True, download_name=f"nika-order-{order_id}-{name}.pdf",
+            max_age=0,
+        )
+    except Exception:
+        current_app.logger.exception("Не удалось сформировать PDF заказа %s (%s)", order_id, kind)
+        return jsonify({"error": "Не удалось сформировать PDF чека"}), 500
