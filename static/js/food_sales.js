@@ -646,6 +646,7 @@
     let foodCashPrintReceived = null;
     let pendingFoodCashConfirmation = false;
     let activeFoodTicketKind = "precheck";
+    let activeFoodTicketOrderId = null;
     let foodOrderPage = 1;
 
     function foodMessage(message) {
@@ -730,9 +731,19 @@
         status.classList.toggle("is-error", hasError);
     }
 
+    function getFoodDesktopBridge() {
+        try { return window.nikaDesktop || window.parent?.nikaDesktop || null; }
+        catch (_) { return window.nikaDesktop || null; }
+    }
+
+    function isElectronFoodCheckout() {
+        // Runtime, not a company setting or user agent. The preload sets this
+        // only inside Nika Electron, including its embedded sales iframe.
+        return getFoodDesktopBridge()?.isElectron === true;
+    }
+
     function getFoodPrinterBridge() {
-        try { return window.nikaDesktop?.printers || window.parent?.nikaDesktop?.printers || null; }
-        catch (_) { return window.nikaDesktop?.printers || null; }
+        return isElectronFoodCheckout() ? (getFoodDesktopBridge()?.printers || null) : null;
     }
 
     async function getSavedFoodTicketHtml(orderId, kind) {
@@ -794,18 +805,22 @@
         const printers = getFoodPrinterBridge();
         const fingerprint = savedFoodTicketFingerprint(order);
         const uiSnapshotBeforePrint = currentFoodUiSignature();
-        if (!printers?.printFoodOrder) {
-            // A browser cannot silently choose TWO different local printers.
-            // Explicit "Оформить" keeps manual preview workflow available,
-            // while direct payment confirmation never bypasses the print step.
-            openFoodTicket(order.id, "precheck", false);
-            const msg = "В браузере распечатайте пречек и кухню вручную. Для двух принтеров автоматически используйте Electron TEST.";
+        if (!isElectronFoodCheckout()) {
+            // In the website, both documents are preview-only. No local printer
+            // probing and no mandatory printing before a valid payment.
+            openFoodTicketPair(order.id);
+            const msg = "Заказ №" + order.id + " сохранён. Чек гостю и заказ на кухню открыты для просмотра, сохранения и отправки.";
             foodMessage(msg);
-            showFoodPrintStatus(msg, true);
-            if (!manualAllowed || printers?.printReceipt) return false;
+            showFoodPrintStatus(msg);
             lastFoodPrintFingerprint = fingerprint;
             lastFoodPrintUiSignature = uiSnapshotBeforePrint;
             return true;
+        }
+        if (!printers?.printFoodOrder) {
+            const msg = "В Electron недоступен сервис печати двух чеков. Проверьте подключение принтеров.";
+            foodMessage(msg);
+            showFoodPrintStatus(msg, true);
+            return false;
         }
 
         // Same order and payment => no duplicated ticket jobs.
@@ -880,23 +895,31 @@
     }
 
     async function finalizeFoodPaymentAfterChecks(method, received = 0) {
-        if (!isFoodTicketCurrent()) {
+        const websiteMode = !isElectronFoodCheckout();
+        const needsFreshTickets = !isFoodTicketCurrent();
+        if (needsFreshTickets) {
             const saved = await saveFoodOrder();
             if (!saved) return false;
-            foodCashPrintReceived = method === "cash" ? received : null;
-            try {
-                if (!await printBothFoodTickets(saved)) {
-                    foodMessage("Заказ сохранён, но оба чека не распечатаны. Оплата не проведена.");
+            if (!websiteMode) {
+                // Electron still requires successful spooling of BOTH tickets
+                // before the sale. Its printer config and retry gate stay intact.
+                foodCashPrintReceived = method === "cash" ? received : null;
+                try {
+                    if (!await printBothFoodTickets(saved)) {
+                        foodMessage("Заказ сохранён, но оба чека не распечатаны. Оплата не проведена.");
+                        return false;
+                    }
+                } catch (error) {
+                    foodMessage("Заказ сохранён, ошибка печати: " + (error.message || error));
+                    showFoodPrintStatus("Оплата не проведена: проверьте принтеры.", true);
                     return false;
+                } finally {
+                    foodCashPrintReceived = null;
                 }
-            } catch (error) {
-                foodMessage("Заказ сохранён, ошибка печати: " + (error.message || error));
-                showFoodPrintStatus("Оплата не проведена: проверьте принтеры.", true);
-                return false;
-            } finally {
-                foodCashPrintReceived = null;
             }
+            // Website: do NOT check local printers or block payment.
         }
+        const browserOrderId = websiteMode && needsFreshTickets ? currentFoodOrderId : null;
 
         const total = getCart().reduce((sum, item) =>
             sum + Number(item.price || 0) * Number(item.qty || 0), 0);
@@ -905,18 +928,22 @@
                 foodMessage("Полученная сумма меньше суммы заказа");
                 return false;
             }
-            return await submitSalePayment({
+            const paid = await submitSalePayment({
                 paymentMethod:"cash", cash:received, card:0, kaspi:0,
                 cashChange:Math.max(0, received-total)
             });
+            if (paid && browserOrderId) openFoodTicketPair(browserOrderId);
+            return paid;
         }
         const card = Number(String(document.getElementById("cardInput")?.value || "").replace(",", ".")) || 0;
         const kaspi = Number(String(document.getElementById("kaspiInput")?.value || "").replace(",", ".")) || 0;
-        return await submitSalePayment({
+        const paid = await submitSalePayment({
             paymentMethod:method, cash:0,
             card:method === "card" ? card : 0,
             kaspi:method === "kaspi" ? kaspi : 0, cashChange:0
         });
+        if (paid && browserOrderId) openFoodTicketPair(browserOrderId);
+        return paid;
     }
 
     async function payExistingFoodOrder() {
