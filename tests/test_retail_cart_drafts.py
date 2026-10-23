@@ -62,6 +62,29 @@ class RetailCartDraftsTests(unittest.TestCase):
         self.assertIn('onclick="retailRepeatSale(', src)
         self.assertIn('retail-repeat-btn', src)
 
+    def test_branded_save_icon_replaces_two_cart_buttons_and_refresh_control(self):
+        template = self.read("templates/sales.html")
+        style = self.read("static/css/sales.css")
+        self.assertEqual(template.count('id="retailSaveCart"'), 1)
+        self.assertIn('icons/save_cart_bookmark.png', template)
+        self.assertIn('class="retail-save-cart-button"', template)
+        self.assertIn('id="shiftRefreshBtn" hidden', template)
+        self.assertNotIn('id="retailOpenDrafts"', template)
+        self.assertNotIn('id="retailDraftToolbar"', template)
+        self.assertIn('id="retailDraftHistory"', template)
+        self.assertIn('id="retailDraftStatus"', template)
+        self.assertTrue((ROOT / "static/icons/save_cart_bookmark.png").is_file())
+        self.assertIn('body.food-sales-mode .sales-commandbar .retail-save-cart-button', style)
+        self.assertIn('grid-template-columns: repeat(3,minmax(0,1fr))', style)
+
+    def test_history_has_payment_badges_and_open_cart_action(self):
+        js = self.read("static/js/sales.js")
+        self.assertIn('"Ожидает оплаты"', js)
+        self.assertIn('getSaleStatusClass(salesDocumentStatus(item))', js)
+        self.assertIn('class="sale-status-badge ${getSaleStatusClass(status)}"', js)
+        self.assertIn('>Открыть корзину</button>', js)
+        self.assertNotIn('>В корзину</button>', js)
+
     def test_existing_food_and_retail_payment_are_untouched(self):
         sales = self.read("static/js/sales.js")
         food = self.read("static/js/food_sales.js")
