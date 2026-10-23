@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};window.NIKA_SALES_WORKFLOW={{ sales_workflow|default('sales_documents')|tojson }};window.NIKA_FOOD_CHECKOUT_MODE={{ food_checkout_mode|default('fast')|tojson }};</script>
+<script>window.NIKA_BUSINESS_MODE={{ business_mode|default('universal')|tojson }};window.NIKA_SALES_WORKFLOW={{ sales_workflow|default('sales_documents')|tojson }};window.NIKA_FOOD_CHECKOUT_MODE={{ food_checkout_mode|default('fast')|tojson }};window.NIKA_RETAIL_DRAFT_OWNER={{ [session.get('company_id'),session.get('user_id')]|tojson }};</script>
 
 <div class="sales-page">
 <div class="sales-commandbar" aria-label="Режимы продаж и кассовая смена">
@@ -72,6 +72,12 @@
 		</div>
 
 
+        <div class="retail-draft-toolbar" id="retailDraftToolbar">
+            <button type="button" id="retailSaveCart" class="retail-draft-save">💾 Сохранить корзину</button>
+            <button type="button" id="retailOpenDrafts" class="retail-draft-open">Мои корзины <span id="retailDraftCount"></span></button>
+            <span id="retailDraftStatus" role="status" aria-live="polite"></span>
+        </div>
+
         <!-- КОРЗИНА -->
         <div class="cart-box">
 		    <div class="table-wrapper" id="cartTableWrapper">
@@ -91,6 +97,13 @@
 			<div id="mobileCart" class="mobile-cart"></div>
 			
 			<div id="salesHistoryBox" style="display:none;">
+                <section class="retail-draft-history" id="retailDraftHistory" aria-label="Сохранённые корзины">
+                    <div class="retail-draft-history__head">
+                        <div><strong>Сохранённые корзины</strong><small>Продолжить незавершённую продажу — без повторной оплаты</small></div>
+                        <button type="button" id="retailDraftRefresh">Обновить</button>
+                    </div>
+                    <div id="retailDraftList" class="retail-draft-list"><span>Загружаем корзины…</span></div>
+                </section>
 				<div class="sales-history-mode-switch" role="tablist" aria-label="Режим истории продаж">
 					<button type="button" id="salesHistoryShiftsMode" class="active"
 							onclick="switchSalesHistoryMode('shifts')" role="tab" aria-selected="true">
@@ -882,4 +895,5 @@
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261022-food-payment-stage-v6') }}"></script>
 
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20261023-mobile-checkout-dock-test-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/retail_cart_drafts.js', v='20261024-retail-drafts-test-v1') }}"></script>
 {% endblock %}
