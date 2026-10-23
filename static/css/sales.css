@@ -4989,7 +4989,7 @@ body.food-sales-mode .sales-commandbar .retail-save-cart-button { display: none 
         grid-row: 1;
         align-self: center;
         min-width: 0;
-        padding-right: 49px;
+        padding-right: 0;
         gap: 8px;
     }
     .sales-page .sales-commandbar .shift-strip-state strong,
@@ -5031,15 +5031,15 @@ body.food-sales-mode .sales-commandbar .retail-save-cart-button { display: none 
         text-overflow: ellipsis;
     }
     .sales-page .sales-commandbar .retail-save-cart-button {
-        position: absolute;
-        right: 7px;
-        top: 6px;
-        grid-row: auto;
-        grid-column: auto;
+        position: static;
+        order: 2;
+        flex: 0 0 42px;
+        align-self: center;
+        margin: 0 0 0 auto;
         display: inline-flex;
-        width: 40px;
-        height: 39px;
-        min-height: 39px;
+        width: 42px;
+        height: 42px;
+        min-height: 42px;
         padding: 3px;
         border-radius: 11px;
         z-index: 2;
@@ -5058,4 +5058,48 @@ body.food-sales-mode .sales-commandbar .retail-save-cart-button { display: none 
 }
 @media (max-width: 370px) {
     .sales-page .sales-commandbar .shift-strip-actions .shift-strip-btn {font-size:9px!important;}
+}
+
+
+/* Cart save is a POS action, not part of reKassa. Its button is a direct
+   child of the command bar; hiding the shift (or switching to history)
+   must never hide the save control. */
+.sales-page .sales-commandbar > .retail-save-cart-button {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+@media (max-width: 768px) {
+    /* Navigation and the independent icon share the FIRST row. The shift,
+       when present, occupies a separate row and may disappear entirely. */
+    .sales-page .sales-commandbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: start;
+        align-items: center;
+        gap: 6px;
+    }
+    .sales-page .sales-commandbar > .sales-view-navigation {
+        order: 1;
+        flex: 1 1 calc(100% - 54px);
+        min-width: 0;
+    }
+    .sales-page .sales-commandbar > .sales-mode-switch {
+        order: 3;
+        flex: 0 1 auto;
+    }
+    .sales-page .sales-commandbar > .shift-strip {
+        order: 4;
+        flex: 1 1 100%;
+        width: 100%;
+        min-width: 0;
+    }
+    .sales-page .sales-commandbar > .retail-save-cart-button {
+        order: 2;
+        position: static;
+        flex: 0 0 42px;
+        margin: 0;
+        align-self: center;
+        width: 42px;
+        height: 42px;
+    }
 }
