@@ -62,6 +62,8 @@ body { width: 72mm; max-width: 100%; margin: 0 auto; padding: 1.5mm 1.5mm 2mm;
 <body>
 <div class="ticket-actions" {% if request.args.get('embed') == '1' %}hidden{% endif %}>
     <button type="button" onclick="window.print()">Печать</button>
+    <button type="button" onclick="saveTicketFile('save')">Сохранить</button>
+    <button type="button" onclick="saveTicketFile('share')">Поделиться</button>
     <button type="button" onclick="window.close()">Закрыть</button>
 </div>
 <section class="ticket-root {{ 'kitchen-ticket' if kind == 'kitchen' else 'guest-ticket' }}">
@@ -147,5 +149,45 @@ body { width: 72mm; max-width: 100%; margin: 0 auto; padding: 1.5mm 1.5mm 2mm;
     <div class="ticket-footer">Приятного аппетита!</div>
     {% endif %}
 </section>
+
+{% if request.args.get('embed') != '1' %}
+<script>
+async function saveTicketFile(action) {
+    const id = {{ order.id|tojson }};
+    const kind = {{ kind|tojson }};
+    const base = '/food/orders/' + encodeURIComponent(id);
+    let blob, filename, mime;
+    try {
+        const pdf = await fetch(base + '/ticket-pdf/' + kind, {credentials:'same-origin'});
+        if (pdf.ok && (pdf.headers.get('content-type') || '').includes('application/pdf')) {
+            blob = await pdf.blob();
+            filename = 'nika-order-' + id + '-' + (kind === 'kitchen' ? 'kitchen' : 'guest') + '.pdf';
+            mime = 'application/pdf';
+        } else {
+            if (pdf.status === 403 || pdf.status === 404) throw new Error('Документ недоступен');
+            const html = await fetch(base + '/ticket/' + kind + '?embed=1', {credentials:'same-origin'});
+            if (!html.ok) throw new Error('Не удалось загрузить чек');
+            blob = new Blob([await html.text()], {type:'text/html;charset=utf-8'});
+            filename = 'nika-order-' + id + '-' + (kind === 'kitchen' ? 'kitchen' : 'guest') + '.html';
+            mime = 'text/html';
+        }
+        if (action === 'share' && navigator.share && typeof File !== 'undefined') {
+            const file = new File([blob], filename, {type:mime});
+            if (!navigator.canShare || navigator.canShare({files:[file]})) {
+                await navigator.share({title:document.title, files:[file]});
+                return;
+            }
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href=url; a.download=filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url),30000);
+        if (action === 'share') alert('Чек сохранён. Отправьте его из файлов устройства.');
+    } catch (error) {
+        if (error?.name !== 'AbortError') alert(error.message || 'Не удалось сохранить чек');
+    }
+}
+</script>
+{% endif %}
 </body>
 </html>
