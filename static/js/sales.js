@@ -2613,6 +2613,7 @@ function renderSalesReceipt(item) {
             </div>
             <div class="sales-receipt-actions">
                 <button type="button" class="sales-receipt-open" onclick="${action}">${actionLabel}</button>
+                ${!refund && Number.isFinite(id) ? `<button type="button" class="sales-receipt-repeat" onclick="retailRepeatSale(${id}, this)" title="Создать новую корзину из этой продажи">В корзину</button>` : ""}
                 ${canRefund ? `
                     <button type="button" class="sales-receipt-refund"
                             onclick="refundSale(${id}, this)">Возврат</button>
@@ -2883,7 +2884,9 @@ function salesDocumentActions(item) {
             Документы <span>${count}</span>
         </button>
     ` : "";
-    return `${primary}${center}`;
+    const repeat = `<button type="button" class="sales-document-btn retail-repeat-btn"
+            onclick="retailRepeatSale(${id}, this)" title="Создать новую корзину по этой продаже">В корзину</button>`;
+    return `${primary}${repeat}${center}`;
 }
 
 function ensureSalesDocumentCenter() {
