@@ -68,6 +68,10 @@ class RetailCartDraftsTests(unittest.TestCase):
         self.assertEqual(template.count('id="retailSaveCart"'), 1)
         self.assertIn('icons/save_cart_bookmark.png', template)
         self.assertIn('class="retail-save-cart-button"', template)
+        shift_part = template.split('id="shiftStrip"', 1)[1].split('</section>', 1)[0]
+        self.assertNotIn('id="retailSaveCart"', shift_part)
+        self.assertLess(template.index('</section>', template.index('id="shiftStrip"')),
+                        template.index('id="retailSaveCart"'))
         self.assertIn('id="shiftRefreshBtn" hidden', template)
         self.assertNotIn('id="retailOpenDrafts"', template)
         self.assertNotIn('id="retailDraftToolbar"', template)
@@ -75,6 +79,8 @@ class RetailCartDraftsTests(unittest.TestCase):
         self.assertIn('id="retailDraftStatus"', template)
         self.assertTrue((ROOT / "static/icons/save_cart_bookmark.png").is_file())
         self.assertIn('body.food-sales-mode .sales-commandbar .retail-save-cart-button', style)
+        self.assertIn('.sales-commandbar > .retail-save-cart-button', style)
+        self.assertIn('hiding the shift (or switching to history)', style)
         self.assertIn('grid-template-columns: repeat(3,minmax(0,1fr))', style)
 
     def test_history_has_payment_badges_and_open_cart_action(self):
