@@ -43,7 +43,7 @@ class FoodMenuCardsTests(unittest.TestCase):
         self.assertIn("@container nika-food-menu (max-width: 505px)", styles)
         self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", styles)
         self.assertIn("@container nika-food-menu (max-width: 335px)", styles)
-        self.assertIn("food-checkout-confirm-v2", (ROOT / "templates/sales.html").read_text(encoding="utf-8"))
+        self.assertIn('id="foodCompletePayment"', (ROOT / "templates/sales.html").read_text(encoding="utf-8"))
         self.assertIn("food-menu-category-badge", styles)
 
     def test_menu_labels_and_idle_scrolling(self):
