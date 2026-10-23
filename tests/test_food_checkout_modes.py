@@ -26,7 +26,7 @@ class FoodCheckoutModesTests(unittest.TestCase):
 
     def test_precheck_does_not_use_sale_payment(self):
         js = self.read("static/js/food_sales.js")
-        create = js.split('async function createFoodPrecheck()', 1)[1].split('async function payExistingFoodOrder()', 1)[0]
+        create = js.split('async function createFoodPrecheck()', 1)[1].split('async function finalizeFoodPaymentAfterChecks(', 1)[0]
         self.assertIn('await saveFoodOrder()', create)
         self.assertIn('await printBothFoodTickets(saved, {manualAllowed: true})', create)
         self.assertNotIn('pay()', create)
@@ -34,11 +34,14 @@ class FoodCheckoutModesTests(unittest.TestCase):
 
     def test_confirm_payment_prints_only_if_needed(self):
         js = self.read("static/js/food_sales.js")
+        finalize = js.split('async function finalizeFoodPaymentAfterChecks(', 1)[1].split('async function payExistingFoodOrder()', 1)[0]
         pay = js.split('async function payExistingFoodOrder()', 1)[1].split('function newFoodOrder()', 1)[0]
-        self.assertIn('if (!isFoodTicketCurrent())', pay)
-        self.assertIn('await saveFoodOrder()', pay)
-        self.assertIn('await printBothFoodTickets(saved)', pay)
-        self.assertIn('submitSalePayment({', pay)
+        self.assertIn('const needsFreshTickets = !isFoodTicketCurrent()', finalize)
+        self.assertIn('const websiteMode = !isElectronFoodCheckout()', finalize)
+        self.assertIn('await saveFoodOrder()', finalize)
+        self.assertIn('if (!websiteMode)', finalize)
+        self.assertIn('await printBothFoodTickets(saved)', finalize)
+        self.assertIn('submitSalePayment({', finalize)
         self.assertIn('openCashChangeModal()', pay)
         self.assertNotIn('else pay()', pay)
         self.assertIn('window.nikaConfirmNegativeStockSale', pay)
@@ -89,8 +92,27 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn('printers.printFoodOrder({', js)
         self.assertIn('frame.contentWindow?.print()', js)
         self.assertIn('frame.onload =', js)
-        self.assertIn('if (autoPrint && kind === "precheck")', js)
+        self.assertIn('if (autoPrint && kind === "precheck" && isElectronFoodCheckout())', js)
         self.assertIn('void printFoodTicketFromModal()', js)
+
+
+    def test_browser_dual_preview_does_not_require_printers(self):
+        js = self.read("static/js/food_sales.js")
+        tpl = self.read("templates/sales.html")
+        route = self.read("routes/food_orders.py")
+        print_section = js.split('async function printBothFoodTickets(', 1)[1].split('async function createFoodPrecheck()', 1)[0]
+        self.assertIn('if (!isElectronFoodCheckout())', print_section)
+        self.assertIn('openFoodTicketPair(order.id)', print_section)
+        self.assertIn('if (!printers?.printFoodOrder)', print_section)
+        self.assertIn('printers.printFoodOrder({', print_section)
+        self.assertIn('getFoodDesktopBridge()?.isElectron === true', js)
+        for marker in ('foodGuestTicketFrame', 'foodKitchenTicketFrame', 'foodTicketPair',
+                       'data-food-ticket-action="share"', 'data-food-ticket-action="save"'):
+            self.assertIn(marker, tpl)
+        self.assertIn('def food_order_ticket_pdf(', route)
+        self.assertIn('food_order_ticket(order_id, kind)', route)
+        self.assertIn('navigator.share', js)
+        self.assertIn("saveTicketFile('share')", self.read("templates/food_order_ticket.html"))
 
     def test_all_edited_python_modules_parse(self):
         for path in ("app.py", "models.py", "routes/auth.py", "routes/sales.py",
