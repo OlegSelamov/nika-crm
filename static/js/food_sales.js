@@ -1065,53 +1065,141 @@
         const modal = document.getElementById("foodOrderDetailsModal");
         if (modal) modal.hidden = !open;
     }
+    function foodTicketUrl(orderId, kind, pdf = false) {
+        const path = pdf ? "ticket-pdf/" : "ticket/";
+        return "/food/orders/" + encodeURIComponent(orderId) + "/" + path + kind;
+    }
+
+    function openFoodTicketPair(orderId) {
+        if (!orderId) return;
+        const modal = document.getElementById("foodTicketModal");
+        const single = document.getElementById("foodTicketSingle");
+        const pair = document.getElementById("foodTicketPair");
+        if (!modal || !single || !pair) return;
+        if (modal.parentElement !== document.body) document.body.appendChild(modal);
+        activeFoodTicketOrderId = orderId;
+        document.getElementById("foodTicketHeading").textContent = "Заказ №" + orderId + " · два чека";
+        modal.querySelector(".food-ticket-dialog")?.classList.add("is-dual");
+        single.hidden = true;
+        pair.hidden = false;
+        document.getElementById("foodGuestTicketFrame").src = foodTicketUrl(orderId, "precheck") + "?embed=1";
+        document.getElementById("foodKitchenTicketFrame").src = foodTicketUrl(orderId, "kitchen") + "?embed=1";
+        modal.hidden = false;
+    }
+
     function openFoodTicket(orderId, kind, autoPrint = false) {
         if (!orderId) { foodMessage("Сначала сохраните заказ"); return; }
         const modal = document.getElementById("foodTicketModal");
         const frame = document.getElementById("foodTicketFrame");
         if (!modal || !frame) return;
-        // Place the overlay outside hidden sales/history containers.
-        // Otherwise history buttons open an invisible modal on the sales tab.
         if (modal.parentElement !== document.body) document.body.appendChild(modal);
+        activeFoodTicketOrderId = orderId;
         activeFoodTicketKind = kind;
-        document.getElementById("foodTicketHeading").textContent = kind === "kitchen" ? "Заказ на кухню" : "Пречек гостю";
+        document.getElementById("foodTicketHeading").textContent = kind === "kitchen" ? "Заказ на кухню" : "Чек гостю";
+        modal.querySelector(".food-ticket-dialog")?.classList.remove("is-dual");
+        document.getElementById("foodTicketPair").hidden = true;
+        document.getElementById("foodTicketSingle").hidden = false;
         const printButton = document.getElementById("foodTicketPrint");
         if (printButton) printButton.disabled = true;
         frame.onload = () => {
             if (printButton) printButton.disabled = false;
-            if (autoPrint && kind === "precheck") {
-                // An explicit "Оформить заказ · пречек" action prints immediately
-                // when an Electron receipt printer is available. In a browser
-                // the preview stays open, so no surprise print dialog is shown.
-                let bridge = null;
-                try { bridge = window.nikaDesktop || window.parent?.nikaDesktop; }
-                catch (_) { bridge = window.nikaDesktop; }
-                if (bridge?.printers?.printReceipt) {
-                    void printFoodTicketFromModal();
-                }
+            if (autoPrint && kind === "precheck" && isElectronFoodCheckout()) {
+                // Never auto-print a browser preview. Electron's combined
+                // printFoodOrder is the normal two-printer checkout path.
+                void printFoodTicketFromModal();
             }
         };
-        frame.src = "/food/orders/" + encodeURIComponent(orderId) + "/ticket/" + kind + "?embed=1";
+        frame.src = foodTicketUrl(orderId, kind) + "?embed=1";
         modal.hidden = false;
     }
+
     function closeFoodTicket() {
         const modal = document.getElementById("foodTicketModal");
         if (modal) modal.hidden = true;
-        const frame = document.getElementById("foodTicketFrame");
-        if (frame) frame.src = "about:blank";
+        for (const id of ["foodTicketFrame", "foodGuestTicketFrame", "foodKitchenTicketFrame"]) {
+            const frame = document.getElementById(id);
+            if (frame) { frame.onload = null; frame.src = "about:blank"; }
+        }
+        activeFoodTicketOrderId = null;
     }
-    async function printFoodTicketFromModal() {
-        const frame = document.getElementById("foodTicketFrame");
-        const button = document.getElementById("foodTicketPrint");
+
+    async function foodTicketFile(orderId, kind) {
+        const result = await fetch(foodTicketUrl(orderId, kind, true), {
+            credentials: "same-origin", headers: {Accept:"application/pdf"}
+        });
+        if (result.ok && (result.headers.get("content-type") || "").includes("application/pdf")) {
+            return {
+                blob: await result.blob(),
+                filename: "nika-order-" + orderId + "-" + (kind === "kitchen" ? "kitchen" : "guest") + ".pdf",
+                mime: "application/pdf"
+            };
+        }
+        if (result.status === 403 || result.status === 404) throw new Error("Чек недоступен");
+        // WeasyPrint is optional on older VPSs. Saving/sharing an HTML copy
+        // must still work even if server-side PDF generation is unavailable.
+        const html = await fetch(foodTicketUrl(orderId, kind) + "?embed=1", {
+            credentials: "same-origin"
+        });
+        if (!html.ok) throw new Error("Не удалось получить чек");
+        return {
+            blob: new Blob([await html.text()], {type:"text/html;charset=utf-8"}),
+            filename: "nika-order-" + orderId + "-" + (kind === "kitchen" ? "kitchen" : "guest") + ".html",
+            mime: "text/html"
+        };
+    }
+
+    function downloadFoodTicketFile({blob, filename}) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+
+    async function exportFoodTicket(kind, action, button) {
+        if (!activeFoodTicketOrderId || button?.disabled) return;
+        if (button) button.disabled = true;
+        try {
+            const fileData = await foodTicketFile(activeFoodTicketOrderId, kind);
+            if (action === "share" && navigator.share && typeof File !== "undefined") {
+                const file = new File([fileData.blob], fileData.filename, {type:fileData.mime});
+                if (!navigator.canShare || navigator.canShare({files:[file]})) {
+                    await navigator.share({
+                        title: kind === "kitchen" ? "Заказ на кухню" : "Чек гостю",
+                        files: [file]
+                    });
+                    return;
+                }
+            }
+            downloadFoodTicketFile(fileData);
+            if (action === "share") {
+                foodMessage("На этом устройстве отправка файлов недоступна. Чек сохранён для отправки.");
+            }
+        } catch (error) {
+            if (error?.name !== "AbortError") {
+                console.error("FOOD TICKET EXPORT:", error);
+                foodMessage(error?.message || "Не удалось сохранить чек");
+            }
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
+    async function printFoodTicketFromModal(kind = activeFoodTicketKind, frameOverride = null, buttonOverride = null) {
+        const frame = frameOverride || document.getElementById("foodTicketFrame");
+        const button = buttonOverride || document.getElementById("foodTicketPrint");
         if (!frame || !frame.contentDocument?.body || button?.disabled) return;
         const doc = frame.contentDocument;
         if (!doc.querySelector(".item")) {
             foodMessage("Чек ещё загружается, повторите печать");
             return;
         }
-        const title = document.getElementById("foodTicketHeading")?.textContent || "Чек общепита";
+        const title = kind === "kitchen" ? "Заказ на кухню" : "Чек гостю";
         const printers = getFoodPrinterBridge();
-        const printMethod = activeFoodTicketKind === "kitchen"
+        const printMethod = kind === "kitchen"
             ? printers?.printKitchen : printers?.printReceipt;
         if (!printMethod) {
             frame.contentWindow?.print();
@@ -1119,8 +1207,6 @@
         }
         if (button) button.disabled = true;
         try {
-            // Keep the ticket's existing design, but use Electron's chosen
-            // 58/80 mm receipt printer and paper-width formatting.
             const page = doc.body.cloneNode(true);
             page.querySelectorAll(".actions,script").forEach(node => node.remove());
             const styles = Array.from(doc.querySelectorAll("style"))
@@ -1259,7 +1345,20 @@
         document.getElementById("foodOrderDetails")?.addEventListener("click", () => setFoodDetails(true));
         document.querySelectorAll("[data-food-details-close]").forEach(el => el.addEventListener("click", () => setFoodDetails(false)));
         document.querySelectorAll("[data-food-ticket-close]").forEach(el => el.addEventListener("click", closeFoodTicket));
-        document.getElementById("foodTicketPrint")?.addEventListener("click", printFoodTicketFromModal);
+        document.getElementById("foodTicketModal")?.addEventListener("click", event => {
+            const button = event.target.closest("[data-food-ticket-action]");
+            if (!button) return;
+            const kind = button.dataset.foodTicketKind || activeFoodTicketKind;
+            const action = button.dataset.foodTicketAction;
+            if (action === "print") {
+                const frame = button.dataset.foodTicketKind
+                    ? document.getElementById(kind === "kitchen" ? "foodKitchenTicketFrame" : "foodGuestTicketFrame")
+                    : document.getElementById("foodTicketFrame");
+                void printFoodTicketFromModal(kind, frame, button);
+            } else if (action === "save" || action === "share") {
+                void exportFoodTicket(kind, action, button);
+            }
+        });
         document.addEventListener("keydown", event => {
             if (event.key === "Escape") { setFoodDetails(false); closeFoodTicket(); setExternalModal(false); }
         });
