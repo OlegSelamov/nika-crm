@@ -3985,9 +3985,12 @@ def retail_cart_draft_detail(draft_id):
             conn.commit()
             return jsonify({"success": True, "deleted": bool(found)})
         cur.execute("""
-            SELECT id,title,client_id,cart,is_auto,updated_at
-            FROM retail_cart_drafts
-            WHERE id=%s AND company_id=%s AND user_id=%s
+            SELECT d.id,d.title,d.client_id,d.cart,d.is_auto,d.updated_at,
+                   COALESCE(NULLIF(TRIM(c.company_name), ''), c.full_name, '') AS client_name
+            FROM retail_cart_drafts d
+            LEFT JOIN clients c ON c.id=d.client_id AND c.company_id=d.company_id
+              AND COALESCE(c.is_deleted,FALSE)=FALSE
+            WHERE d.id=%s AND d.company_id=%s AND d.user_id=%s
         """, (draft_id,company_id,user_id))
         row=cur.fetchone()
         if not row:
