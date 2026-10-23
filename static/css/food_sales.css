@@ -1072,3 +1072,102 @@ body.food-modifier-open { overflow: hidden !important; }
         padding: 10px 12px;
     }
 }
+
+
+/* Guest/kitchen receipts: shared full-screen browser preview with individual
+   Print / Save / Share actions. Retail document dialogs remain untouched. */
+.food-ticket-dialog.is-dual { width: min(980px, 100%); height: min(780px, 94dvh); }
+.food-ticket-single {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+}
+.food-ticket-single > iframe {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    border: 0;
+    background: #fff;
+}
+.food-ticket-pair {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px;
+    overflow: auto;
+    background: #f5f6fc;
+}
+.food-ticket-card {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #e3e7f0;
+    border-radius: 12px;
+    background: #fff;
+}
+.food-ticket-card h3 {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 11px 12px;
+    font-size: 14px;
+    color: #1f2937;
+    border-bottom: 1px solid #edf0f5;
+}
+.food-ticket-card iframe {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    border: 0;
+    background: #fff;
+}
+.food-ticket-dialog .food-ticket-footer {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #fff;
+}
+.food-ticket-dialog .food-ticket-footer button {
+    flex: 1 1 auto;
+    min-width: 92px;
+    margin: 0;
+    padding: 10px 8px;
+    font-size: 12px;
+}
+.food-ticket-dialog .food-ticket-footer button:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 768px) {
+    body > #foodTicketModal {
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100dvh !important;
+        align-items: stretch !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
+    }
+    body > #foodTicketModal .food-ticket-dialog {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: none !important;
+        border-radius: 0 !important;
+    }
+    body > #foodTicketModal .food-ticket-pair {
+        grid-template-columns: minmax(0, 1fr);
+        align-content: start;
+        gap: 10px;
+        padding: 10px;
+        -webkit-overflow-scrolling: touch;
+    }
+    body > #foodTicketModal .food-ticket-card {
+        min-height: 52dvh;
+        height: 52dvh;
+    }
+    body > #foodTicketModal .food-ticket-footer {
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+}
