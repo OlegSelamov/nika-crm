@@ -9,6 +9,7 @@
     let autoTimer = null, pendingWrite = Promise.resolve();
     let currentManualId = null, knownDrafts = [];
     let serverAvailable = false;
+    let noticeTimer = null;
 
     const el = id => document.getElementById(id);
     const active = () => window.NIKA_BUSINESS_MODE !== "foodservice" &&
@@ -31,8 +32,16 @@
     const notice = (message, bad = false) => {
         const node = el("retailDraftStatus");
         if (!node) return;
+        clearTimeout(noticeTimer);
         node.textContent = message;
         node.classList.toggle("is-error", bad);
+        node.classList.toggle("is-visible", Boolean(message));
+        noticeTimer = setTimeout(() => {
+            node.classList.remove("is-visible");
+            // Keep ARIA output brief and avoid an invisible message that can
+            // unexpectedly be read again by assistive technologies.
+            node.textContent = "";
+        }, bad ? 6500 : 4000);
     };
     const jsonRequest = async (url, opts) => {
         const response = await fetch(url, {credentials:"same-origin", ...(opts || {})});
@@ -101,10 +110,6 @@
         const data = await jsonRequest(api);
         serverAvailable = true;
         knownDrafts = data.drafts || [];
-        if (el("retailDraftCount")) {
-            const count = knownDrafts.filter(d => !d.is_auto).length;
-            el("retailDraftCount").textContent = count ? "· " + count : "";
-        }
         renderDraftList();
         return knownDrafts;
     }
@@ -237,11 +242,6 @@
             };
         }
         el("retailSaveCart")?.addEventListener("click", () => void saveManually());
-        el("retailOpenDrafts")?.addEventListener("click", () => {
-            if (!active()) return;
-            switchSalesTab("history");
-            void listDrafts().catch(error => notice(error.message, true));
-        });
         el("retailDraftRefresh")?.addEventListener("click", () =>
             void listDrafts().catch(error => notice(error.message, true)));
         const local = localRead();
