@@ -307,6 +307,10 @@
         pendingModifierGroups = groups;
         pendingRecipeIngredients = ingredients;
         const modal = document.getElementById('foodModifierModal');
+        // Escape the sales-grid stacking context: the checkout is mounted
+        // directly under body on phones and otherwise covers this dialog.
+        if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+        document.body.classList.add('food-modifier-open');
         const root = document.getElementById('foodModifierGroups');
         document.getElementById('foodModifierTitle').textContent = item.name || 'Блюдо';
         root.innerHTML = '';
@@ -364,7 +368,7 @@
     function escapeFood(v){const d=document.createElement('div');d.textContent=String(v||'');return d.innerHTML;}
     function selectedFoodModifiers(){const selected=[];document.querySelectorAll('#foodModifierGroups input:checked').forEach(input=>{const g=pendingModifierGroups.find(x=>String(x.id)===String(input.dataset.groupId));const o=g?.options?.find(x=>String(x.id)===String(input.value));if(o)selected.push(o)});return selected}
     function renderFoodModifierTotal(){const extra=selectedFoodModifiers().reduce((s,o)=>s+Number(o.price_delta||0),0);const total=Number(pendingModifierItem?.retail_price||0)+extra;const n=document.getElementById('foodModifierTotal');if(n)n.textContent=money(total)}
-    function closeFoodModifierModal(){const m=document.getElementById('foodModifierModal');if(m)m.hidden=true;pendingModifierItem=null;pendingModifierGroups=[];pendingRecipeIngredients=[]}
+    function closeFoodModifierModal(){const m=document.getElementById('foodModifierModal');if(m)m.hidden=true;document.body.classList.remove('food-modifier-open');pendingModifierItem=null;pendingModifierGroups=[];pendingRecipeIngredients=[]}
     function confirmFoodModifiers(){
         if(!pendingModifierItem)return;
         for(const group of pendingModifierGroups){const count=document.querySelectorAll('#foodModifierGroups input[data-group-id="'+group.id+'"]:checked').length;if(count<Number(group.min_select||0)){alert('Выберите: '+group.name);return}}
