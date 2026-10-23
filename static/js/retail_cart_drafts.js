@@ -145,7 +145,7 @@
     }
     async function resumeDraft(id, button) {
         if (!active()) return;
-        if (getCart().length && !window.confirm("Заменить текущую корзину сохранённой? Текущий состав будет автосохранён до замены.")) return;
+        if (getCart().length && !window.confirm("Заменить текущую корзину? Если её нужно сохранить отдельно, сначала нажмите «Сохранить корзину».")) return;
         button.disabled = true;
         try {
             const data = await jsonRequest(api + "/" + encodeURIComponent(id));
@@ -192,7 +192,7 @@
     async function repeatSale(id, button) {
         if (!active()) return;
         if (getCart().length &&
-            !window.confirm("Заменить текущую корзину позициями прошлой продажи?")) return;
+            !window.confirm("Заменить текущую корзину? Сначала сохраните её, если хотите вернуться к ней позже.")) return;
         if (button) button.disabled = true;
         try {
             const result = await jsonRequest("/api/sales/" + encodeURIComponent(id) + "/repeat-cart");
@@ -264,7 +264,10 @@
             notice("Сервер временно недоступен. Корзина хранится на устройстве.", true);
         }
         ready = true;
-        if (getCart().length && active()) schedule();
+        if (getCart().length && active()) {
+            notice("Предыдущая корзина восстановлена. Проверьте товары и клиента.");
+            schedule();
+        }
     }
     window.addEventListener("nika:sale-completed", () => {
         if (!active()) return;
