@@ -94,7 +94,7 @@
             foodPage = 0;
             foodHasMore = false;
             const grid = document.getElementById("foodMenuGrid");
-            if (grid) grid.scrollTop = 0;
+            if (grid) { grid.scrollTop = 0; grid.scrollLeft = 0; }
         }
         if (foodLoading || (foodLoaded && !reset)) return;
         if (!foodPage) loadFoodCategories();
