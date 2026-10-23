@@ -348,3 +348,25 @@ body.nika-embedded-page {
         padding:14px 10px 96px;
     }
 }
+
+
+/* Mobile app shell: the iframe must fit INSIDE .content's real padded
+   visual viewport. Previous 100dvh-24px iframe height exceeded the space
+   below the 70px mobile toolbar, clipping the bottom of fixed checkout
+   and fullscreen dialogs by roughly the missing toolbar height. */
+@media (max-width: 768px) {
+    body.nika-app-shell {
+        height: 100dvh;
+    }
+    body.nika-app-shell .content {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100dvh;
+    }
+    body.nika-app-shell .nika-frame-wrap {
+        flex: 1 1 auto;
+        height: auto !important;
+        min-height: 0;
+    }
+}
