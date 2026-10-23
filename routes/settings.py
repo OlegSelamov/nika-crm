@@ -11,6 +11,7 @@ from datetime import date, timedelta
 
 from flask import Blueprint, jsonify, render_template, request, session, redirect
 from models import get_db, pool
+from subscriptions import has_module
 from services.alatau_client import AlatauClient, AlatauError, AlatauSecretCipher
 
 # Imported for startup side effects: installs stock quantity sync, duplicate
@@ -27,12 +28,14 @@ def _alatau_current_company():
     company_id = session.get("company_id")
     if not company_id:
         return None, (jsonify({"success": False, "error": "Организация не выбрана"}), 403)
-    if not (
-        session.get("is_super_admin")
-        or session.get("role") in ("owner", "admin", "creator")
-        or "banks" in session.get("employee_modules", [])
-    ):
-        return None, (jsonify({"success": False, "error": "Нет доступа к модулю «Мои Банки»"}), 403)
+    if not session.get("is_super_admin"):
+        if not has_module(company_id, "banks"):
+            return None, (jsonify({"success": False, "error": "Модуль «Мои Банки» не подключён в подписке"}), 403)
+        if not (
+            session.get("role") in ("owner", "admin", "creator")
+            or "banks" in session.get("employee_modules", [])
+        ):
+            return None, (jsonify({"success": False, "error": "Нет доступа к модулю «Мои Банки»"}), 403)
     return company_id, None
 
 
