@@ -2610,10 +2610,11 @@ function renderSalesReceipt(item) {
             <div class="sales-receipt-meta">
                 <strong>${escapeHtml(amount)}</strong>
                 <span>${escapeHtml(item.created_at_display || salesShiftDate(item.event_at || item.created_at))}</span>
+                <span class="sale-status-badge ${getSaleStatusClass(salesDocumentStatus(item))}">${escapeHtml(salesDocumentStatus(item))}</span>
             </div>
             <div class="sales-receipt-actions">
                 <button type="button" class="sales-receipt-open" onclick="${action}">${actionLabel}</button>
-                ${!refund && Number.isFinite(id) ? `<button type="button" class="sales-receipt-repeat" onclick="retailRepeatSale(${id}, this)" title="Создать новую корзину из этой продажи">В корзину</button>` : ""}
+                ${!refund && Number.isFinite(id) ? `<button type="button" class="sales-receipt-repeat" onclick="retailRepeatSale(${id}, this)" title="Открыть товары этой продажи в новой корзине">Открыть корзину</button>` : ""}
                 ${canRefund ? `
                     <button type="button" class="sales-receipt-refund"
                             onclick="refundSale(${id}, this)">Возврат</button>
@@ -2885,7 +2886,7 @@ function salesDocumentActions(item) {
         </button>
     ` : "";
     const repeat = `<button type="button" class="sales-document-btn retail-repeat-btn"
-            onclick="retailRepeatSale(${id}, this)" title="Создать новую корзину по этой продаже">В корзину</button>`;
+            onclick="retailRepeatSale(${id}, this)" title="Открыть товары этой продажи в новой корзине">Открыть корзину</button>`;
     return `${primary}${repeat}${center}`;
 }
 
@@ -2978,7 +2979,15 @@ window.resumeSalesDocumentCenter = resumeSalesDocumentCenter;
 function salesDocumentStatus(item) {
     if (item.event_type === "refund" || item.is_refunded === true) return "Возврат";
     if (item.sale_refunded) return "Возвращён";
-    return item.status || "Продажа";
+    const source = String(item.status || "").trim();
+    if (source.toLowerCase() === "оплачено") return "Оплачено";
+    // An issued but unpaid invoice is still a draft of payment, not a
+    // completed transaction. Never mark it paid based on the receipt button.
+    if (item.sale_type === "invoice" &&
+        (!source || ["счёт выставлен", "ожидает оплаты", "не оплачен"].includes(source.toLowerCase()))) {
+        return "Ожидает оплаты";
+    }
+    return source || "Продажа";
 }
 
 function salesDocumentOperationLabel(item) {
@@ -3213,7 +3222,7 @@ document.getElementById("salesShiftsMore")?.addEventListener("click", () => load
 
 function getSaleStatusClass(status) {
     if (status === "Оплачено") return "is-paid";
-    if (status === "Счёт выставлен") return "is-pending";
+    if (status === "Счёт выставлен" || status === "Ожидает оплаты") return "is-pending";
     if (status === "Возврат" || status === "Возвращён") return "is-refunded";
     return "is-neutral";
 }
