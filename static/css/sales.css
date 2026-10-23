@@ -4799,3 +4799,86 @@ body.food-sales-mode .sales-commandbar .sales-mode-switch button {
         padding-bottom: var(--nika-mobile-payment-space, 340px) !important;
     }
 }
+
+
+/* Unpaid retail cart drafts. Keep the separate restaurant order journal intact. */
+.retail-draft-toolbar {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:9px;
+    padding:10px 12px;
+    margin:6px 0 9px;
+    border:1px solid #e4e8f2;
+    border-radius:13px;
+    background:#fff;
+}
+.retail-draft-toolbar button, .retail-draft-row button,
+.retail-draft-history__head button {
+    min-height:37px;
+    padding:8px 12px;
+    font:inherit;
+    font-size:12px;
+    font-weight:800;
+    border-radius:9px;
+    border:1px solid #d9def2;
+    cursor:pointer;
+    background:#f4f3ff;
+    color:#4338ca;
+}
+.retail-draft-toolbar .retail-draft-save {
+    color:#fff;
+    border-color:#5b50dd;
+    background:linear-gradient(135deg,#5148e8,#7464f3);
+}
+.retail-draft-toolbar button:disabled,
+.retail-draft-row button:disabled {opacity:.5;cursor:wait}
+#retailDraftStatus {min-width:0; flex:1 1 165px; font-size:11px; color:#64748b}
+#retailDraftStatus.is-error {color:#b45309}
+.retail-draft-history {
+    margin:10px 10px 14px;
+    padding:13px;
+    border:1px solid #e0e6f2;
+    border-radius:14px;
+    background:#fcfcff;
+}
+.retail-draft-history__head {display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px}
+.retail-draft-history__head strong,
+.retail-draft-history__head small {display:block}
+.retail-draft-history__head strong {font-size:14px; color:#1f2937}
+.retail-draft-history__head small {margin-top:4px; font-size:11px; color:#64748b}
+.retail-draft-list {display:grid; gap:7px; color:#64748b; font-size:12px}
+.retail-draft-row {
+    display:flex; align-items:center; justify-content:space-between; gap:9px;
+    padding:10px; border:1px solid #e3e7f0; border-radius:11px; background:#fff;
+}
+.retail-draft-row strong,.retail-draft-row small {display:block}
+.retail-draft-row strong {font-size:12px;color:#1f2937;word-break:break-word}
+.retail-draft-row small {margin-top:4px;font-size:10px;color:#64748b}
+.retail-draft-row__actions {display:flex; flex:0 0 auto; flex-wrap:wrap; gap:6px}
+.retail-draft-row button.retail-draft-delete {color:#b91c1c;background:#fff5f5;border-color:#fecaca}
+.sales-receipt-actions {flex-wrap:wrap}
+.sales-receipt-repeat,
+.sales-document-actions .retail-repeat-btn {
+    min-height:34px;
+    padding:7px 9px;
+    border:1px solid #c7d2fe;
+    border-radius:9px;
+    background:#eef2ff;
+    color:#4338ca;
+    font:inherit;
+    font-size:10px;
+    font-weight:800;
+    cursor:pointer;
+}
+.sales-receipt-repeat:hover,
+.sales-document-actions .retail-repeat-btn:hover {background:#e0e7ff}
+body.food-sales-mode .retail-draft-toolbar {display:none!important}
+@media (max-width:768px) {
+    .retail-draft-toolbar {padding:8px;gap:6px}
+    .retail-draft-toolbar button {flex:1 1 auto;min-width:0;padding:9px 7px}
+    #retailDraftStatus {flex-basis:100%}
+    .retail-draft-history {margin:8px 3px 12px;padding:10px}
+    .retail-draft-row {align-items:stretch;flex-direction:column}
+    .retail-draft-row__actions button {flex:1}
+}
