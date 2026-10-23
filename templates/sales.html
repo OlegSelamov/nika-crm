@@ -261,12 +261,38 @@
         <div id="foodOrderHistoryList" class="food-order-history-list"></div>
         <button type="button" id="foodOrderHistoryMore" hidden>Показать ещё</button>
     </section>
-    <div id="foodTicketModal" class="food-shell-modal" hidden role="dialog" aria-modal="true" aria-label="Просмотр чека">
+    <div id="foodTicketModal" class="food-shell-modal" hidden role="dialog" aria-modal="true" aria-label="Просмотр чеков">
         <div class="food-shell-backdrop" data-food-ticket-close></div>
         <div class="food-shell-dialog food-ticket-dialog">
-            <div class="food-shell-head"><strong id="foodTicketHeading">Просмотр чека</strong><button type="button" data-food-ticket-close aria-label="Закрыть">×</button></div>
-            <iframe id="foodTicketFrame" title="Предварительный просмотр чека"></iframe>
-            <div class="food-ticket-footer"><button type="button" id="foodTicketPrint">Печать</button></div>
+            <div class="food-shell-head"><strong id="foodTicketHeading">Просмотр чеков</strong><button type="button" data-food-ticket-close aria-label="Закрыть">×</button></div>
+            <div id="foodTicketSingle" class="food-ticket-single">
+                <iframe id="foodTicketFrame" title="Предварительный просмотр чека"></iframe>
+                <div class="food-ticket-footer">
+                    <button type="button" id="foodTicketPrint" data-food-ticket-action="print">Печать</button>
+                    <button type="button" data-food-ticket-action="save">Сохранить</button>
+                    <button type="button" data-food-ticket-action="share">Поделиться</button>
+                </div>
+            </div>
+            <div id="foodTicketPair" class="food-ticket-pair" hidden>
+                <section class="food-ticket-card">
+                    <h3>Чек гостю</h3>
+                    <iframe id="foodGuestTicketFrame" title="Пречек гостю"></iframe>
+                    <div class="food-ticket-footer">
+                        <button type="button" data-food-ticket-action="print" data-food-ticket-kind="precheck">Печать</button>
+                        <button type="button" data-food-ticket-action="save" data-food-ticket-kind="precheck">Сохранить</button>
+                        <button type="button" data-food-ticket-action="share" data-food-ticket-kind="precheck">Поделиться</button>
+                    </div>
+                </section>
+                <section class="food-ticket-card">
+                    <h3>Заказ на кухню</h3>
+                    <iframe id="foodKitchenTicketFrame" title="Заказ на кухню"></iframe>
+                    <div class="food-ticket-footer">
+                        <button type="button" data-food-ticket-action="print" data-food-ticket-kind="kitchen">Печать</button>
+                        <button type="button" data-food-ticket-action="save" data-food-ticket-kind="kitchen">Сохранить</button>
+                        <button type="button" data-food-ticket-action="share" data-food-ticket-kind="kitchen">Поделиться</button>
+                    </div>
+                </section>
+            </div>
         </div>
     </div>
     <div id="foodExternalModal" class="food-shell-modal" hidden role="dialog" aria-modal="true" aria-label="Чек внешней ККМ">
