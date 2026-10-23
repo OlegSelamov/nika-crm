@@ -902,3 +902,113 @@ body.food-sales-mode.food-checkout-orders #foodOrderSave { display:none !importa
     .food-history-actions { justify-content:flex-start; }
     .food-order-history-list .food-history-actions button { min-height:40px; }
 }
+
+
+/* Mobile food POS: swipe dishes sideways; the page itself scrolls to the cart.
+   Keeping the menu's vertical scroll trapped the order panel out of reach. */
+@media (max-width: 768px) {
+    body.food-sales-mode .sales-grid .food-side,
+    body.food-sales-mode .sales-grid .food-workspace {
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    body.food-sales-mode .sales-grid .food-menu-panel,
+    body.food-sales-mode .sales-grid .food-order-panel {
+        overflow: visible !important;
+        min-height: 0 !important;
+    }
+
+    body.food-sales-mode .food-menu-panel .food-menu-grid {
+        display: grid !important;
+        grid-template-columns: none !important;
+        grid-template-rows: minmax(190px, auto) !important;
+        grid-auto-columns: clamp(144px, 43vw, 182px);
+        grid-auto-flow: column !important;
+        align-content: start;
+        align-items: stretch;
+        width: 100%;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        gap: 9px;
+        padding: 5px 12px 13px !important;
+        box-sizing: border-box;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        overscroll-behavior-x: contain;
+        overscroll-behavior-y: auto;
+        touch-action: pan-x !important;
+        scroll-snap-type: x proximity;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
+    body.food-sales-mode .food-menu-panel .food-menu-card {
+        width: 100%;
+        height: auto;
+        min-height: 190px;
+        scroll-snap-align: start;
+    }
+
+    body.food-sales-mode .food-menu-panel .food-menu-empty,
+    body.food-sales-mode .food-menu-panel .food-menu-loading {
+        grid-column: auto;
+        min-width: calc(100vw - 90px);
+        min-height: 190px;
+    }
+
+    /* Cart quantity +/- and Remove now remain reachable by scrolling the page. */
+    body.food-sales-mode .food-order-panel .food-cart {
+        flex: 0 0 auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    /* Fit both staged checkout actions on-screen without hiding the second one. */
+    body.food-sales-mode.food-checkout-orders.sales-mobile-payment-mounted > .payment-box {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 10px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    body.food-sales-mode.food-checkout-orders > .payment-box > .total-title {
+        margin: 0;
+        font-size: 12px;
+    }
+    body.food-sales-mode.food-checkout-orders > .payment-box > .total-amount {
+        margin: 0;
+        font-size: 27px;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+    body.food-sales-mode.food-checkout-orders > .payment-box > .payment-methods {
+        grid-column: 1 / -1;
+        margin-top: 8px;
+    }
+    body.food-sales-mode.food-checkout-orders > .payment-box > .payment-actions {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-column: 1 / -1;
+        gap: 7px;
+        margin-top: 8px;
+    }
+    body.food-sales-mode.food-checkout-orders .payment-actions > .food-checkout-primary,
+    body.food-sales-mode.food-checkout-orders .payment-actions > .food-checkout-secondary {
+        min-width: 0 !important;
+        min-height: 51px !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 8px 6px !important;
+        font-size: 12px !important;
+        line-height: 1.2;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    body.food-sales-mode.food-checkout-orders .payment-actions > .food-print-status {
+        grid-column: 1 / -1;
+    }
+}
