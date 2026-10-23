@@ -5,6 +5,19 @@
     let originalParent = null;
     let originalNextSibling = null;
     let sidebarObserver = null;
+    let paymentResizeObserver = null;
+
+    function syncPaymentSpace() {
+        const salesPage = document.querySelector('.sales-page');
+        if (!salesPage) return;
+        if (!window.matchMedia(MOBILE_QUERY).matches || !paymentBox) {
+            salesPage.style.removeProperty('--nika-mobile-payment-space');
+            return;
+        }
+        // Reserve precisely the dock height so menu/cart can scroll behind it.
+        const height = Math.ceil(paymentBox.getBoundingClientRect().height);
+        salesPage.style.setProperty('--nika-mobile-payment-space', (height + 20) + 'px');
+    }
 
     function syncSidebarState() {
         const sidebar = document.querySelector('.sidebar');
@@ -39,6 +52,11 @@
                 document.body.appendChild(paymentBox);
             }
             document.body.classList.add('sales-mobile-payment-mounted');
+            if (!paymentResizeObserver && typeof ResizeObserver !== 'undefined') {
+                paymentResizeObserver = new ResizeObserver(syncPaymentSpace);
+                paymentResizeObserver.observe(paymentBox);
+            }
+            requestAnimationFrame(syncPaymentSpace);
             observeSidebar();
             syncSidebarState();
             return;
@@ -55,6 +73,7 @@
             }
         }
 
+        syncPaymentSpace();
         document.body.classList.remove('sales-mobile-payment-mounted', 'sales-mobile-menu-open');
     }
 
