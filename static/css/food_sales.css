@@ -940,7 +940,8 @@ body.food-sales-mode.food-checkout-orders #foodOrderSave { display:none !importa
         overflow-y: hidden !important;
         overscroll-behavior-x: contain;
         overscroll-behavior-y: auto;
-        touch-action: pan-x !important;
+        /* Permit normal vertical page swipes as well as horizontal dish swipes. */
+        touch-action: auto !important;
         scroll-snap-type: x proximity;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
