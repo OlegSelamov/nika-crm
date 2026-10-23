@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261024-retail-drafts-test-v1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261024-retail-save-icon-layout-test-v2') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261024-dual-food-tickets-test-v1') }}">
 {% endblock %}
 
@@ -38,9 +38,16 @@
             <button type="button" class="shift-strip-btn" id="shiftXReportBtn" disabled>X‑отчёт</button>
             <button type="button" class="shift-strip-btn" id="shiftHistoryBtn">История Z</button>
             <button type="button" class="shift-strip-btn shift-strip-btn-danger" id="shiftCloseBtn" disabled>Закрыть смену</button>
-            <button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" title="Обновить смену" aria-label="Обновить смену">↻</button>
+            <!-- Keep the legacy refresh hook for the shift logic without showing an unnecessary button. -->
+            <button type="button" class="shift-strip-refresh" id="shiftRefreshBtn" hidden tabindex="-1" aria-hidden="true">↻</button>
+            <button type="button" id="retailSaveCart" class="retail-save-cart-button"
+                    title="Сохранить корзину" aria-label="Сохранить корзину">
+                <img src="{{ url_for('static', filename='icons/save_cart_bookmark.png') }}?v=20261024-1"
+                     alt="" width="32" height="32" draggable="false">
+            </button>
         </div>
     </section>
+    <div id="retailDraftStatus" class="retail-draft-notice" role="status" aria-live="polite"></div>
 </div>
 
 <div class="sales-grid" id="salesGridWorkspace">
@@ -71,12 +78,6 @@
 
 		</div>
 
-
-        <div class="retail-draft-toolbar" id="retailDraftToolbar">
-            <button type="button" id="retailSaveCart" class="retail-draft-save">💾 Сохранить корзину</button>
-            <button type="button" id="retailOpenDrafts" class="retail-draft-open">Мои корзины <span id="retailDraftCount"></span></button>
-            <span id="retailDraftStatus" role="status" aria-live="polite"></span>
-        </div>
 
         <!-- КОРЗИНА -->
         <div class="cart-box">
@@ -890,10 +891,10 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261024-retail-drafts-test-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261024-retail-status-badges-test-v2') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20261024-dual-food-tickets-test-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261022-food-payment-stage-v6') }}"></script>
 
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20261023-mobile-checkout-dock-test-v1') }}"></script>
-<script src="{{ url_for('static', filename='js/retail_cart_drafts.js', v='20261024-retail-drafts-test-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/retail_cart_drafts.js', v='20261024-retail-save-icon-layout-test-v2') }}"></script>
 {% endblock %}
