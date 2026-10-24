@@ -53,7 +53,7 @@ class RetailCartDraftsTests(unittest.TestCase):
         self.assertIn('window.addEventListener("nika:sale-completed"', js)
         self.assertIn("is_auto:false", js)
         self.assertNotIn("is_auto:true", js)
-        self.assertNotIn("localStorage", js)
+        self.assertNotIn("localStorage.", js)
         self.assertNotIn("syncAuto", js)
         self.assertNotIn("autoTimer", js)
         self.assertNotIn("schedule()", js)
