@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261024-independent-retail-save-test-v3') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261024-save-only-v1') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261024-dual-food-tickets-test-v1') }}">
 {% endblock %}
 
@@ -45,8 +45,8 @@
     <!-- Independent of reKassa state/visibility: saved retail cart belongs to POS, not fiscal shift. -->
             <button type="button" id="retailSaveCart" class="retail-save-cart-button"
                     title="Сохранить корзину" aria-label="Сохранить корзину">
-                <img src="{{ url_for('static', filename='icons/save_cart_bookmark.png') }}?v=20261024-1"
-                     alt="" width="32" height="32" draggable="false">
+                <img src="{{ url_for('static', filename='icons/save_cart_simple.png') }}?v=20261024-save-only-v1"
+                     alt="" width="30" height="30" draggable="false">
             </button>
     <div id="retailDraftStatus" class="retail-draft-notice" role="status" aria-live="polite"></div>
 </div>

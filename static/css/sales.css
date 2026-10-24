@@ -4884,8 +4884,9 @@ body.food-sales-mode .retail-draft-toolbar {display:none!important}
 }
 
 
-/* Retail session action: Nika cart/bookmark icon in place of unnecessary
-   shift-refresh button. The hidden refresh DOM hook is kept for reKassa JS. */
+/* Independent save-only action: purple floppy-disk icon.
+   The browser title attribute supplies "Сохранить корзину" on hover.
+   Keep the reKassa refresh hook hidden without changing shift logic. */
 #shiftRefreshBtn[hidden] { display: none !important; }
 .sales-page .sales-commandbar .retail-save-cart-button {
     display: inline-flex;
@@ -4896,24 +4897,25 @@ body.food-sales-mode .retail-draft-toolbar {display:none!important}
     height: 36px;
     min-height: 36px;
     padding: 3px;
-    border: 1px solid #c9c5ff;
-    border-radius: 12px;
-    background: linear-gradient(150deg, #f7f6ff, #e9e7ff);
-    box-shadow: 0 3px 9px rgba(78, 63, 188, .13);
+    border: 1px solid #dedcf0;
+    border-radius: 11px;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(66, 56, 140, .07);
     cursor: pointer;
-    transition: border-color .15s, box-shadow .15s, transform .15s;
+    transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .15s ease;
 }
 .sales-page .sales-commandbar .retail-save-cart-button img {
     display: block;
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     object-fit: contain;
     pointer-events: none;
 }
 .sales-page .sales-commandbar .retail-save-cart-button:hover,
 .sales-page .sales-commandbar .retail-save-cart-button:focus-visible {
+    background: #f6f3ff;
     border-color: #8b76ee;
-    box-shadow: 0 4px 12px rgba(89, 61, 204, .22);
+    box-shadow: 0 4px 12px rgba(89, 61, 204, .17);
     outline-offset: 2px;
 }
 .sales-page .sales-commandbar .retail-save-cart-button:active { transform: scale(.96); }
@@ -5045,8 +5047,8 @@ body.food-sales-mode .sales-commandbar .retail-save-cart-button { display: none 
         z-index: 2;
     }
     .sales-page .sales-commandbar .retail-save-cart-button img {
-        width: 33px;
-        height: 33px;
+        width: 32px;
+        height: 32px;
     }
     .retail-draft-notice {
         right: 10px;

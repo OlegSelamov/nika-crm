@@ -71,7 +71,10 @@ class RetailCartDraftsTests(unittest.TestCase):
         template = self.read("templates/sales.html")
         style = self.read("static/css/sales.css")
         self.assertEqual(template.count('id="retailSaveCart"'), 1)
-        self.assertIn('icons/save_cart_bookmark.png', template)
+        self.assertIn('icons/save_cart_simple.png', template)
+        self.assertIn('title="Сохранить корзину" aria-label="Сохранить корзину"', template)
+        self.assertIn('.retail-save-cart-button:hover', style)
+        self.assertTrue((ROOT / "static/icons/save_cart_simple.png").is_file())
         self.assertIn('class="retail-save-cart-button"', template)
         shift_part = template.split('id="shiftStrip"', 1)[1].split('</section>', 1)[0]
         self.assertNotIn('id="retailSaveCart"', shift_part)
