@@ -19,6 +19,7 @@ on:
       - "templates/sales.html"
       - "tests/test_food_checkout_modes.py"
       - "tests/test_retail_cart_drafts.py"
+      - "tests/test_retail_manual_cart.js"
       - "tests/test_food_menu_cards.py"
       - "tests/test_food_dual_print.py"
       - "tests/test_food_ticket_layout.py"
@@ -62,6 +63,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_food_menu_cards.py -v
       - name: Run retail cart drafts and history regression checks
         run: python -m unittest discover -s tests -p test_retail_cart_drafts.py -v
+      - name: Run manual cart parking and new-sale behavioral checks
+        run: node tests/test_retail_manual_cart.js
       - name: Run dual receipt checkout checks
         run: python -m unittest discover -s tests -p test_food_dual_print.py -v
       - name: Render and validate receipt templates
