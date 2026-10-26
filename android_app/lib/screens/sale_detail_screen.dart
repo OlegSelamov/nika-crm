@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
 import '../services/sale_refund_confirmation.dart';
+import '../services/kaspi_pos_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import 'check_screen.dart';
@@ -57,9 +58,25 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
       final manualKaspi = await confirmSaleRefund(context, currentSale);
       if (!mounted || manualKaspi == null) return;
 
+      String? bankRefundId;
+      final posId = (currentSale['kaspi_transaction_id'] ?? '').toString().trim();
+      if (!manualKaspi &&
+          currentSale['sale_type'] == 'kaspi' && posId.isNotEmpty) {
+        // POS is a local device; the cloud VPS cannot access its LAN.
+        // Preserve bank confirmation on-device so a failed fiscal operation
+        // never sends a second bank refund on retry.
+        bankRefundId = await KaspiPosService.refundPayment(
+          saleId: widget.saleId,
+          transactionId: posId,
+          amount: asDouble(currentSale['total_amount']).round(),
+          method: (currentSale['kaspi_method'] ?? 'qr').toString(),
+        );
+      }
+
       final result = await ApiService.refundSale(
         widget.saleId,
         kaspiManualFiscalOnly: manualKaspi,
+        kaspiLocalRefundTransactionId: bankRefundId,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

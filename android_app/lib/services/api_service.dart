@@ -1061,13 +1061,21 @@ class ApiService {
   static Future<Map<String, dynamic>> refundSale(
     int saleId, {
     bool kaspiManualFiscalOnly = false,
+    String? kaspiLocalRefundTransactionId,
   }) async =>
       Map<String, dynamic>.from(await _request(
         'POST',
         '/sales/refund/$saleId',
-        // A manually tagged Kaspi receipt has no POS transaction to refund.
-        // Only an explicitly confirmed fiscal/stock reversal may set this flag.
-        body: kaspiManualFiscalOnly ? {'kaspi_manual_fiscal_only': true} : null,
+        // The bank refund is performed on the phone in the POS LAN.
+        // VPS only records/fiscalizes an already confirmed terminal refund.
+        body: kaspiManualFiscalOnly
+            ? {'kaspi_manual_fiscal_only': true}
+            : kaspiLocalRefundTransactionId != null
+                ? {
+                    'kaspi_refund_local': true,
+                    'kaspi_refund_transaction_id': kaspiLocalRefundTransactionId,
+                  }
+                : null,
         timeout: const Duration(seconds: 90),
       ));
 
