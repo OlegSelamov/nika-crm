@@ -577,6 +577,84 @@ class ApiService {
     );
   }
 
+  // Restaurant writes are online-only; never enqueue a potentially paid
+  // order/payment into the generic offline sales queue.
+  static Future<Map<String, dynamic>> foodConfiguration() async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/food/config'));
+
+  static Future<Map<String, dynamic>> foodMenu({
+    String query = '', String type = 'food_menu',
+    int page = 1, String category = '',
+  }) async => Map<String, dynamic>.from(await _request(
+        'GET', '/api/catalog/items',
+        query: {
+          'type': type, 'limit': '36', 'page': '$page',
+          if (query.trim().isNotEmpty) 'q': query.trim(),
+          if (category.isNotEmpty) 'category': category,
+        },
+      ));
+
+  static Future<Map<String, dynamic>> foodModifiers(int itemId) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET', '/api/items/$itemId/modifiers'));
+
+  static Future<Map<String, dynamic>> foodRecipe(int itemId) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET', '/api/items/$itemId/recipe'));
+
+  static Future<Map<String, dynamic>> foodOrders({
+    String status = 'all', int page = 1,
+  }) async => Map<String, dynamic>.from(await _request(
+        'GET', '/api/food/orders',
+        query: {'status': status, 'page': '$page'},
+      ));
+
+  static Future<Map<String, dynamic>> foodOrder(int id) async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/food/orders/$id'));
+
+  static Future<Map<String, dynamic>> saveFoodOrder(Map<String, dynamic> data) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/api/food/orders', body: data));
+
+  static Future<Map<String, dynamic>> cancelFoodOrder(int id) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/api/food/orders/$id', body: {'action': 'cancel'}));
+
+  static Future<Map<String, dynamic>> confirmExternalFoodPayment(
+    int id, String receipt,
+  ) async => Map<String, dynamic>.from(await _request(
+        'POST', '/api/food/orders/$id/external-payment',
+        body: {'receipt_number': receipt},
+      ));
+
+  static Future<Map<String, dynamic>> payFoodOrder({
+    required int foodOrderId,
+    required List<Map<String, dynamic>> cart,
+    required String method,
+    required String operationId,
+    int? clientId,
+    String? transactionId,
+    String? kaspiMethod,
+    double? cashReceived,
+  }) async => Map<String, dynamic>.from(await _request(
+        'POST', '/sales/pay',
+        timeout: const Duration(seconds: 65),
+        body: {
+          'food_mode': true,
+          'food_order_id': foodOrderId,
+          'operation_id': operationId,
+          'cart': cart,
+          'client_id': clientId,
+          'payment_method': method,
+          'kaspi_transaction_id': transactionId,
+          'kaspi_method': kaspiMethod,
+          if (cashReceived != null) 'cash_amount': cashReceived,
+        },
+      ));
+
+  static String foodTicketPdfPath(int id, String kind) =>
+      '/food/orders/$id/ticket-pdf/$kind';
+
   static Future<Map<String, dynamic>> createInvoiceSale({
     required List cart,
     int? clientId,

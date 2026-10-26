@@ -238,6 +238,27 @@ def verify_payment_order(cur, company_id, order_id, cart, payment_method=None):
     return order
 
 
+@food_orders_bp.route("/api/food/config")
+def food_configuration():
+    """Company-scoped config for the native food POS."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        company_id = _food_access(cur)
+        if company_id is None:
+            return jsonify({"success": False, "message": "Общепит не включён"}), 403
+        cur.execute("SELECT name,business_mode,food_checkout_mode FROM companies WHERE id=%s", (company_id,))
+        row = cur.fetchone()
+        return jsonify({
+            "success": True,
+            "business_mode": row["business_mode"],
+            "food_checkout_mode": row["food_checkout_mode"] or "fast",
+            "company_name": row["name"] or "",
+        })
+    finally:
+        pool.putconn(conn)
+
+
 @food_orders_bp.route("/api/food/orders", methods=["GET", "POST"])
 def food_orders():
     conn = get_db()

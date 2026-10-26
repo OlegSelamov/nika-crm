@@ -18,6 +18,7 @@ import 'check_screen.dart';
 import 'add_client_screen.dart';
 import 'scanner_screen.dart';
 import 'web_module_screen.dart';
+import 'food_service_screen.dart';
 
 class _MeasuredSaleInput {
   const _MeasuredSaleInput({
@@ -50,6 +51,7 @@ class SalesScreenState extends State<SalesScreen> {
   String paymentMethod = 'cash';
   bool paying = false;
   bool clientTouched = false;
+  bool foodEnabled = false;
   String? pendingVoicePaymentMethod;
   double? pendingVoicePaymentTotal;
   String? lastPaymentError;
@@ -119,12 +121,24 @@ class SalesScreenState extends State<SalesScreen> {
     SalesVoiceBridge.instance.attach(this, handleVoiceCommand);
     loadDefaultClient();
     _warmVoiceCatalog();
+    _checkFoodMode();
   }
 
   @override
   void dispose() {
     SalesVoiceBridge.instance.detach(this);
     super.dispose();
+  }
+
+  Future<void> _checkFoodMode() async {
+    try {
+      final info = await ApiService.foodConfiguration();
+      if (mounted && info['success'] == true) {
+        setState(() => foodEnabled = true);
+      }
+    } catch (_) {
+      // Retail organizations have no food access.
+    }
   }
 
   Future<void> loadDefaultClient() async {
@@ -1608,6 +1622,16 @@ class SalesScreenState extends State<SalesScreen> {
     final actions = Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
       child: Row(children: [
+        if (foodEnabled) ...[
+          FilledButton.tonalIcon(
+            onPressed: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const FoodServiceScreen()),
+            ),
+            icon: const Icon(Icons.restaurant_menu_rounded),
+            label: const Text('Общепит'),
+          ),
+          const SizedBox(width: 8),
+        ],
         Expanded(
           child: InkWell(
             onTap: showManualAddDialog,
