@@ -22,6 +22,7 @@ import 'dashboard_screen.dart';
 import 'employees_screen.dart';
 import 'expenses_screen.dart';
 import 'food_service_screen.dart';
+import 'food_catalog_screen.dart';
 import 'items_screen.dart';
 import 'income_screen.dart';
 import 'login_screen.dart';
@@ -271,16 +272,16 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         page = const ClientsScreen();
         break;
       case '/items':
-        title = 'Товары и услуги';
-        page = const ItemsScreen();
+        title = foodBusiness ? 'Меню и каталог' : 'Товары и услуги';
+        page = foodBusiness ? const FoodCatalogScreen() : const ItemsScreen();
         break;
       case '/stock':
         title = 'Склад';
-        page = const StockScreen();
+        page = StockScreen(foodBusiness: foodBusiness);
         break;
       case '/stock/income':
-        title = 'Приход товара';
-        page = const IncomeScreen();
+        title = foodBusiness ? 'Приход ингредиентов и товаров' : 'Приход товара';
+        page = IncomeScreen(foodBusiness: foodBusiness);
         break;
       case '/stock/movements':
         title = 'Движение товара';
@@ -660,10 +661,10 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                       ),
                       child: Row(children: [
                         Expanded(child: _SalesNavButton(icon: Icons.inventory_2_outlined, label: 'Каталог', onTap: () {
-                          if (hasModule('catalog')) { openPage(const ModulePage(title: 'Каталог', child: ItemsScreen())); } else { _moduleDenied(); }
+                          if (hasModule('catalog')) { openPage(ModulePage(title: foodBusiness ? 'Меню и каталог' : 'Каталог', child: foodBusiness ? const FoodCatalogScreen() : const ItemsScreen())); } else { _moduleDenied(); }
                         })),
                         Expanded(child: _SalesNavButton(icon: Icons.warehouse_outlined, label: 'Склад', onTap: () {
-                          if (hasModule('warehouse')) { openPage(const ModulePage(title: 'Склад', child: StockScreen())); } else { _moduleDenied(); }
+                          if (hasModule('warehouse')) { openPage(ModulePage(title: 'Склад', child: StockScreen(foodBusiness: foodBusiness))); } else { _moduleDenied(); }
                         })),
                         Expanded(child: _SalesScannerNavButton(
                           onHoldStart: _startQuickScanner,
@@ -832,14 +833,14 @@ class _MoreScreen extends StatelessWidget {
       const _SectionData('analytics', 'Аналитика', 'Выручка и прибыль', Icons.query_stats_rounded, AppColors.primary, AnalyticsScreen()),
       _SectionData('catalog', foodBusiness ? 'Меню и каталог' : 'Каталог',
           foodBusiness ? 'Блюда, ингредиенты, цены' : 'Товары, услуги и цены',
-          Icons.inventory_2_outlined, AppColors.warning, const ItemsScreen()),
+          Icons.inventory_2_outlined, AppColors.warning, foodBusiness ? const FoodCatalogScreen() : const ItemsScreen()),
       const _SectionData('storefront', 'Онлайн-витрина', 'Заказы и бронирования', Icons.storefront_outlined, Color(0xFFDC6803), StorefrontScreen()),
       const _SectionData('tasks', 'Задачи', 'Команда и контроль сроков', Icons.task_alt_outlined, Color(0xFF4776E6), TasksScreen()),
       const _SectionData('cto', 'ККМ и ЦТО', 'Кассы и техническое обслуживание', Icons.developer_board_outlined, Color(0xFF475467), CtoScreen()),
       const _SectionData('accounting', 'Бухгалтерия', 'Налоги, долги и документы', Icons.account_balance_outlined, Color(0xFF6941C6), AccountingScreen()),
       const _SectionData('reports', 'Отчёты', 'Отчёты и Excel', Icons.summarize_outlined, Color(0xFF8A54D1), ReportsScreen()),
       const _SectionData('expenses', 'Расходы', 'Затраты и категории', Icons.payments_outlined, AppColors.danger, ExpensesScreen()),
-      const _SectionData('warehouse', 'Склад', 'Остатки и движения', Icons.warehouse_outlined, AppColors.success, StockScreen()),
+      _SectionData('warehouse', 'Склад', foodBusiness ? 'Ингредиенты, товары и производство' : 'Остатки и движения', Icons.warehouse_outlined, AppColors.success, StockScreen(foodBusiness: foodBusiness)),
       const _SectionData('clients', 'Клиенты', 'CRM и история покупок', Icons.people_alt_outlined, AppColors.cyan, ClientsScreen()),
       const _SectionData('school', 'Школа', 'Классные руководители и питание', Icons.school_outlined, Color(0xFF6941C6), SchoolScreen()),
       const _SectionData('settings', 'Настройки', 'Настройки компании и интеграций', Icons.settings_outlined, AppColors.muted, SettingsScreen()),
@@ -983,7 +984,7 @@ class _AppDrawer extends StatelessWidget {
                   if (hasModule('sales')) _drawerItem(Icons.history_outlined, foodBusiness ? 'История заказов' : 'История', () => openCore(2), active: selectedIndex == 2),
                   if (!foodBusiness) _drawerItem(Icons.cloud_upload_outlined, 'Очередь синхронизации', () { Navigator.pop(context); openPage(const ModulePage(title: 'Очередь синхронизации', child: OfflineQueueScreen())); }),
                   if (hasModule('analytics')) _drawerItem(Icons.query_stats_rounded, 'Аналитика', () { Navigator.pop(context); openPage(const ModulePage(title: 'Аналитика', child: AnalyticsScreen())); }),
-                  if (hasModule('catalog')) _drawerItem(Icons.inventory_2_outlined, foodBusiness ? 'Меню и каталог' : 'Каталог', () { Navigator.pop(context); openPage(const ModulePage(title: 'Каталог', child: ItemsScreen())); }),
+                  if (hasModule('catalog')) _drawerItem(Icons.inventory_2_outlined, foodBusiness ? 'Меню и каталог' : 'Каталог', () { Navigator.pop(context); openPage(ModulePage(title: foodBusiness ? 'Меню и каталог' : 'Каталог', child: foodBusiness ? const FoodCatalogScreen() : const ItemsScreen())); }),
                   if (hasModule('storefront')) _drawerItem(Icons.storefront_outlined, 'Онлайн-витрина', () { Navigator.pop(context); openPage(const ModulePage(title: 'Онлайн-витрина', child: StorefrontScreen())); }),
                   if (hasModule('tasks')) _drawerItem(Icons.task_alt_outlined, 'Задачи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Задачи', child: TasksScreen())); }),
                   if (hasModule('cto')) _drawerItem(Icons.developer_board_outlined, 'ККМ и ЦТО', () { Navigator.pop(context); openPage(const ModulePage(title: 'ККМ и ЦТО', child: CtoScreen())); }),
@@ -991,7 +992,7 @@ class _AppDrawer extends StatelessWidget {
                   if (hasModule('reports')) _drawerItem(Icons.summarize_outlined, 'Отчёты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Отчёты', child: ReportsScreen())); }),
                   if (hasModule('expenses')) _drawerItem(Icons.payments_outlined, 'Расходы', () { Navigator.pop(context); openPage(const ModulePage(title: 'Расходы', child: ExpensesScreen())); }),
                   if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const ModulePage(title: 'Школа', child: SchoolScreen())); }),
-                  if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(const ModulePage(title: 'Склад', child: StockScreen())); }),
+                  if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(ModulePage(title: 'Склад', child: StockScreen(foodBusiness: foodBusiness))); }),
                   if (hasModule('clients')) _drawerItem(Icons.people_alt_outlined, 'Клиенты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Клиенты', child: ClientsScreen())); }),
                   if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.account_balance_wallet_outlined, 'Мои банки', () { Navigator.pop(context); openPage(const ModulePage(title: 'Мои банки', child: BanksScreen())); }),
                   if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.badge_outlined, 'Пользователи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Пользователи', child: EmployeesScreen())); }),
