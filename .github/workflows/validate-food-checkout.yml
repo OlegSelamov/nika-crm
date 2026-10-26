@@ -13,6 +13,7 @@ on:
       - "routes/rekassa_comrun.py"
       - "static/js/food_sales.js"
       - "static/js/sales.js"
+      - "static/js/sales_payment_touch.js"
       - "static/js/retail_cart_drafts.js"
       - "static/css/food_sales.css"
       - "templates/profile.html"
@@ -27,6 +28,7 @@ on:
       - "tests/test_food_payment_print.js"
       - "tests/test_food_order_cancel.js"
       - "tests/test_food_modifier_tabs.js"
+      - "tests/test_payment_touch_first_tap.js"
       - "templates/food_order_ticket.html"
       - ".github/workflows/validate-food-checkout.yml"
   workflow_dispatch:
@@ -57,6 +59,7 @@ jobs:
         run: |
           node --check static/js/food_sales.js
           node --check static/js/sales.js
+          node --check static/js/sales_payment_touch.js
           node --check static/js/retail_cart_drafts.js
       - name: Verify website preview and Electron receipt gate by payment method
         run: node tests/test_food_payment_print.js
@@ -64,6 +67,8 @@ jobs:
         run: node tests/test_food_order_cancel.js
       - name: Verify food modifier tab behavior
         run: node tests/test_food_modifier_tabs.js
+      - name: Verify first-tap payment choice does not open touch keyboard
+        run: node tests/test_payment_touch_first_tap.js
       - name: Run food checkout regression checks
         run: python -m unittest discover -s tests -p test_food_checkout_modes.py -v
       - name: Run food menu visual and scroll regression checks

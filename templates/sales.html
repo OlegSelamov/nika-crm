@@ -354,9 +354,9 @@
 
 			<div class="payment-methods">
 
-				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cardInput').value=''; document.getElementById('kaspiInput').value=''; fillPayment('cash')">
-				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cashInput').value=''; document.getElementById('kaspiInput').value=''; fillPayment('card')">
-				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cashInput').value=''; document.getElementById('cardInput').value=''; fillPayment('kaspi')">
+				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" autocomplete="off" data-payment-kind="cash">
+				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" autocomplete="off" data-payment-kind="card">
+				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" autocomplete="off" data-payment-kind="kaspi">
 
 			</div>
 
@@ -903,6 +903,7 @@
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
 <script src="{{ url_for('static', filename='js/sales.js', v='20261026-food-paid-refund-test-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales_payment_touch.js', v='20261026-double-tap-payment-test-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/food_sales.js', v='20261026-food-modifier-tabs-test-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261022-food-payment-stage-v6') }}"></script>
 
