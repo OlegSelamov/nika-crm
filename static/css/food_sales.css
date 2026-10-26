@@ -766,6 +766,72 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 .food-orders-workspace #foodOrderHistoryMore[hidden] { display:none!important; }
 @media(max-width:700px) { .food-shell-modal { padding:8px; } .food-history-top { align-items:stretch; flex-direction:column; } .sales-page .food-orders-workspace { padding:12px; } }
 
+/* Food dish settings: separate add-ons from recipe exclusions, on desktop and mobile. */
+.food-modifier-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    flex: 0 0 auto;
+    padding: 12px 20px 0;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+}
+.food-modifier-tab {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 46px;
+    padding: 9px 12px;
+    border: 1px solid transparent;
+    border-bottom: 3px solid transparent;
+    border-radius: 10px 10px 0 0;
+    background: #f8fafc;
+    color: #475569;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+.food-modifier-tab:hover { background: #f1f5f9; }
+.food-modifier-tab:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
+.food-modifier-tab[aria-selected="true"] {
+    color: #3730a3;
+    background: #eef2ff;
+    border-color: #c7d2fe;
+    border-bottom-color: #6366f1;
+}
+.food-modifier-tab[data-food-modifier-tab="remove"][aria-selected="true"] {
+    color: #9a3412;
+    background: #fff7ed;
+    border-color: #fed7aa;
+    border-bottom-color: #ea580c;
+}
+.food-modifier-tab-count {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #e0e7ff;
+    color: #3730a3;
+    font-size: 11px;
+}
+.food-modifier-tab[data-food-modifier-tab="remove"] .food-modifier-tab-count { background: #ffedd5; color: #9a3412; }
+.food-modifier-groups { flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
+.food-modifier-pane-help { margin: 0 0 14px; color: #64748b; font-size: 13px; line-height: 1.5; }
+.food-modifier-remove-help { color: #9a3412; }
+.food-modifier-pane-empty { padding: 18px; border: 1px dashed #cbd5e1; border-radius: 12px; text-align: center; color: #64748b; font-size: 13px; line-height: 1.5; }
+@media (max-width: 768px) {
+    body > #foodModifierModal .food-modifier-tabs {
+        flex: 0 0 auto;
+        padding: 10px 12px 0;
+    }
+    body > #foodModifierModal .food-modifier-tab { min-height: 48px; font-size: 14px; padding: 9px 6px; }
+}
 /* Per-dish exclusions are kitchen instructions, never extra charges. */
 .food-exclusions-group { padding:12px; background:#fff8f0; border:1px solid #fed7aa; border-radius:12px; }
 .food-exclusions-group .food-modifier-group-title { flex-wrap:wrap; }
