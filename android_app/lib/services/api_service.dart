@@ -648,7 +648,7 @@ class ApiService {
           'payment_method': method,
           'kaspi_transaction_id': transactionId,
           'kaspi_method': kaspiMethod,
-          if (cashReceived != null) 'cash_amount': cashReceived,
+          if (cashReceived != null) 'cash_received': cashReceived,
         },
       ));
 
