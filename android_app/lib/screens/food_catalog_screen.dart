@@ -498,6 +498,18 @@ class _FoodCatalogEditorState extends State<_FoodCatalogEditor> {
             icon: const Icon(Icons.photo_library_outlined)),
           onTap: pickPhoto,
         )),
+        if (kind == 'dish' && savedId != null)
+          OutlinedButton.icon(
+            onPressed: loading || saving ? null : () async {
+              await showModalBottomSheet<void>(
+                context: context, showDragHandle: true, useSafeArea: true,
+                isScrollControlled: true,
+                builder: (_) => FractionallySizedBox(heightFactor: .96,
+                  child: _FoodModifiersEditor(itemId: savedId!)),
+              );
+            },
+            icon: const Icon(Icons.tune), label: const Text('Модификаторы блюда'),
+          ),
         if (hasRecipe) ...[
           const Divider(height: 30),
           Text('Технологическая карта',
@@ -538,6 +550,270 @@ class _FoodCatalogEditorState extends State<_FoodCatalogEditor> {
         onPressed: loading || saving ? null : save,
         icon: const Icon(Icons.save_outlined),
         label: Text(saving ? 'Сохраняем…' : 'Сохранить'),
+      )),
+    )),
+  ]);
+}
+
+
+/// Modifier groups saved through the same PUT endpoint as the website.
+class _FoodModifiersEditor extends StatefulWidget {
+  final int itemId;
+  const _FoodModifiersEditor({required this.itemId});
+
+  @override
+  State<_FoodModifiersEditor> createState() => _FoodModifiersEditorState();
+}
+
+class _FoodModifiersEditorState extends State<_FoodModifiersEditor> {
+  List<Map<String, dynamic>> groups = [];
+  List<Map<String, dynamic>> ingredientItems = [];
+  bool loading = true;
+  bool saving = false;
+  String? error;
+
+  @override
+  void initState() { super.initState(); load(); }
+
+  Future<void> load() async {
+    try {
+      final groupData = await ApiService.foodModifiers(widget.itemId);
+      final items = <Map<String, dynamic>>[];
+      for (final type in ['ingredient', 'semi_finished']) {
+        for (int page = 1; page <= 100; page++) {
+          final data = await ApiService.foodMenu(type: type, page: page);
+          items.addAll((data['items'] as List? ?? [])
+            .whereType<Map>().map((v) => Map<String, dynamic>.from(v)));
+          if (data['has_more'] != true) break;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        groups = (groupData['groups'] as List? ?? [])
+          .whereType<Map>().map((g) {
+            final copy = Map<String, dynamic>.from(g);
+            copy['options'] = (g['options'] as List? ?? [])
+              .whereType<Map>().map((o) => Map<String, dynamic>.from(o)).toList();
+            return copy;
+          }).toList();
+        ingredientItems = items;
+        loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { error = readableError(e); loading = false; });
+    }
+  }
+
+  Future<void> save() async {
+    if (saving) return;
+    setState(() { saving = true; error = null; });
+    try {
+      final payload = <Map<String, dynamic>>[];
+      for (final group in groups) {
+        final groupName = (group['name'] ?? '').toString().trim();
+        if (groupName.isEmpty) throw const ApiException('Укажите название группы');
+        final min = int.tryParse('${group['min_select'] ?? 0}') ?? 0;
+        final max = int.tryParse('${group['max_select'] ?? 1}') ?? 1;
+        if (min < 0 || max < 1 || max < min) {
+          throw const ApiException('Проверьте минимальное и максимальное количество');
+        }
+        final options = <Map<String, dynamic>>[];
+        for (final o in group['options'] as List? ?? []) {
+          final option = Map<String, dynamic>.from(o as Map);
+          final optionName = (option['name'] ?? '').toString().trim();
+          if (optionName.isEmpty) throw const ApiException('Укажите название модификатора');
+          final price = double.tryParse((option['price_delta'] ?? '0')
+            .toString().replaceAll(',', '.'));
+          if (price == null) throw const ApiException('Проверьте цену модификатора');
+          final qty = double.tryParse((option['ingredient_quantity'] ?? '0')
+            .toString().replaceAll(',', '.'));
+          if (qty == null || qty < 0) {
+            throw const ApiException('Некорректное количество ингредиента');
+          }
+          options.add({
+            'name': optionName,
+            'price_delta': price,
+            'ingredient_item_id': option['ingredient_item_id'],
+            'ingredient_quantity': qty,
+          });
+        }
+        payload.add({
+          'name': groupName, 'min_select': min, 'max_select': max,
+          'options': options,
+        });
+      }
+      final result = await ApiService.saveFoodModifiers(widget.itemId, payload);
+      if (result['success'] != true) {
+        throw ApiException((result['message'] ?? 'Не удалось сохранить').toString());
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) setState(() => error = readableError(e));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  void addGroup() => setState(() => groups.add({
+    'name': '', 'min_select': 0, 'max_select': 1,
+    'options': <Map<String, dynamic>>[],
+  }));
+
+  @override
+  Widget build(BuildContext context) => Column(children: [
+    Padding(padding: const EdgeInsets.fromLTRB(16, 4, 10, 10),
+      child: Row(children: [
+        Expanded(child: Text('Модификаторы',
+          style: Theme.of(context).textTheme.titleLarge)),
+        IconButton(icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context)),
+      ])),
+    if (loading) const LinearProgressIndicator(),
+    Expanded(child: ListView(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+      children: [
+        if (error != null) Padding(padding: const EdgeInsets.all(8),
+          child: Text(error!, style: const TextStyle(color: Colors.redAccent))),
+        const Padding(padding: EdgeInsets.all(8),
+          child: Text('Группы дополнений и исключений доступны при заказе блюда. '
+            'Если модификатор содержит ингредиент, его количество учитывается '
+            'при списании по техкарте.')),
+        for (int gi = 0; gi < groups.length; gi++)
+          Card(
+            key: ValueKey('g-$gi'),
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(children: [
+                Row(children: [
+                  Expanded(child: Text('Группа ${gi + 1}',
+                    style: Theme.of(context).textTheme.titleMedium)),
+                  IconButton(
+                    onPressed: () => setState(() => groups.removeAt(gi)),
+                    icon: const Icon(Icons.delete_outline)),
+                ]),
+                TextFormField(
+                  initialValue: (groups[gi]['name'] ?? '').toString(),
+                  decoration: const InputDecoration(labelText: 'Название группы'),
+                  onChanged: (v) => groups[gi]['name'] = v,
+                ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(child: TextFormField(
+                    initialValue: '${groups[gi]['min_select'] ?? 0}',
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Мин. выбор'),
+                    onChanged: (v) => groups[gi]['min_select'] = v,
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: TextFormField(
+                    initialValue: '${groups[gi]['max_select'] ?? 1}',
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Макс. выбор'),
+                    onChanged: (v) => groups[gi]['max_select'] = v,
+                  )),
+                ]),
+                const SizedBox(height: 10),
+                for (int oi = 0;
+                  oi < (groups[gi]['options'] as List).length; oi++)
+                  Builder(builder: (ctx) {
+                    final option = Map<String, dynamic>.from(
+                      (groups[gi]['options'] as List)[oi] as Map);
+                    final rawIng = option['ingredient_item_id'];
+                    final ingId = int.tryParse((rawIng ?? '').toString());
+                    return Card(
+                      key: ValueKey('o-$gi-$oi'),
+                      color: Theme.of(context).colorScheme.surfaceContainer,
+                      child: Padding(padding: const EdgeInsets.all(10),
+                        child: Column(children: [
+                          Row(children: [
+                            Expanded(child: Text('Вариант ${oi + 1}')),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline),
+                              onPressed: () => setState(() =>
+                                (groups[gi]['options'] as List).removeAt(oi)),
+                            ),
+                          ]),
+                          TextFormField(
+                            initialValue: (option['name'] ?? '').toString(),
+                            decoration: const InputDecoration(
+                              labelText: 'Название дополнения'),
+                            onChanged: (v) =>
+                              (groups[gi]['options'] as List)[oi]['name'] = v,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            initialValue: '${option['price_delta'] ?? 0}',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true, signed: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Изменение цены, ₸'),
+                            onChanged: (v) =>
+                              (groups[gi]['options'] as List)[oi]['price_delta'] = v,
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<int?>(
+                            value: ingId != null &&
+                                ingredientItems.any((i) =>
+                                  i['id'].toString() == ingId.toString())
+                              ? ingId : null,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Ингредиент (необязательно)'),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null, child: Text('Без ингредиента')),
+                              ...ingredientItems.map((i) => DropdownMenuItem<int?>(
+                                value: int.tryParse(i['id'].toString()),
+                                child: Text('${i['name']}', overflow: TextOverflow.ellipsis),
+                              )),
+                            ],
+                            onChanged: (v) => (groups[gi]['options'] as List)[oi]
+                              ['ingredient_item_id'] = v,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            initialValue:
+                              '${option['ingredient_quantity'] ?? 0}',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Норма ингредиента на порцию'),
+                            onChanged: (v) => (groups[gi]['options'] as List)[oi]
+                              ['ingredient_quantity'] = v,
+                          ),
+                        ]),
+                      ),
+                    );
+                  }),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() =>
+                    (groups[gi]['options'] as List).add(
+                      <String, dynamic>{
+                        'name': '', 'price_delta': 0,
+                        'ingredient_item_id': null,
+                        'ingredient_quantity': 0,
+                      })),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Добавить вариант'),
+                ),
+              ]),
+            ),
+          ),
+        OutlinedButton.icon(
+          onPressed: loading ? null : addGroup,
+          icon: const Icon(Icons.add_circle_outline),
+          label: const Text('Добавить группу модификаторов'),
+        ),
+      ],
+    )),
+    SafeArea(top: false, child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: SizedBox(width: double.infinity, child: FilledButton.icon(
+        onPressed: saving || loading ? null : save,
+        icon: const Icon(Icons.save),
+        label: Text(saving ? 'Сохранение…' : 'Сохранить модификаторы'),
       )),
     )),
   ]);

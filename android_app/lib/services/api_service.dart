@@ -682,6 +682,12 @@ class ApiService {
       Map<String, dynamic>.from(await _request(
         'GET', '/api/items/$itemId/modifiers'));
 
+  static Future<Map<String, dynamic>> saveFoodModifiers(
+    int itemId, List<Map<String, dynamic>> groups,
+  ) async => Map<String, dynamic>.from(await _request(
+    'PUT', '/api/items/$itemId/modifiers', body: {'groups': groups},
+  ));
+
   static Future<Map<String, dynamic>> foodRecipe(int itemId) async =>
       Map<String, dynamic>.from(await _request(
         'GET', '/api/items/$itemId/recipe'));
