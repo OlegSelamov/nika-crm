@@ -3521,16 +3521,33 @@ async function refundSale(id, button = null) {
         }
 
         if (sale.sale_type === "kaspi") {
-            const bridge = window.nikaDesktop && window.nikaDesktop.kaspiPos;
-
-            if (bridge && typeof bridge.refund === "function") {
-                if (button) button.textContent = "Возврат Kaspi…";
-
-                const refundTransactionId = await refundKaspiPosLocally(sale);
-                finalizeBody = {
-                    kaspi_refund_local: true,
-                    kaspi_refund_transaction_id: refundTransactionId
-                };
+            // A manually selected "Kaspi" tender does not have a terminal
+            // transactionId. This reverses ONLY the duplicate fiscal sale
+            // and restores stock; it never sends money via Kaspi POS.
+            const hasKaspiPosTransaction = Boolean(String(sale.kaspi_transaction_id || "").trim());
+            if (!hasKaspiPosTransaction) {
+                const warning = sale.rekassa_ticket_id
+                    ? "Это чек с ручной отметкой «Kaspi» — без transactionId терминала.\n\n" +
+                      "Оформим фискальный возврат reKassa и восстановим товар на складе.\n" +
+                      "ДЕНЬГИ через Kaspi НЕ возвращаются.\n\n" +
+                      "Продолжайте только если это ошибочный или дублирующий чек " +
+                      "и по этой продаже не нужно возвращать реальный банковский платёж. Продолжить?"
+                    : "У продажи с ручной оплатой Kaspi нет transactionId и чека reKassa.\n\n" +
+                      "Вернём товар на склад и отметим продажу как возвращённую.\n" +
+                      "Это НЕ банковский возврат и НЕ фискальный чек возврата.\n\n" +
+                      "Продолжайте только для ошибочной продажи без банковского платежа. Продолжить?";
+                if (!confirm(warning)) return;
+                finalizeBody = { kaspi_manual_fiscal_only: true };
+            } else {
+                const bridge = window.nikaDesktop && window.nikaDesktop.kaspiPos;
+                if (bridge && typeof bridge.refund === "function") {
+                    if (button) button.textContent = "Возврат Kaspi…";
+                    const refundTransactionId = await refundKaspiPosLocally(sale);
+                    finalizeBody = {
+                        kaspi_refund_local: true,
+                        kaspi_refund_transaction_id: refundTransactionId
+                    };
+                }
             }
         }
 

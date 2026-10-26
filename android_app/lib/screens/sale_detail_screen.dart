@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/sale_refund_confirmation.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import 'check_screen.dart';
@@ -46,30 +47,20 @@ class _SaleDetailScreenState extends State<SaleDetailScreen> {
   }
 
   Future<void> _refund() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.undo_rounded, color: AppColors.danger, size: 36),
-        title: const Text('Оформить возврат?'),
-        content: const Text(
-          'Товар вернётся на склад, оплата и прибыль уменьшатся, а reKassa сформирует отдельный чек возврата. Отменить операцию нельзя.',
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Подтвердить возврат'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
+    if (refunding) return;
     setState(() => refunding = true);
     try {
-      final result = await ApiService.refundSale(widget.saleId);
+      // Fetch authoritative payment details before deciding whether a bank
+      // operation is possible. An old cached receipt may lack transactionId.
+      final currentSale = await ApiService.getSale(widget.saleId);
+      if (!mounted) return;
+      final manualKaspi = await confirmSaleRefund(context, currentSale);
+      if (!mounted || manualKaspi == null) return;
+
+      final result = await ApiService.refundSale(
+        widget.saleId,
+        kaspiManualFiscalOnly: manualKaspi,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

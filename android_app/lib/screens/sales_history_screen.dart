@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/sale_refund_confirmation.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import 'shift_detail_screen.dart';
@@ -1374,30 +1375,18 @@ class _SaleDocumentsSheetState extends State<_SaleDocumentsSheet> {
 
   Future<void> _refund() async {
     if (saleId <= 0 || refunding || isRefunded || isInvoice) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        icon: const Icon(Icons.undo_rounded, color: AppColors.danger, size: 36),
-        title: const Text('Оформить возврат?'),
-        content: const Text(
-          'Товар вернётся на склад, сумма продажи и прибыль уменьшатся, а reKassa сформирует чек возврата.',
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Подтвердить возврат'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
     setState(() => refunding = true);
     try {
-      final result = await ApiService.refundSale(saleId);
+      // The document list does not always contain the Kaspi transaction ID.
+      final currentSale = await ApiService.getSale(saleId);
+      if (!mounted) return;
+      final manualKaspi = await confirmSaleRefund(context, currentSale);
+      if (!mounted || manualKaspi == null) return;
+
+      final result = await ApiService.refundSale(
+        saleId,
+        kaspiManualFiscalOnly: manualKaspi,
+      );
       if (!mounted) return;
       if (result['success'] != true) {
         throw ApiException('${result['error'] ?? 'Не удалось выполнить возврат'}');
