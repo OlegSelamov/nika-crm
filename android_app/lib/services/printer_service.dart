@@ -22,7 +22,8 @@ class PrinterService {
 
   static Future<bool> printReceipt({
     required String text,
-	String? qrData,
+    String? qrData,
+    String? printerMac,
   }) async {
     if (_isPrinting) return false;
 
@@ -30,7 +31,7 @@ class PrinterService {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final mac = prefs.getString("printer_mac");
+      final mac = printerMac ?? prefs.getString("printer_mac");
 
       if (mac == null || mac.isEmpty) {
         return false;

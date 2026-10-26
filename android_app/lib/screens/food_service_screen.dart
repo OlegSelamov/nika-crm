@@ -339,7 +339,12 @@ class _FoodServiceScreenState extends State<FoodServiceScreen> {
       toast('Заказ сохранён. Чеки доступны в истории; Bluetooth-принтер не настроен.');
       return true;
     }
-    if (!await PrinterService.printReceipt(text: ticketText(order, 'kitchen'))) return false;
+    final kitchenMac = prefs.getString('kitchen_printer_mac');
+    if (!await PrinterService.printReceipt(
+      text: ticketText(order, 'kitchen'),
+      printerMac: kitchenMac == null || kitchenMac.isEmpty
+          ? null : kitchenMac,
+    )) return false;
     return PrinterService.printReceipt(text: ticketText(order, 'precheck'));
   }
 
