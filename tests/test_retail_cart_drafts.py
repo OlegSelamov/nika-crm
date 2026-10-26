@@ -114,7 +114,7 @@ class RetailCartDraftsTests(unittest.TestCase):
         self.assertIn('if (!confirm(warning)) return;', refund_frontend)
         self.assertIn('finalizeBody = { kaspi_manual_fiscal_only: true };', refund_frontend)
         self.assertIn('await refundKaspiPosLocally(sale);', refund_frontend)
-        self.assertIn('if (sale.get("rekassa_ticket_id")):', refund_backend)
+        self.assertIn('if sale.get("rekassa_ticket_id"):', refund_backend)
         self.assertIn('"refund",', refund_backend)  # stock movements are restored
 
     def test_existing_food_and_retail_payment_are_untouched(self):
