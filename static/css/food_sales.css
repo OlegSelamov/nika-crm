@@ -889,6 +889,7 @@ body.food-sales-mode.food-checkout-orders #foodOrderSave { display:none !importa
 .food-history-badge { display:inline-flex; align-items:center; border-radius:999px; padding:6px 10px; font-size:12px; line-height:1.2; font-weight:800; white-space:nowrap; }
 .food-history-badge-open { background:#fff4d6; color:#925600; }
 .food-history-badge-paid { background:#dcfce7; color:#166534; }
+.food-history-badge-refunded { background:#e0e7ff; color:#4338ca; }
 .food-history-badge-external_paid { background:#dbeafe; color:#1d4ed8; }
 .food-history-badge-cancelled { background:#fee2e2; color:#b91c1c; }
 .food-history-amount { color:#18233b; font-size:14px; font-weight:850; white-space:nowrap; }
@@ -898,6 +899,8 @@ body.food-sales-mode.food-checkout-orders #foodOrderSave { display:none !importa
 .food-order-history-list .food-history-actions button:hover { background:#ede9fe; border-color:#c4b5fd; color:#4338ca; }
 .food-history-empty { padding:42px 16px; text-align:center; font-size:14px; color:#64748b; }
 .food-order-history-list .food-history-actions .food-history-cancel { background:#fff1f2; border-color:#fecdd3; color:#be123c; }
+.food-order-history-list .food-history-actions .food-history-refund { background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+.food-order-history-list .food-history-actions .food-history-refund:hover { background:#e0e7ff; border-color:#a5b4fc; color:#312e81; }
 .food-order-history-list .food-history-actions .food-history-cancel:hover { background:#ffe4e6; border-color:#fda4af; color:#9f1239; }
 .food-order-history-list .food-history-actions button:disabled { opacity:.55; cursor:wait; }
 .food-order-history-notice { padding:10px 14px; margin:10px 0; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:9px; color:#065f46; font-size:13px; }

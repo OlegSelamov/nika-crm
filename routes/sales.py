@@ -3669,6 +3669,17 @@ def refund_sale(sale_id):
             sale_id
         ))
 
+        # A paid food order belongs to the same sale being refunded.
+        # Update the restaurant journal within the very same transaction;
+        # a shop without food_orders must keep its retail refund working.
+        cur.execute("SELECT to_regclass('public.food_orders') AS food_orders_table")
+        if cur.fetchone()["food_orders_table"] is not None:
+            cur.execute("""
+                UPDATE food_orders
+                SET status='refunded', updated_at=%s
+                WHERE company_id=%s AND sale_id=%s AND status='paid'
+            """, (now_kz_for_timestamp(), sale["company_id"], sale_id))
+
         conn.commit()
 
         return jsonify({

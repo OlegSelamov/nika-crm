@@ -1262,6 +1262,28 @@
         }
     }
 
+    // The receipt is already paid: reuse Nika's audited sale refund flow.
+    // Never mutate a paid food_order directly or pretend that Kaspi/reKassa
+    // returned funds without invoking the corresponding payment pipeline.
+    async function refundPaidFoodOrder(order, button) {
+        if (button?.disabled || foodOrderBusy || foodCheckoutBusy) return;
+        if (order.status !== "paid" || !Number.isSafeInteger(Number(order.sale_id)) ||
+            Number(order.sale_id) <= 0) return;
+        if (typeof refundSale !== "function") {
+            const notice = document.getElementById("foodOrderHistoryNotice");
+            if (notice) {
+                notice.textContent = "Модуль возвратов недоступен. Обновите страницу.";
+                notice.classList.add("is-error");
+                notice.hidden = false;
+            }
+            return;
+        }
+        // refundSale confirms the financial/fiscal transaction itself.
+        // After a successful refund it broadcasts nika:sale-refunded and
+        // the history switches from "Оплачен" to "Возврат".
+        await refundSale(Number(order.sale_id), button);
+    }
+
     async function cancelFoodOrder(orderId, button) {
         if (button?.disabled || foodOrderBusy || foodCheckoutBusy) return;
         const message = "Отменить заказ №" + orderId + "?\n\n" +
@@ -1343,6 +1365,7 @@
             badge.className = "food-history-badge food-history-badge-" +
                 (["paid", "open", "external_paid", "cancelled"].includes(order.status) ? order.status : "open");
             badge.textContent = order.status === "paid" ? "Оплачен"
+                : order.status === "refunded" ? "Возврат"
                 : order.status === "external_paid" ? "Внешняя ККМ"
                 : order.status === "cancelled" ? "Отменён" : "Ожидает оплаты";
             const total = document.createElement("span");
@@ -1368,6 +1391,14 @@
                 cancel.textContent = "Отменить заказ";
                 cancel.addEventListener("click", () => cancelFoodOrder(order.id, cancel));
                 buttons.appendChild(cancel);
+            } else if (order.status === "paid" && Number(order.sale_id) > 0) {
+                const refund = document.createElement("button");
+                refund.type = "button";
+                refund.className = "food-history-refund";
+                refund.textContent = "Оформить возврат";
+                refund.title = "Возврат оплаты и фискального чека через механизм Nika Business";
+                refund.addEventListener("click", () => refundPaidFoodOrder(order, refund));
+                buttons.appendChild(refund);
             }
             for (const [kind, caption] of [["kitchen","Кухня"],["precheck","Пречек"]]) {
                 const print = document.createElement("button");
@@ -1427,6 +1458,12 @@
             document.getElementById(id)?.addEventListener("input", () => { currentFoodOrderSaved = false; });
         }
         window.addEventListener("nika:sale-completed", resetFoodOrder);
+        window.addEventListener("nika:sale-refunded", () => {
+            const history = document.getElementById("foodOrdersWorkspace");
+            if (history && !history.hidden) {
+                void loadFoodOrderHistory();
+            }
+        });
     }
 
     function initFoodSalesMode() {

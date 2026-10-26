@@ -254,23 +254,35 @@ def food_orders():
             except (ValueError, TypeError):
                 page = 1
             status = request.args.get("status", "all")
-            if status not in ("all", "open", "paid", "external_paid", "cancelled"):
+            if status not in ("all", "open", "paid", "refunded", "external_paid", "cancelled"):
                 status = "all"
             query = (request.args.get("q") or "").strip()[:70]
-            conditions = ["company_id=%s"]
+            conditions = ["fo.company_id=%s"]
             params = [company_id]
-            if status != "all":
-                conditions.append("status=%s")
+            if status == "refunded":
+                # Include legacy food orders whose sale was refunded before
+                # this status was introduced.
+                conditions.append("(fo.status='refunded' OR (fo.status='paid' AND COALESCE(s.is_refunded,FALSE)=TRUE))")
+            elif status == "paid":
+                conditions.append("fo.status='paid' AND COALESCE(s.is_refunded,FALSE)=FALSE")
+            elif status != "all":
+                conditions.append("fo.status=%s")
                 params.append(status)
             if query:
-                conditions.append("(table_name ILIKE %s OR guest_name ILIKE %s OR CAST(id AS TEXT)=%s)")
+                conditions.append("(fo.table_name ILIKE %s OR fo.guest_name ILIKE %s OR CAST(fo.id AS TEXT)=%s)")
                 params.extend([f"%{query}%", f"%{query}%", query.lstrip("#")])
             where_sql = " AND ".join(conditions)
             cur.execute(f"""
-                SELECT id, status, table_name, guest_name, total_amount,
-                       planned_payment_method, sale_id, external_receipt_number, created_at, updated_at FROM food_orders
+                SELECT fo.id,
+                       CASE WHEN fo.status='paid' AND COALESCE(s.is_refunded,FALSE)=TRUE
+                            THEN 'refunded' ELSE fo.status END AS status,
+                       fo.table_name, fo.guest_name, fo.total_amount,
+                       fo.planned_payment_method, fo.sale_id, fo.external_receipt_number,
+                       fo.created_at, fo.updated_at
+                FROM food_orders fo
+                LEFT JOIN sales s ON s.id=fo.sale_id AND s.company_id=fo.company_id
                 WHERE {where_sql}
-                ORDER BY id DESC LIMIT 21 OFFSET %s
+                ORDER BY fo.id DESC LIMIT 21 OFFSET %s
             """, tuple(params + [(page - 1) * 20]))
             rows = cur.fetchall()
             return jsonify({

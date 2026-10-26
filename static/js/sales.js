@@ -3571,10 +3571,12 @@ async function refundSale(id, button = null) {
 
         alert("Возврат выполнен");
         loadSalesHistory();
+        window.dispatchEvent(new CustomEvent("nika:sale-refunded", {detail: {saleId: Number(id)}}));
 
         if (data.refund_check_available) {
             openRefundCheckModal(id);
         }
+        return true;
     } catch (err) {
         console.error("REFUND ERROR:", err);
         alert(err.message || "Ошибка связи");

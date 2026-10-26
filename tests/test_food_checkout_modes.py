@@ -138,6 +138,35 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn('cancelFoodOrder(order.id, cancel)', history)
         self.assertIn('foodOrderHistoryNotice', self.read("templates/sales.html"))
 
+    def test_paid_food_refunds_use_linked_sale_and_update_status(self):
+        backend = self.read("routes/food_orders.py")
+        sales = self.read("routes/sales.py")
+        ui = self.read("static/js/food_sales.js")
+        shared = self.read("static/js/sales.js")
+        html = self.read("templates/sales.html")
+        list_route = backend.split('def food_orders():', 1)[1].split(
+            '@food_orders_bp.route("/api/food/orders/<int:order_id>"', 1
+        )[0]
+        refund_route = sales.split("def refund_sale(sale_id):", 1)[1].split(
+            '@sales_bp.route("/api/gtin"', 1
+        )[0]
+        food_refund = ui.split('async function refundPaidFoodOrder(', 1)[1].split(
+            'async function cancelFoodOrder(', 1
+        )[0]
+        self.assertIn("s.is_refunded", list_route)
+        self.assertIn("refunded", list_route)
+        self.assertIn("LEFT JOIN sales s ON s.id=fo.sale_id AND s.company_id=fo.company_id", list_route)
+        self.assertIn("SET status='refunded', updated_at=%s", refund_route)
+        self.assertIn("WHERE company_id=%s AND sale_id=%s AND status='paid'", refund_route)
+        self.assertIn("await refundSale(Number(order.sale_id), button)", food_refund)
+        self.assertNotIn("fetch(", food_refund)
+        self.assertIn('"nika:sale-refunded"', ui)
+        self.assertIn('"nika:sale-refunded"', shared)
+        self.assertIn('className = "food-history-refund"', ui)
+        self.assertIn('order.status === "paid" && Number(order.sale_id) > 0', ui)
+        self.assertIn('option value="refunded"', html)
+        self.assertIn('food-history-badge-refunded', self.read("static/css/food_sales.css"))
+
     def test_all_edited_python_modules_parse(self):
         for path in ("app.py", "models.py", "routes/auth.py", "routes/sales.py",
                      "routes/food_orders.py", "routes/rekassa_comrun.py"):
