@@ -682,9 +682,9 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                             if (hasModule('dashboard'))
                               const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Главная'),
                             if (hasModule('sales'))
-                              const NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale_rounded), label: foodBusiness ? 'Заказы' : 'Продажа'),
+                              NavigationDestination(icon: const Icon(Icons.point_of_sale_outlined), selectedIcon: const Icon(Icons.point_of_sale_rounded), label: foodBusiness ? 'Заказы' : 'Продажа'),
                             if (hasModule('sales'))
-                              const NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history_rounded), label: foodBusiness ? 'История заказов' : 'История'),
+                              NavigationDestination(icon: const Icon(Icons.history_outlined), selectedIcon: const Icon(Icons.history_rounded), label: foodBusiness ? 'История заказов' : 'История'),
                             const NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'Разделы'),
                           ],
                         ),
