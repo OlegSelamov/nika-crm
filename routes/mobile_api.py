@@ -155,6 +155,36 @@ def mobile_modules():
     return jsonify({"success": True, "modules": modules})
 
 
+@mobile_api_bp.route("/configuration")
+def mobile_configuration():
+    """Current session organization's business configuration for native mobile UI."""
+    denied = _guard()
+    if denied:
+        return denied
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, name, business_mode, food_checkout_mode "
+            "FROM companies WHERE id = %s",
+            (session["company_id"],),
+        )
+        company = cur.fetchone()
+        if not company:
+            return jsonify({"success": False, "error": "Организация не найдена"}), 404
+        return jsonify({
+            "success": True,
+            "company_id": company["id"],
+            "user_id": session["user_id"],
+            "company_name": company["name"] or "",
+            "business_mode": company["business_mode"] or "retail",
+            "food_checkout_mode": company["food_checkout_mode"] or "fast",
+        })
+    finally:
+        pool.putconn(conn)
+
+
 @mobile_api_bp.route("/health")
 def mobile_health():
     denied = _guard()

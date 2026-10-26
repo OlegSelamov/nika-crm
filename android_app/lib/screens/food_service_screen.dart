@@ -16,13 +16,20 @@ import 'check_screen.dart';
 /// Native restaurant checkout. All food writes are online and use the same
 /// food_orders, sales, stock and fiscal endpoints as the website.
 class FoodServiceScreen extends StatefulWidget {
-  const FoodServiceScreen({super.key});
+  final bool embedded;
+  final bool historyOnly;
+
+  const FoodServiceScreen({
+    super.key,
+    this.embedded = false,
+    this.historyOnly = false,
+  });
 
   @override
-  State<FoodServiceScreen> createState() => _FoodServiceScreenState();
+  State<FoodServiceScreen> createState() => FoodServiceScreenState();
 }
 
-class _FoodServiceScreenState extends State<FoodServiceScreen> {
+class FoodServiceScreenState extends State<FoodServiceScreen> {
   final table = TextEditingController();
   final guest = TextEditingController();
   final note = TextEditingController();
@@ -51,7 +58,7 @@ class _FoodServiceScreenState extends State<FoodServiceScreen> {
   double get total => FoodOrderLogic.total(cart);
 
   @override
-  void initState() { super.initState(); initialize(); }
+  void initState() { super.initState(); view = widget.historyOnly ? 'history' : 'menu'; initialize(); }
 
   @override
   void dispose() {
@@ -121,7 +128,7 @@ class _FoodServiceScreenState extends State<FoodServiceScreen> {
     setState(() {
       cart.clear(); orderId = null; payment = 'cash';
       clientId = null; clientName = 'Частное лицо';
-      printedPair = false; uncertain = false; view = 'menu';
+      printedPair = false; uncertain = false; view = widget.historyOnly ? 'history' : 'menu';
     });
   }
 
@@ -763,33 +770,58 @@ class _FoodServiceScreenState extends State<FoodServiceScreen> {
   ]);
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Общепит'),
-      actions: [IconButton(onPressed: busy ? null : () { loadMenu(); loadOrders(); },
-        icon: const Icon(Icons.refresh))]),
-    body: loading
+  Widget build(BuildContext context) {
+    final content = loading
       ? const Center(child: CircularProgressIndicator())
       : error != null
         ? Center(child: Text(error!))
         : Column(children: [
-            Row(children: [
-              for (final (key, label, icon) in [
-                ('menu', 'Меню', Icons.restaurant_menu),
-                ('order', 'Заказ', Icons.shopping_cart),
-                ('history', 'История', Icons.history),
-              ]) Expanded(child: Padding(padding: const EdgeInsets.all(3),
-                child: FilledButton.tonalIcon(
-                  onPressed: () => setState(() => view = key),
-                  icon: Icon(icon, size: 16),
-                  label: Text(label),
-                ))),
-            ]),
+            if (widget.historyOnly && view != 'history')
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () { resetOrder(); loadOrders(); },
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('К истории заказов'),
+                ),
+              ),
+            if (!widget.historyOnly)
+              Row(children: [
+                for (final (key, label, icon) in [
+                  ('menu', 'Меню', Icons.restaurant_menu),
+                  ('order', 'Заказ', Icons.shopping_cart),
+                ]) Expanded(child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => setState(() => view = key),
+                    icon: Icon(icon, size: 16),
+                    label: Text(label),
+                  ),
+                )),
+                IconButton(
+                  tooltip: 'Обновить меню',
+                  onPressed: busy ? null : () { loadMenu(); loadOrders(); },
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ]),
             if (busy) const LinearProgressIndicator(),
             Expanded(child: switch (view) {
               'menu' => menuView(),
               'order' => orderView(),
               _ => historyView(),
             }),
-          ]),
-  );
+          ]);
+
+    if (widget.embedded) return content;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.historyOnly ? 'История заказов' : 'Заказы'),
+        actions: [IconButton(
+          onPressed: busy ? null : () { loadMenu(); loadOrders(); },
+          icon: const Icon(Icons.refresh),
+        )],
+      ),
+      body: content,
+    );
+  }
 }

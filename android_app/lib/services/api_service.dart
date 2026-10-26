@@ -460,6 +460,44 @@ class ApiService {
     }
   }
 
+  /// Fetch the website configuration for the logged-in organization, not a
+  /// global device switch. Cache is isolated by company ID in OfflineStore.
+  static Future<Map<String, dynamic>> businessConfiguration({
+    bool forceRemote = false,
+  }) async {
+    final cached = await OfflineStore.instance.snapshot('business_configuration');
+    if (!forceRemote && cached is Map) {
+      return Map<String, dynamic>.from(cached);
+    }
+    try {
+      final config = Map<String, dynamic>.from(await _request(
+        'GET', '/api/mobile/configuration',
+        timeout: const Duration(seconds: 8),
+      ));
+      final cid = int.tryParse('${config['company_id'] ?? ''}');
+      final uid = int.tryParse('${config['user_id'] ?? ''}');
+      if (config['success'] != true || cid == null || cid <= 0 ||
+          uid == null || uid <= 0) {
+        throw const ApiException('Не удалось определить конфигурацию организации');
+      }
+      final activeCompany = await OfflineStore.instance.companyId;
+      final activeUser = await OfflineStore.instance.userId;
+      if (activeCompany != cid || activeUser != uid) {
+        // The user may have switched organizations in the web session.
+        await OfflineStore.instance.setIdentity(companyId: cid, userId: uid);
+      }
+      await OfflineStore.instance.cacheSnapshot('business_configuration', config);
+      return config;
+    } on ApiException catch (e) {
+      // Authentication or an invalid configuration cannot silently reuse
+      // another session's last-known mode.
+      if ((e.statusCode == null || e.statusCode! >= 500) && cached is Map) {
+        return Map<String, dynamic>.from(cached);
+      }
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> dashboard({bool forceRemote = false}) async {
     final cached = await OfflineStore.instance.snapshot('dashboard');
     if (!forceRemote && cached is Map) return Map<String, dynamic>.from(cached);

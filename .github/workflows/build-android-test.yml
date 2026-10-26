@@ -39,6 +39,7 @@ jobs:
         run: |
           flutter test test/sale_refund_confirmation_test.dart
           flutter test test/food_order_logic_test.dart
+          flutter test test/organization_mode_test.dart
       - name: Isolate test APK from production
         run: |
           python3 - <<'PY'
