@@ -83,6 +83,7 @@ function createElement() {
     ctx.setFoodModifierTab = () => {};
     ctx.renderFoodModifierTotal = () => {};
     ctx.escapeFood = value => String(value);
+    ctx.money = value => String(value) + " ₸";
     const modalCode = extract(
         "    function openFoodModifierModal(item, groups, ingredients, editingLine = null) {",
         "    function escapeFood(v)"
