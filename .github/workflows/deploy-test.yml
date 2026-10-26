@@ -17,6 +17,12 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - uses: actions/checkout@v4
+      - name: Verify website food modifier editor
+        run: |
+          node --check static/js/food_sales.js
+          node tests/test_food_modifier_tabs.js
+          node tests/test_food_cart_modifier_edit.js
       - name: Configure SSH
         shell: bash
         env:
