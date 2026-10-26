@@ -3455,83 +3455,112 @@ def refund_sale(sale_id):
 
         if sale["sale_type"] == "kaspi":
 
-            transaction_id = sale.get("kaspi_transaction_id")
+            transaction_id = str(sale.get("kaspi_transaction_id") or "").strip()
+            manual_kaspi_fiscal_only = (
+                request_data.get("kaspi_manual_fiscal_only") is True
+            )
+
+            # "Kaspi" in the checkout dropdown is a *tender label*, not
+            # proof that Kaspi POS initiated a bank payment. A manual
+            # Kaspi sale has no terminal transactionId; it can be reversed
+            # in the ledger/reKassa without attempting a bank refund.
+            # Require explicit operator confirmation to avoid mistakenly
+            # recording a bank-paid sale as refunded.
             if not transaction_id:
-                return jsonify({
-                    "success": False,
-                    "error": "Нет transactionId"
-                })
-
-            local_refund_done = request_data.get("kaspi_refund_local") is True
-            local_refund_transaction_id = str(
-                request_data.get("kaspi_refund_transaction_id") or ""
-            ).strip()
-
-            if local_refund_done:
-                if not local_refund_transaction_id:
+                if not manual_kaspi_fiscal_only:
                     return jsonify({
                         "success": False,
-                        "error": "Kaspi POS выполнил возврат, но не передал transactionId возврата"
+                        "error": (
+                            "В продаже не найден transactionId Kaspi POS. "
+                            "Для ошибочного ручного чека выберите возврат "
+                            "без банковской операции; деньги через Kaspi "
+                            "автоматически не возвращаются."
+                        )
+                    }), 409
+                if request_data.get("kaspi_refund_local") is True:
+                    return jsonify({
+                        "success": False,
+                        "error": "Без transactionId возврат через Kaspi POS невозможен"
                     }), 400
-
-                # Возврат оплаты уже выполнен непосредственно с компьютера,
-                # который находится в одной локальной сети с Kaspi POS.
-                # VPS не должен пытаться обращаться к локальному IP терминала.
-                refund_transaction_id = local_refund_transaction_id
             else:
-                amount = int(sale["total_amount"])
-                method = sale.get("kaspi_method") or "qr"
-
-                refund_response = requests.get(
-                    "http://10.149.133.105:8080/v2/refund",
-                    params={
-                        "transactionId": transaction_id,
-                        "amount": amount,
-                        "method": method
-                    },
-                    timeout=15
-                )
-
-                refund_result = refund_response.json()
-
-                if refund_result.get("statusCode") != 0:
+                if manual_kaspi_fiscal_only:
                     return jsonify({
                         "success": False,
-                        "error": refund_result
-                    })
+                        "error": (
+                            "Это оплата Kaspi POS с transactionId. "
+                            "Нельзя отменить её только фискальным возвратом."
+                        )
+                    }), 409
+                local_refund_done = request_data.get("kaspi_refund_local") is True
+                local_refund_transaction_id = str(
+                    request_data.get("kaspi_refund_transaction_id") or ""
+                ).strip()
 
-                process_id = refund_result["data"]["processId"]
-                refund_ok = False
+                if local_refund_done:
+                    if not local_refund_transaction_id:
+                        return jsonify({
+                            "success": False,
+                            "error": "Kaspi POS выполнил возврат, но не передал transactionId возврата"
+                        }), 400
 
-                for _ in range(30):
-                    time.sleep(2)
+                    # Возврат оплаты уже выполнен непосредственно с компьютера,
+                    # который находится в одной локальной сети с Kaspi POS.
+                    # VPS не должен пытаться обращаться к локальному IP терминала.
+                    refund_transaction_id = local_refund_transaction_id
+                else:
+                    amount = int(sale["total_amount"])
+                    method = sale.get("kaspi_method") or "qr"
 
-                    status_response = requests.get(
-                        "http://10.149.133.105:8080/v2/status",
-                        params={"processId": process_id},
+                    refund_response = requests.get(
+                        "http://10.149.133.105:8080/v2/refund",
+                        params={
+                            "transactionId": transaction_id,
+                            "amount": amount,
+                            "method": method
+                        },
                         timeout=15
                     )
 
-                    status_result = status_response.json()
-                    data_block = status_result.get("data", {})
-                    status = data_block.get("status")
+                    refund_result = refund_response.json()
 
-                    if status == "success":
-                        refund_ok = True
-                        refund_transaction_id = data_block.get("transactionId")
-                        break
-
-                    if status == "fail":
+                    if refund_result.get("statusCode") != 0:
                         return jsonify({
                             "success": False,
-                            "error": "Возврат отменён или отклонён"
+                            "error": refund_result
                         })
 
-                if not refund_ok:
-                    return jsonify({
-                        "success": False,
-                        "error": "Истекло время ожидания возврата"
-                    })
+                    process_id = refund_result["data"]["processId"]
+                    refund_ok = False
+
+                    for _ in range(30):
+                        time.sleep(2)
+
+                        status_response = requests.get(
+                            "http://10.149.133.105:8080/v2/status",
+                            params={"processId": process_id},
+                            timeout=15
+                        )
+
+                        status_result = status_response.json()
+                        data_block = status_result.get("data", {})
+                        status = data_block.get("status")
+
+                        if status == "success":
+                            refund_ok = True
+                            refund_transaction_id = data_block.get("transactionId")
+                            break
+
+                        if status == "fail":
+                            return jsonify({
+                                "success": False,
+                                "error": "Возврат отменён или отклонён"
+                            })
+
+                    if not refund_ok:
+                        return jsonify({
+                            "success": False,
+                            "error": "Истекло время ожидания возврата"
+                        })
 
         if sale.get("rekassa_ticket_id"):
 
@@ -3615,6 +3644,12 @@ def refund_sale(sale_id):
 
         refund_receipt_data = {
             "payment_refund_transaction_id": refund_transaction_id,
+            "payment_refund_mode": (
+                "manual_kaspi_no_bank_refund"
+                if sale["sale_type"] == "kaspi" and not transaction_id
+                else "kaspi_pos" if sale["sale_type"] == "kaspi"
+                else "other"
+            ),
             "rekassa": rekassa_refund_result or {}
         }
         refunded_at = now_kz()

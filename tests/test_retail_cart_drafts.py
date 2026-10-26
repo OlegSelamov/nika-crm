@@ -99,6 +99,24 @@ class RetailCartDraftsTests(unittest.TestCase):
         self.assertIn('>Открыть корзину</button>', js)
         self.assertNotIn('>В корзину</button>', js)
 
+    def test_manual_kaspi_refund_does_not_require_pos_transaction_id(self):
+        backend = self.read("routes/sales.py")
+        frontend = self.read("static/js/sales.js")
+        refund_backend = backend.split('def refund_sale(sale_id):', 1)[1].split('@sales_bp.route(', 1)[0]
+        refund_frontend = frontend.split('async function refundSale(', 1)[1].split('/* Предыдущая реализация', 1)[0]
+        self.assertIn('request_data.get("kaspi_manual_fiscal_only") is True', refund_backend)
+        self.assertIn('if not manual_kaspi_fiscal_only:', refund_backend)
+        self.assertIn('if manual_kaspi_fiscal_only:', refund_backend)
+        self.assertIn('if request_data.get("kaspi_refund_local") is True:', refund_backend)
+        self.assertIn('"manual_kaspi_no_bank_refund"', refund_backend)
+        self.assertIn('const hasKaspiPosTransaction = Boolean(', refund_frontend)
+        self.assertIn('ДЕНЬГИ через Kaspi НЕ возвращаются', refund_frontend)
+        self.assertIn('if (!confirm(warning)) return;', refund_frontend)
+        self.assertIn('finalizeBody = { kaspi_manual_fiscal_only: true };', refund_frontend)
+        self.assertIn('await refundKaspiPosLocally(sale);', refund_frontend)
+        self.assertIn('if (sale.get("rekassa_ticket_id")):', refund_backend)
+        self.assertIn('"refund",', refund_backend)  # stock movements are restored
+
     def test_existing_food_and_retail_payment_are_untouched(self):
         sales = self.read("static/js/sales.js")
         food = self.read("static/js/food_sales.js")
