@@ -114,6 +114,30 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn('navigator.share', js)
         self.assertIn("saveTicketFile('share')", self.read("templates/food_order_ticket.html"))
 
+    def test_food_order_cancel_only_if_unpaid(self):
+        route = self.read("routes/food_orders.py")
+        detail = route.split('def food_order_detail(order_id):', 1)[1].split(
+            '@food_orders_bp.route("/api/food/orders/<int:order_id>/external-payment"', 1
+        )[0]
+        frontend = self.read("static/js/food_sales.js")
+        history = frontend.split('async function loadFoodOrderHistory(', 1)[1].split(
+            'function initFoodOrderControls()', 1
+        )[0]
+        cancel = frontend.split('async function cancelFoodOrder(', 1)[1].split(
+            'async function loadFoodOrderHistory(', 1
+        )[0]
+        self.assertIn('action != "cancel"', detail)
+        self.assertIn("status='open'", detail)
+        self.assertIn("sale_id IS NULL AND external_receipt_number IS NULL", detail)
+        self.assertNotIn("INSERT INTO sales", detail)
+        self.assertNotIn("stock_movements", detail)
+        self.assertNotIn("fiscalize_sale(", detail)
+        self.assertIn('JSON.stringify({action: "cancel"})', cancel)
+        self.assertIn("clearFoodCart();", cancel)
+        self.assertIn('if (order.status === "open")', history)
+        self.assertIn('cancelFoodOrder(order.id, cancel)', history)
+        self.assertIn('foodOrderHistoryNotice', self.read("templates/sales.html"))
+
     def test_all_edited_python_modules_parse(self):
         for path in ("app.py", "models.py", "routes/auth.py", "routes/sales.py",
                      "routes/food_orders.py", "routes/rekassa_comrun.py"):

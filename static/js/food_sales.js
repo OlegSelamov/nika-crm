@@ -1262,6 +1262,59 @@
         }
     }
 
+    async function cancelFoodOrder(orderId, button) {
+        if (button?.disabled || foodOrderBusy || foodCheckoutBusy) return;
+        const message = "Отменить заказ №" + orderId + "?\n\n" +
+            "Отмена доступна только до оплаты. Заказ останется в истории со статусом «Отменён».\n" +
+            "Продажи, возврата денег и движения склада не будет.\n\n" +
+            "Если пречек или заказ на кухню уже напечатан, предупредите сотрудников: бумажные чеки не аннулируются.";
+        if (!window.confirm(message)) return;
+
+        const notice = document.getElementById("foodOrderHistoryNotice");
+        if (notice) notice.hidden = true;
+        if (button) {
+            button.disabled = true;
+            button.textContent = "Отменяем…";
+        }
+        try {
+            const response = await fetch("/api/food/orders/" + encodeURIComponent(orderId), {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({action: "cancel"})
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || "Не удалось отменить заказ");
+            }
+            // Do not allow a cancelled saved order to remain ready for checkout.
+            if (Number(currentFoodOrderId) === Number(orderId)) {
+                clearFoodCart();
+                applySavedFoodPaymentMethod("cash", 0);
+            }
+            if (notice) {
+                notice.textContent = "Заказ №" + orderId + " отменён. Оплата и склад не затронуты.";
+                notice.classList.remove("is-error");
+                notice.hidden = false;
+            }
+            try {
+                await loadFoodOrderHistory();
+            } catch (refreshError) {
+                console.warn("Не удалось обновить историю после отмены:", refreshError);
+            }
+        } catch (error) {
+            if (notice) {
+                notice.textContent = error.message || "Не удалось отменить заказ";
+                notice.classList.add("is-error");
+                notice.hidden = false;
+            }
+        } finally {
+            if (button?.isConnected) {
+                button.disabled = false;
+                button.textContent = "Отменить заказ";
+            }
+        }
+    }
+
     async function loadFoodOrderHistory(append = false) {
         if (!append) foodOrderPage = 1;
         const filter = document.getElementById("foodOrderStatusFilter")?.value || "all";
@@ -1309,6 +1362,12 @@
                 open.textContent = "Открыть заказ";
                 open.addEventListener("click", () => openFoodOrder(order.id));
                 buttons.appendChild(open);
+                const cancel = document.createElement("button");
+                cancel.type = "button";
+                cancel.className = "food-history-cancel";
+                cancel.textContent = "Отменить заказ";
+                cancel.addEventListener("click", () => cancelFoodOrder(order.id, cancel));
+                buttons.appendChild(cancel);
             }
             for (const [kind, caption] of [["kitchen","Кухня"],["precheck","Пречек"]]) {
                 const print = document.createElement("button");

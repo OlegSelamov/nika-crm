@@ -356,11 +356,12 @@ def food_order_detail(order_id):
         cur.execute("""
             UPDATE food_orders SET status='cancelled', updated_at=%s
             WHERE id=%s AND company_id=%s AND status='open'
+              AND sale_id IS NULL AND external_receipt_number IS NULL
             RETURNING id
         """, (now_kz_for_timestamp(), order_id, company_id))
         if not cur.fetchone():
             conn.rollback()
-            return jsonify({"success": False, "message": "Заказ уже закрыт"}), 409
+            return jsonify({"success": False, "message": "Отменить можно только неоплаченный заказ"}), 409
         conn.commit()
         return jsonify({"success": True})
     finally:

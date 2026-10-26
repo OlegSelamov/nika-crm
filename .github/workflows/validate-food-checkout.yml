@@ -25,6 +25,7 @@ on:
       - "tests/test_food_dual_print.py"
       - "tests/test_food_ticket_layout.py"
       - "tests/test_food_payment_print.js"
+      - "tests/test_food_order_cancel.js"
       - "templates/food_order_ticket.html"
       - ".github/workflows/validate-food-checkout.yml"
   workflow_dispatch:
@@ -58,6 +59,8 @@ jobs:
           node --check static/js/retail_cart_drafts.js
       - name: Verify website preview and Electron receipt gate by payment method
         run: node tests/test_food_payment_print.js
+      - name: Verify cancellation of unpaid food orders
+        run: node tests/test_food_order_cancel.js
       - name: Run food checkout regression checks
         run: python -m unittest discover -s tests -p test_food_checkout_modes.py -v
       - name: Run food menu visual and scroll regression checks
