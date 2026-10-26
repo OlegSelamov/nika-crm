@@ -980,10 +980,16 @@ class ApiService {
         await _request('GET', '/kaspi/status/$processId'),
       );
 
-  static Future<Map<String, dynamic>> refundSale(int saleId) async =>
+  static Future<Map<String, dynamic>> refundSale(
+    int saleId, {
+    bool kaspiManualFiscalOnly = false,
+  }) async =>
       Map<String, dynamic>.from(await _request(
         'POST',
         '/sales/refund/$saleId',
+        // A manually tagged Kaspi receipt has no POS transaction to refund.
+        // Only an explicitly confirmed fiscal/stock reversal may set this flag.
+        body: kaspiManualFiscalOnly ? {'kaspi_manual_fiscal_only': true} : null,
         timeout: const Duration(seconds: 90),
       ));
 
