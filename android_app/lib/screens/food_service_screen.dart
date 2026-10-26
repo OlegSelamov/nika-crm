@@ -37,6 +37,11 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
   final cart = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> menu = [];
   List<Map<String, dynamic>> orders = [];
+  List<Map<String, dynamic>> categories = [];
+  String section = 'dish';
+  String selectedCategory = '';
+  StateSetter? orderSheetRefresh;
+  bool orderModalOpen = false;
   Timer? debounce;
   String mode = 'orders';
   String view = 'menu';
@@ -82,10 +87,19 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
         company = (config['company_name'] ?? '').toString();
         loading = false;
       });
-      await Future.wait([loadMenu(), loadOrders()]);
+      await Future.wait([loadMenu(), loadOrders(), loadCategories()]);
     } catch (e) {
       if (mounted) setState(() { loading = false; error = readableError(e); });
     }
+  }
+
+  Future<void> loadCategories() async {
+    try {
+      final data = await ApiService.foodCategories();
+      if (!mounted) return;
+      setState(() => categories = (data['categories'] as List? ?? [])
+        .whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList());
+    } catch (e) { toast(readableError(e)); }
   }
 
   Future<void> loadMenu({bool more = false}) async {
@@ -93,7 +107,8 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
       final page = more ? menuPage + 1 : 1;
       final data = await ApiService.foodMenu(
         query: search.text, page: page,
-        type: search.text.trim().isEmpty ? 'dish' : 'food_menu',
+        type: search.text.trim().isNotEmpty ? 'food_menu' : section,
+        category: selectedCategory,
       );
       if (!mounted) return;
       setState(() {
@@ -121,7 +136,37 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
     } catch (e) { toast(readableError(e)); }
   }
 
-  void changed() { printedPair = false; }
+  void changed() {
+    printedPair = false;
+    orderSheetRefresh?.call(() {});
+  }
+
+  Future<void> openCart() async {
+    if (orderModalOpen || !mounted) return;
+    orderModalOpen = true;
+    try {
+      await showModalBottomSheet<void>(
+        context: context, useSafeArea: true, isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheet) => StatefulBuilder(builder: (ctx, update) {
+          orderSheetRefresh = update;
+          return FractionallySizedBox(heightFactor: .95, child: Column(children: [
+            Padding(padding: const EdgeInsets.fromLTRB(16, 2, 6, 0),
+              child: Row(children: [
+                Expanded(child: Text('Корзина и оформление',
+                  style: Theme.of(ctx).textTheme.titleLarge)),
+                IconButton(onPressed: () => Navigator.pop(sheet),
+                  icon: const Icon(Icons.close)),
+              ])),
+            Expanded(child: orderView()),
+          ]));
+        }),
+      );
+    } finally {
+      orderSheetRefresh = null;
+      orderModalOpen = false;
+    }
+  }
 
   void resetOrder() {
     table.clear(); guest.clear(); note.clear();
@@ -130,14 +175,19 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
       clientId = null; clientName = 'Частное лицо';
       printedPair = false; uncertain = false; view = widget.historyOnly ? 'history' : 'menu';
     });
+    orderSheetRefresh?.call(() {});
   }
 
   Future<void> runBusy(Future<void> Function() task) async {
     if (busy || uncertain) return;
     setState(() => busy = true);
+    orderSheetRefresh?.call(() {});
     try { await task(); }
     catch (e) { toast(readableError(e)); }
-    finally { if (mounted) setState(() => busy = false); }
+    finally {
+      if (mounted) setState(() => busy = false);
+      orderSheetRefresh?.call(() {});
+    }
   }
 
   Future<void> chooseClient() async {
@@ -169,7 +219,7 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
     if (busy || uncertain) return;
     if (item['item_type'] != 'dish') {
       setState(() {
-        cart.add(FoodOrderLogic.line(item)); changed(); view = 'order';
+        cart.add(FoodOrderLogic.line(item)); changed();
       });
       return;
     }
@@ -186,7 +236,7 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
       if (!mounted) return;
       final line = await modifierDialog(item, groups, ingredients);
       if (!mounted || line == null) return;
-      setState(() { cart.add(line); changed(); view = 'order'; });
+      setState(() { cart.add(line); changed(); });
     } catch (e) { toast(readableError(e)); }
   }
 
@@ -376,7 +426,8 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
       }
     });
 
-  Future<void> openOrder(int id) async => runBusy(() async {
+  Future<void> openOrder(int id) async {
+    await runBusy(() async {
     final data = await ApiService.foodOrder(id);
     final order = Map<String, dynamic>.from(data['order'] as Map);
     if (order['status'] != 'open') throw const ApiException('Заказ уже закрыт');
@@ -393,7 +444,9 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
       clientName = clientId == null ? 'Частное лицо' : 'Клиент №' + clientId.toString();
       printedPair = false; view = 'order';
     });
-  });
+    });
+    if (mounted && orderId == id) await openCart();
+  }
 
   Future<void> cancelOrder(Map<String, dynamic> order) async {
     final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
@@ -540,6 +593,7 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
       final fiscalized = result['fiscalized'] == true;
       if (!mounted) return;
       resetOrder();
+      if (orderModalOpen && mounted) Navigator.of(context).pop();
       await loadOrders();
       toast(fiscalized ? 'Заказ оплачен, чек reKassa сформирован'
         : 'Продажа сохранена, но чек не фискализирован. Не оплачивайте повторно!');
@@ -564,32 +618,136 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
     } catch (e) { toast(readableError(e)); }
   }
 
+  Widget _foodPhoto(Map<String, dynamic> item, {double size = 72}) {
+    final url = ApiService.catalogImageUrl(item['image']);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: size, height: size,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: url.isEmpty
+          ? Icon(item['item_type'] == 'dish' ? Icons.restaurant : Icons.local_drink,
+              color: Theme.of(context).colorScheme.primary)
+          : Image.network(url, fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.broken_image_outlined)),
+      ),
+    );
+  }
+
   Widget menuView() => Column(children: [
-    Padding(padding: const EdgeInsets.all(10), child: TextField(
-      controller: search,
-      decoration: const InputDecoration(prefixIcon: Icon(Icons.search),
-        hintText: 'Поиск по меню'),
-      onChanged: (_) {
-        debounce?.cancel();
-        debounce = Timer(const Duration(milliseconds: 300), loadMenu);
-      },
+    Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: TextField(
+        controller: search,
+        decoration: InputDecoration(
+          prefixIcon: const Icon(Icons.search), hintText: 'Найти блюдо или напиток',
+          isDense: true,
+          suffixIcon: search.text.isNotEmpty ? IconButton(
+            onPressed: () { search.clear(); loadMenu(); setState(() {}); },
+            icon: const Icon(Icons.close)) : null,
+        ),
+        onChanged: (_) {
+          debounce?.cancel();
+          debounce = Timer(const Duration(milliseconds: 300), loadMenu);
+          setState(() {});
+        },
+      )),
+    SizedBox(height: 50, child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      children: [
+        for (final (type, title) in [
+          ('dish', 'Блюда'), ('food_menu', 'Всё меню'), ('product', 'Товары и напитки'),
+        ]) Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+          child: ChoiceChip(label: Text(title), selected: section == type,
+            onSelected: (_) {
+              setState(() { section = type; selectedCategory = ''; });
+              loadMenu();
+            }),
+        ),
+      ],
+    )),
+    if (categories.isNotEmpty) SizedBox(height: 49, child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      children: [
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+          child: ChoiceChip(label: const Text('Все категории'),
+            selected: selectedCategory.isEmpty,
+            onSelected: (_) { setState(() => selectedCategory = ''); loadMenu(); })),
+        for (final cat in categories)
+          if (section != 'dish' ||
+              (FoodOrderLogic.number(cat['dish_count']) > 0))
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+              child: ChoiceChip(
+                label: Text((cat['name'] ?? '').toString()),
+                selected: selectedCategory == cat['name'],
+                onSelected: (_) {
+                  setState(() => selectedCategory = cat['name'].toString());
+                  loadMenu();
+                })),
+      ],
     )),
     Expanded(child: RefreshIndicator(
       onRefresh: loadMenu,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(9, 4, 9, 12),
         children: [
-          for (final item in menu) Card(child: ListTile(
-            leading: Icon(item['item_type'] == 'dish'
-              ? Icons.restaurant : Icons.local_drink),
-            title: Text((item['name'] ?? '').toString()),
-            subtitle: Text(item['item_type'] == 'dish' ? 'Блюдо' : 'Товар'),
-            trailing: Text(money(item['retail_price'])),
-            onTap: busy ? null : () => addItem(item),
-          )),
+          if (menu.isEmpty) const Padding(padding: EdgeInsets.all(36),
+            child: Center(child: Text('В меню пока нет позиций'))),
+          for (final item in menu)
+            Card(
+              margin: const EdgeInsets.only(bottom: 7),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: busy ? null : () => addItem(item),
+                child: Padding(
+                  padding: const EdgeInsets.all(9),
+                  child: Row(children: [
+                    _foodPhoto(item),
+                    const SizedBox(width: 10),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text((item['name'] ?? '').toString(), maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        Text((item['category'] ?? '').toString(),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall),
+                        const SizedBox(height: 6),
+                        Text(money(item['retail_price']),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary)),
+                      ],
+                    )),
+                    const SizedBox(width: 6),
+                    IconButton.filledTonal(
+                      onPressed: busy ? null : () => addItem(item),
+                      icon: const Icon(Icons.add_shopping_cart),
+                      tooltip: 'Добавить в заказ',
+                    ),
+                  ]),
+                ),
+              ),
+            ),
           if (menuMore) TextButton(
-            onPressed: () => loadMenu(more: true),
+            onPressed: busy ? null : () => loadMenu(more: true),
             child: const Text('Показать ещё')),
         ],
+      ),
+    )),
+    SafeArea(top: false, child: Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      child: SizedBox(width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: busy ? null : openCart,
+          icon: const Icon(Icons.shopping_cart_outlined),
+          label: Text('Заказ · ${cart.length} поз. · ${money(total)}'),
+        ),
       ),
     )),
   ]);
@@ -700,72 +858,109 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
     )),
   ]);
 
+  Future<void> _historyActions(Map<String, dynamic> order) async {
+    final id = int.tryParse((order['id'] ?? '').toString());
+    if (id == null || !mounted) return;
+    await showModalBottomSheet<void>(
+      context: context, showDragHandle: true, useSafeArea: true,
+      builder: (sheet) => Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            title: Text('Заказ №$id', style: Theme.of(sheet).textTheme.titleLarge),
+            subtitle: Text('${order['created_at_display'] ?? ''} · ${money(order['total_amount'])}'),
+          ),
+          if (order['status'] == 'open')
+            ListTile(
+              leading: const Icon(Icons.edit_note),
+              title: const Text('Открыть и изменить заказ'),
+              onTap: () { Navigator.pop(sheet); openOrder(id); },
+            ),
+          if (order['status'] == 'paid' && order['sale_id'] != null)
+            ListTile(
+              leading: const Icon(Icons.keyboard_return_rounded),
+              title: const Text('Возврат оплаченного заказа'),
+              onTap: () async {
+                Navigator.pop(sheet);
+                await Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => SaleDetailScreen(
+                    saleId: int.parse(order['sale_id'].toString()))));
+                if (mounted) loadOrders();
+              },
+            ),
+          ListTile(
+            leading: const Icon(Icons.soup_kitchen_outlined),
+            title: const Text('Чек на кухню'),
+            onTap: () { Navigator.pop(sheet); document(id, 'kitchen'); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: const Text('Пречек гостю'),
+            onTap: () { Navigator.pop(sheet); document(id, 'precheck'); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.share_outlined),
+            title: const Text('Поделиться пречеком'),
+            onTap: () { Navigator.pop(sheet); document(id, 'precheck', share: true); },
+          ),
+          if (order['status'] == 'open') ListTile(
+            leading: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
+            title: const Text('Отменить заказ'),
+            onTap: () { Navigator.pop(sheet); cancelOrder(order); },
+          ),
+        ]),
+      ),
+    );
+  }
+
   Widget historyView() => Column(children: [
-    SingleChildScrollView(scrollDirection: Axis.horizontal,
-      child: Row(children: [
+    SizedBox(height: 55, child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      children: [
         for (final (key, label) in [
           ('all', 'Все'), ('open', 'Ожидают'), ('paid', 'Оплачены'),
           ('refunded', 'Возвраты'), ('cancelled', 'Отменены'),
           ('external_paid', 'Внешняя ККМ'),
-        ]) Padding(padding: const EdgeInsets.all(3),
+        ]) Padding(padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
           child: ChoiceChip(label: Text(label), selected: filter == key,
-            onSelected: (_) {
-              setState(() => filter = key);
-              loadOrders();
-            })),
-      ])),
+            onSelected: (_) { setState(() => filter = key); loadOrders(); })),
+      ],
+    )),
     Expanded(child: RefreshIndicator(
       onRefresh: loadOrders,
-      child: ListView(children: [
-        if (orders.isEmpty) const ListTile(title: Text('История пуста')),
-        for (final order in orders) Card(child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Text('Заказ №' + (order['id'] ?? '').toString(),
-                style: const TextStyle(fontWeight: FontWeight.bold))),
-              Text(money(order['total_amount'])),
-            ]),
-            Text((order['table_name'] ?? 'Без стола').toString() + ' · ' +
-              (order['created_at_display'] ?? '').toString()),
-            Text(switch ((order['status'] ?? '').toString()) {
-              'open' => 'Ожидает оплаты',
-              'paid' => 'Оплачен',
-              'refunded' => 'Возврат',
-              'cancelled' => 'Отменён',
-              'external_paid' => 'Внешняя ККМ',
-              _ => (order['status'] ?? '').toString(),
-            }),
-            Wrap(spacing: 2, children: [
-              if (order['status'] == 'open') ...[
-                TextButton(onPressed: busy ? null : () =>
-                  openOrder(int.parse(order['id'].toString())),
-                  child: const Text('Открыть')),
-                TextButton(onPressed: busy ? null : () => cancelOrder(order),
-                  child: const Text('Отменить')),
-              ],
-              if (order['status'] == 'paid' && order['sale_id'] != null)
-                TextButton(onPressed: busy ? null : () async {
-                  await Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => SaleDetailScreen(
-                      saleId: int.parse(order['sale_id'].toString()))));
-                  await loadOrders();
-                }, child: const Text('Возврат')),
-              TextButton(onPressed: busy ? null : () =>
-                document(int.parse(order['id'].toString()), 'kitchen'),
-                child: const Text('Кухня')),
-              TextButton(onPressed: busy ? null : () =>
-                document(int.parse(order['id'].toString()), 'precheck'),
-                child: const Text('Пречек')),
-              IconButton(onPressed: busy ? null : () =>
-                document(int.parse(order['id'].toString()), 'precheck', share: true),
-                icon: const Icon(Icons.share_outlined)),
-            ]),
-          ]),
-        )),
-        if (ordersMore) TextButton(onPressed: () => loadOrders(more: true),
-          child: const Text('Показать ещё')),
-      ]),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 22),
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          if (orders.isEmpty) const ListTile(title: Text('История пуста')),
+          for (final order in orders)
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                onTap: () => _historyActions(order),
+                title: Row(children: [
+                  Expanded(child: Text('Заказ №${order['id']}',
+                    style: const TextStyle(fontWeight: FontWeight.w700))),
+                  Text(money(order['total_amount'])),
+                ]),
+                subtitle: Text('${order['created_at_display'] ?? ''} · '
+                  '${switch ((order['status'] ?? '').toString()) {
+                    'open' => 'Ожидает оплаты',
+                    'paid' => 'Оплачен',
+                    'refunded' => 'Возврат',
+                    'cancelled' => 'Отменён',
+                    'external_paid' => 'Внешняя ККМ',
+                    _ => (order['status'] ?? '').toString(),
+                  }}'),
+                trailing: const Icon(Icons.chevron_right),
+              ),
+            ),
+          if (ordersMore) TextButton(
+            onPressed: () => loadOrders(more: true),
+            child: const Text('Показать ещё')),
+        ],
+      ),
     )),
   ]);
 
@@ -776,40 +971,9 @@ class FoodServiceScreenState extends State<FoodServiceScreen> {
       : error != null
         ? Center(child: Text(error!))
         : Column(children: [
-            if (widget.historyOnly && view != 'history')
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () { resetOrder(); loadOrders(); },
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text('К истории заказов'),
-                ),
-              ),
-            if (!widget.historyOnly)
-              Row(children: [
-                for (final (key, label, icon) in [
-                  ('menu', 'Меню', Icons.restaurant_menu),
-                  ('order', 'Заказ', Icons.shopping_cart),
-                ]) Expanded(child: Padding(
-                  padding: const EdgeInsets.all(3),
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => setState(() => view = key),
-                    icon: Icon(icon, size: 16),
-                    label: Text(label),
-                  ),
-                )),
-                IconButton(
-                  tooltip: 'Обновить меню',
-                  onPressed: busy ? null : () { loadMenu(); loadOrders(); },
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ]),
+            if (!widget.historyOnly && busy) const LinearProgressIndicator(),
             if (busy) const LinearProgressIndicator(),
-            Expanded(child: switch (view) {
-              'menu' => menuView(),
-              'order' => orderView(),
-              _ => historyView(),
-            }),
+            Expanded(child: widget.historyOnly ? historyView() : menuView()),
           ]);
 
     if (widget.embedded) return content;
