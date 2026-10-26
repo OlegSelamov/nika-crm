@@ -324,6 +324,31 @@
     gap: 10px;
 }
 
+.food-cart-row-top.food-cart-row-editable {
+    width: 100%;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    padding: 5px;
+    margin: -5px;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+.food-cart-row-editable:hover,
+.food-cart-row-editable:focus-visible {
+    background: #eef2ff;
+    outline: 2px solid #c7d2fe;
+    outline-offset: 1px;
+}
+.food-cart-edit-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #6366f1;
+    font-weight: 650;
+}
+
 .food-cart-row-name {
     min-width: 0;
     color: #0f172a;

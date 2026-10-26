@@ -274,6 +274,7 @@
     let pendingModifierItem = null;
     let pendingModifierGroups = [];
     let pendingRecipeIngredients = [];
+    let pendingModifierCartLine = null;
     let foodChoiceRequest = 0;
 
     async function addFoodItem(item) {
@@ -299,6 +300,50 @@
             openFoodModifierModal(item, modifierData.groups || [], recipeData.ingredients);
         } catch (error) {
             if (requestVersion === foodChoiceRequest) alert(error.message || 'Не удалось открыть настройки блюда');
+        }
+    }
+
+
+    // Existing order prices already include their selected modifiers.
+    function foodCartEditBasePrice(line) {
+        const extras = (Array.isArray(line?.modifiers) ? line.modifiers : [])
+            .reduce((sum, option) => sum + Number(option.price_delta || 0), 0);
+        return Number(line?.price || 0) - extras;
+    }
+
+    async function editFoodCartItem(index) {
+        if (foodOrderBusy || foodCheckoutBusy || window.nikaKaspiPosActive) {
+            foodMessage('Дождитесь завершения текущей операции');
+            return;
+        }
+        if (currentMode() !== 'food') return;
+        const line = getCart()[index];
+        if (!line || (line.item_type && line.item_type !== 'dish')) return;
+        const base = foodCartEditBasePrice(line);
+        if (!Number.isFinite(base) || base < 0) {
+            foodMessage('Некорректная цена позиции, проверьте заказ');
+            return;
+        }
+        const requestVersion = ++foodChoiceRequest;
+        try {
+            const [modResponse, recipeResponse] = await Promise.all([
+                fetch('/api/items/' + encodeURIComponent(line.id) + '/modifiers', {headers:{Accept:'application/json'}}),
+                fetch('/api/items/' + encodeURIComponent(line.id) + '/recipe', {headers:{Accept:'application/json'}})
+            ]);
+            if (requestVersion !== foodChoiceRequest || !getCart().includes(line)) return;
+            if (!modResponse.ok || !recipeResponse.ok) throw new Error('Изменение состава доступно только для блюд');
+            const modData = await modResponse.json();
+            const recipeData = await recipeResponse.json();
+            if (requestVersion !== foodChoiceRequest || !getCart().includes(line)) return;
+            if (!modData.success || !recipeData.success) throw new Error('Не удалось загрузить модификаторы');
+            if (!Array.isArray(recipeData.ingredients) || !recipeData.ingredients.length) {
+                throw new Error('У этого блюда отсутствует техкарта. Заполните её в каталоге.');
+            }
+            openFoodModifierModal({
+                ...line, item_type: 'dish', retail_price: base
+            }, modData.groups || [], recipeData.ingredients, line);
+        } catch (error) {
+            if (requestVersion === foodChoiceRequest) foodMessage(error.message || 'Ошибка открытия модификаторов');
         }
     }
 
@@ -334,10 +379,13 @@
         }
     }
 
-    function openFoodModifierModal(item, groups, ingredients) {
+    function openFoodModifierModal(item, groups, ingredients, editingLine = null) {
         pendingModifierItem = item;
         pendingModifierGroups = groups;
         pendingRecipeIngredients = ingredients;
+        pendingModifierCartLine = editingLine;
+        const selectedModifierIds = new Set((editingLine?.modifiers || []).map(option => String(option.id)));
+        const selectedExclusions = new Set((editingLine?.excluded_ingredients || []).map(ingredient => String(ingredient.id ?? ingredient.item_id)));
         const modal = document.getElementById('foodModifierModal');
         // Escape the sales-grid stacking context: the checkout is mounted
         // directly under body on phones and otherwise covers this dialog.
@@ -346,6 +394,8 @@
         const addRoot = document.getElementById('foodModifierGroups');
         const removeRoot = document.getElementById('foodModifierExclusions');
         document.getElementById('foodModifierTitle').textContent = item.name || 'Блюдо';
+        const submit = document.getElementById('foodModifierAdd');
+        if (submit) submit.textContent = editingLine ? 'Сохранить изменения' : 'Добавить в заказ';
         addRoot.replaceChildren();
         removeRoot.replaceChildren();
 
@@ -374,6 +424,7 @@
                 input.name = 'food-modifier-' + group.id;
                 input.value = option.id;
                 input.dataset.groupId = group.id;
+                input.checked = selectedModifierIds.has(String(option.id));
                 input.addEventListener('change', () => {
                     const checked = section.querySelectorAll('input:checked');
                     const max = Number(group.max_select || 0);
@@ -402,6 +453,7 @@
                 const input = document.createElement('input');
                 input.type = 'checkbox';
                 input.dataset.excludedIngredientId = String(ingredient.item_id);
+                input.checked = selectedExclusions.has(String(ingredient.item_id));
                 input.addEventListener('change', updateFoodModifierTabCounts);
                 const name = document.createElement('span');
                 name.textContent = 'Без ' + (ingredient.name || 'ингредиента');
@@ -417,7 +469,7 @@
     function escapeFood(v){const d=document.createElement('div');d.textContent=String(v||'');return d.innerHTML;}
     function selectedFoodModifiers(){const selected=[];document.querySelectorAll('#foodModifierGroups input:checked').forEach(input=>{const g=pendingModifierGroups.find(x=>String(x.id)===String(input.dataset.groupId));const o=g?.options?.find(x=>String(x.id)===String(input.value));if(o)selected.push(o)});return selected}
     function renderFoodModifierTotal(){const extra=selectedFoodModifiers().reduce((s,o)=>s+Number(o.price_delta||0),0);const total=Number(pendingModifierItem?.retail_price||0)+extra;const n=document.getElementById('foodModifierTotal');if(n)n.textContent=money(total);updateFoodModifierTabCounts()}
-    function closeFoodModifierModal(){const m=document.getElementById('foodModifierModal');if(m)m.hidden=true;document.body.classList.remove('food-modifier-open');pendingModifierItem=null;pendingModifierGroups=[];pendingRecipeIngredients=[]}
+    function closeFoodModifierModal(){const m=document.getElementById('foodModifierModal');if(m)m.hidden=true;document.body.classList.remove('food-modifier-open');pendingModifierItem=null;pendingModifierGroups=[];pendingRecipeIngredients=[];pendingModifierCartLine=null}
     function confirmFoodModifiers(){
         if(!pendingModifierItem)return;
         for(const group of pendingModifierGroups){const count=document.querySelectorAll('#foodModifierGroups input[data-group-id="'+group.id+'"]:checked').length;if(count<Number(group.min_select||0)){setFoodModifierTab('add');alert('Выберите: '+group.name);return}}
@@ -426,7 +478,32 @@
             const ingredient = pendingRecipeIngredients.find(row => String(row.item_id) === input.dataset.excludedIngredientId);
             return {id:Number(ingredient.item_id),name:ingredient.name};
         });
-        cart.push({id:Number(pendingModifierItem.id),name:pendingModifierItem.name||'Блюдо',price:price,qty:1,gtin:pendingModifierItem.gtin||'',ntin:pendingModifierItem.ntin||'',unit:pendingModifierItem.unit||'шт',item_type:'dish',modifiers:mods.map(o=>({id:o.id,name:o.name,price_delta:Number(o.price_delta||0)})),excluded_ingredients:excludedIngredients});
+        const values = {
+            price, item_type: 'dish',
+            modifiers: mods.map(o => ({id:o.id,name:o.name,price_delta:Number(o.price_delta||0)})),
+            excluded_ingredients: excludedIngredients
+        };
+        if (pendingModifierCartLine) {
+            if (!getCart().includes(pendingModifierCartLine)) {
+                closeFoodModifierModal();
+                foodMessage('Позиция больше не находится в корзине');
+                return;
+            }
+            Object.assign(pendingModifierCartLine, values);
+            delete pendingModifierCartLine.line_total;
+        } else {
+            cart.push({
+                id:Number(pendingModifierItem.id),
+                name:pendingModifierItem.name||'Блюдо',
+                qty:1,gtin:pendingModifierItem.gtin||'',ntin:pendingModifierItem.ntin||'',
+                unit:pendingModifierItem.unit||'шт',
+                ...values
+            });
+        }
+        currentFoodOrderSaved = false;
+        lastFoodPrintFingerprint = null;
+        lastFoodPrintUiSignature = null;
+        showFoodPrintStatus('');
         closeFoodModifierModal(); renderCart(); renderFoodCart();
     }
 
@@ -557,12 +634,26 @@
                 const row = document.createElement("div");
                 row.className = "food-cart-row";
 
-                const top = document.createElement("div");
-                top.className = "food-cart-row-top";
+                const editable = item.item_type === 'dish' || !item.item_type;
+                const top = document.createElement(editable ? 'button' : 'div');
+                top.className = 'food-cart-row-top';
+                if (editable) {
+                    top.type = 'button';
+                    top.classList.add('food-cart-row-editable');
+                    top.title = 'Изменить добавки и состав';
+                    top.setAttribute('aria-label', 'Изменить состав: ' + (item.name || 'Блюдо'));
+                    top.addEventListener('click', () => { void editFoodCartItem(index); });
+                }
 
                 const name = document.createElement("div");
                 name.className = "food-cart-row-name";
                 name.textContent = item.name || "Позиция";
+                if (editable) {
+                    const hint = document.createElement("small");
+                    hint.className = "food-cart-edit-hint";
+                    hint.textContent = "Изменить состав";
+                    name.appendChild(hint);
+                }
 
                 const price = document.createElement("div");
                 price.className = "food-cart-row-price";
