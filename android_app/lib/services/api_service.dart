@@ -615,6 +615,26 @@ class ApiService {
     );
   }
 
+  /// Images may be full R2/CDN URLs or legacy relative paths.
+  static String catalogImageUrl(dynamic image) {
+    final raw = (image ?? '').toString().trim();
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
+    if (raw.startsWith('//')) return 'https:$raw';
+    return '$baseUrl${raw.startsWith('/') ? '' : '/'}$raw';
+  }
+
+  static Future<Map<String, dynamic>> foodCategories() async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/catalog/food-categories'));
+
+  static Future<Map<String, dynamic>> saveFoodCatalogItem(
+    Map<String, dynamic> data, {int? id}
+  ) async => Map<String, dynamic>.from(await _request(
+    id == null ? 'POST' : 'PATCH',
+    id == null ? '/api/mobile/food/catalog' : '/api/mobile/food/catalog/$id',
+    body: data,
+  ));
+
   // Restaurant writes are online-only; never enqueue a potentially paid
   // order/payment into the generic offline sales queue.
   static Future<Map<String, dynamic>> foodConfiguration() async =>
