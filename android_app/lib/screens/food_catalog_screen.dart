@@ -1,5 +1,8 @@
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
@@ -239,6 +242,8 @@ class _FoodCatalogEditorState extends State<_FoodCatalogEditor> {
   final description = TextEditingController();
   final barcode = TextEditingController();
   final recipe = <int, TextEditingController>{};
+  XFile? pickedPhoto;
+  int? savedId;
   List<Map<String, dynamic>> ingredients = [];
   List<String> categories = [];
   late String kind;
@@ -253,6 +258,7 @@ class _FoodCatalogEditorState extends State<_FoodCatalogEditor> {
   void initState() {
     super.initState();
     kind = widget.initialKind;
+    savedId = widget.item == null ? null : int.tryParse(widget.item!['id'].toString());
     final item = widget.item ?? const <String, dynamic>{};
     name.text = (item['name'] ?? '').toString();
     category.text = (item['category'] ?? '').toString();
@@ -387,15 +393,29 @@ class _FoodCatalogEditorState extends State<_FoodCatalogEditor> {
         'barcode': barcode.text.trim(),
         if (isNew) 'opening_quantity': initial,
         'recipe': lines,
-      }, id: isNew ? null : int.parse(widget.item!['id'].toString()));
+      }, id: savedId);
       if (result['success'] != true) {
         throw ApiException((result['error'] ?? 'Не удалось сохранить').toString());
+      }
+      savedId = int.parse(result['id'].toString());
+      if (pickedPhoto != null) {
+        await ApiService.uploadFoodCatalogImage(savedId!, pickedPhoto!.path);
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) setState(() => error = readableError(e));
     } finally {
       if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> pickPhoto() async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery, imageQuality: 82, maxWidth: 1600);
+      if (file != null && mounted) setState(() => pickedPhoto = file);
+    } catch (e) {
+      if (mounted) setState(() => error = 'Не удалось выбрать фото: $e');
     }
   }
 
@@ -462,16 +482,22 @@ class _FoodCatalogEditorState extends State<_FoodCatalogEditor> {
           field('Начальный остаток', opening, number: true),
         if (kind == 'product') field('Штрихкод', barcode),
         field('Описание', description, lines: 3),
-        if (widget.item != null &&
-            ApiService.catalogImageUrl(widget.item!['image']).isNotEmpty)
-          Card(child: ListTile(
-            leading: Image.network(
-              ApiService.catalogImageUrl(widget.item!['image']),
-              width: 70, height: 70, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)),
-            title: const Text('Фото с сайта'),
-            subtitle: const Text('Используется существующая фотография позиции'),
-          )),
+        Card(child: ListTile(
+          leading: pickedPhoto != null
+            ? Image.file(File(pickedPhoto!.path), width: 70, height: 70,
+                fit: BoxFit.cover)
+            : widget.item != null &&
+                ApiService.catalogImageUrl(widget.item!['image']).isNotEmpty
+              ? Image.network(ApiService.catalogImageUrl(widget.item!['image']),
+                  width: 70, height: 70, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined))
+              : const Icon(Icons.add_photo_alternate_outlined, size: 45),
+          title: const Text('Фотография позиции'),
+          subtitle: const Text('Общая с сайтом Nika Business'),
+          trailing: IconButton(onPressed: pickPhoto,
+            icon: const Icon(Icons.photo_library_outlined)),
+          onTap: pickPhoto,
+        )),
         if (hasRecipe) ...[
           const Divider(height: 30),
           Text('Технологическая карта',

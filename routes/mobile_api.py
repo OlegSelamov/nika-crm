@@ -2385,3 +2385,54 @@ def mobile_food_catalog_save(item_id=None):
         raise
     finally:
         pool.putconn(conn)
+
+
+@mobile_api_bp.route("/food/catalog/<int:item_id>/image", methods=["POST"])
+def mobile_food_catalog_image(item_id):
+    """Upload catalog photos through the same media store as web catalog."""
+    guard = _guard()
+    if guard:
+        return guard
+    if not (session.get("is_super_admin") or session.get("role") in
+            ("owner", "admin", "creator", "super_admin")):
+        return jsonify({"success": False, "error": "Недостаточно прав"}), 403
+    image = request.files.get("image")
+    if not image or not image.filename:
+        return jsonify({"success": False, "error": "Не выбрана фотография"}), 400
+
+    company_id = session["company_id"]
+    conn = get_db()
+    uploaded_url = None
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT i.id FROM items i JOIN companies c ON c.id=i.company_id
+            WHERE i.id=%s AND i.company_id=%s
+              AND c.business_mode IN ('foodservice','universal')
+        """, (item_id, company_id))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Позиция не найдена"}), 404
+
+        from services.media import upload_image, delete_media
+        try:
+            uploaded_url = upload_image(
+                image, company_id=company_id, namespace=f"items/{item_id}")
+        except ValueError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
+
+        cur.execute(
+            "UPDATE item_images SET is_main=FALSE WHERE item_id=%s", (item_id,))
+        cur.execute("""
+            INSERT INTO item_images (item_id, image, is_main)
+            VALUES (%s,%s,TRUE)
+        """, (item_id, uploaded_url))
+        conn.commit()
+        return jsonify({"success": True, "image": uploaded_url})
+    except Exception:
+        conn.rollback()
+        if uploaded_url:
+            from services.media import delete_media
+            delete_media(uploaded_url)
+        raise
+    finally:
+        pool.putconn(conn)

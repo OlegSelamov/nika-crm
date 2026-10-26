@@ -624,6 +624,32 @@ class ApiService {
     return '$baseUrl${raw.startsWith('/') ? '' : '/'}$raw';
   }
 
+  static Future<Map<String, dynamic>> uploadFoodCatalogImage(
+    int itemId, String imagePath,
+  ) async {
+    final request = http.MultipartRequest('POST',
+        _uri('/api/mobile/food/catalog/$itemId/image'));
+    if (_cookie != null && _cookie!.isNotEmpty) {
+      request.headers['Cookie'] = _cookie!;
+    }
+    request.fields['kind'] = 'catalog';
+    request.files.add(await http.MultipartFile.fromPath('image', imagePath));
+    late http.Response response;
+    try {
+      final streamed = await request.send().timeout(const Duration(seconds: 50));
+      response = await http.Response.fromStream(streamed);
+    } catch (_) {
+      throw const ApiException('Не удалось загрузить фотографию на сервер');
+    }
+    dynamic json;
+    try { json = jsonDecode(utf8.decode(response.bodyBytes)); } catch (_) {}
+    if (response.statusCode >= 300 || response.statusCode < 200) {
+      throw ApiException(_errorMessage(json, response.statusCode),
+          statusCode: response.statusCode);
+    }
+    return Map<String, dynamic>.from(json as Map);
+  }
+
   static Future<Map<String, dynamic>> foodCategories() async =>
       Map<String, dynamic>.from(await _request('GET', '/api/catalog/food-categories'));
 
