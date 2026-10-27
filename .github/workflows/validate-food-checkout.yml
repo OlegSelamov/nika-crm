@@ -28,6 +28,7 @@ on:
       - "tests/test_food_payment_print.js"
       - "tests/test_food_order_cancel.js"
       - "tests/test_food_modifier_tabs.js"
+      - "tests/test_food_cart_modifier_edit.js"
       - "tests/test_payment_touch_first_tap.js"
       - "templates/food_order_ticket.html"
       - ".github/workflows/validate-food-checkout.yml"
@@ -67,6 +68,8 @@ jobs:
         run: node tests/test_food_order_cancel.js
       - name: Verify food modifier tab behavior
         run: node tests/test_food_modifier_tabs.js
+      - name: Verify editing modifiers on existing food order lines
+        run: node tests/test_food_cart_modifier_edit.js
       - name: Verify first-tap payment choice does not open touch keyboard
         run: node tests/test_payment_touch_first_tap.js
       - name: Run food checkout regression checks

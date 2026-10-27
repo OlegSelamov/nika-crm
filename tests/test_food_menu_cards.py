@@ -76,7 +76,9 @@ class FoodMenuCardsTests(unittest.TestCase):
         self.assertIn("setFoodModifierTab('add');alert('Выберите: '", js)
         self.assertIn("'#foodModifierExclusions input[data-excluded-ingredient-id]:checked'", js)
         self.assertIn("const mods=selectedFoodModifiers();", js)
-        self.assertIn("excluded_ingredients:excludedIngredients", js)
+        self.assertIn("excluded_ingredients: excludedIngredients", js)
+        self.assertIn("Object.assign(pendingModifierCartLine, values)", js)
+        self.assertIn("delete pendingModifierCartLine.line_total", js)
         self.assertIn('.food-modifier-tabs', css)
         self.assertIn('body > #foodModifierModal .food-modifier-tabs', css)
 
