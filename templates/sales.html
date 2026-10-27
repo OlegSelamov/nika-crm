@@ -2,7 +2,7 @@
 
 {% block page_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css', v='20261024-save-only-v1') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261024-dual-food-tickets-test-v1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/food_sales.css', v='20261026-food-modifier-tabs-test-v1') }}">
 {% endblock %}
 
 {% block content %}
@@ -271,8 +271,9 @@
     </div>
     <section id="foodOrdersWorkspace" class="food-orders-workspace" hidden aria-label="История заказов">
         <div class="food-history-top"><div><strong>История заказов</strong><span>Открытые и оплаченные заказы, печать кухни и пречеков</span></div>
-            <select id="foodOrderStatusFilter" aria-label="Статус"><option value="all">Все заказы</option><option value="open">Открытые</option><option value="paid">Оплаченные</option><option value="external_paid">Внешняя ККМ</option><option value="cancelled">Отменённые</option></select>
+            <select id="foodOrderStatusFilter" aria-label="Статус"><option value="all">Все заказы</option><option value="open">Открытые</option><option value="paid">Оплаченные</option><option value="refunded">Возвраты</option><option value="external_paid">Внешняя ККМ</option><option value="cancelled">Отменённые</option></select>
         </div>
+        <div id="foodOrderHistoryNotice" class="food-order-history-notice" role="status" aria-live="polite" hidden></div>
         <div id="foodOrderHistoryList" class="food-order-history-list"></div>
         <button type="button" id="foodOrderHistoryMore" hidden>Показать ещё</button>
     </section>
@@ -328,7 +329,16 @@
         <div class="food-modifier-backdrop" data-food-modifier-close></div>
         <div class="food-modifier-dialog" role="dialog" aria-modal="true">
             <div class="food-modifier-head"><div><small>НАСТРОЙКА БЛЮДА</small><h2 id="foodModifierTitle">Блюдо</h2></div><button type="button" data-food-modifier-close>×</button></div>
-            <div id="foodModifierGroups" class="food-modifier-groups"></div>
+            <div class="food-modifier-tabs" role="tablist" aria-label="Изменение состава блюда">
+                <button type="button" id="foodModifierAddTab" class="food-modifier-tab is-active" role="tab" aria-selected="true" aria-controls="foodModifierGroups" data-food-modifier-tab="add">
+                    <span>＋ Добавить</span><span id="foodModifierAddCount" class="food-modifier-tab-count" hidden>0</span>
+                </button>
+                <button type="button" id="foodModifierRemoveTab" class="food-modifier-tab" role="tab" aria-selected="false" aria-controls="foodModifierExclusions" data-food-modifier-tab="remove" tabindex="-1">
+                    <span>− Убрать</span><span id="foodModifierRemoveCount" class="food-modifier-tab-count" hidden>0</span>
+                </button>
+            </div>
+            <div id="foodModifierGroups" class="food-modifier-groups" role="tabpanel" aria-labelledby="foodModifierAddTab"></div>
+            <div id="foodModifierExclusions" class="food-modifier-groups" role="tabpanel" aria-labelledby="foodModifierRemoveTab" hidden></div>
             <div class="food-modifier-footer"><div><span>Итого</span><strong id="foodModifierTotal">0 ₸</strong></div><button type="button" id="foodModifierAdd">Добавить в заказ</button></div>
         </div>
     </div>
@@ -344,9 +354,9 @@
 
 			<div class="payment-methods">
 
-				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cardInput').value=''; document.getElementById('kaspiInput').value=''; fillPayment('cash')">
-				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cashInput').value=''; document.getElementById('kaspiInput').value=''; fillPayment('card')">
-				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" autocomplete="off" onclick="document.getElementById('cashInput').value=''; document.getElementById('cardInput').value=''; fillPayment('kaspi')">
+				<input id="cashInput" placeholder="Наличные / получено" class="pay-input" inputmode="decimal" autocomplete="off" data-payment-kind="cash">
+				<input id="cardInput" placeholder="Карта" class="pay-input" inputmode="decimal" autocomplete="off" data-payment-kind="card">
+				<input id="kaspiInput" placeholder="Kaspi" class="pay-input" inputmode="decimal" autocomplete="off" data-payment-kind="kaspi">
 
 			</div>
 
@@ -892,8 +902,9 @@
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="{{ url_for('static', filename='js/ncalayer.js') }}?v=20260826-4"></script>
 <script src="{{ url_for('static', filename='js/esf.js') }}?v=20260919-1"></script>
-<script src="{{ url_for('static', filename='js/sales.js', v='20261024-retail-status-badges-test-v2') }}"></script>
-<script src="{{ url_for('static', filename='js/food_sales.js', v='20261024-dual-food-tickets-test-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales.js', v='20261026-food-paid-refund-test-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/sales_payment_touch.js', v='20261026-double-tap-payment-test-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/food_sales.js', v='20261026-food-modifier-tabs-test-v1') }}"></script>
 <script src="{{ url_for('static', filename='js/sales_cash_change_patch.js', v='20261022-food-payment-stage-v6') }}"></script>
 
 <script src="{{ url_for('static', filename='js/sales_mobile_payment.js', v='20261023-mobile-checkout-dock-test-v1') }}"></script>

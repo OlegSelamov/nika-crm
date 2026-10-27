@@ -460,6 +460,44 @@ class ApiService {
     }
   }
 
+  /// Fetch the website configuration for the logged-in organization, not a
+  /// global device switch. Cache is isolated by company ID in OfflineStore.
+  static Future<Map<String, dynamic>> businessConfiguration({
+    bool forceRemote = false,
+  }) async {
+    final cached = await OfflineStore.instance.snapshot('business_configuration');
+    if (!forceRemote && cached is Map) {
+      return Map<String, dynamic>.from(cached);
+    }
+    try {
+      final config = Map<String, dynamic>.from(await _request(
+        'GET', '/api/mobile/configuration',
+        timeout: const Duration(seconds: 8),
+      ));
+      final cid = int.tryParse('${config['company_id'] ?? ''}');
+      final uid = int.tryParse('${config['user_id'] ?? ''}');
+      if (config['success'] != true || cid == null || cid <= 0 ||
+          uid == null || uid <= 0) {
+        throw const ApiException('Не удалось определить конфигурацию организации');
+      }
+      final activeCompany = await OfflineStore.instance.companyId;
+      final activeUser = await OfflineStore.instance.userId;
+      if (activeCompany != cid || activeUser != uid) {
+        // The user may have switched organizations in the web session.
+        await OfflineStore.instance.setIdentity(companyId: cid, userId: uid);
+      }
+      await OfflineStore.instance.cacheSnapshot('business_configuration', config);
+      return config;
+    } on ApiException catch (e) {
+      // Authentication or an invalid configuration cannot silently reuse
+      // another session's last-known mode.
+      if ((e.statusCode == null || e.statusCode! >= 500) && cached is Map) {
+        return Map<String, dynamic>.from(cached);
+      }
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> dashboard({bool forceRemote = false}) async {
     final cached = await OfflineStore.instance.snapshot('dashboard');
     if (!forceRemote && cached is Map) return Map<String, dynamic>.from(cached);
@@ -576,6 +614,136 @@ class ApiService {
       onQueued: () => OfflineStore.instance.applySaleStockDelta(cartSnapshot),
     );
   }
+
+  /// Images may be full R2/CDN URLs or legacy relative paths.
+  static String catalogImageUrl(dynamic image) {
+    final raw = (image ?? '').toString().trim();
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
+    if (raw.startsWith('//')) return 'https:$raw';
+    return '$baseUrl${raw.startsWith('/') ? '' : '/'}$raw';
+  }
+
+  static Future<Map<String, dynamic>> uploadFoodCatalogImage(
+    int itemId, String imagePath,
+  ) async {
+    final request = http.MultipartRequest('POST',
+        _uri('/api/mobile/food/catalog/$itemId/image'));
+    if (_cookie != null && _cookie!.isNotEmpty) {
+      request.headers['Cookie'] = _cookie!;
+    }
+    request.fields['kind'] = 'catalog';
+    request.files.add(await http.MultipartFile.fromPath('image', imagePath));
+    late http.Response response;
+    try {
+      final streamed = await request.send().timeout(const Duration(seconds: 50));
+      response = await http.Response.fromStream(streamed);
+    } catch (_) {
+      throw const ApiException('Не удалось загрузить фотографию на сервер');
+    }
+    dynamic json;
+    try { json = jsonDecode(utf8.decode(response.bodyBytes)); } catch (_) {}
+    if (response.statusCode >= 300 || response.statusCode < 200) {
+      throw ApiException(_errorMessage(json, response.statusCode),
+          statusCode: response.statusCode);
+    }
+    return Map<String, dynamic>.from(json as Map);
+  }
+
+  static Future<Map<String, dynamic>> foodCategories() async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/catalog/food-categories'));
+
+  static Future<Map<String, dynamic>> saveFoodCatalogItem(
+    Map<String, dynamic> data, {int? id}
+  ) async => Map<String, dynamic>.from(await _request(
+    id == null ? 'POST' : 'PATCH',
+    id == null ? '/api/mobile/food/catalog' : '/api/mobile/food/catalog/$id',
+    body: data,
+  ));
+
+  // Restaurant writes are online-only; never enqueue a potentially paid
+  // order/payment into the generic offline sales queue.
+  static Future<Map<String, dynamic>> foodConfiguration() async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/food/config'));
+
+  static Future<Map<String, dynamic>> foodMenu({
+    String query = '', String type = 'food_menu',
+    int page = 1, String category = '',
+  }) async => Map<String, dynamic>.from(await _request(
+        'GET', '/api/catalog/items',
+        query: {
+          'type': type, 'limit': '36', 'page': '$page',
+          if (query.trim().isNotEmpty) 'q': query.trim(),
+          if (category.isNotEmpty) 'category': category,
+        },
+      ));
+
+  static Future<Map<String, dynamic>> foodModifiers(int itemId) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET', '/api/items/$itemId/modifiers'));
+
+  static Future<Map<String, dynamic>> saveFoodModifiers(
+    int itemId, List<Map<String, dynamic>> groups,
+  ) async => Map<String, dynamic>.from(await _request(
+    'PUT', '/api/items/$itemId/modifiers', body: {'groups': groups},
+  ));
+
+  static Future<Map<String, dynamic>> foodRecipe(int itemId) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET', '/api/items/$itemId/recipe'));
+
+  static Future<Map<String, dynamic>> foodOrders({
+    String status = 'all', int page = 1,
+  }) async => Map<String, dynamic>.from(await _request(
+        'GET', '/api/food/orders',
+        query: {'status': status, 'page': '$page'},
+      ));
+
+  static Future<Map<String, dynamic>> foodOrder(int id) async =>
+      Map<String, dynamic>.from(await _request('GET', '/api/food/orders/$id'));
+
+  static Future<Map<String, dynamic>> saveFoodOrder(Map<String, dynamic> data) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/api/food/orders', body: data));
+
+  static Future<Map<String, dynamic>> cancelFoodOrder(int id) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/api/food/orders/$id', body: {'action': 'cancel'}));
+
+  static Future<Map<String, dynamic>> confirmExternalFoodPayment(
+    int id, String receipt,
+  ) async => Map<String, dynamic>.from(await _request(
+        'POST', '/api/food/orders/$id/external-payment',
+        body: {'receipt_number': receipt},
+      ));
+
+  static Future<Map<String, dynamic>> payFoodOrder({
+    required int foodOrderId,
+    required List<Map<String, dynamic>> cart,
+    required String method,
+    required String operationId,
+    int? clientId,
+    String? transactionId,
+    String? kaspiMethod,
+    double? cashReceived,
+  }) async => Map<String, dynamic>.from(await _request(
+        'POST', '/sales/pay',
+        timeout: const Duration(seconds: 65),
+        body: {
+          'food_mode': true,
+          'food_order_id': foodOrderId,
+          'operation_id': operationId,
+          'cart': cart,
+          'client_id': clientId,
+          'payment_method': method,
+          'kaspi_transaction_id': transactionId,
+          'kaspi_method': kaspiMethod,
+          if (cashReceived != null) 'cash_received': cashReceived,
+        },
+      ));
+
+  static String foodTicketPdfPath(int id, String kind) =>
+      '/food/orders/$id/ticket-pdf/$kind';
 
   static Future<Map<String, dynamic>> createInvoiceSale({
     required List cart,
@@ -983,13 +1151,21 @@ class ApiService {
   static Future<Map<String, dynamic>> refundSale(
     int saleId, {
     bool kaspiManualFiscalOnly = false,
+    String? kaspiLocalRefundTransactionId,
   }) async =>
       Map<String, dynamic>.from(await _request(
         'POST',
         '/sales/refund/$saleId',
-        // A manually tagged Kaspi receipt has no POS transaction to refund.
-        // Only an explicitly confirmed fiscal/stock reversal may set this flag.
-        body: kaspiManualFiscalOnly ? {'kaspi_manual_fiscal_only': true} : null,
+        // The bank refund is performed on the phone in the POS LAN.
+        // VPS only records/fiscalizes an already confirmed terminal refund.
+        body: kaspiManualFiscalOnly
+            ? {'kaspi_manual_fiscal_only': true}
+            : kaspiLocalRefundTransactionId != null
+                ? {
+                    'kaspi_refund_local': true,
+                    'kaspi_refund_transaction_id': kaspiLocalRefundTransactionId,
+                  }
+                : null,
         timeout: const Duration(seconds: 90),
       ));
 

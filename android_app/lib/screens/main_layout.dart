@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/catalog_display_preferences.dart';
 import '../services/nika_assistant_controller.dart';
 import '../services/offline_sync_service.dart';
+import '../services/organization_mode.dart';
 import '../services/scanner_feedback_service.dart';
 import '../services/sales_voice_bridge.dart';
 import '../theme/app_theme.dart';
@@ -20,6 +21,8 @@ import 'clients_screen.dart';
 import 'dashboard_screen.dart';
 import 'employees_screen.dart';
 import 'expenses_screen.dart';
+import 'food_service_screen.dart';
+import 'food_catalog_screen.dart';
 import 'items_screen.dart';
 import 'income_screen.dart';
 import 'login_screen.dart';
@@ -51,7 +54,14 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   int selectedIndex = 0;
-  final salesKey = GlobalKey<SalesScreenState>();
+  GlobalKey<SalesScreenState> salesKey = GlobalKey<SalesScreenState>();
+  GlobalKey<FoodServiceScreenState> foodHistoryKey = GlobalKey<FoodServiceScreenState>();
+  String? businessMode;
+  int? activeCompanyId;
+  String? companyConfigError;
+  bool loadingCompanyConfig = false;
+  Timer? companyConfigTimer;
+  bool get foodBusiness => OrganizationMode.isFoodService(businessMode);
   final quickScannerController = MobileScannerController(
     autoStart: false,
     detectionSpeed: DetectionSpeed.normal,
@@ -66,8 +76,6 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   String currentRole = 'employee';
 
   bool hasModule(String code) => enabledModules?.contains(code) ?? true;
-
-  static const titles = ['Главная', 'Продажи', 'История', 'Все разделы'];
 
   @override
   void initState() {
@@ -89,6 +97,10 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       (_) => unawaited(OfflineSyncService.instance.syncNow()),
     );
     _loadModules();
+    companyConfigTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => unawaited(_loadModules()),
+    );
     CatalogDisplayPreferences.load().catchError((_) {});
   }
 
@@ -96,23 +108,57 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(OfflineSyncService.instance.syncNow());
+      unawaited(_loadModules());
     }
   }
 
+  bool _sameModules(Set<String>? a, Set<String> b) =>
+      a != null && a.length == b.length && a.containsAll(b);
+
   Future<void> _loadModules() async {
+    if (loadingCompanyConfig) return;
+    loadingCompanyConfig = true;
     try {
-      final modules = await ApiService.getModules();
+      final config = await ApiService.businessConfiguration(forceRemote: true);
+      final modules = await ApiService.getModules(forceRemote: true);
       final role = await AuthService.getRole();
       if (!mounted) return;
-      setState(() {
-        enabledModules = modules;
-        currentRole = role.toLowerCase();
-        if (!modules.contains('dashboard') && selectedIndex == 0) {
-          selectedIndex = 3;
-        }
-      });
-    } catch (_) {
-      // Не блокируем приложение при временной ошибке синхронизации.
+      final companyId = int.tryParse('${config['company_id'] ?? ''}');
+      final mode = (config['business_mode'] ?? 'retail').toString();
+      final contextChanged = businessMode != mode || activeCompanyId != companyId;
+      if (contextChanged || companyConfigError != null ||
+          currentRole != role.toLowerCase() ||
+          !_sameModules(enabledModules, modules)) {
+        if (contextChanged && quickScannerActive) unawaited(_stopQuickScanner());
+        setState(() {
+          if (contextChanged) {
+            // Dispose carts and order histories from the previous organization
+            // or a different sales workflow, even without logging out.
+            salesKey = GlobalKey<SalesScreenState>();
+            foodHistoryKey = GlobalKey<FoodServiceScreenState>();
+            quickScannedCodes.clear();
+          }
+          businessMode = mode;
+          activeCompanyId = companyId;
+          companyConfigError = null;
+          enabledModules = modules;
+          currentRole = role.toLowerCase();
+          if (!modules.contains('dashboard') && selectedIndex == 0) {
+            selectedIndex = 3;
+          }
+          if (!modules.contains('sales') &&
+              (selectedIndex == 1 || selectedIndex == 2)) {
+            selectedIndex = 3;
+          }
+        });
+        SalesVoiceBridge.instance.setSalesVisible(selectedIndex == 1 && !foodBusiness);
+      }
+    } catch (e) {
+      if (mounted && businessMode == null) {
+        setState(() => companyConfigError = e.toString());
+      }
+    } finally {
+      loadingCompanyConfig = false;
     }
   }
 
@@ -126,6 +172,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     offlineSyncTimer?.cancel();
+    companyConfigTimer?.cancel();
     SalesVoiceBridge.instance.setSalesVisible(false);
     nika.clearHandlers();
     nika.deactivate();
@@ -148,15 +195,21 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     final next = index.clamp(0, 3).toInt();
     if (next == 0 && !hasModule('dashboard')) { _moduleDenied(); return; }
     if ((next == 1 || next == 2) && !hasModule('sales')) { _moduleDenied(); return; }
-    SalesVoiceBridge.instance.setSalesVisible(next == 1);
+    SalesVoiceBridge.instance.setSalesVisible(next == 1 && !foodBusiness);
     setState(() => selectedIndex = next);
+    if (next == 2 && foodBusiness) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) foodHistoryKey.currentState?.loadOrders();
+      });
+    }
   }
 
   Future<void> openPage(Widget page) async {
     SalesVoiceBridge.instance.setSalesVisible(false);
     await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
     if (mounted) {
-      SalesVoiceBridge.instance.setSalesVisible(selectedIndex == 1);
+      SalesVoiceBridge.instance.setSalesVisible(selectedIndex == 1 && !foodBusiness);
+      unawaited(_loadModules());
     }
   }
 
@@ -219,16 +272,16 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         page = const ClientsScreen();
         break;
       case '/items':
-        title = 'Товары и услуги';
-        page = const ItemsScreen();
+        title = foodBusiness ? 'Меню и каталог' : 'Товары и услуги';
+        page = foodBusiness ? const FoodCatalogScreen() : const ItemsScreen();
         break;
       case '/stock':
         title = 'Склад';
-        page = const StockScreen();
+        page = StockScreen(foodBusiness: foodBusiness);
         break;
       case '/stock/income':
-        title = 'Приход товара';
-        page = const IncomeScreen();
+        title = foodBusiness ? 'Приход ингредиентов и товаров' : 'Приход товара';
+        page = IncomeScreen(foodBusiness: foodBusiness);
         break;
       case '/stock/movements':
         title = 'Движение товара';
@@ -303,7 +356,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   }
 
   void _startQuickScanner() {
-    if (quickScannerActive || selectedIndex != 1) return;
+    if (foodBusiness || quickScannerActive || selectedIndex != 1) return;
     quickScannedCodes.clear();
     quickScannerActive = true;
     final session = ++quickScanSession;
@@ -335,7 +388,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   }
 
   Future<void> _onQuickBarcode(BarcodeCapture capture) async {
-    if (!quickScannerActive || quickScanBusy || capture.barcodes.isEmpty) return;
+    if (foodBusiness || !quickScannerActive || quickScanBusy || capture.barcodes.isEmpty) return;
     final code = capture.barcodes.first.rawValue?.trim() ?? '';
     if (code.isEmpty || quickScannedCodes.contains(code)) return;
     quickScannedCodes.add(code);
@@ -350,11 +403,45 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (businessMode == null) {
+      return Scaffold(
+        body: Center(
+          child: companyConfigError == null
+              ? const CircularProgressIndicator()
+              : Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('Не удалось определить режим организации'),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(companyConfigError!, textAlign: TextAlign.center),
+                  ),
+                  TextButton(onPressed: _loadModules, child: const Text('Повторить')),
+                ]),
+        ),
+      );
+    }
+    final sectionTitles = [
+      'Главная',
+      OrganizationMode.salesTitle(businessMode),
+      OrganizationMode.historyTitle(businessMode),
+      'Все разделы',
+    ];
     final screens = [
-      DashboardScreen(onOpenSection: openCore),
-      SalesScreen(key: salesKey),
-      const SalesHistoryScreen(),
-      _MoreScreen(openPage: openPage, logout: logout, enabledModules: enabledModules, currentRole: currentRole),
+      DashboardScreen(
+        key: ValueKey('dashboard-$activeCompanyId'),
+        onOpenSection: openCore,
+      ),
+      foodBusiness
+          ? FoodServiceScreen(key: ValueKey('food-sale-$activeCompanyId'), embedded: true)
+          : SalesScreen(key: salesKey),
+      foodBusiness
+          ? FoodServiceScreen(key: foodHistoryKey, embedded: true, historyOnly: true)
+          : const SalesHistoryScreen(),
+      _MoreScreen(
+        key: ValueKey('more-$activeCompanyId-$businessMode'),
+        openPage: openPage, logout: logout, enabledModules: enabledModules,
+        currentRole: currentRole, foodBusiness: foodBusiness,
+      ),
     ];
 
     final coreIndices = <int>[
@@ -391,6 +478,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                   logout: logout,
                   enabledModules: enabledModules,
                   currentRole: currentRole,
+                  foodBusiness: foodBusiness,
                 ),
           appBar: AppBar(
             titleSpacing: tablet ? 16 : 0,
@@ -420,7 +508,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                 const SizedBox(width: 10),
                 Flexible(
                   child: Text(
-                    titles[selectedIndex],
+                    sectionTitles[selectedIndex],
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -451,7 +539,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                   final tooltip = syncing
                       ? 'Синхронизация…'
                       : offline
-                          ? 'Офлайн · данные на телефоне'
+                          ? (foodBusiness ? 'Офлайн · заказы общепита требуют сервера' : 'Офлайн · данные на телефоне')
                           : failed
                               ? 'Ошибка синхронизации'
                               : 'Синхронизировано';
@@ -466,7 +554,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                             final message = status == OfflineSyncStatus.synced
                                 ? 'Данные синхронизированы'
                                 : status == OfflineSyncStatus.offline
-                                    ? 'Сервер недоступен · продажи сохраняются локально'
+                                    ? (foodBusiness ? 'Сервер недоступен · заказы общепита работают только онлайн' : 'Сервер недоступен · продажи сохраняются локально')
                                     : 'Не удалось синхронизировать данные';
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(message)),
@@ -524,16 +612,16 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                           label: Text('Главная'),
                         ),
                       if (hasModule('sales'))
-                        const NavigationRailDestination(
-                          icon: Icon(Icons.point_of_sale_outlined),
+                        NavigationRailDestination(
+                          icon: const Icon(Icons.point_of_sale_outlined),
                           selectedIcon: Icon(Icons.point_of_sale_rounded),
-                          label: Text('Продажа'),
+                          label: Text(foodBusiness ? 'Заказы' : 'Продажа'),
                         ),
                       if (hasModule('sales'))
-                        const NavigationRailDestination(
-                          icon: Icon(Icons.history_outlined),
+                        NavigationRailDestination(
+                          icon: const Icon(Icons.history_outlined),
                           selectedIcon: Icon(Icons.history_rounded),
-                          label: Text('История'),
+                          label: Text(foodBusiness ? 'История заказов' : 'История'),
                         ),
                       const NavigationRailDestination(
                         icon: Icon(Icons.grid_view_outlined),
@@ -561,7 +649,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           ]),
           bottomNavigationBar: tablet
               ? null
-              : selectedIndex == 1
+              : selectedIndex == 1 && !foodBusiness
                   ? Container(
                       margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                       padding: const EdgeInsets.fromLTRB(4, 7, 4, 5),
@@ -573,10 +661,10 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                       ),
                       child: Row(children: [
                         Expanded(child: _SalesNavButton(icon: Icons.inventory_2_outlined, label: 'Каталог', onTap: () {
-                          if (hasModule('catalog')) { openPage(const ModulePage(title: 'Каталог', child: ItemsScreen())); } else { _moduleDenied(); }
+                          if (hasModule('catalog')) { openPage(ModulePage(title: foodBusiness ? 'Меню и каталог' : 'Каталог', child: foodBusiness ? const FoodCatalogScreen() : const ItemsScreen())); } else { _moduleDenied(); }
                         })),
                         Expanded(child: _SalesNavButton(icon: Icons.warehouse_outlined, label: 'Склад', onTap: () {
-                          if (hasModule('warehouse')) { openPage(const ModulePage(title: 'Склад', child: StockScreen())); } else { _moduleDenied(); }
+                          if (hasModule('warehouse')) { openPage(ModulePage(title: 'Склад', child: StockScreen(foodBusiness: foodBusiness))); } else { _moduleDenied(); }
                         })),
                         Expanded(child: _SalesScannerNavButton(
                           onHoldStart: _startQuickScanner,
@@ -595,9 +683,9 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                             if (hasModule('dashboard'))
                               const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Главная'),
                             if (hasModule('sales'))
-                              const NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale_rounded), label: 'Продажа'),
+                              NavigationDestination(icon: const Icon(Icons.point_of_sale_outlined), selectedIcon: const Icon(Icons.point_of_sale_rounded), label: foodBusiness ? 'Заказы' : 'Продажа'),
                             if (hasModule('sales'))
-                              const NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history_rounded), label: 'История'),
+                              NavigationDestination(icon: const Icon(Icons.history_outlined), selectedIcon: const Icon(Icons.history_rounded), label: foodBusiness ? 'История заказов' : 'История'),
                             const NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'Разделы'),
                           ],
                         ),
@@ -723,25 +811,36 @@ class _MoreScreen extends StatelessWidget {
   final Future<void> Function() logout;
   final Set<String>? enabledModules;
   final String currentRole;
+  final bool foodBusiness;
 
-  const _MoreScreen({required this.openPage, required this.logout, required this.enabledModules, required this.currentRole});
+  const _MoreScreen({
+    super.key,
+    required this.openPage, required this.logout,
+    required this.enabledModules, required this.currentRole,
+    required this.foodBusiness,
+  });
 
   @override
   Widget build(BuildContext context) {
     final sections = <_SectionData>[
       const _SectionData('profile', 'Профиль', 'Личный профиль и статистика', Icons.person_outline_rounded, AppColors.primary, ProfileScreen()),
       const _SectionData('dashboard', 'Главная', 'Главная панель компании', Icons.home_outlined, AppColors.primary, DashboardScreen()),
-      const _SectionData(null, 'Очередь синхронизации', 'Локальные продажи и ошибки отправки · работает без интернета', Icons.cloud_upload_outlined, AppColors.warning, OfflineQueueScreen()),
-      const _SectionData('sales', 'Продажи', 'Касса и история продаж', Icons.point_of_sale_outlined, AppColors.primary, SalesScreen()),
+      if (!foodBusiness) const _SectionData(null, 'Очередь синхронизации', 'Локальные продажи и ошибки отправки · работает без интернета', Icons.cloud_upload_outlined, AppColors.warning, OfflineQueueScreen()),
+      _SectionData('sales', foodBusiness ? 'Заказы' : 'Продажи',
+          foodBusiness ? 'Касса и заказы кухни' : 'Касса и история продаж',
+          Icons.point_of_sale_outlined, AppColors.primary,
+          foodBusiness ? const FoodServiceScreen(embedded: true) : const SalesScreen()),
       const _SectionData('analytics', 'Аналитика', 'Выручка и прибыль', Icons.query_stats_rounded, AppColors.primary, AnalyticsScreen()),
-      const _SectionData('catalog', 'Каталог', 'Товары, услуги и цены', Icons.inventory_2_outlined, AppColors.warning, ItemsScreen()),
+      _SectionData('catalog', foodBusiness ? 'Меню и каталог' : 'Каталог',
+          foodBusiness ? 'Блюда, ингредиенты, цены' : 'Товары, услуги и цены',
+          Icons.inventory_2_outlined, AppColors.warning, foodBusiness ? const FoodCatalogScreen() : const ItemsScreen()),
       const _SectionData('storefront', 'Онлайн-витрина', 'Заказы и бронирования', Icons.storefront_outlined, Color(0xFFDC6803), StorefrontScreen()),
       const _SectionData('tasks', 'Задачи', 'Команда и контроль сроков', Icons.task_alt_outlined, Color(0xFF4776E6), TasksScreen()),
       const _SectionData('cto', 'ККМ и ЦТО', 'Кассы и техническое обслуживание', Icons.developer_board_outlined, Color(0xFF475467), CtoScreen()),
       const _SectionData('accounting', 'Бухгалтерия', 'Налоги, долги и документы', Icons.account_balance_outlined, Color(0xFF6941C6), AccountingScreen()),
       const _SectionData('reports', 'Отчёты', 'Отчёты и Excel', Icons.summarize_outlined, Color(0xFF8A54D1), ReportsScreen()),
       const _SectionData('expenses', 'Расходы', 'Затраты и категории', Icons.payments_outlined, AppColors.danger, ExpensesScreen()),
-      const _SectionData('warehouse', 'Склад', 'Остатки и движения', Icons.warehouse_outlined, AppColors.success, StockScreen()),
+      _SectionData('warehouse', 'Склад', foodBusiness ? 'Ингредиенты, товары и производство' : 'Остатки и движения', Icons.warehouse_outlined, AppColors.success, StockScreen(foodBusiness: foodBusiness)),
       const _SectionData('clients', 'Клиенты', 'CRM и история покупок', Icons.people_alt_outlined, AppColors.cyan, ClientsScreen()),
       const _SectionData('school', 'Школа', 'Классные руководители и питание', Icons.school_outlined, Color(0xFF6941C6), SchoolScreen()),
       const _SectionData('settings', 'Настройки', 'Настройки компании и интеграций', Icons.settings_outlined, AppColors.muted, SettingsScreen()),
@@ -825,6 +924,7 @@ class _AppDrawer extends StatelessWidget {
   final Future<void> Function() logout;
   final Set<String>? enabledModules;
   final String currentRole;
+  final bool foodBusiness;
 
   const _AppDrawer({
     required this.selectedIndex,
@@ -833,6 +933,7 @@ class _AppDrawer extends StatelessWidget {
     required this.logout,
     required this.enabledModules,
     required this.currentRole,
+    required this.foodBusiness,
   });
 
   bool hasModule(String code) => enabledModules?.contains(code) ?? true;
@@ -879,10 +980,11 @@ class _AppDrawer extends StatelessWidget {
                 children: [
                   if (hasModule('profile')) _drawerItem(Icons.person_outline_rounded, 'Профиль', () { Navigator.pop(context); openPage(const ModulePage(title: 'Профиль', child: ProfileScreen())); }),
                   if (hasModule('dashboard')) _drawerItem(Icons.home_rounded, 'Главная', () => openCore(0), active: selectedIndex == 0),
-                  if (hasModule('sales')) _drawerItem(Icons.point_of_sale_rounded, 'Продажи', () => openCore(1), active: selectedIndex == 1),
-                  _drawerItem(Icons.cloud_upload_outlined, 'Очередь синхронизации', () { Navigator.pop(context); openPage(const ModulePage(title: 'Очередь синхронизации', child: OfflineQueueScreen())); }),
+                  if (hasModule('sales')) _drawerItem(Icons.point_of_sale_rounded, foodBusiness ? 'Заказы' : 'Продажи', () => openCore(1), active: selectedIndex == 1),
+                  if (hasModule('sales')) _drawerItem(Icons.history_outlined, foodBusiness ? 'История заказов' : 'История', () => openCore(2), active: selectedIndex == 2),
+                  if (!foodBusiness) _drawerItem(Icons.cloud_upload_outlined, 'Очередь синхронизации', () { Navigator.pop(context); openPage(const ModulePage(title: 'Очередь синхронизации', child: OfflineQueueScreen())); }),
                   if (hasModule('analytics')) _drawerItem(Icons.query_stats_rounded, 'Аналитика', () { Navigator.pop(context); openPage(const ModulePage(title: 'Аналитика', child: AnalyticsScreen())); }),
-                  if (hasModule('catalog')) _drawerItem(Icons.inventory_2_outlined, 'Каталог', () { Navigator.pop(context); openPage(const ModulePage(title: 'Каталог', child: ItemsScreen())); }),
+                  if (hasModule('catalog')) _drawerItem(Icons.inventory_2_outlined, foodBusiness ? 'Меню и каталог' : 'Каталог', () { Navigator.pop(context); openPage(ModulePage(title: foodBusiness ? 'Меню и каталог' : 'Каталог', child: foodBusiness ? const FoodCatalogScreen() : const ItemsScreen())); }),
                   if (hasModule('storefront')) _drawerItem(Icons.storefront_outlined, 'Онлайн-витрина', () { Navigator.pop(context); openPage(const ModulePage(title: 'Онлайн-витрина', child: StorefrontScreen())); }),
                   if (hasModule('tasks')) _drawerItem(Icons.task_alt_outlined, 'Задачи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Задачи', child: TasksScreen())); }),
                   if (hasModule('cto')) _drawerItem(Icons.developer_board_outlined, 'ККМ и ЦТО', () { Navigator.pop(context); openPage(const ModulePage(title: 'ККМ и ЦТО', child: CtoScreen())); }),
@@ -890,7 +992,7 @@ class _AppDrawer extends StatelessWidget {
                   if (hasModule('reports')) _drawerItem(Icons.summarize_outlined, 'Отчёты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Отчёты', child: ReportsScreen())); }),
                   if (hasModule('expenses')) _drawerItem(Icons.payments_outlined, 'Расходы', () { Navigator.pop(context); openPage(const ModulePage(title: 'Расходы', child: ExpensesScreen())); }),
                   if (hasModule('school')) _drawerItem(Icons.school_outlined, 'Школа', () { Navigator.pop(context); openPage(const ModulePage(title: 'Школа', child: SchoolScreen())); }),
-                  if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(const ModulePage(title: 'Склад', child: StockScreen())); }),
+                  if (hasModule('warehouse')) _drawerItem(Icons.warehouse_outlined, 'Склад', () { Navigator.pop(context); openPage(ModulePage(title: 'Склад', child: StockScreen(foodBusiness: foodBusiness))); }),
                   if (hasModule('clients')) _drawerItem(Icons.people_alt_outlined, 'Клиенты', () { Navigator.pop(context); openPage(const ModulePage(title: 'Клиенты', child: ClientsScreen())); }),
                   if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.account_balance_wallet_outlined, 'Мои банки', () { Navigator.pop(context); openPage(const ModulePage(title: 'Мои банки', child: BanksScreen())); }),
                   if (currentRole == 'admin' || currentRole == 'owner' || currentRole == 'creator' || currentRole == 'super_admin') _drawerItem(Icons.badge_outlined, 'Пользователи', () { Navigator.pop(context); openPage(const ModulePage(title: 'Пользователи', child: EmployeesScreen())); }),

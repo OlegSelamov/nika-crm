@@ -13,7 +13,8 @@ import 'suppliers_screen.dart';
 import 'writeoff_screen.dart';
 
 class StockScreen extends StatefulWidget {
-  const StockScreen({super.key});
+  final bool foodBusiness;
+  const StockScreen({super.key, this.foodBusiness = false});
 
   @override
   State<StockScreen> createState() => _StockScreenState();
@@ -46,7 +47,9 @@ class _StockScreenState extends State<StockScreen> {
       final data = await ApiService.getStock();
       if (!mounted) return;
       setState(() {
-        items = data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+        items = data.map((item) => Map<String, dynamic>.from(item as Map))
+          .where((item) => !widget.foodBusiness || const ['ingredient', 'product', 'semi_finished'].contains((item['item_type'] ?? 'product').toString()))
+          .toList();
         if (categoryFilter != 'all' && !categories.contains(categoryFilter)) categoryFilter = 'all';
         loading = false;
       });
@@ -156,7 +159,7 @@ class _StockScreenState extends State<StockScreen> {
                     children: [
                       Text('${item['name'] ?? 'Без названия'}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                       const SizedBox(height: 3),
-                      Text('${item['category'] ?? 'Без категории'}${barcode.isEmpty ? '' : ' · $barcode'}', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                      Text('${widget.foodBusiness ? (item['item_type'] == 'ingredient' ? 'Ингредиент · ' : item['item_type'] == 'semi_finished' ? 'Полуфабрикат · ' : 'Товар · ') : ''}${item['category'] ?? 'Без категории'}${barcode.isEmpty ? '' : ' · $barcode'}', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -210,16 +213,20 @@ class _StockScreenState extends State<StockScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
           children: [
-            const SectionTitle('Склад', subtitle: 'Остатки и операции только по товарам'),
+            SectionTitle('Склад', subtitle: widget.foodBusiness
+              ? 'Ингредиенты и товары — приход; полуфабрикаты — производство'
+              : 'Остатки и операции только по товарам'),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: AppColors.primary),
-                  SizedBox(width: 10),
-                  Expanded(child: Text('Услуги не имеют складского остатка и не участвуют в приходах и списаниях.', style: TextStyle(color: AppColors.text, fontSize: 13))),
+                  const Icon(Icons.info_outline, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(widget.foodBusiness
+                    ? 'Блюда списываются по техкартам при оплате. На приход ставятся только ингредиенты и товары. Полуфабрикаты выпускаются через производство.'
+                    : 'Услуги не имеют складского остатка и не участвуют в приходах и списаниях.', style: const TextStyle(color: AppColors.text, fontSize: 13))),
                 ],
               ),
             ),
@@ -229,9 +236,9 @@ class _StockScreenState extends State<StockScreen> {
               child: Row(
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () => _openOperation(const IncomeScreen(), refreshAfter: true),
+                    onPressed: () => _openOperation(IncomeScreen(foodBusiness: widget.foodBusiness), refreshAfter: true),
                     icon: const Icon(Icons.add_box_outlined),
-                    label: const Text('Приход товара'),
+                    label: Text(widget.foodBusiness ? 'Приход ингредиентов / товаров' : 'Приход товара'),
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
@@ -260,7 +267,7 @@ class _StockScreenState extends State<StockScreen> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  _metric('Всего товаров', '${items.length}', Icons.inventory_2_outlined, AppColors.primary),
+                  _metric(widget.foodBusiness ? 'Складских позиций' : 'Всего товаров', '${items.length}', Icons.inventory_2_outlined, AppColors.primary),
                   const SizedBox(width: 10),
                   _metric('В наличии', '${_statusCount('normal')}', Icons.check_circle_outline, AppColors.success),
                   const SizedBox(width: 10),

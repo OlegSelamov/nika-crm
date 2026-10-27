@@ -12,12 +12,16 @@ assert(start >= 0 && end > start, "Unable to isolate refundSale function");
 const fragment = source.slice(start, end);
 
 async function scenario(sale, confirmations) {
-    const requests = [], alerts = [], prompts = [];
+    const requests = [], alerts = [], prompts = [], events = [];
     let bankRefundCalls = 0, refreshed = 0, opened = 0;
     const button = { disabled: false, textContent: "Возврат" };
     const context = {
         console, JSON, String, Boolean, encodeURIComponent,
-        window: { nikaDesktop: { kaspiPos: { refund() { throw Error("Do not send actual bank requests in tests"); } } } },
+        CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
+        window: {
+            dispatchEvent(event) { events.push({type: event.type, saleId: event.detail?.saleId}); },
+            nikaDesktop: { kaspiPos: { refund() { throw Error("Do not send actual bank requests in tests"); } } }
+        },
         document: { body: { contains: () => true } },
         confirm: (prompt) => {
             prompts.push(prompt);
@@ -44,7 +48,7 @@ async function scenario(sale, confirmations) {
     };
     const run = vm.runInNewContext(fragment + "\nrefundSale", context);
     await run(684, button);
-    return { requests, prompts, bankRefundCalls, alerts, refreshed, opened, button };
+    return { requests, prompts, bankRefundCalls, alerts, refreshed, opened, button, events };
 }
 
 (async () => {
@@ -58,11 +62,13 @@ async function scenario(sale, confirmations) {
     assert.equal(s.requests[1].url, "/sales/refund/684");
     assert.equal(s.refreshed, 1);
     assert.equal(s.opened, 1);
+    assert.deepEqual(s.events, [{type: "nika:sale-refunded", saleId: 684}]);
     assert.equal(s.button.disabled, false);
 
     s = await scenario(manual, [true, false]);
     assert.equal(s.requests.length, 1, "Canceling the warning must not finalize a fiscal-only return");
     assert.equal(s.bankRefundCalls, 0);
+    assert.equal(s.events.length, 0, "Cancellation must not send refund event");
     assert.equal(s.button.disabled, false);
 
     s = await scenario({...manual,rekassa_ticket_id:null}, [true, true]);

@@ -36,7 +36,10 @@ jobs:
         run: flutter pub get
       - name: Run Kaspi refund regression tests
         working-directory: android_app
-        run: flutter test test/sale_refund_confirmation_test.dart
+        run: |
+          flutter test test/sale_refund_confirmation_test.dart
+          flutter test test/food_order_logic_test.dart
+          flutter test test/organization_mode_test.dart
       - name: Isolate test APK from production
         run: |
           python3 - <<'PY'

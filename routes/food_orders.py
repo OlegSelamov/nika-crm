@@ -238,6 +238,27 @@ def verify_payment_order(cur, company_id, order_id, cart, payment_method=None):
     return order
 
 
+@food_orders_bp.route("/api/food/config")
+def food_configuration():
+    """Company-scoped config for the native food POS."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        company_id = _food_access(cur)
+        if company_id is None:
+            return jsonify({"success": False, "message": "Общепит не включён"}), 403
+        cur.execute("SELECT name,business_mode,food_checkout_mode FROM companies WHERE id=%s", (company_id,))
+        row = cur.fetchone()
+        return jsonify({
+            "success": True,
+            "business_mode": row["business_mode"],
+            "food_checkout_mode": row["food_checkout_mode"] or "fast",
+            "company_name": row["name"] or "",
+        })
+    finally:
+        pool.putconn(conn)
+
+
 @food_orders_bp.route("/api/food/orders", methods=["GET", "POST"])
 def food_orders():
     conn = get_db()
@@ -254,23 +275,35 @@ def food_orders():
             except (ValueError, TypeError):
                 page = 1
             status = request.args.get("status", "all")
-            if status not in ("all", "open", "paid", "external_paid", "cancelled"):
+            if status not in ("all", "open", "paid", "refunded", "external_paid", "cancelled"):
                 status = "all"
             query = (request.args.get("q") or "").strip()[:70]
-            conditions = ["company_id=%s"]
+            conditions = ["fo.company_id=%s"]
             params = [company_id]
-            if status != "all":
-                conditions.append("status=%s")
+            if status == "refunded":
+                # Include legacy food orders whose sale was refunded before
+                # this status was introduced.
+                conditions.append("(fo.status='refunded' OR (fo.status='paid' AND COALESCE(s.is_refunded,FALSE)=TRUE))")
+            elif status == "paid":
+                conditions.append("fo.status='paid' AND COALESCE(s.is_refunded,FALSE)=FALSE")
+            elif status != "all":
+                conditions.append("fo.status=%s")
                 params.append(status)
             if query:
-                conditions.append("(table_name ILIKE %s OR guest_name ILIKE %s OR CAST(id AS TEXT)=%s)")
+                conditions.append("(fo.table_name ILIKE %s OR fo.guest_name ILIKE %s OR CAST(fo.id AS TEXT)=%s)")
                 params.extend([f"%{query}%", f"%{query}%", query.lstrip("#")])
             where_sql = " AND ".join(conditions)
             cur.execute(f"""
-                SELECT id, status, table_name, guest_name, total_amount,
-                       planned_payment_method, sale_id, external_receipt_number, created_at, updated_at FROM food_orders
+                SELECT fo.id,
+                       CASE WHEN fo.status='paid' AND COALESCE(s.is_refunded,FALSE)=TRUE
+                            THEN 'refunded' ELSE fo.status END AS status,
+                       fo.table_name, fo.guest_name, fo.total_amount,
+                       fo.planned_payment_method, fo.sale_id, fo.external_receipt_number,
+                       fo.created_at, fo.updated_at
+                FROM food_orders fo
+                LEFT JOIN sales s ON s.id=fo.sale_id AND s.company_id=fo.company_id
                 WHERE {where_sql}
-                ORDER BY id DESC LIMIT 21 OFFSET %s
+                ORDER BY fo.id DESC LIMIT 21 OFFSET %s
             """, tuple(params + [(page - 1) * 20]))
             rows = cur.fetchall()
             return jsonify({
@@ -356,11 +389,12 @@ def food_order_detail(order_id):
         cur.execute("""
             UPDATE food_orders SET status='cancelled', updated_at=%s
             WHERE id=%s AND company_id=%s AND status='open'
+              AND sale_id IS NULL AND external_receipt_number IS NULL
             RETURNING id
         """, (now_kz_for_timestamp(), order_id, company_id))
         if not cur.fetchone():
             conn.rollback()
-            return jsonify({"success": False, "message": "Заказ уже закрыт"}), 409
+            return jsonify({"success": False, "message": "Отменить можно только неоплаченный заказ"}), 409
         conn.commit()
         return jsonify({"success": True})
     finally:

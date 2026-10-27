@@ -12,7 +12,8 @@ import 'scanner_screen.dart';
 import 'suppliers_screen.dart';
 
 class IncomeScreen extends StatefulWidget {
-  const IncomeScreen({super.key});
+  final bool foodBusiness;
+  const IncomeScreen({super.key, this.foodBusiness = false});
 
   @override
   State<IncomeScreen> createState() => _IncomeScreenState();
@@ -91,7 +92,9 @@ class _IncomeScreenState extends State<IncomeScreen> {
         ApiService.getStockMovements(),
       ]);
       if (!mounted) return;
-      final stock = results[0].map((item) => Map<String, dynamic>.from(item as Map)).toList();
+      final stock = results[0].map((item) => Map<String, dynamic>.from(item as Map))
+        .where((item) => !widget.foodBusiness || const ['product', 'ingredient'].contains((item['item_type'] ?? 'product').toString()))
+        .toList();
       final movements = results[1]
           .map((item) => Map<String, dynamic>.from(item as Map))
           .where((item) => item['movement_type'] == 'income')

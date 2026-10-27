@@ -155,6 +155,36 @@ def mobile_modules():
     return jsonify({"success": True, "modules": modules})
 
 
+@mobile_api_bp.route("/configuration")
+def mobile_configuration():
+    """Current session organization's business configuration for native mobile UI."""
+    denied = _guard()
+    if denied:
+        return denied
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, name, business_mode, food_checkout_mode "
+            "FROM companies WHERE id = %s",
+            (session["company_id"],),
+        )
+        company = cur.fetchone()
+        if not company:
+            return jsonify({"success": False, "error": "Организация не найдена"}), 404
+        return jsonify({
+            "success": True,
+            "company_id": company["id"],
+            "user_id": session["user_id"],
+            "company_name": company["name"] or "",
+            "business_mode": company["business_mode"] or "retail",
+            "food_checkout_mode": company["food_checkout_mode"] or "fast",
+        })
+    finally:
+        pool.putconn(conn)
+
+
 @mobile_api_bp.route("/health")
 def mobile_health():
     denied = _guard()
@@ -2213,4 +2243,196 @@ def mobile_sale_items():
         return jsonify({"success": False, "error": "Не удалось загрузить каталог"}), 500
     finally:
         cur.close()
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/food/catalog", methods=["POST"])
+@mobile_api_bp.route("/food/catalog/<int:item_id>", methods=["PATCH"])
+def mobile_food_catalog_save(item_id=None):
+    """Mobile restaurant editor uses the same items/item_recipes as the website.
+
+    Stock receipts stay in /api/stock/income; editing a recipe never changes
+    warehouse quantities or creates a sale.
+    """
+    guard = _guard()
+    if guard:
+        return guard
+    company_id = session["company_id"]
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT business_mode FROM companies WHERE id=%s", (company_id,))
+        company = cur.fetchone()
+        if not company or company["business_mode"] not in ("foodservice", "universal"):
+            return jsonify({"success": False, "error": "Общепит не включён"}), 403
+        if not (session.get("is_super_admin") or session.get("role") in
+                ("owner", "admin", "creator", "super_admin")):
+            return jsonify({"success": False, "error": "Недостаточно прав на редактирование каталога"}), 403
+
+        data = _payload()
+        kind = str(data.get("item_type") or "dish").strip()
+        if kind not in ("dish", "semi_finished", "ingredient", "product"):
+            return jsonify({"success": False, "error": "Некорректный тип позиции"}), 400
+        name = str(data.get("name") or "").strip()
+        if not name:
+            return jsonify({"success": False, "error": "Укажите название"}), 400
+
+        def amount(value, field):
+            try:
+                number = Decimal(str(value or 0))
+                if not number.is_finite() or number < 0 or number > 1000000000:
+                    raise ValueError()
+                return number
+            except (ValueError, TypeError, InvalidOperation):
+                raise ValueError("Некорректное значение: " + field)
+
+        from routes.items import _item_barcode, _record_opening_balance
+        from utils.measure_units import normalize_unit
+
+        retail = Decimal("0") if kind == "ingredient" else amount(data.get("retail_price"), "цена")
+        purchase = amount(data.get("purchase_price"), "закупочная цена")
+        opening = amount(data.get("opening_quantity"), "начальный остаток")
+        if item_id is not None and opening:
+            raise ValueError("Начальный остаток можно задать только при создании")
+        if kind not in ("ingredient", "product") and opening:
+            raise ValueError("Остатки для блюд и полуфабрикатов приходом не создаются")
+
+        recipe = data.get("recipe")
+        if recipe is not None and not isinstance(recipe, list):
+            raise ValueError("Некорректная техкарта")
+        if kind not in ("dish", "semi_finished") and recipe:
+            raise ValueError("Техкарта доступна только блюдам и полуфабрикатам")
+
+        lines = []
+        seen = set()
+        for line in (recipe or []):
+            if not isinstance(line, dict):
+                raise ValueError("Некорректный ингредиент")
+            try:
+                source_id = int(line["item_id"])
+            except (ValueError, TypeError, KeyError):
+                raise ValueError("Выберите ингредиент")
+            qty = amount(line.get("quantity"), "количество ингредиента")
+            if source_id <= 0 or qty <= 0 or source_id in seen or source_id == item_id:
+                raise ValueError("Проверьте состав техкарты и дубли ингредиентов")
+            seen.add(source_id)
+            cur.execute("""
+                SELECT id FROM items WHERE company_id=%s AND id=%s
+                  AND item_type IN ('ingredient','semi_finished')
+            """, (company_id, source_id))
+            if not cur.fetchone():
+                raise ValueError("Ингредиент не найден в этой организации")
+            lines.append((source_id, qty))
+
+        unit = normalize_unit(data.get("unit"), kind)
+        category = str(data.get("category") or "").strip()
+        description = str(data.get("description") or "").strip()
+        barcode = _item_barcode(cur, data.get("barcode"), kind)
+
+        if item_id is None:
+            cur.execute("""
+                INSERT INTO items (
+                    company_id, name, category, unit, type, description,
+                    retail_price, purchase_price, wholesale_price,
+                    discount_percent, barcode, gtin, ntin, is_marked,
+                    item_type, quantity
+                ) VALUES (%s,%s,%s,%s,'piece',%s,%s,%s,0,0,%s,%s,%s,FALSE,%s,%s)
+                RETURNING id
+            """, (company_id, name, category, unit, description, retail,
+                  purchase, barcode, str(data.get("gtin") or "") if kind == "product" else "",
+                  str(data.get("ntin") or "") if kind == "product" else "",
+                  kind, opening))
+            item_id = cur.fetchone()["id"]
+            if opening:
+                _record_opening_balance(
+                    cur, company_id=company_id, user_id=session["user_id"],
+                    item_id=item_id, item_name=name, quantity=opening,
+                    purchase_price=purchase,
+                    payment_method=str(data.get("opening_payment_method") or "Другое"))
+        else:
+            cur.execute("""
+                SELECT id FROM items WHERE id=%s AND company_id=%s FOR UPDATE
+            """, (item_id, company_id))
+            if not cur.fetchone():
+                return jsonify({"success": False, "error": "Позиция не найдена"}), 404
+            cur.execute("""
+                UPDATE items SET name=%s, category=%s, unit=%s, description=%s,
+                    retail_price=%s, purchase_price=%s, barcode=%s,
+                    gtin=%s, ntin=%s, is_marked=FALSE, item_type=%s
+                WHERE id=%s AND company_id=%s
+            """, (name, category, unit, description, retail, purchase, barcode,
+                  str(data.get("gtin") or "") if kind == "product" else "",
+                  str(data.get("ntin") or "") if kind == "product" else "",
+                  kind, item_id, company_id))
+
+        if recipe is not None:
+            cur.execute(
+                "DELETE FROM item_recipes WHERE company_id=%s AND item_id=%s",
+                (company_id, item_id))
+            for source_id, qty in lines:
+                cur.execute("""
+                    INSERT INTO item_recipes
+                    (company_id, item_id, ingredient_item_id, quantity)
+                    VALUES (%s,%s,%s,%s)
+                """, (company_id, item_id, source_id, qty))
+        conn.commit()
+        return jsonify({"success": True, "id": item_id})
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+@mobile_api_bp.route("/food/catalog/<int:item_id>/image", methods=["POST"])
+def mobile_food_catalog_image(item_id):
+    """Upload catalog photos through the same media store as web catalog."""
+    guard = _guard()
+    if guard:
+        return guard
+    if not (session.get("is_super_admin") or session.get("role") in
+            ("owner", "admin", "creator", "super_admin")):
+        return jsonify({"success": False, "error": "Недостаточно прав"}), 403
+    image = request.files.get("image")
+    if not image or not image.filename:
+        return jsonify({"success": False, "error": "Не выбрана фотография"}), 400
+
+    company_id = session["company_id"]
+    conn = get_db()
+    uploaded_url = None
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT i.id FROM items i JOIN companies c ON c.id=i.company_id
+            WHERE i.id=%s AND i.company_id=%s
+              AND c.business_mode IN ('foodservice','universal')
+        """, (item_id, company_id))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Позиция не найдена"}), 404
+
+        from services.media import upload_image, delete_media
+        try:
+            uploaded_url = upload_image(
+                image, company_id=company_id, namespace=f"items/{item_id}")
+        except ValueError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
+
+        cur.execute(
+            "UPDATE item_images SET is_main=FALSE WHERE item_id=%s", (item_id,))
+        cur.execute("""
+            INSERT INTO item_images (item_id, image, is_main)
+            VALUES (%s,%s,TRUE)
+        """, (item_id, uploaded_url))
+        conn.commit()
+        return jsonify({"success": True, "image": uploaded_url})
+    except Exception:
+        conn.rollback()
+        if uploaded_url:
+            from services.media import delete_media
+            delete_media(uploaded_url)
+        raise
+    finally:
         pool.putconn(conn)

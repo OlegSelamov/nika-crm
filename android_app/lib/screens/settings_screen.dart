@@ -23,6 +23,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String kaspiStatus = 'Не проверен';
   String printerName = 'Не выбран';
   String printerMac = '';
+  String kitchenPrinterName = 'Как принтер чеков';
+  String kitchenPrinterMac = '';
   bool autoPrint = false;
   int printerPaperWidth = 58;
   String printerEncoding = PrinterService.gbkEncoding;
@@ -55,6 +57,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ipController.text = prefs.getString('kaspi_ip') ?? '';
       printerName = prefs.getString('printer_name') ?? 'Не выбран';
       printerMac = prefs.getString('printer_mac') ?? '';
+      kitchenPrinterName = prefs.getString('kitchen_printer_name') ?? 'Как принтер чеков';
+      kitchenPrinterMac = prefs.getString('kitchen_printer_mac') ?? '';
       autoPrint = prefs.getBool('auto_print') ?? false;
       printerPaperWidth = prefs.getInt('printer_paper_width') ?? 58;
       final savedEncoding = prefs.getString(PrinterService.printerEncodingPreference);
@@ -95,7 +99,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _pickPrinter() async {
+  Future<void> _pickPrinter({bool kitchen = false}) async {
     try {
       final statuses = await [
         Permission.bluetoothScan,
@@ -147,12 +151,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(device.macAdress),
                   onTap: () async {
                     final prefs = await SharedPreferences.getInstance();
-                    await prefs.setString('printer_name', device.name);
-                    await prefs.setString('printer_mac', device.macAdress);
+                    if (kitchen) {
+                      await prefs.setString('kitchen_printer_name', device.name);
+                      await prefs.setString('kitchen_printer_mac', device.macAdress);
+                    } else {
+                      await prefs.setString('printer_name', device.name);
+                      await prefs.setString('printer_mac', device.macAdress);
+                    }
                     if (!mounted) return;
                     setState(() {
-                      printerName = device.name;
-                      printerMac = device.macAdress;
+                      if (kitchen) {
+                        kitchenPrinterName = device.name;
+                        kitchenPrinterMac = device.macAdress;
+                      } else {
+                        printerName = device.name;
+                        printerMac = device.macAdress;
+                      }
                     });
                     Navigator.pop(context);
                   },
@@ -320,6 +334,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: _pickPrinter,
                 ),
+                const Divider(),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.soup_kitchen_outlined),
+                  title: Text('Принтер кухни: ' + kitchenPrinterName),
+                  subtitle: Text(kitchenPrinterMac.isEmpty
+                      ? 'По умолчанию печать на принтер чеков'
+                      : kitchenPrinterMac),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _pickPrinter(kitchen: true),
+                ),
+                if (kitchenPrinterMac.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.remove('kitchen_printer_name');
+                        await prefs.remove('kitchen_printer_mac');
+                        if (mounted) setState(() {
+                          kitchenPrinterName = 'Как принтер чеков';
+                          kitchenPrinterMac = '';
+                        });
+                      },
+                      child: const Text('Использовать принтер чеков'),
+                    ),
+                  ),
                 const Divider(),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

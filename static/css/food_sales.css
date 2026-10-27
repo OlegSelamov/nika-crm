@@ -324,6 +324,31 @@
     gap: 10px;
 }
 
+.food-cart-row-top.food-cart-row-editable {
+    width: 100%;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    padding: 5px;
+    margin: -5px;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+.food-cart-row-editable:hover,
+.food-cart-row-editable:focus-visible {
+    background: #eef2ff;
+    outline: 2px solid #c7d2fe;
+    outline-offset: 1px;
+}
+.food-cart-edit-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #6366f1;
+    font-weight: 650;
+}
+
 .food-cart-row-name {
     min-width: 0;
     color: #0f172a;
@@ -766,6 +791,72 @@ body.food-sales-mode .sales-mode-switch button { padding: 7px 14px; border-radiu
 .food-orders-workspace #foodOrderHistoryMore[hidden] { display:none!important; }
 @media(max-width:700px) { .food-shell-modal { padding:8px; } .food-history-top { align-items:stretch; flex-direction:column; } .sales-page .food-orders-workspace { padding:12px; } }
 
+/* Food dish settings: separate add-ons from recipe exclusions, on desktop and mobile. */
+.food-modifier-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    flex: 0 0 auto;
+    padding: 12px 20px 0;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+}
+.food-modifier-tab {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 46px;
+    padding: 9px 12px;
+    border: 1px solid transparent;
+    border-bottom: 3px solid transparent;
+    border-radius: 10px 10px 0 0;
+    background: #f8fafc;
+    color: #475569;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+.food-modifier-tab:hover { background: #f1f5f9; }
+.food-modifier-tab:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
+.food-modifier-tab[aria-selected="true"] {
+    color: #3730a3;
+    background: #eef2ff;
+    border-color: #c7d2fe;
+    border-bottom-color: #6366f1;
+}
+.food-modifier-tab[data-food-modifier-tab="remove"][aria-selected="true"] {
+    color: #9a3412;
+    background: #fff7ed;
+    border-color: #fed7aa;
+    border-bottom-color: #ea580c;
+}
+.food-modifier-tab-count {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #e0e7ff;
+    color: #3730a3;
+    font-size: 11px;
+}
+.food-modifier-tab[data-food-modifier-tab="remove"] .food-modifier-tab-count { background: #ffedd5; color: #9a3412; }
+.food-modifier-groups { flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
+.food-modifier-pane-help { margin: 0 0 14px; color: #64748b; font-size: 13px; line-height: 1.5; }
+.food-modifier-remove-help { color: #9a3412; }
+.food-modifier-pane-empty { padding: 18px; border: 1px dashed #cbd5e1; border-radius: 12px; text-align: center; color: #64748b; font-size: 13px; line-height: 1.5; }
+@media (max-width: 768px) {
+    body > #foodModifierModal .food-modifier-tabs {
+        flex: 0 0 auto;
+        padding: 10px 12px 0;
+    }
+    body > #foodModifierModal .food-modifier-tab { min-height: 48px; font-size: 14px; padding: 9px 6px; }
+}
 /* Per-dish exclusions are kitchen instructions, never extra charges. */
 .food-exclusions-group { padding:12px; background:#fff8f0; border:1px solid #fed7aa; border-radius:12px; }
 .food-exclusions-group .food-modifier-group-title { flex-wrap:wrap; }
@@ -889,6 +980,7 @@ body.food-sales-mode.food-checkout-orders #foodOrderSave { display:none !importa
 .food-history-badge { display:inline-flex; align-items:center; border-radius:999px; padding:6px 10px; font-size:12px; line-height:1.2; font-weight:800; white-space:nowrap; }
 .food-history-badge-open { background:#fff4d6; color:#925600; }
 .food-history-badge-paid { background:#dcfce7; color:#166534; }
+.food-history-badge-refunded { background:#e0e7ff; color:#4338ca; }
 .food-history-badge-external_paid { background:#dbeafe; color:#1d4ed8; }
 .food-history-badge-cancelled { background:#fee2e2; color:#b91c1c; }
 .food-history-amount { color:#18233b; font-size:14px; font-weight:850; white-space:nowrap; }
@@ -897,6 +989,13 @@ body.food-sales-mode.food-checkout-orders #foodOrderSave { display:none !importa
 .food-order-history-list .food-history-actions button { margin:0; min-height:38px; padding:8px 12px; border-radius:9px; font-size:13px; font-weight:700; }
 .food-order-history-list .food-history-actions button:hover { background:#ede9fe; border-color:#c4b5fd; color:#4338ca; }
 .food-history-empty { padding:42px 16px; text-align:center; font-size:14px; color:#64748b; }
+.food-order-history-list .food-history-actions .food-history-cancel { background:#fff1f2; border-color:#fecdd3; color:#be123c; }
+.food-order-history-list .food-history-actions .food-history-refund { background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+.food-order-history-list .food-history-actions .food-history-refund:hover { background:#e0e7ff; border-color:#a5b4fc; color:#312e81; }
+.food-order-history-list .food-history-actions .food-history-cancel:hover { background:#ffe4e6; border-color:#fda4af; color:#9f1239; }
+.food-order-history-list .food-history-actions button:disabled { opacity:.55; cursor:wait; }
+.food-order-history-notice { padding:10px 14px; margin:10px 0; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:9px; color:#065f46; font-size:13px; }
+.food-order-history-notice.is-error { background:#fff1f2; border-color:#fecdd3; color:#9f1239; }
 @media(max-width:760px) {
     .food-order-history-list .food-history-row { flex-direction:column; align-items:stretch; gap:14px; padding:15px 9px; }
     .food-history-actions { justify-content:flex-start; }
