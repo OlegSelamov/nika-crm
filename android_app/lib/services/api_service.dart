@@ -1697,6 +1697,13 @@ class ApiService {
   static Future<Map<String, dynamic>> mobileAccounting() async =>
       Map<String, dynamic>.from(await _request('GET', '/api/mobile/accounting'));
 
+  // TEST-only, read-only Smart Bridge diagnostics (never sends tax data).
+  static Future<Map<String, dynamic>> isnaTestDiagnostics() async =>
+      Map<String, dynamic>.from(await _request(
+        'GET', '/accounting/isna/test/diagnostics',
+        timeout: const Duration(seconds: 10),
+      ));
+
   static Future<Map<String, dynamic>> mobileTaxCalculation(String period) async =>
       Map<String, dynamic>.from(await _request(
         'GET',
