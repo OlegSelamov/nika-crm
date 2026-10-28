@@ -90,7 +90,7 @@ def configuration() -> IsnaBipConfig:
         sender_password=os.getenv("ISNA_BIP_PASSWORD") or "",
         signer_command=(os.getenv("ISNA_BIP_SIGNER_COMMAND") or "").strip(),
         timeout_seconds=timeout_seconds,
-        soap_action=(os.getenv("ISNA_BIP_SOAP_ACTION") or "#POST").strip(),
+        soap_action=os.getenv("ISNA_BIP_SOAP_ACTION", "").strip(),
     )
 
 
@@ -122,10 +122,9 @@ def build_sync_envelope(
 
     if not service_id:
         raise IsnaBipError("Smart Bridge serviceId is empty.")
-    if not sender_id or not sender_password:
+    if not sender_id:
         raise IsnaBipError(
-            "Smart Bridge sender credentials are not configured "
-            "(ISNA_BIP_SENDER_ID / ISNA_BIP_PASSWORD)."
+            "Smart Bridge sender ID is not configured (ISNA_BIP_SENDER_ID)."
         )
 
     try:
@@ -134,7 +133,6 @@ def build_sync_envelope(
         raise IsnaBipError(f"Invalid service payload XML: {exc}") from exc
 
     message_id = message_id or str(uuid4())
-    session_id = session_id or "{" + str(uuid4()) + "}"
 
     envelope = ET.Element(ET.QName(SOAP_NS, "Envelope"))
     header = ET.SubElement(envelope, ET.QName(SOAP_NS, "Header"))
@@ -154,11 +152,15 @@ def build_sync_envelope(
 
     sender = ET.SubElement(request_info, "sender")
     ET.SubElement(sender, "senderId").text = sender_id
-    ET.SubElement(sender, "password").text = sender_password
-    ET.SubElement(request_info, "sessionId").text = session_id
+    if sender_password:
+        ET.SubElement(sender, "password").text = sender_password
+    # sessionId is assigned by BIP; do not fabricate it in client requests.
+    if session_id:
+        ET.SubElement(request_info, "sessionId").text = session_id
 
     request_data = ET.SubElement(request, "requestData")
-    request_data.append(data_node)
+    # SyncChannel v10 schema requires requestData/data (xsd:anyType).
+    ET.SubElement(request_data, "data").append(data_node)
 
     return ET.tostring(envelope, encoding="unicode", xml_declaration=False)
 
@@ -209,8 +211,8 @@ def post_signed_envelope(signed_xml: str) -> requests.Response:
     headers = {
         "Content-Type": "text/xml; charset=UTF-8",
     }
-    if cfg.soap_action:
-        headers["SOAPAction"] = cfg.soap_action
+    # The supplied SyncChannel v10 WSDL declares soapAction="".
+    headers["SOAPAction"] = cfg.soap_action
 
     try:
         return requests.post(
@@ -271,7 +273,42 @@ def probe_tcp() -> dict:
 def _main() -> int:
     parser = argparse.ArgumentParser(description="Nika ISNA / Smart Bridge diagnostics")
     parser.add_argument("--probe", action="store_true", help="TCP reachability check")
+    parser.add_argument("--check-config", action="store_true", help="Report safe configuration readiness (no credentials printed)")
+    parser.add_argument("--prepare-unsigned", metavar="OFFICIAL_PAYLOAD_XML", help="Build an unsigned SOAP envelope locally, without sending")
+    parser.add_argument("--output", metavar="SOAP_XML", help="Output file for --prepare-unsigned (created with mode 0600)")
     args = parser.parse_args()
+
+    if args.check_config or args.prepare_unsigned:
+        # Read test-specific environment without printing credentials or key material.
+        from dotenv import load_dotenv
+        load_dotenv(override=False)
+        cfg = configuration()
+        app_mode = (os.getenv("APP_MODE") or "test").strip().lower()
+        if args.check_config:
+            print("Environment:", app_mode)
+            print("Endpoint:", cfg.endpoint or "NOT SET")
+            print("Sender ID:", "configured" if cfg.sender_id else "MISSING")
+            print("Sender password:", "configured" if cfg.sender_password else "not configured (optional in WSDL)")
+            print("Transport signer:", "configured" if cfg.signer_ready else "MISSING")
+            print("Service ID:", cfg.service_id, "(default, not verified)" if not os.getenv("ISNA_BIP_SERVICE_ID") else "(configured)")
+            print("SOAPAction:", repr(cfg.soap_action))
+            print("OFFLINE CHECK ONLY: no request was sent.")
+            return 0
+        if app_mode != "test":
+            parser.error("--prepare-unsigned is limited to APP_MODE=test")
+        if not args.output:
+            parser.error("--output is required with --prepare-unsigned")
+        from pathlib import Path
+        payload_xml = Path(args.prepare_unsigned).read_text(encoding="utf-8")
+        unsigned_xml = build_sync_envelope(payload_xml)
+        # XML can contain service data and sender credentials. Never dump to stdout;
+        # write only to a new private file and refuse to overwrite existing files.
+        fd = os.open(args.output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(unsigned_xml)
+        print("Unsigned SOAP envelope saved privately to:", args.output)
+        print("NOT SENT. Must be transport-signed; verify official service XSD/IDs first.")
+        return 0
 
     if args.probe:
         result = probe_tcp()
