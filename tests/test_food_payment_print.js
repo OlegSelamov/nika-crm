@@ -98,7 +98,8 @@ async function printFromGreenButton(method,fail=false,autoPrint=true,runtime="el
         assert.ok(calls.indexOf("save:"+method)<calls.indexOf("dual:"+method),
             "Save must happen before printing on green button");
     }
-    return calls;
+    // UI status updates are not print jobs; assert against actual side effects.
+    return calls.filter(call=>!call.startsWith("clear:"));
 }
 
 // Exercise the real common payment function, verifying FOOD print suppression
