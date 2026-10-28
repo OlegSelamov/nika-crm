@@ -11,7 +11,7 @@ const end = src.indexOf("\n    function newFoodOrder()", start);
 assert.ok(start >= 0 && end > start, "Could not locate checkout functions");
 const functionCode = src.slice(start, end);
 
-async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowed=true, runtime="electron"}={}) {
+async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowed=true, runtime="electron",autoPrint=true}={}) {
     const calls = [];
     const button = {disabled:false};
     const values = {
@@ -37,6 +37,7 @@ async function checkout(method, {alreadyPrinted=false, printOK=true, stockAllowe
         showFoodPrintStatus:()=>{},
         isFoodTicketCurrent:()=>alreadyPrinted,
         isElectronFoodCheckout:()=>runtime==="electron",
+        foodAutoPrintPreference:async()=>autoPrint,
         currentFoodOrderId:42,
         openFoodTicketPair:(id)=>calls.push("preview:"+id),
         saveFoodOrder:async()=>{calls.push("save");return {id:42};},
@@ -74,7 +75,7 @@ const greenEnd=src.indexOf("\n    async function payExistingFoodOrder()",greenSt
 assert.ok(greenStart>=0&&greenEnd>greenStart,"Green precheck handler missing");
 const greenCode=src.slice(greenStart,greenEnd);
 
-async function printFromGreenButton(method,fail=false){
+async function printFromGreenButton(method,fail=false,autoPrint=true,runtime="electron"){
     const calls=[];
     const button={disabled:false};
     const sb={
@@ -83,6 +84,8 @@ async function printFromGreenButton(method,fail=false){
         document:{getElementById:()=>button},
         showFoodPrintStatus:msg=>calls.push("clear:"+msg),
         foodMessage:()=>{},
+        isElectronFoodCheckout:()=>runtime==="electron",
+        foodAutoPrintPreference:async()=>autoPrint,
         saveFoodOrder:async()=>{calls.push("save:"+method);return {id:123};},
         printBothFoodTickets:async()=>{calls.push("dual:"+method);return !fail;},
         console
@@ -158,6 +161,13 @@ async function simulateSale(method,mode,result){
         const failed=await checkout(method,{printOK:false});
         assert.ok(failed.includes("save")&&failed.includes("print"));
         assert.ok(!failed.includes("submit:"+method),"Printer failure must block payment");
+        const off=await checkout(method,{autoPrint:false});
+        assert.deepEqual(off,method==="cash"
+            ? ["stock","cash-modal","save","submit:cash","cash-close"]
+            : ["stock","save","submit:"+method],
+            "Disabled auto-print must save and pay but never print for "+method);
+        const unknown=await checkout(method,{autoPrint:null});
+        assert.deepEqual(unknown,off,"Missing printer settings must never force printing");
         const website=await checkout(method,{runtime:"website",printOK:false});
         assert.deepEqual(website,method==="cash"
             ? ["stock","cash-modal","save","submit:cash","preview:42","cash-close"]
@@ -172,6 +182,12 @@ async function simulateSale(method,mode,result){
         assert.deepEqual(stockDenied,["stock"],"Declined stock warning must not print or charge");
     }
     for(const method of ["cash","card","kaspi"]) {
+        const off=await printFromGreenButton(method,false,false);
+        assert.deepEqual(off,["save:"+method],"Green checkout must not print when disabled");
+        const unknown=await printFromGreenButton(method,false,null);
+        assert.deepEqual(unknown,["save:"+method],"Green checkout must not print on unknown setting");
+        const browser=await printFromGreenButton(method,false,false,"website");
+        assert.ok(browser.includes("dual:"+method),"Browser preview must stay available");
         const green=await printFromGreenButton(method);
         assert.ok(green.includes("dual:"+method),"Green button must print for "+method);
         const noKkm={success:true,sale_id:22,fiscalized:false,fiscalization_skipped:true};
@@ -193,5 +209,5 @@ async function simulateSale(method,mode,result){
         });
         assert.ok(real.includes("THIRD_RECEIPT"),"Real fiscal ticket should still be printed");
     }
-    console.log("Electron mandatory dual printing and browser printer-free cash/card/Kaspi checkout passed");
+    console.log("Food auto-print on/off and browser receipt flow passed");
 })().catch(err=>{console.error(err);process.exitCode=1});

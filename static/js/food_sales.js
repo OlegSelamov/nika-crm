@@ -896,6 +896,21 @@
         return isElectronFoodCheckout() ? (getFoodDesktopBridge()?.printers || null) : null;
     }
 
+    // Respect the existing Electron receipt auto-print toggle in foodservice.
+    // Missing device settings must never trigger an unexpected print job.
+    async function foodAutoPrintPreference() {
+        const printers = getFoodPrinterBridge();
+        if (!printers?.getState) return null;
+        try {
+            const state = await printers.getState();
+            return typeof state?.settings?.auto_print_receipt === "boolean"
+                ? state.settings.auto_print_receipt : null;
+        } catch (error) {
+            console.warn("FOOD AUTO PRINT SETTINGS:", error);
+            return null;
+        }
+    }
+
     async function getSavedFoodTicketHtml(orderId, kind) {
         const cashReceived = kind === "precheck" ? Number(foodCashPrintReceived || 0) : 0;
         const suffix = cashReceived > 0 ? "&cash_received=" + encodeURIComponent(cashReceived) : "";
@@ -951,7 +966,7 @@
             lastFoodPrintUiSignature === currentFoodUiSignature());
     }
 
-    async function printBothFoodTickets(order, {manualAllowed = false} = {}) {
+    async function printBothFoodTickets(order) {
         const printers = getFoodPrinterBridge();
         const fingerprint = savedFoodTicketFingerprint(order);
         const uiSnapshotBeforePrint = currentFoodUiSignature();
@@ -1025,9 +1040,21 @@
             // Always save the freshest cart before opening the precheck.
             const saved = await saveFoodOrder();
             if (saved) {
+                const electron = isElectronFoodCheckout();
+                const autoPrint = electron ? await foodAutoPrintPreference() : null;
+                // Browser previews are unchanged. Physical printing depends on
+                // the same Electron preference as ordinary sale receipts.
+                if (electron && autoPrint !== true) {
+                    const msg = autoPrint === false
+                        ? "Заказ №" + saved.id + " оформлен. Автопечать выключена — чеки доступны в истории заказов."
+                        : "Заказ №" + saved.id + " оформлен. Настройка автопечати недоступна — чеки можно распечатать вручную.";
+                    foodMessage(msg);
+                    showFoodPrintStatus(msg);
+                    return;
+                }
                 foodMessage("Заказ №" + saved.id + " оформлен");
                 try {
-                    const completed = await printBothFoodTickets(saved, {manualAllowed: true});
+                    const completed = await printBothFoodTickets(saved);
                     if (!completed) {
                         foodMessage("Заказ №" + saved.id + " сохранён, но печать не завершена. Проверьте настройки принтеров.");
                     }
@@ -1050,9 +1077,10 @@
         if (needsFreshTickets) {
             const saved = await saveFoodOrder();
             if (!saved) return false;
-            if (!websiteMode) {
-                // Electron still requires successful spooling of BOTH tickets
-                // before the sale. Its printer config and retry gate stay intact.
+            const autoPrint = websiteMode ? null : await foodAutoPrintPreference();
+            if (!websiteMode && autoPrint === true) {
+                // When auto-print is ON, retain the existing two-ticket print
+                // gate: a printer failure still blocks completing the payment.
                 foodCashPrintReceived = method === "cash" ? received : null;
                 try {
                     if (!await printBothFoodTickets(saved)) {
@@ -1066,6 +1094,14 @@
                 } finally {
                     foodCashPrintReceived = null;
                 }
+            } else if (!websiteMode) {
+                // No automatic printing is a supported checkout mode, not
+                // a printer error. Kitchen/guest documents remain in history.
+                const msg = autoPrint === false
+                    ? "Автопечать выключена — оба чека доступны в истории заказов."
+                    : "Настройка автопечати недоступна — чеки можно распечатать вручную в истории заказов.";
+                foodMessage(msg);
+                showFoodPrintStatus(msg);
             }
             // Website: do NOT check local printers or block payment.
         }

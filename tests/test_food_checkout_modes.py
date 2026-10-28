@@ -28,7 +28,9 @@ class FoodCheckoutModesTests(unittest.TestCase):
         js = self.read("static/js/food_sales.js")
         create = js.split('async function createFoodPrecheck()', 1)[1].split('async function finalizeFoodPaymentAfterChecks(', 1)[0]
         self.assertIn('await saveFoodOrder()', create)
-        self.assertIn('await printBothFoodTickets(saved, {manualAllowed: true})', create)
+        self.assertIn('await printBothFoodTickets(saved)', create)
+        self.assertIn('autoPrint !== true', create)
+        self.assertIn('await foodAutoPrintPreference()', create)
         self.assertNotIn('pay()', create)
         self.assertNotIn('submitSalePayment', create)
 
@@ -39,13 +41,17 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn('const needsFreshTickets = !isFoodTicketCurrent()', finalize)
         self.assertIn('const websiteMode = !isElectronFoodCheckout()', finalize)
         self.assertIn('await saveFoodOrder()', finalize)
-        self.assertIn('if (!websiteMode)', finalize)
+        self.assertIn('if (!websiteMode && autoPrint === true)', finalize)
+        self.assertIn('autoPrint === false', finalize)
+        self.assertIn('await foodAutoPrintPreference()', finalize)
         self.assertIn('await printBothFoodTickets(saved)', finalize)
         self.assertIn('submitSalePayment({', finalize)
         self.assertIn('openCashChangeModal()', pay)
         self.assertNotIn('else pay()', pay)
         self.assertIn('window.nikaConfirmNegativeStockSale', pay)
         self.assertIn('lastFoodPrintUiSignature === currentFoodUiSignature()', js)
+        self.assertIn('state?.settings?.auto_print_receipt', js)
+        self.assertIn('auto_print_receipt', self.read("desktop/main.js"))
         self.assertIn('food_order_id:', self.read("static/js/sales.js"))
 
     def test_retail_stock_guard_never_captures_food_buttons(self):
