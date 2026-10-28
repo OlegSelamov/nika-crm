@@ -65,7 +65,8 @@ class IsnaBipConfig:
 
     @property
     def sender_ready(self) -> bool:
-        return bool(self.sender_id and self.sender_password)
+        # SenderInfo/password is minOccurs=0 in the supplied WSDL.
+        return bool(self.sender_id)
 
     @property
     def signer_ready(self) -> bool:
@@ -212,7 +213,8 @@ def post_signed_envelope(signed_xml: str) -> requests.Response:
         "Content-Type": "text/xml; charset=UTF-8",
     }
     # The supplied SyncChannel v10 WSDL declares soapAction="".
-    headers["SOAPAction"] = cfg.soap_action
+    # WS-I Basic Profile requires quoted SOAPAction, including the empty value.
+    headers["SOAPAction"] = '"' + cfg.soap_action + '"'
 
     try:
         return requests.post(
@@ -289,7 +291,7 @@ def _main() -> int:
             print("Endpoint:", cfg.endpoint or "NOT SET")
             print("Sender ID:", "configured" if cfg.sender_id else "MISSING")
             print("Sender password:", "configured" if cfg.sender_password else "not configured (optional in WSDL)")
-            print("Transport signer:", "configured" if cfg.signer_ready else "MISSING")
+            print("Transport signer:", "configured" if cfg.signer_ready else "MISSING (signed POST unavailable)")
             print("Service ID:", cfg.service_id, "(default, not verified)" if not os.getenv("ISNA_BIP_SERVICE_ID") else "(configured)")
             print("SOAPAction:", repr(cfg.soap_action))
             print("OFFLINE CHECK ONLY: no request was sent.")
@@ -299,6 +301,8 @@ def _main() -> int:
         if not args.output:
             parser.error("--output is required with --prepare-unsigned")
         from pathlib import Path
+        if not os.getenv("ISNA_BIP_SERVICE_ID") or not cfg.sender_id:
+            parser.error("Set the VERIFIED ISNA_BIP_SERVICE_ID and ISNA_BIP_SENDER_ID before preparing a request")
         payload_xml = Path(args.prepare_unsigned).read_text(encoding="utf-8")
         unsigned_xml = build_sync_envelope(payload_xml)
         # XML can contain service data and sender credentials. Never dump to stdout;
