@@ -14,7 +14,7 @@ String buildIsnaSignatureDemoXml({String? nonce}) {
   return '<?xml version="1.0" encoding="UTF-8"?>'
       '<NikaIsnaTest xmlns="urn:nikabusiness:offline-signature-test:1">'
       '<Purpose>Local XML signature compatibility check only</Purpose>'
-      '<Nonce>' + id + '</Nonce>'
+      '<Nonce>$id</Nonce>'
       '<Submission>false</Submission>'
       '</NikaIsnaTest>';
 }
