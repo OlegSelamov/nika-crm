@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ receipt_preferences.language if receipt_preferences.language != 'bilingual' else 'kk' }}">
 <head>
 <meta charset="UTF-8">
 <title>Чек</title>
@@ -34,6 +34,7 @@
 }
 
 /* HEADER */
+.receipt-logo{display:block;max-width:48mm;max-height:18mm;object-fit:contain;margin:0 auto 6px;}
 
 .company {
 
@@ -192,13 +193,14 @@
 <div class="receipt">
 
 <div class="company">
+{% if receipt_preferences.logo_data_url %}<img class="receipt-logo" src="{{ receipt_preferences.logo_data_url }}" alt="">{% endif %}
 
     <div class="company-name">
         {{ company.name }}
     </div>
 
     <div class="company-bin">
-        БИН/ИИН: {{ company.bin }}
+        {{ receipt_label('bin_iin') }}: {{ company.bin }}
     </div>
 
     <div class="company-address">
@@ -210,7 +212,7 @@
 <div class="line"></div>
 
 <div class="info-row">
-    <span>Чек №{{ sale.sale_number }}</span>
+    <span>{{ receipt_label('receipt') }} №{{ sale.sale_number }}</span>
     <span>{{ check_date }}</span>
 </div>
 
@@ -220,11 +222,11 @@
 {% if sale.rekassa_shift_number %}
 <div class="info-row">
     <span>
-        Продажа: №{{ sale.rekassa_document_number }}
+        {{ receipt_label('sale') }}: №{{ sale.rekassa_document_number }}
     </span>
 
     <span>
-        Смена: {{ sale.rekassa_shift_number }}
+        {{ receipt_label('shift') }}: {{ sale.rekassa_shift_number }}
     </span>
 </div>
 
@@ -248,7 +250,7 @@
 
 {% if client and client.iin and (client.company_name or client.full_name or '')|trim|lower != 'частное лицо' %}
 <div class="line"></div>
-<div class="payment"><span>Покупатель:</span><span>ИИН/БИН {{ client.iin }}</span></div>
+<div class="payment"><span>{{ receipt_label('buyer') }}:</span><span>{{ receipt_label('bin_iin') }} {{ client.iin }}</span></div>
 {% endif %}
 
 <div class="line"></div>
@@ -296,20 +298,20 @@
 
 <div class="total">
 
-    <span>ИТОГО</span>
+    <span>{{ receipt_label('total') }}</span>
 
     <span>{{ "%.2f"|format(sale.total_amount|float) }} ₸</span>
 
 </div>
 
 <div class="payment">
-    <span>Оплата</span>
+    <span>{{ receipt_label('payment') }}</span>
 
     <span>
         {% if sale.sale_type == "cash" %}
-            Наличные
+            {{ receipt_label('cash') }}
         {% elif sale.sale_type == "card" %}
-            Банковская карта
+            {{ receipt_label('bank_card') }}
         {% elif sale.sale_type == "kaspi" %}
             Kaspi POS
         {% endif %}
@@ -318,13 +320,13 @@
 
 {% if sale.kaspi_method %}
 <div class="payment">
-    <span>Тип</span>
+    <span>{{ receipt_label('type') }}</span>
 
     <span>
         {% if "Qr" in sale.kaspi_method %}
             Kaspi QR
         {% elif "Card" in sale.kaspi_method %}
-            Банковская карта
+            {{ receipt_label('bank_card') }}
         {% else %}
             {{ sale.kaspi_method }}
         {% endif %}
@@ -335,7 +337,7 @@
 {% if cash|float > 0 %}
 <div class="payment">
 
-    <span>Наличные</span>
+    <span>{{ receipt_label('cash') }}</span>
 
     <span>
         {{ "%.2f"|format(cash|float) }} ₸
@@ -347,7 +349,7 @@
 {% if card|float > 0 %}
 <div class="payment">
 
-    <span>Карта</span>
+    <span>{{ receipt_label('card') }}</span>
 
     <span>
         {{ "%.2f"|format(card|float) }} ₸
@@ -359,7 +361,7 @@
 {% if kaspi|float > 0 %}
 <div class="payment">
 
-    <span>Оплачено</span>
+    <span>{{ receipt_label('paid_amount') }}</span>
 
     <span>
         {{ "%.2f"|format(kaspi|float) }} ₸
@@ -369,8 +371,8 @@
 {% endif %}
 
 {% if sale.sale_type == "cash" %}
-<div class="payment"><span>Получено</span><span>{{ "%.2f"|format(cash_received|float) }} ₸</span></div>
-<div class="payment"><span>Сдача</span><span>{{ "%.2f"|format(change_amount|float) }} ₸</span></div>
+<div class="payment"><span>{{ receipt_label('received') }}</span><span>{{ "%.2f"|format(cash_received|float) }} ₸</span></div>
+<div class="payment"><span>{{ receipt_label('change') }}</span><span>{{ "%.2f"|format(change_amount|float) }} ₸</span></div>
 {% endif %}
 
 <div class="line"></div>
@@ -390,7 +392,7 @@
 </div>
 
 <div class="footer">
-    Спасибо за покупку
+    {{ receipt_preferences.footer_text or receipt_label('thanks') }}
 </div>
 
 </div>

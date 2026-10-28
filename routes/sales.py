@@ -1932,6 +1932,7 @@ def refund_check(sale_id):
             client=client,
             company=company,
             refund=refund,
+            **receipt_context(session.get("company_id")),
             refund_date=refunded_at.strftime("%d.%m.%Y %H:%M"),
             original_check_date=sale["created_at"].strftime("%d.%m.%Y %H:%M")
         )

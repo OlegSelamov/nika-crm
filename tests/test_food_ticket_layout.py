@@ -38,6 +38,19 @@ def render(kind, **changes):
         money=lambda value: f"{float(value):,.0f}".replace(",", " "),
         qty_text=lambda value: str(int(value)) if float(value).is_integer() else str(value),
         ticket_date="22.10.26 19:46", cash_preview_received=None, cash_preview_change=None,
+        receipt_preferences={"language":"ru","footer_text":"","logo_data_url":None},
+        receipt_label=lambda code: {
+            "iin":"ИИН","bin":"БИН","phone":"Тел.","order":"Заказ",
+            "cashier":"Кассир","table":"Стол","guest":"Гость",
+            "kitchen_order":"ЗАКАЗ НА КУХНЮ","payment_receipt":"КВИТАНЦИЯ ОБ ОПЛАТЕ",
+            "order_receipt":"КВИТАНЦИЯ К ЗАКАЗУ","without":"БЕЗ",
+            "comment":"Комментарий","total_to_pay":"ИТОГО К ОПЛАТЕ",
+            "cash":"Наличные","received":"Получено","change":"Сдача",
+            "card_payment":"Оплата картой","kaspi_payment":"Kaspi оплата",
+            "paid":"ОПЛАЧЕНО","external_paid":"ОПЛАЧЕНО ЧЕРЕЗ ВНЕШНЮЮ ККМ",
+            "receipt":"Чек","payment":"Оплата","card":"Карта",
+            "bon_appetit":"Приятного аппетита!"
+        }[code],
         request=SimpleNamespace(args={"embed": "1"})
     )
 

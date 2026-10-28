@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="{{ receipt_preferences.language if receipt_preferences.language != 'bilingual' else 'kk' }}">
 <head>
 <meta charset="utf-8">
 <title>{{ 'Заказ на кухню' if kind == 'kitchen' else 'Квитанция к заказу' }} №{{ order.id }}</title>
@@ -11,6 +11,7 @@ body { width: 72mm; max-width: 100%; margin: 0 auto; padding: 1.5mm 1.5mm 2mm;
        font: 400 13px/1.3 Arial, Helvetica, sans-serif; color: #000; background: #fff; }
 .ticket-root { min-width: 0; width: 100%; color: #000; overflow-wrap: anywhere; }
 .ticket-brand { text-align: center; margin: 0 0 4px; }
+.ticket-logo{display:block;max-width:46mm;max-height:18mm;object-fit:contain;margin:0 auto 5px;}
 .ticket-brand strong { display: block; font-size: 15px; font-weight: 700; line-height: 1.22; }
 .ticket-brand div { margin-top: 1px; font-size: 12px; font-weight: 400; line-height: 1.28; }
 .ticket-title { font-size: 14px; font-weight: 700; line-height: 1.2; text-align: center;
@@ -68,27 +69,28 @@ body { width: 72mm; max-width: 100%; margin: 0 auto; padding: 1.5mm 1.5mm 2mm;
 </div>
 <section class="ticket-root {{ 'kitchen-ticket' if kind == 'kitchen' else 'guest-ticket' }}">
     <div class="ticket-brand">
+        {% if kind == 'precheck' and receipt_preferences.logo_data_url %}<img class="ticket-logo" src="{{ receipt_preferences.logo_data_url }}" alt="">{% endif %}
         <strong>{{ company.name if company else 'Nika Business' }}</strong>
         {% if kind == 'precheck' %}
-            {% if company and company.bin %}<div>{{ 'ИИН' if company.legal_form == 'ip' else 'БИН' }}: {{ company.bin }}</div>{% endif %}
+            {% if company and company.bin %}<div>{{ receipt_label('iin') if company.legal_form == 'ip' else receipt_label('bin') }}: {{ company.bin }}</div>{% endif %}
             {% if company and company.address %}<div>{{ company.address }}</div>{% endif %}
-            {% if company and company.phone %}<div>Тел.: {{ company.phone }}</div>{% endif %}
+            {% if company and company.phone %}<div>{{ receipt_label('phone') }}: {{ company.phone }}</div>{% endif %}
         {% endif %}
     </div>
     <hr class="ticket-line">
     <div class="ticket-info">
-        <strong>Заказ №{{ order.id }}</strong>
+        <strong>{{ receipt_label('order') }} №{{ order.id }}</strong>
         <span class="ticket-date">{{ ticket_date }}</span>
     </div>
     <div class="ticket-info">
-        <span>Кассир: {{ order.cashier_name or '—' }}</span>
-        <span>Стол №{{ order.table_name or '—' }}</span>
+        <span>{{ receipt_label('cashier') }}: {{ order.cashier_name or '—' }}</span>
+        <span>{{ receipt_label('table') }} №{{ order.table_name or '—' }}</span>
     </div>
-    {% if order.guest_name %}<div class="ticket-secondary">Гость: {{ order.guest_name }}</div>{% endif %}
+    {% if order.guest_name %}<div class="ticket-secondary">{{ receipt_label('guest') }}: {{ order.guest_name }}</div>{% endif %}
     <h1 class="ticket-title">
-        {% if kind == 'kitchen' %}ЗАКАЗ НА КУХНЮ
-        {% elif order.status in ('paid', 'external_paid') %}КВИТАНЦИЯ ОБ ОПЛАТЕ
-        {% else %}КВИТАНЦИЯ К ЗАКАЗУ{% endif %}
+        {% if kind == 'kitchen' %}{{ receipt_label('kitchen_order') }}
+        {% elif order.status in ('paid', 'external_paid') %}{{ receipt_label('payment_receipt') }}
+        {% else %}{{ receipt_label('order_receipt') }}{% endif %}
     </h1>
     <hr class="ticket-line">
     {% for row in order.cart %}
@@ -113,40 +115,40 @@ body { width: 72mm; max-width: 100%; margin: 0 auto; padding: 1.5mm 1.5mm 2mm;
         </div>
         {% endfor %}
         {% for excluded in row.excluded_ingredients|default([]) %}
-        <div class="item-excluded">БЕЗ: {{ excluded.name }}</div>
+        <div class="item-excluded">{{ receipt_label('without') }}: {{ excluded.name }}</div>
         {% endfor %}
     </div>
     {% endfor %}
     {% if order.note %}
-    <div class="ticket-note"><hr class="ticket-line"><strong>Комментарий:</strong>{{ order.note }}</div>
+    <div class="ticket-note"><hr class="ticket-line"><strong>{{ receipt_label('comment') }}:</strong>{{ order.note }}</div>
     {% endif %}
     {% if kind == 'precheck' %}
     <hr class="ticket-line">
-    <div class="ticket-total"><span>ИТОГО К ОПЛАТЕ</span><span>{{ money(order.total_amount) }} ₸</span></div>
+    <div class="ticket-total"><span>{{ receipt_label('total_to_pay') }}</span><span>{{ money(order.total_amount) }} ₸</span></div>
     {% if order.status == 'paid' %}
         {% if order.payment_method == 'cash' %}
-        <div class="ticket-payment"><span>Наличные</span><strong>{{ money(order.cash_amount) }} ₸</strong></div>
-        <div class="ticket-payment"><span>Получено</span><strong>{{ money(order.cash_received) }} ₸</strong></div>
-        <div class="ticket-payment"><span>Сдача</span><strong>{{ money(order.change_amount) }} ₸</strong></div>
+        <div class="ticket-payment"><span>{{ receipt_label('cash') }}</span><strong>{{ money(order.cash_amount) }} ₸</strong></div>
+        <div class="ticket-payment"><span>{{ receipt_label('received') }}</span><strong>{{ money(order.cash_received) }} ₸</strong></div>
+        <div class="ticket-payment"><span>{{ receipt_label('change') }}</span><strong>{{ money(order.change_amount) }} ₸</strong></div>
         {% elif order.payment_method == 'card' %}
-        <div class="ticket-payment"><span>Оплата картой</span><strong>{{ money(order.card_amount) }} ₸</strong></div>
+        <div class="ticket-payment"><span>{{ receipt_label('card_payment') }}</span><strong>{{ money(order.card_amount) }} ₸</strong></div>
         {% elif order.payment_method == 'kaspi' %}
-        <div class="ticket-payment"><span>Kaspi оплата</span><strong>{{ money(order.kaspi_amount) }} ₸</strong></div>
+        <div class="ticket-payment"><span>{{ receipt_label('kaspi_payment') }}</span><strong>{{ money(order.kaspi_amount) }} ₸</strong></div>
         {% else %}
-        <div class="ticket-state">ОПЛАЧЕНО</div>
+        <div class="ticket-state">{{ receipt_label('paid') }}</div>
         {% endif %}
     {% elif order.status == 'external_paid' %}
-        <div class="ticket-state">ОПЛАЧЕНО ЧЕРЕЗ ВНЕШНЮЮ ККМ</div>
-        {% if order.external_receipt_number %}<div class="ticket-secondary">Чек №{{ order.external_receipt_number }}</div>{% endif %}
+        <div class="ticket-state">{{ receipt_label('external_paid') }}</div>
+        {% if order.external_receipt_number %}<div class="ticket-secondary">{{ receipt_label('receipt') }} №{{ order.external_receipt_number }}</div>{% endif %}
     {% else %}
-        <div class="ticket-payment"><span>Оплата:</span><strong>{{ {'cash':'Наличные','card':'Карта','kaspi':'Kaspi'}.get(order.planned_payment_method or 'cash', 'Наличные') }}</strong></div>
+        <div class="ticket-payment"><span>{{ receipt_label('payment') }}:</span><strong>{{ {'cash':receipt_label('cash'),'card':receipt_label('card'),'kaspi':'Kaspi'}.get(order.planned_payment_method or 'cash', receipt_label('cash')) }}</strong></div>
         {% if order.planned_payment_method == 'cash' and cash_preview_received is not none %}
-        <div class="ticket-payment"><span>Получено</span><strong>{{ money(cash_preview_received) }} ₸</strong></div>
-        <div class="ticket-payment"><span>Сдача</span><strong>{{ money(cash_preview_change) }} ₸</strong></div>
+        <div class="ticket-payment"><span>{{ receipt_label('received') }}</span><strong>{{ money(cash_preview_received) }} ₸</strong></div>
+        <div class="ticket-payment"><span>{{ receipt_label('change') }}</span><strong>{{ money(cash_preview_change) }} ₸</strong></div>
         {% endif %}
     {% endif %}
     <hr class="ticket-line">
-    <div class="ticket-footer">Приятного аппетита!</div>
+    <div class="ticket-footer" style="white-space:pre-wrap">{{ receipt_preferences.footer_text or receipt_label('bon_appetit') }}</div>
     {% endif %}
 </section>
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="{{ receipt_preferences.language if receipt_preferences.language != 'bilingual' else 'kk' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,6 +12,7 @@
         .receipt { width: 68mm; max-width: 100%; margin: 0 auto; padding: 2mm 0; }
         .center { text-align: center; }
         .center > div:first-child { font-size: 16px; font-weight: 700; }
+        .receipt-logo{display:block;max-width:48mm;max-height:18mm;object-fit:contain;margin:0 auto 6px;}
         .title { margin: 8px 0 2px; font-size: 16px; font-weight: 800; }
         .subtitle { font-size: 12px; font-weight: 700; }
         .divider { margin: 6px 0; border-top: 1px dashed #000; }
@@ -35,19 +36,20 @@
 <body>
 <main class="receipt">
     <div class="center">
+        {% if receipt_preferences.logo_data_url %}<img class="receipt-logo" src="{{ receipt_preferences.logo_data_url }}" alt="">{% endif %}
         <div><strong>{{ company.name or "Организация" }}</strong></div>
-        {% if company.bin %}<div>БИН {{ company.bin }}</div>{% endif %}
+        {% if company.bin %}<div>{{ receipt_label('bin') }} {{ company.bin }}</div>{% endif %}
         {% if company.address %}<div>{{ company.address }}</div>{% endif %}
-        <div class="title">ЧЕК ВОЗВРАТА</div>
-        <div class="subtitle">ВОЗВРАТ ПРИХОДА</div>
+        <div class="title">{{ receipt_label('refund_receipt') }}</div>
+        <div class="subtitle">{{ receipt_label('refund_income') }}</div>
     </div>
 
     <div class="divider"></div>
-    <div class="row"><span>Продажа №</span><span>{{ sale.sale_number or sale.id }}</span></div>
-    <div class="row"><span>Дата продажи</span><span>{{ original_check_date }}</span></div>
-    <div class="row"><span>Дата возврата</span><span>{{ refund_date }}</span></div>
+    <div class="row"><span>{{ receipt_label('sale') }} №</span><span>{{ sale.sale_number or sale.id }}</span></div>
+    <div class="row"><span>{{ receipt_label('sale_date') }}</span><span>{{ original_check_date }}</span></div>
+    <div class="row"><span>{{ receipt_label('refund_date') }}</span><span>{{ refund_date }}</span></div>
     {% if client %}
-        <div class="row"><span>Покупатель</span><span>{{ client.full_name or client.company_name or "Частное лицо" }}</span></div>
+        <div class="row"><span>{{ receipt_label('buyer') }}</span><span>{{ client.full_name or client.company_name or "Частное лицо" }}</span></div>
     {% endif %}
 
     <div class="divider"></div>
@@ -62,12 +64,12 @@
     {% endfor %}
 
     <div class="divider"></div>
-    <div class="row total"><span>ВОЗВРАТ</span><span>{{ "%.2f"|format(sale.total_amount or 0) }} ₸</span></div>
+    <div class="row total"><span>{{ receipt_label('refund') }}</span><span>{{ "%.2f"|format(sale.total_amount or 0) }} ₸</span></div>
     <div class="row">
-        <span>Способ</span>
+        <span>{{ receipt_label('method') }}</span>
         <span>
-            {% if sale.sale_type == "cash" %}Наличные
-            {% elif sale.sale_type == "card" %}Карта
+            {% if sale.sale_type == "cash" %}{{ receipt_label('cash') }}
+            {% elif sale.sale_type == "card" %}{{ receipt_label('card') }}
             {% elif sale.sale_type == "kaspi" %}Kaspi POS
             {% else %}{{ sale.sale_type }}{% endif %}
         </span>
@@ -75,16 +77,16 @@
 
     {% if refund.ticket_number or refund.document_number or refund.ticket_id %}
         <div class="divider"></div>
-        {% if refund.ticket_number %}<div class="row"><span>Чек №</span><span>{{ refund.ticket_number }}</span></div>{% endif %}
-        {% if refund.document_number %}<div class="row"><span>Фискальный документ</span><span>{{ refund.document_number }}</span></div>{% endif %}
-        {% if refund.shift_number %}<div class="row"><span>Смена</span><span>{{ refund.shift_number }}</span></div>{% endif %}
+        {% if refund.ticket_number %}<div class="row"><span>{{ receipt_label('receipt') }} №</span><span>{{ refund.ticket_number }}</span></div>{% endif %}
+        {% if refund.document_number %}<div class="row"><span>{{ receipt_label('fiscal_document') }}</span><span>{{ refund.document_number }}</span></div>{% endif %}
+        {% if refund.shift_number %}<div class="row"><span>{{ receipt_label('shift') }}</span><span>{{ refund.shift_number }}</span></div>{% endif %}
         {% if refund.rnm %}<div class="row"><span>РНМ</span><span>{{ refund.rnm }}</span></div>{% endif %}
         {% if refund.znm %}<div class="row"><span>ЗНМ</span><span>{{ refund.znm }}</span></div>{% endif %}
         {% if refund.ticket_id %}<div class="meta muted">ID: {{ refund.ticket_id }}</div>{% endif %}
     {% endif %}
 
     {% if refund.payment_transaction_id %}
-        <div class="meta">Транзакция возврата: {{ refund.payment_transaction_id }}</div>
+        <div class="meta">{{ receipt_label('refund_transaction') }}: {{ refund.payment_transaction_id }}</div>
     {% endif %}
     {% set fiscal_url = refund.qr or refund.print_url %}
     {% if fiscal_url %}
@@ -93,13 +95,13 @@
                 <img
                     src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&amp;data={{ fiscal_url|urlencode }}"
                     alt="QR-код фискального чека возврата">
-                <div class="fiscal-qr-label">ФИСКАЛЬНЫЙ ЧЕК reKassa</div>
+                <div class="fiscal-qr-label">{{ receipt_label('fiscal_refund') }}</div>
             </a>
         </div>
     {% endif %}
 
     <div class="divider"></div>
-    <div class="center">Возврат выполнен</div>
+    <div class="center" style="white-space:pre-wrap">{{ receipt_preferences.footer_text or receipt_label('refund_done') }}</div>
 </main>
 </body>
 </html>
