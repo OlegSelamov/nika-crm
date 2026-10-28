@@ -21,6 +21,8 @@ class ReceiptRenderingTests(unittest.TestCase):
                     "price": 1650, "total": 1650, "gtin": "", "ntin": ""}],
             client=None, check_date="22.10.2026 09:30", cash=1650, card=0,
             kaspi=0, cash_received=2000, change_amount=350,
+            receipt_preferences={"language":"ru","footer_text":"","logo_data_url":None},
+            receipt_label=lambda key: {"received":"Получено","change":"Сдача"}.get(key,key),
         )
         self.assertIn("Получено", html)
         self.assertIn("2000.00", html)

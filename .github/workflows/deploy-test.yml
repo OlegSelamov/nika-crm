@@ -131,7 +131,19 @@ jobs:
             exit 1
           fi
 
-          if ! curl -fsS --max-time 8 "http://127.0.0.1:5000/login" >/dev/null; then
+          # Gunicorn can take longer than 3 seconds to initialize its single
+          # worker after restart. Retry a bounded health check instead of
+          # reporting a false deploy failure on the first cold request.
+          TEST_HEALTHY=0
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 8 "http://127.0.0.1:5000/login" >/dev/null; then
+              TEST_HEALTHY=1
+              break
+            fi
+            echo "TEST HTTP not ready (attempt ${attempt}/12); retrying..."
+            sleep 4
+          done
+          if [ "$TEST_HEALTHY" -ne 1 ]; then
             echo "TEST service is active but HTTP health check failed on port 5000"
             sudo systemctl status nika-business-test --no-pager -l || true
             sudo journalctl -u nika-business-test -n 160 --no-pager || true

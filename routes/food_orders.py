@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import Blueprint, jsonify, render_template, request, session, current_app, make_response, send_file
 from io import BytesIO
 from models import get_db, pool
+from services.receipt_settings import receipt_context
 from utils.sale_amounts import normalize_sale_line
 from utils.timezone import now_kz, now_kz_for_timestamp
 
@@ -490,6 +491,7 @@ def food_order_ticket(order_id, kind):
                                cash_preview_change=cash_preview_change,
                                kind=kind, order=_serialize(order),
                                company=company,
+                               **receipt_context(company_id),
                                money=receipt_money, qty_text=receipt_quantity,
                                ticket_date=order["created_at"].strftime("%d.%m.%y %H:%M") if order.get("created_at") else "")
     finally:

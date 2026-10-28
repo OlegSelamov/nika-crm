@@ -10,6 +10,7 @@ from cryptography.x509.oid import ExtensionOID
 from datetime import date, timedelta
 
 from flask import Blueprint, jsonify, render_template, request, session, redirect
+from services.receipt_settings import get_receipt_settings, receipt_label, save_receipt_settings
 from models import get_db, pool
 from subscriptions import has_module
 from services.alatau_client import AlatauClient, AlatauError, AlatauSecretCipher
@@ -2836,6 +2837,48 @@ def equipment():
 
     return render_template("settings/equipment.html")
     
+@settings_bp.route("/settings/receipt", methods=["GET", "POST"])
+def receipt_settings_page():
+    if not session.get("user_id"):
+        return redirect("/login")
+    company_id = session.get("company_id")
+    if not company_id:
+        return redirect("/settings")
+    if not (session.get("is_super_admin") or session.get("is_creator")
+            or session.get("role") in ("owner", "admin", "creator")):
+        return "Настройки чека может менять администратор организации", 403
+
+    token = session.get("receipt_preferences_csrf")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["receipt_preferences_csrf"] = token
+
+    error = None
+    if request.method == "POST":
+        submitted = request.form.get("csrf_token", "")
+        if not secrets.compare_digest(token, submitted):
+            return "Страница устарела. Обновите её и повторите сохранение", 403
+        try:
+            save_receipt_settings(
+                company_id,
+                language=request.form.get("language", "ru"),
+                footer_text=request.form.get("footer_text", ""),
+                show_logo=request.form.get("show_logo") == "1",
+                uploaded_logo=request.files.get("logo"),
+                remove_logo=request.form.get("remove_logo") == "1",
+            )
+            return redirect("/settings/receipt?saved=1")
+        except ValueError as exc:
+            error = str(exc)
+
+    prefs = get_receipt_settings(company_id)
+    return render_template(
+        "settings/receipt.html", preferences=prefs, error=error,
+        saved=request.args.get("saved") == "1", csrf_token=token,
+        receipt_label=lambda key: receipt_label(key, prefs["language"]),
+    )
+
+
 @settings_bp.route("/settings/printers")
 def printers():
     return render_template("settings/printers.html")

@@ -28,7 +28,9 @@ class FoodCheckoutModesTests(unittest.TestCase):
         js = self.read("static/js/food_sales.js")
         create = js.split('async function createFoodPrecheck()', 1)[1].split('async function finalizeFoodPaymentAfterChecks(', 1)[0]
         self.assertIn('await saveFoodOrder()', create)
-        self.assertIn('await printBothFoodTickets(saved, {manualAllowed: true})', create)
+        self.assertIn('await printBothFoodTickets(saved)', create)
+        self.assertIn('autoPrint !== true', create)
+        self.assertIn('await foodAutoPrintPreference()', create)
         self.assertNotIn('pay()', create)
         self.assertNotIn('submitSalePayment', create)
 
@@ -39,13 +41,17 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn('const needsFreshTickets = !isFoodTicketCurrent()', finalize)
         self.assertIn('const websiteMode = !isElectronFoodCheckout()', finalize)
         self.assertIn('await saveFoodOrder()', finalize)
-        self.assertIn('if (!websiteMode)', finalize)
+        self.assertIn('if (!websiteMode && autoPrint === true)', finalize)
+        self.assertIn('autoPrint === false', finalize)
+        self.assertIn('await foodAutoPrintPreference()', finalize)
         self.assertIn('await printBothFoodTickets(saved)', finalize)
         self.assertIn('submitSalePayment({', finalize)
         self.assertIn('openCashChangeModal()', pay)
         self.assertNotIn('else pay()', pay)
         self.assertIn('window.nikaConfirmNegativeStockSale', pay)
         self.assertIn('lastFoodPrintUiSignature === currentFoodUiSignature()', js)
+        self.assertIn('state?.settings?.auto_print_receipt', js)
+        self.assertIn('auto_print_receipt', self.read("desktop/main.js"))
         self.assertIn('food_order_id:', self.read("static/js/sales.js"))
 
     def test_retail_stock_guard_never_captures_food_buttons(self):
@@ -65,7 +71,7 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn('planned_payment_method FROM food_orders', backend)
         self.assertIn('order["planned_payment_method"] != payment_method', backend)
         self.assertIn('food_config["food_checkout_mode"] == "orders"', self.read("routes/rekassa_comrun.py"))
-        self.assertIn("Оплата:", tpl)
+        self.assertIn("receipt_label('payment')", tpl)
         self.assertNotIn("Планируемая оплата", tpl)
         self.assertNotIn("НЕ ФИСКАЛЬНЫЙ ЧЕК", tpl)
         self.assertIn('if (isFoodCheckout) {', sales_js)
@@ -103,6 +109,9 @@ class FoodCheckoutModesTests(unittest.TestCase):
         print_section = js.split('async function printBothFoodTickets(', 1)[1].split('async function createFoodPrecheck()', 1)[0]
         self.assertIn('if (!isElectronFoodCheckout())', print_section)
         self.assertIn('openFoodTicketPair(order.id)', print_section)
+        self.assertIn('await openFoodTicketPair(order.id, {', print_section)
+        self.assertIn('waitForPreview: true', print_section)
+        self.assertIn('setFoodPairAutoPrinting(true)', print_section)
         self.assertIn('if (!printers?.printFoodOrder)', print_section)
         self.assertIn('printers.printFoodOrder({', print_section)
         self.assertIn('getFoodDesktopBridge()?.isElectron === true', js)
@@ -111,6 +120,9 @@ class FoodCheckoutModesTests(unittest.TestCase):
             self.assertIn(marker, tpl)
         self.assertIn('def food_order_ticket_pdf(', route)
         self.assertIn('food_order_ticket(order_id, kind)', route)
+        self.assertIn('openFoodTicketPair(saved.id)', js)
+        self.assertIn('previewAfterPaymentOrderId = saved.id', js)
+        self.assertIn('cash_received', js)
         self.assertIn('navigator.share', js)
         self.assertIn("saveTicketFile('share')", self.read("templates/food_order_ticket.html"))
 

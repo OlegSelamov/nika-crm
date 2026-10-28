@@ -1,6 +1,7 @@
 from routes.clients import format_date_ru
 from flask import Blueprint, render_template, request, jsonify, redirect, make_response, send_file, current_app
 from models import get_db, pool
+from services.receipt_settings import receipt_context
 from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz, now_kz_for_timestamp
@@ -1803,6 +1804,7 @@ def check(sale_id):
         client=client,
         company=company,
         check_date=check_date,
+        **receipt_context(session.get("company_id")),
         # Legacy cash receipts have no explicit tender amount. Preserve their
         # displayed payment amount instead of rendering an undefined template var.
         cash_received=sale.get("cash_received") or sale.get("cash_amount") or 0,
@@ -1930,6 +1932,7 @@ def refund_check(sale_id):
             client=client,
             company=company,
             refund=refund,
+            **receipt_context(session.get("company_id")),
             refund_date=refunded_at.strftime("%d.%m.%Y %H:%M"),
             original_check_date=sale["created_at"].strftime("%d.%m.%Y %H:%M")
         )

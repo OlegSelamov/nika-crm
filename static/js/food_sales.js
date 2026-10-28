@@ -896,6 +896,21 @@
         return isElectronFoodCheckout() ? (getFoodDesktopBridge()?.printers || null) : null;
     }
 
+    // Respect the existing Electron receipt auto-print toggle in foodservice.
+    // Missing device settings must never trigger an unexpected print job.
+    async function foodAutoPrintPreference() {
+        const printers = getFoodPrinterBridge();
+        if (!printers?.getState) return null;
+        try {
+            const state = await printers.getState();
+            return typeof state?.settings?.auto_print_receipt === "boolean"
+                ? state.settings.auto_print_receipt : null;
+        } catch (error) {
+            console.warn("FOOD AUTO PRINT SETTINGS:", error);
+            return null;
+        }
+    }
+
     async function getSavedFoodTicketHtml(orderId, kind) {
         const cashReceived = kind === "precheck" ? Number(foodCashPrintReceived || 0) : 0;
         const suffix = cashReceived > 0 ? "&cash_received=" + encodeURIComponent(cashReceived) : "";
@@ -951,7 +966,7 @@
             lastFoodPrintUiSignature === currentFoodUiSignature());
     }
 
-    async function printBothFoodTickets(order, {manualAllowed = false} = {}) {
+    async function printBothFoodTickets(order) {
         const printers = getFoodPrinterBridge();
         const fingerprint = savedFoodTicketFingerprint(order);
         const uiSnapshotBeforePrint = currentFoodUiSignature();
@@ -985,12 +1000,28 @@
                 ? guestTicket.reason : kitchenTicket.reason;
             throw new Error(cause?.message || "Не удалось подготовить оба чека");
         }
-        const results = await printers.printFoodOrder({
-            orderId: order.id,
-            fingerprint,
-            guestHtml: guestTicket.value,
-            kitchenHtml: kitchenTicket.value
-        });
+        // Display the same two-check preview in Electron before either
+        // physical print job, preserving the existing auto-print setting.
+        setFoodPairAutoPrinting(true);
+        try {
+            await openFoodTicketPair(order.id, {
+                cashReceived: foodCashPrintReceived,
+                waitForPreview: true
+            });
+        } catch (error) {
+            console.warn("FOOD PREVIEW BEFORE PRINT:", error);
+        }
+        let results;
+        try {
+            results = await printers.printFoodOrder({
+                orderId: order.id,
+                fingerprint,
+                guestHtml: guestTicket.value,
+                kitchenHtml: kitchenTicket.value
+            });
+        } finally {
+            setFoodPairAutoPrinting(false);
+        }
 
         const guest = results?.guest;
         const kitchen = results?.kitchen;
@@ -1025,9 +1056,24 @@
             // Always save the freshest cart before opening the precheck.
             const saved = await saveFoodOrder();
             if (saved) {
+                const electron = isElectronFoodCheckout();
+                const autoPrint = electron ? await foodAutoPrintPreference() : null;
+                // Browser previews are unchanged. Physical printing depends on
+                // the same Electron preference as ordinary sale receipts.
+                if (electron && autoPrint !== true) {
+                    // No auto-print: display both saved receipts for manual
+                    // printing without sending anything to either printer.
+                    openFoodTicketPair(saved.id);
+                    const msg = autoPrint === false
+                        ? "Заказ №" + saved.id + " оформлен. Автопечать выключена — чеки доступны в истории заказов."
+                        : "Заказ №" + saved.id + " оформлен. Настройка автопечати недоступна — чеки можно распечатать вручную.";
+                    foodMessage(msg);
+                    showFoodPrintStatus(msg);
+                    return;
+                }
                 foodMessage("Заказ №" + saved.id + " оформлен");
                 try {
-                    const completed = await printBothFoodTickets(saved, {manualAllowed: true});
+                    const completed = await printBothFoodTickets(saved);
                     if (!completed) {
                         foodMessage("Заказ №" + saved.id + " сохранён, но печать не завершена. Проверьте настройки принтеров.");
                     }
@@ -1047,12 +1093,14 @@
     async function finalizeFoodPaymentAfterChecks(method, received = 0) {
         const websiteMode = !isElectronFoodCheckout();
         const needsFreshTickets = !isFoodTicketCurrent();
+        let previewAfterPaymentOrderId = null;
         if (needsFreshTickets) {
             const saved = await saveFoodOrder();
             if (!saved) return false;
-            if (!websiteMode) {
-                // Electron still requires successful spooling of BOTH tickets
-                // before the sale. Its printer config and retry gate stay intact.
+            const autoPrint = websiteMode ? null : await foodAutoPrintPreference();
+            if (!websiteMode && autoPrint === true) {
+                // When auto-print is ON, retain the existing two-ticket print
+                // gate: a printer failure still blocks completing the payment.
                 foodCashPrintReceived = method === "cash" ? received : null;
                 try {
                     if (!await printBothFoodTickets(saved)) {
@@ -1066,10 +1114,19 @@
                 } finally {
                     foodCashPrintReceived = null;
                 }
+            } else if (!websiteMode) {
+                previewAfterPaymentOrderId = saved.id;
+                // No automatic printing is a supported checkout mode, not
+                // a printer error. Kitchen/guest documents remain in history.
+                const msg = autoPrint === false
+                    ? "Автопечать выключена — оба чека доступны в истории заказов."
+                    : "Настройка автопечати недоступна — чеки можно распечатать вручную в истории заказов.";
+                foodMessage(msg);
+                showFoodPrintStatus(msg);
             }
             // Website: do NOT check local printers or block payment.
+            if (websiteMode) previewAfterPaymentOrderId = saved.id;
         }
-        const browserOrderId = websiteMode && needsFreshTickets ? currentFoodOrderId : null;
 
         const total = getCart().reduce((sum, item) =>
             sum + Number(item.price || 0) * Number(item.qty || 0), 0);
@@ -1082,7 +1139,7 @@
                 paymentMethod:"cash", cash:received, card:0, kaspi:0,
                 cashChange:Math.max(0, received-total)
             });
-            if (paid && browserOrderId) openFoodTicketPair(browserOrderId);
+            if (paid && previewAfterPaymentOrderId) openFoodTicketPair(previewAfterPaymentOrderId);
             return paid;
         }
         const card = Number(String(document.getElementById("cardInput")?.value || "").replace(",", ".")) || 0;
@@ -1092,7 +1149,7 @@
             card:method === "card" ? card : 0,
             kaspi:method === "kaspi" ? kaspi : 0, cashChange:0
         });
-        if (paid && browserOrderId) openFoodTicketPair(browserOrderId);
+        if (paid && previewAfterPaymentOrderId) openFoodTicketPair(previewAfterPaymentOrderId);
         return paid;
     }
 
@@ -1220,21 +1277,64 @@
         return "/food/orders/" + encodeURIComponent(orderId) + "/" + path + kind;
     }
 
-    function openFoodTicketPair(orderId) {
-        if (!orderId) return;
+    function setFoodPairAutoPrinting(printing) {
+        // Prevent accidental duplicate manual jobs while auto-print is active.
+        document.querySelectorAll('#foodTicketPair [data-food-ticket-action="print"]').forEach(button => {
+            button.disabled = printing;
+            button.title = printing ? "Дождитесь завершения автопечати" : "";
+        });
+    }
+
+    function openFoodTicketPair(orderId, {cashReceived = null, waitForPreview = false} = {}) {
+        if (!orderId) return Promise.resolve();
         const modal = document.getElementById("foodTicketModal");
         const single = document.getElementById("foodTicketSingle");
         const pair = document.getElementById("foodTicketPair");
-        if (!modal || !single || !pair) return;
+        const guestFrame = document.getElementById("foodGuestTicketFrame");
+        const kitchenFrame = document.getElementById("foodKitchenTicketFrame");
+        if (!modal || !single || !pair || !guestFrame || !kitchenFrame) return Promise.resolve();
         if (modal.parentElement !== document.body) document.body.appendChild(modal);
         activeFoodTicketOrderId = orderId;
         document.getElementById("foodTicketHeading").textContent = "Заказ №" + orderId + " · два чека";
         modal.querySelector(".food-ticket-dialog")?.classList.add("is-dual");
         single.hidden = true;
         pair.hidden = false;
-        document.getElementById("foodGuestTicketFrame").src = foodTicketUrl(orderId, "precheck") + "?embed=1";
-        document.getElementById("foodKitchenTicketFrame").src = foodTicketUrl(orderId, "kitchen") + "?embed=1";
+
+        let previewReady = Promise.resolve();
+        if (waitForPreview) {
+            previewReady = new Promise(resolve => {
+                let pending = 2;
+                let settled = false;
+                let timeout;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    window.clearTimeout(timeout);
+                    guestFrame.removeEventListener("load", onLoad);
+                    kitchenFrame.removeEventListener("load", onLoad);
+                    resolve();
+                };
+                const onLoad = () => {
+                    pending -= 1;
+                    if (pending <= 0) finish();
+                };
+                guestFrame.addEventListener("load", onLoad);
+                kitchenFrame.addEventListener("load", onLoad);
+                // Loading the preview is best-effort: the separate validated
+                // printer payload must not be blocked by a slow iframe.
+                timeout = window.setTimeout(finish, 2500);
+            });
+        }
+        const guestParams = new URLSearchParams({embed: "1"});
+        const received = Number(cashReceived);
+        if (cashReceived !== null && cashReceived !== undefined &&
+                Number.isFinite(received) && received > 0) {
+            guestParams.set("cash_received", String(received));
+        }
         modal.hidden = false;
+        guestFrame.src = foodTicketUrl(orderId, "precheck") + "?" + guestParams.toString();
+        kitchenFrame.src = foodTicketUrl(orderId, "kitchen") + "?embed=1";
+        return previewReady;
     }
 
     function openFoodTicket(orderId, kind, autoPrint = false) {
