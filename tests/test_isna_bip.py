@@ -18,6 +18,8 @@ class IsnaBipEnvelopeTests(unittest.TestCase):
             "ISNA_BIP_SENDER_ID": "fake-test-sender",
             "ISNA_BIP_PASSWORD": "fake-test-password",
             "ISNA_BIP_SERVICE_ID": "fake-test-service",
+            "ISNA_BIP_SOAP_ACTION": "",
+            "ISNA_BIP_URL": bip.DEFAULT_TEST_URL,
         })
         self.env.start()
         self.addCleanup(self.env.stop)
