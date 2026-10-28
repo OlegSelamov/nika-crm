@@ -885,10 +885,10 @@
     </section>
 </div>
 
-{% endblock %}
-{% block page_js %}
 {% if isna_test_lab_enabled %}
-<script src="{{ url_for('static', filename='js/ncalayer.js', v='20261028-isna-lab-test-v1') }}"></script>
-<script src="{{ url_for('static', filename='js/isna_test_lab.js', v='20261028-isna-lab-test-v1') }}"></script>
+{# base.html renders page_js only in embedded mode; this lab must also work
+   in a full mobile WebView and standalone desktop browser. #}
+<script src="{{ url_for('static', filename='js/ncalayer.js', v='20261028-isna-lab-test-v2') }}"></script>
+<script src="{{ url_for('static', filename='js/isna_test_lab.js', v='20261028-isna-lab-test-v2') }}"></script>
 {% endif %}
 {% endblock %}
