@@ -179,7 +179,7 @@ async function testElectronPreviewBeforeSpool() {
         console
     };
     vm.runInNewContext(src.slice(foodPrintStart,foodPrintEnd)+
-        "\\nthis.printPair=printBothFoodTickets;",ctx);
+        "\nthis.printPair=printBothFoodTickets;",ctx);
     const result=await ctx.printPair({id:42,cart:[],planned_payment_method:"cash"});
     assert.equal(result,true);
     assert.deepEqual(actions,["disable-manual","preview","spool","enable-manual"]);
@@ -202,12 +202,14 @@ async function testElectronPreviewBeforeSpool() {
         assert.ok(failed.includes("save")&&failed.includes("print"));
         assert.ok(!failed.includes("submit:"+method),"Printer failure must block payment");
         const off=await checkout(method,{autoPrint:false});
-        assert.deepEqual(off,method==="cash"
-            ? ["stock","cash-modal","save","submit:cash","cash-close"]
-            : ["stock","save","submit:"+method],
-            "Disabled auto-print must save and pay but never print for "+method);
+        assert.deepEqual(off.filter(x=>!x.startsWith("message:")),method==="cash"
+            ? ["stock","cash-modal","save","submit:cash","preview:42","cash-close"]
+            : ["stock","save","submit:"+method,"preview:42"],
+            "Disabled auto-print must save, pay and open preview without printing for "+method);
         const unknown=await checkout(method,{autoPrint:null});
-        assert.deepEqual(unknown,off,"Missing printer settings must never force printing");
+        assert.deepEqual(unknown.filter(x=>!x.startsWith("message:")),
+            off.filter(x=>!x.startsWith("message:")),
+            "Missing printer settings must never force printing");
         const noAuto=await checkout(method,{autoPrint:false,printOK:false});
         assert.ok(noAuto.includes("preview:42"),
             "Auto-print disabled Electron must preview the two tickets after payment");
