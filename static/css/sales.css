@@ -4610,6 +4610,57 @@ body > #clientSheet .client-picker-actions .btn {width:100%;min-height:48px;marg
   body > #clientSheet .selected-client {max-height:12dvh;}
   body > #clientSheet .client-picker-actions {flex-direction:row;}
   body > #clientSheet .client-picker-actions .btn {min-width:0;}
+
+  /* Mobile picker: keep selected client details compact and both actions visible.
+     The shared .picker-right .btn previously had flex:0 0 auto and width:100%,
+     so the second button was pushed outside the viewport. */
+  #clientSheet.sheet .picker-right {
+    position:relative !important;
+    bottom:auto !important;
+    display:flex !important;
+    flex-direction:column !important;
+    width:100%;
+    min-width:0;
+    box-sizing:border-box;
+    max-height:min(42dvh,260px) !important;
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom)) !important;
+    gap:8px;
+    overflow:hidden;
+  }
+  #clientSheet.sheet .selected-title {
+    flex:0 0 auto;
+    margin:0;
+  }
+  #clientSheet.sheet .selected-client {
+    flex:0 1 auto;
+    min-height:0 !important;
+    max-height:min(13dvh,90px);
+    margin:0;
+    padding:8px 10px;
+    overflow:auto;
+  }
+  #clientSheet.sheet .client-picker-actions {
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    flex:0 0 auto;
+    width:100%;
+    min-width:0;
+    gap:8px;
+  }
+  #clientSheet.sheet .client-picker-actions .btn {
+    flex:1 1 auto !important;
+    box-sizing:border-box;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100%;
+    min-height:44px;
+    height:auto;
+    margin:0 !important;
+    padding:9px 6px;
+    font-size:14px;
+    white-space:normal;
+    text-align:center;
+  }
 }
 
 /* Add customer above the fullscreen sales client picker. */
