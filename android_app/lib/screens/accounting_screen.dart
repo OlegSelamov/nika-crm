@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 
 import '../services/api_service.dart';
 import '../services/printer_service.dart';
+import 'isna_test_panel.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 
@@ -101,8 +102,9 @@ class _AccountingScreenState extends State<AccountingScreen> {
     }
 
     final summary = Map<String, dynamic>.from(data['summary'] ?? const {});
+    final isTestApp = ApiService.baseUrl == 'https://test.nikabusiness.com';
     return DefaultTabController(
-      length: 4,
+      length: isTestApp ? 5 : 4,
       child: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
@@ -161,6 +163,7 @@ class _AccountingScreenState extends State<AccountingScreen> {
             Tab(text: 'Документы'),
             Tab(text: 'Налоги'),
             Tab(text: 'Долги'),
+            if (isTestApp) const Tab(text: 'ИСНА TEST'),
           ],
         ),
         Expanded(
@@ -189,6 +192,7 @@ class _AccountingScreenState extends State<AccountingScreen> {
               onRefresh: load,
               onPaid: (item) => markPaid('debts', item),
             ),
+            if (isTestApp) const IsnaTestPanel(),
           ]),
         ),
       ]),
