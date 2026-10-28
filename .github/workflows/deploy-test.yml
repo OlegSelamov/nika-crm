@@ -22,6 +22,7 @@ jobs:
         run: |
           node --check static/js/food_sales.js
           node --check static/js/isna_test_lab.js
+          node tests/test_isna_test_lab.js
           node tests/test_food_modifier_tabs.js
           node tests/test_food_cart_modifier_edit.js
       - name: Configure SSH
