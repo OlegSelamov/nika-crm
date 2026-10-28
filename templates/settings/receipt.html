@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.receipt-settings{max-width:1100px;margin:0 auto;padding:14px 0 50px;color:#252840}
+.receipt-settings h1{font-size:27px;font-weight:850;margin:0 0 6px}
+.receipt-settings .intro{color:#7b8193;font-size:13px;line-height:1.55;margin-bottom:22px}
+.receipt-settings .layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(290px,.8fr);gap:19px;align-items:start}
+.receipt-settings .card{background:#fff;border:1px solid #e5e7f0;border-radius:20px;padding:23px;box-shadow:0 10px 35px rgba(35,38,70,.06)}
+.receipt-settings h2{font-size:16px;margin:0 0 17px}
+.receipt-settings .field{display:block;margin-bottom:18px;font-size:12px;color:#414660;font-weight:700}
+.receipt-settings .field select,.receipt-settings .field textarea,.receipt-settings .field input[type=file]{display:block;margin-top:8px;width:100%;border:1px solid #d9ddeb;border-radius:11px;padding:12px;background:#fafbff;color:#293047;font-size:13px}
+.receipt-settings .field textarea{resize:vertical;min-height:90px;font-family:inherit}
+.receipt-settings .hint{display:block;color:#81899c;font-size:11px;font-weight:400;line-height:1.5;margin-top:6px}
+.receipt-settings .check{display:flex;gap:9px;align-items:center;font-size:13px;margin:14px 0 20px;cursor:pointer}
+.receipt-settings .check input{width:17px;height:17px;accent-color:#7257ff}
+.receipt-settings .logo-area{display:flex;align-items:center;justify-content:center;min-height:120px;border-radius:12px;background:#f8f9fc;border:1px dashed #cdd1e3;padding:12px;margin:12px 0}
+.receipt-settings .logo-area img{display:block;max-width:230px;max-height:100px;object-fit:contain}
+.receipt-settings .btn{background:#7356f3;border:0;border-radius:11px;padding:13px 22px;font-weight:800;color:#fff;cursor:pointer}
+.receipt-settings .alert{padding:12px 14px;border-radius:10px;background:#e8f9ee;color:#17653a;margin-bottom:15px;font-size:13px}
+.receipt-settings .error{background:#fff0e9;color:#9c3d18}
+.receipt-settings .preview-paper{max-width:285px;margin:auto;background:#fff;border:1px solid #e6e6e6;padding:18px 14px;font:12px/1.45 Arial,sans-serif;text-align:center;overflow-wrap:anywhere;color:#161616;box-shadow:0 9px 18px #ebedf5}
+.receipt-settings .preview-paper .row{display:flex;justify-content:space-between;border-top:1px dashed #aaa;padding:7px 0;text-align:left}
+.receipt-settings .preview-paper img{max-height:75px;max-width:180px;object-fit:contain}
+.receipt-settings .preview-paper .end{margin-top:11px;padding-top:9px;border-top:1px dashed #999;white-space:pre-wrap}
+@media(max-width:740px){.receipt-settings .layout{grid-template-columns:1fr}.receipt-settings .card{padding:17px}}
+</style>
+<div class="receipt-settings">
+ <a href="/settings" style="font-size:13px;color:#7356f3;text-decoration:none">← Настройки</a>
+ <h1>Настройка чека</h1>
+ <p class="intro">Оформление чеков продаж и заказов общепита для этой организации. Настройки действуют на сайте и во всех Electron-кассах. Фискальные реквизиты и QR-код сохраняются.</p>
+ {% if saved %}<div class="alert" role="status">Настройки чека сохранены</div>{% endif %}
+ {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+ <div class="layout">
+  <form class="card" action="/settings/receipt" method="post" enctype="multipart/form-data">
+   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+   <h2>Язык и оформление</h2>
+   <label class="field">Язык чека
+    <select name="language" id="receiptLanguage">
+     <option value="bilingual" {% if preferences.language == 'bilingual' %}selected{% endif %}>Қазақша + Русский</option>
+     <option value="kk" {% if preferences.language == 'kk' %}selected{% endif %}>Только казахский</option>
+     <option value="ru" {% if preferences.language == 'ru' %}selected{% endif %}>Только русский</option>
+    </select>
+    <span class="hint">Меняет подписи в чеке, не названия товаров. Для новых организаций по умолчанию русский язык.</span>
+   </label>
+   <label class="field">Логотип на чеке (PNG, JPG или WebP)
+    <input type="file" name="logo" accept="image/png,image/jpeg,image/webp">
+    <span class="hint">Максимум 1 МБ. Изображение автоматически уменьшается и переводится в оттенки серого для чекового принтера.</span>
+   </label>
+   {% if preferences.logo_data_url %}
+    <div class="logo-area"><img src="{{ preferences.logo_data_url }}" alt="Загруженный логотип"></div>
+    <label class="check"><input type="checkbox" name="remove_logo" value="1">Удалить загруженный логотип</label>
+   {% endif %}
+   <label class="check"><input type="checkbox" name="show_logo" value="1" {% if preferences.show_logo %}checked{% endif %}>Показывать логотип в чеке</label>
+   <label class="field">Свой текст внизу чека
+    <textarea name="footer_text" maxlength="160" placeholder="Например: Ждём вас снова!">{{ preferences.footer_text }}</textarea>
+    <span class="hint">До 160 символов. Если поле пустое, используется стандартное «Спасибо за покупку» или «Приятного аппетита» на выбранном языке.</span>
+   </label>
+   <button class="btn" type="submit">Сохранить настройки</button>
+  </form>
+  <aside class="card">
+   <h2>Предварительный вид</h2>
+   <div class="preview-paper">
+    {% if preferences.logo_data_url and preferences.show_logo %}<img src="{{ preferences.logo_data_url }}" alt="Логотип"><br>{% endif %}
+    <strong>Nika Business</strong><br>
+    <small>{{ receipt_label('receipt') }} №123 · 28.10.2026 12:00</small>
+    <div class="row"><span>Товар × 1</span><strong>1 500 ₸</strong></div>
+    <div class="row"><strong>{{ receipt_label('total') }}</strong><strong>1 500 ₸</strong></div>
+    <div class="row"><span>{{ receipt_label('payment') }}</span><span>{{ receipt_label('cash') }}</span></div>
+    <div class="end">{{ preferences.footer_text or receipt_label('thanks') }}</div>
+   </div>
+   <p class="hint" style="margin-top:14px;text-align:center">Показан пример. QR-код фискального чека добавляется при наличии.</p>
+  </aside>
+ </div>
+</div>
+{% endblock %}
