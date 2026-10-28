@@ -109,6 +109,9 @@ class FoodCheckoutModesTests(unittest.TestCase):
         print_section = js.split('async function printBothFoodTickets(', 1)[1].split('async function createFoodPrecheck()', 1)[0]
         self.assertIn('if (!isElectronFoodCheckout())', print_section)
         self.assertIn('openFoodTicketPair(order.id)', print_section)
+        self.assertIn('await openFoodTicketPair(order.id, {', print_section)
+        self.assertIn('waitForPreview: true', print_section)
+        self.assertIn('setFoodPairAutoPrinting(true)', print_section)
         self.assertIn('if (!printers?.printFoodOrder)', print_section)
         self.assertIn('printers.printFoodOrder({', print_section)
         self.assertIn('getFoodDesktopBridge()?.isElectron === true', js)
@@ -117,6 +120,9 @@ class FoodCheckoutModesTests(unittest.TestCase):
             self.assertIn(marker, tpl)
         self.assertIn('def food_order_ticket_pdf(', route)
         self.assertIn('food_order_ticket(order_id, kind)', route)
+        self.assertIn('openFoodTicketPair(saved.id)', js)
+        self.assertIn('previewAfterPaymentOrderId = saved.id', js)
+        self.assertIn('cash_received', js)
         self.assertIn('navigator.share', js)
         self.assertIn("saveTicketFile('share')", self.read("templates/food_order_ticket.html"))
 

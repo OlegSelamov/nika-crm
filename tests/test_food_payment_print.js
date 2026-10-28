@@ -86,6 +86,7 @@ async function printFromGreenButton(method,fail=false,autoPrint=true,runtime="el
         foodMessage:()=>{},
         isElectronFoodCheckout:()=>runtime==="electron",
         foodAutoPrintPreference:async()=>autoPrint,
+        openFoodTicketPair:()=>calls.push("preview:"+method),
         saveFoodOrder:async()=>{calls.push("save:"+method);return {id:123};},
         printBothFoodTickets:async()=>{calls.push("dual:"+method);return !fail;},
         console
@@ -146,7 +147,46 @@ async function simulateSale(method,mode,result){
     return calls;
 }
 
+
+const foodPrintStart=src.indexOf("    async function printBothFoodTickets(");
+const foodPrintEnd=src.indexOf("\n    async function createFoodPrecheck()",foodPrintStart);
+assert.ok(foodPrintStart>=0&&foodPrintEnd>foodPrintStart,"Food receipt batch handler not found");
+async function testElectronPreviewBeforeSpool() {
+    const actions=[];
+    const printer={
+        printFoodOrder:async()=>{
+            actions.push("spool");
+            return {success:true,guest:{success:true},kitchen:{success:true}};
+        }
+    };
+    const ctx={
+        getFoodPrinterBridge:()=>printer,
+        isElectronFoodCheckout:()=>true,
+        savedFoodTicketFingerprint:()=>"fingerprint",
+        currentFoodUiSignature:()=>"ui-state",
+        getSavedFoodTicketHtml:async(_id,kind)=>"<main>"+kind+"</main>",
+        openFoodTicketPair:async(_id,options)=>{
+            assert.equal(options.cashReceived,1100);
+            assert.equal(options.waitForPreview,true);
+            actions.push("preview");
+        },
+        setFoodPairAutoPrinting:busy=>actions.push(busy?"disable-manual":"enable-manual"),
+        foodCashPrintReceived:1100,
+        lastFoodPrintFingerprint:null,
+        lastFoodPrintUiSignature:null,
+        showFoodPrintStatus:()=>{},
+        foodMessage:()=>{},
+        console
+    };
+    vm.runInNewContext(src.slice(foodPrintStart,foodPrintEnd)+
+        "\\nthis.printPair=printBothFoodTickets;",ctx);
+    const result=await ctx.printPair({id:42,cart:[],planned_payment_method:"cash"});
+    assert.equal(result,true);
+    assert.deepEqual(actions,["disable-manual","preview","spool","enable-manual"]);
+}
+
 (async()=>{
+    await testElectronPreviewBeforeSpool();
     for(const method of ["cash","card","kaspi"]) {
         const first=await checkout(method);
         assert.deepEqual(first,method==="cash"
@@ -168,6 +208,9 @@ async function simulateSale(method,mode,result){
             "Disabled auto-print must save and pay but never print for "+method);
         const unknown=await checkout(method,{autoPrint:null});
         assert.deepEqual(unknown,off,"Missing printer settings must never force printing");
+        const noAuto=await checkout(method,{autoPrint:false,printOK:false});
+        assert.ok(noAuto.includes("preview:42"),
+            "Auto-print disabled Electron must preview the two tickets after payment");
         const website=await checkout(method,{runtime:"website",printOK:false});
         assert.deepEqual(website,method==="cash"
             ? ["stock","cash-modal","save","submit:cash","preview:42","cash-close"]
@@ -183,9 +226,11 @@ async function simulateSale(method,mode,result){
     }
     for(const method of ["cash","card","kaspi"]) {
         const off=await printFromGreenButton(method,false,false);
-        assert.deepEqual(off,["save:"+method],"Green checkout must not print when disabled");
+        assert.deepEqual(off,["save:"+method,"preview:"+method],
+            "Green checkout must preview but not print when disabled");
         const unknown=await printFromGreenButton(method,false,null);
-        assert.deepEqual(unknown,["save:"+method],"Green checkout must not print on unknown setting");
+        assert.deepEqual(unknown,["save:"+method,"preview:"+method],
+            "Green checkout must preview but not print on unknown setting");
         const browser=await printFromGreenButton(method,false,false,"website");
         assert.ok(browser.includes("dual:"+method),"Browser preview must stay available");
         const green=await printFromGreenButton(method);
