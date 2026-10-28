@@ -134,6 +134,19 @@
 .isna-signature-form { display:grid; grid-template-columns:1fr 1fr auto; gap:8px; width:100%; margin-top:12px; }
 .isna-signature-form input,.isna-signature-form textarea { min-width:0; padding:10px; border:1px solid var(--r-border); border-radius:10px; font:inherit; font-size:10px; resize:vertical; }
 .isna-warning { margin-top:10px !important; color:var(--r-red) !important; }
+.isna-test-lab {margin:15px 0;padding:19px;border:1px solid #bfcaf9;border-radius:16px;background:#f7f8ff;box-shadow:var(--r-shadow);}
+.isna-test-lab h3 {margin:0 0 6px;font-size:16px;color:#302277;}
+.isna-test-lab p {font-size:12px;line-height:1.6;color:#46526b;margin:6px 0;}
+.isna-test-lab__flag {display:inline-block;margin-bottom:9px;padding:5px 9px;border-radius:10px;background:#e7e1ff;color:#5338bb;font-size:11px;font-weight:800;}
+.isna-test-lab__actions {display:flex;gap:9px;flex-wrap:wrap;margin-top:13px;}
+.isna-test-lab__actions .report-btn {min-height:42px;font-size:12px;}
+.isna-test-lab__actions button:disabled {opacity:.58;cursor:not-allowed;}
+.isna-test-lab__status {white-space:pre-line;overflow-wrap:anywhere;line-height:1.6;margin-top:12px;padding:11px 13px;border:1px solid #dddff3;border-radius:12px;background:#fff;color:#334155;font-size:12px;}
+.isna-test-lab__password {display:block;margin-top:12px;font-size:12px;font-weight:700;color:#273147;}
+.isna-test-lab__password input {display:block;width:min(360px,100%);box-sizing:border-box;margin-top:6px;padding:10px 12px;border:1px solid #ced3e9;border-radius:10px;font-size:14px;}
+.isna-test-lab__disclaimer {margin-top:13px !important;color:#895021 !important;}
+@media (max-width:760px) {.isna-test-lab {padding:14px;}.isna-test-lab__actions .report-btn {width:100%;}}
+
 @media(max-width:760px){ .isna-steps{grid-template-columns:1fr 1fr}.isna-signature-form{grid-template-columns:1fr} }
 
 .report-status-grid,
@@ -568,6 +581,35 @@
         {% if filing_status == 'signed' and not isna_gateway_ready %}<p class="isna-warning">Подпись сохранена. Для отправки администратору нужно настроить шлюз ИСНА.</p>{% endif %}
     </section>
 
+    {% if isna_test_lab_enabled %}
+    <section class="isna-test-lab" id="isnaTestLab" aria-label="Тестирование ИСНА без отправки">
+        <span class="isna-test-lab__flag">ТЕСТОВАЯ СРЕДА · БЕЗ ОТПРАВКИ</span>
+        <h3>Диагностика Smart Bridge и подписи ЭЦП</h3>
+        <p>Проверяем TCP-доступность шлюза с TEST VPS и локальную XML-подпись через NCALayer
+           или тестовое Android-приложение. Для проверки подписи используется только
+           демонстрационный XML без реквизитов клиентов или налоговых сведений.</p>
+        <p>Это <strong>не транспортная WS-Security подпись</strong> и не отправка формы 910/200.
+           Для настоящей отправки нужны официальная XSD ИСНА, подтверждённые
+           senderId/serviceId и отдельное подписание SOAP-транспорта.</p>
+        <label id="isnaTestPasswordLabel" class="isna-test-lab__password" hidden>
+            Пароль тестового .p12 (остаётся в приложении, не передаётся серверу)
+            <input id="isnaTestP12Password" type="password" autocomplete="off" placeholder="Пароль от .p12">
+        </label>
+        <div class="isna-test-lab__actions">
+            <button type="button" class="report-btn report-btn--light" id="isnaTestCheck">Проверить доступность</button>
+            <button type="button" class="report-btn report-btn--primary" id="isnaTestSign">Подписать пробный XML</button>
+            <button type="button" class="report-btn report-btn--light" id="isnaTestDownload" disabled>Сохранить подписанный XML</button>
+            <button type="button" class="report-btn report-btn--light" disabled title="Отправка через SOAP пока не реализована и заблокирована">Отправить в ИСНА · позже</button>
+        </div>
+        <div id="isnaTestStatus" class="isna-test-lab__status" role="status" aria-live="polite">
+            Ничего не отправлено. Можно проверить доступность или подписать пробный XML.
+        </div>
+        <p class="isna-test-lab__disclaimer">Подписанный XML остаётся только в памяти устройства до
+           скачивания или закрытия страницы. Не является подтверждением принятия отчётности.</p>
+    </section>
+    {% endif %}
+
+
     <section class="official-form-sheet">\n        <div class="official-form-title">\n            <strong>{{ report.title }}</strong>\n            <span>{{ report.period_label }} · версия {{ report.form_version }} · ревизия {{ report.form_revision }}</span>\n        </div>\n\n        <div class="official-form-grid">\n            <div class="official-cell"><label>ИИН / БИН</label><b>{{ company.bin or "—" }}</b></div>\n            <div class="official-cell"><label>Наименование</label><b>{{ company.name or "—" }}</b></div>\n            <div class="official-cell"><label>Налоговый период</label><b>{{ report.period_label }}</b></div>\n            <div class="official-cell"><label>Вид декларации</label><b>Первоначальная</b></div>\n            <div class="official-cell"><label>Адрес</label><b>{{ company.address or "—" }}</b></div>\n            <div class="official-cell"><label>Руководитель</label><b>{{ company.director or "—" }}</b></div>\n            <div class="official-cell"><label>Срок сдачи</label><b>{{ report.submit_due.strftime("%d.%m.%Y") }}</b></div>\n            <div class="official-cell"><label>Срок оплаты</label><b>{{ report.payment_due.strftime("%d.%m.%Y") }}</b></div>\n        </div>\n\n        <div class="official-section-title">Основные показатели формы</div>\n        <table class="official-lines">\n            <thead>\n                <tr><th>Код строки</th><th>Наименование показателя</th><th>Значение</th></tr>\n            </thead>\n            <tbody>\n                {% for line in report.official_lines %}\n                <tr>\n                    <td class="code">{{ line.code }}</td>\n                    <td>{{ line.name }}</td>\n                    <td class="value">{{ "{:,.0f}".format(line.amount or 0).replace(",", " ") }} ₸</td>\n                </tr>\n                {% endfor %}\n            </tbody>\n        </table>\n\n        {% if report.form_type == "200" %}\n        <div class="official-section-title">Приложение 200.01 — сведения по физическим лицам</div>\n        <table class="official-lines">\n            <thead>\n                <tr><th>Работник</th><th>Доход</th><th>ОПВ</th><th>ВОСМС</th><th>ИПН</th></tr>\n            </thead>\n            <tbody>\n                {% for employee in report.employees %}\n                <tr>\n                    <td>{{ employee.name }}</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.salary or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.opv or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.vosms or 0).replace(",", " ") }} ₸</td>\n                    <td class="value">{{ "{:,.0f}".format(employee.ipn or 0).replace(",", " ") }} ₸</td>\n                </tr>\n                {% endfor %}\n            </tbody>\n        </table>\n        {% endif %}\n    </section>\n\n    <section class="report-card">
         <div class="report-card__head">
             <div>
@@ -843,4 +885,10 @@
     </section>
 </div>
 
+{% endblock %}
+{% block page_js %}
+{% if isna_test_lab_enabled %}
+<script src="{{ url_for('static', filename='js/ncalayer.js', v='20261028-isna-lab-test-v1') }}"></script>
+<script src="{{ url_for('static', filename='js/isna_test_lab.js', v='20261028-isna-lab-test-v1') }}"></script>
+{% endif %}
 {% endblock %}
