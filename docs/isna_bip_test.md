@@ -14,6 +14,16 @@
 - Do not point `ISNA_GATEWAY_URL` directly at the SOAP URL: the JSON format is incompatible.
 - The WSDL from the test endpoint advertises an unrelated internal SOAP address. Always use the URL explicitly provided in the approved Smart Bridge application.
 
+## In-app TEST diagnostics and demonstration XML signing
+
+- Open `https://test.nikabusiness.com/accounting/report?form_type=910` as an authenticated company user.
+- The **TEST-only** ISNA diagnostics card checks a short TCP connection **from the TEST VPS** and locally signs a harmless dummy XML with browser NCALayer. It is NOT an official form, NOT a transport WS-Security signature, and has NO real SOAP submission action.
+- The optional downloaded signed XML contains certificate/public key material; share it only as appropriate and never include the private `.p12` or its password.
+- The diagnostic endpoint `GET /accounting/isna/test/diagnostics` requires login, active company and explicit `APP_MODE=test`. It never accepts a user-controlled URL or a SOAP payload.
+- The Android TEST bridge supports `signIsnaTestXml` only when the current page is exactly `test.nikabusiness.com/accounting/report`; this needs a newly built isolated Android TEST APK (existing installs do not get native signing support from website deployment alone).
+- The "Отправить в ИСНА" button in this new panel is **disabled** until we receive official ISNA service XSD, registered sender identity and working GOST WS-Security transport signer.
+- The VPN was previously verified from the main VPS, **not the TEST VPS**. Failure of the TEST-side TCP probe does not invalidate that result. We are deliberately not proxying test traffic through production.
+
 ## Confirm before a signed test
 
 1. Exact approved Smart Bridge **`serviceId`** for ISNA (the code defaults `FNO_INTEGRATION`, but the default is **unverified**).
