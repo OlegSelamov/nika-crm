@@ -87,8 +87,11 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
   Future<void> _handleMobileSignerMessage(String rawMessage) async {
     final currentUrl = ready ? await controller.currentUrl() : null;
     final currentUri = currentUrl == null ? null : Uri.tryParse(currentUrl);
-    if (currentUri == null ||
-        currentUri.host.toLowerCase() != 'www.nikabusiness.com') {
+    if (currentUri == null) return;
+    final host = currentUri.host.toLowerCase();
+    // Preserve existing production signer routes. TEST diagnostic signing is
+    // allowed only from the exact isolated TEST host and accounting report.
+    if (host != 'www.nikabusiness.com' && host != 'test.nikabusiness.com') {
       return;
     }
 
@@ -99,10 +102,14 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
       final message = Map<String, dynamic>.from(decoded);
       final action = (message['action'] ?? '').toString();
 
-      final bankAction = action == 'signAlatauJws' && currentUri.path == '/banks';
-      final esfAction = (action == 'signEsfRaw' || action == 'signEsfXml') &&
+      final bankAction = host == 'www.nikabusiness.com' &&
+          action == 'signAlatauJws' && currentUri.path == '/banks';
+      final esfAction = host == 'www.nikabusiness.com' &&
+          (action == 'signEsfRaw' || action == 'signEsfXml') &&
           currentUri.path == '/sales';
-      if (!bankAction && !esfAction) return;
+      final isnaTestAction = host == 'test.nikabusiness.com' &&
+          action == 'signIsnaTestXml' && currentUri.path == '/accounting/report';
+      if (!bankAction && !esfAction && !isnaTestAction) return;
 
       requestId = (message['requestId'] ?? '').toString();
       final payload = (message['payload'] ?? '').toString();
@@ -130,6 +137,12 @@ class _WebModuleScreenState extends State<WebModuleScreen> {
             password: password,
           ),
         'signEsfXml' => await MobileP12Signer.signEsfXml(
+            payload: payload,
+            password: password,
+          ),
+        // Deliberately XML-signs a harmless offline test payload, not a SOAP
+        // WS-Security request or an actual tax filing.
+        'signIsnaTestXml' => await MobileP12Signer.signEsfXml(
             payload: payload,
             password: password,
           ),
