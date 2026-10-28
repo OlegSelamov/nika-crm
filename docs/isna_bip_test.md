@@ -20,7 +20,7 @@
 - The **TEST-only** ISNA diagnostics card checks a short TCP connection **from the TEST VPS** and locally signs a harmless dummy XML with browser NCALayer. It is NOT an official form, NOT a transport WS-Security signature, and has NO real SOAP submission action.
 - The optional downloaded signed XML contains certificate/public key material; share it only as appropriate and never include the private `.p12` or its password.
 - The diagnostic endpoint `GET /accounting/isna/test/diagnostics` requires login, active company and explicit `APP_MODE=test`. It never accepts a user-controlled URL or a SOAP payload.
-- The Android TEST bridge supports `signIsnaTestXml` only when the current page is exactly `test.nikabusiness.com/accounting/report`; this needs a newly built isolated Android TEST APK (existing installs do not get native signing support from website deployment alone).
+- The Android TEST app is native Flutter. Its Accounting screen contains **ИСНА TEST · Проверка ЭЦП** (and an **ИСНА TEST** tab). The diagnostic screen uses the native Kotlin/KalkanCrypt `MobileP12Signer.signEsfXml` file picker, not WebView or NCALayer. It signs a non-sensitive sample locally without saving the selected key (`saveKey:false`). After updating the Android source, a **new isolated TEST APK** must be installed; a website deploy alone cannot update the native Flutter interface.
 - The "Отправить в ИСНА" button in this new panel is **disabled** until we receive official ISNA service XSD, registered sender identity and working GOST WS-Security transport signer.
 - The VPN was previously verified from the main VPS, **not the TEST VPS**. Failure of the TEST-side TCP probe does not invalidate that result. We are deliberately not proxying test traffic through production.
 
