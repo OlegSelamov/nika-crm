@@ -76,7 +76,7 @@ class IsnaBipEnvelopeTests(unittest.TestCase):
         response = Mock()
         with patch.object(bip.requests, "post", return_value=response) as post:
             bip.post_signed_envelope("<signed-test/>")
-        self.assertEqual(post.call_args.kwargs["headers"]["SOAPAction"], "")
+        self.assertEqual(post.call_args.kwargs["headers"]["SOAPAction"], '""')
 
 
 if __name__ == "__main__":
