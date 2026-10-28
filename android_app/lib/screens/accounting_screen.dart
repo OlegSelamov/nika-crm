@@ -119,6 +119,24 @@ class _AccountingScreenState extends State<AccountingScreen> {
                 label: const Text('Сверить'),
               ),
             ]),
+            if (isTestApp) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('ИСНА · тестирование')),
+                        body: const IsnaTestPanel(),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.verified_user_outlined),
+                  label: const Text('ИСНА TEST · Проверка ЭЦП'),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             LayoutBuilder(
               builder: (_, constraints) {
