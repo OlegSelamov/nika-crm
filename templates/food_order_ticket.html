@@ -2,7 +2,7 @@
 <html lang="{{ receipt_preferences.language if receipt_preferences.language != 'bilingual' else 'kk' }}">
 <head>
 <meta charset="utf-8">
-<title>{{ 'Заказ на кухню' if kind == 'kitchen' else 'Квитанция к заказу' }} №{{ order.id }}</title>
+<title>{{ receipt_label('kitchen_order') if kind == 'kitchen' else receipt_label('order_receipt') }} №{{ order.id }}</title>
 <style>
 @page { size: 80mm auto; margin: 0; }
 * { box-sizing: border-box; }

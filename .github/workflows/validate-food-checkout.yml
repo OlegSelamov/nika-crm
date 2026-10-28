@@ -31,6 +31,12 @@ on:
       - "tests/test_food_cart_modifier_edit.js"
       - "tests/test_payment_touch_first_tap.js"
       - "templates/food_order_ticket.html"
+      - "templates/docs/check.html"
+      - "templates/docs/refund_check.html"
+      - "templates/settings/receipt.html"
+      - "services/receipt_settings.py"
+      - "tests/test_receipt_preferences.py"
+      - "tests/test_receipt_rendering.py"
       - ".github/workflows/validate-food-checkout.yml"
   workflow_dispatch:
 
@@ -85,4 +91,7 @@ jobs:
       - name: Run dual receipt checkout checks
         run: python -m unittest discover -s tests -p test_food_dual_print.py -v
       - name: Render and validate receipt templates
-        run: python -m unittest discover -s tests -p test_food_ticket_layout.py -v
+        run: |
+          python -m unittest discover -s tests -p test_food_ticket_layout.py -v
+          python -m unittest discover -s tests -p test_receipt_rendering.py -v
+          python -m unittest discover -s tests -p test_receipt_preferences.py -v

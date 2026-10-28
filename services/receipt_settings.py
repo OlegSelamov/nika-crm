@@ -12,7 +12,8 @@ from models import get_db, pool
 
 LANGUAGES = {"ru", "kk", "bilingual"}
 MAX_LOGO_UPLOAD = 1024 * 1024
-DEFAULTS = {"language": "ru", "footer_text": "", "show_logo": True, "logo_data_url": None}
+DEFAULTS = {"language": "ru", "footer_text": "", "show_logo": True, "logo_data_url": None,
+            "logo_preview_data_url": None}
 
 # (Kazakh, Russian). Full bilingual strings remain legible on 58mm paper.
 LABELS = {
@@ -105,10 +106,14 @@ def _read_settings(company_id, *, include_logo=True):
             "footer_text": row["footer_text"] or "",
             "show_logo": bool(row["show_logo"]),
             "logo_data_url": None,
+            "logo_preview_data_url": None,
         }
-        if include_logo and row["logo_png"] and config["show_logo"]:
+        if include_logo and row["logo_png"]:
             png = bytes(row["logo_png"])
-            config["logo_data_url"] = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+            data_url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+            config["logo_preview_data_url"] = data_url
+            if config["show_logo"]:
+                config["logo_data_url"] = data_url
         return config
     finally:
         pool.putconn(conn)
@@ -136,7 +141,6 @@ def normalize_logo(upload):
     if not raw or len(raw) > MAX_LOGO_UPLOAD:
         raise ValueError("Логотип должен быть изображением PNG, JPG или WebP до 1 МБ")
     try:
-        Image.MAX_IMAGE_PIXELS = 8_000_000
         source = Image.open(BytesIO(raw))
         if source.format not in {"PNG", "JPEG", "WEBP"}:
             raise ValueError("Поддерживаются только PNG, JPG и WebP")

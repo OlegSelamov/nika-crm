@@ -71,7 +71,7 @@ class FoodCheckoutModesTests(unittest.TestCase):
         self.assertIn('planned_payment_method FROM food_orders', backend)
         self.assertIn('order["planned_payment_method"] != payment_method', backend)
         self.assertIn('food_config["food_checkout_mode"] == "orders"', self.read("routes/rekassa_comrun.py"))
-        self.assertIn("Оплата:", tpl)
+        self.assertIn("receipt_label('payment')", tpl)
         self.assertNotIn("Планируемая оплата", tpl)
         self.assertNotIn("НЕ ФИСКАЛЬНЫЙ ЧЕК", tpl)
         self.assertIn('if (isFoodCheckout) {', sales_js)

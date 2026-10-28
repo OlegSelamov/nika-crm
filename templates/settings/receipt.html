@@ -46,8 +46,8 @@
     <input type="file" name="logo" accept="image/png,image/jpeg,image/webp">
     <span class="hint">Максимум 1 МБ. Изображение автоматически уменьшается и переводится в оттенки серого для чекового принтера.</span>
    </label>
-   {% if preferences.logo_data_url %}
-    <div class="logo-area"><img src="{{ preferences.logo_data_url }}" alt="Загруженный логотип"></div>
+   {% if preferences.logo_preview_data_url %}
+    <div class="logo-area"><img src="{{ preferences.logo_preview_data_url }}" alt="Загруженный логотип"></div>
     <label class="check"><input type="checkbox" name="remove_logo" value="1">Удалить загруженный логотип</label>
    {% endif %}
    <label class="check"><input type="checkbox" name="show_logo" value="1" {% if preferences.show_logo %}checked{% endif %}>Показывать логотип в чеке</label>
