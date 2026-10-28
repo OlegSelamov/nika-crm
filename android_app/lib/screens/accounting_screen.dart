@@ -173,7 +173,7 @@ class _AccountingScreenState extends State<AccountingScreen> {
             ),
           ]),
         ),
-        const TabBar(
+        TabBar(
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           tabs: [

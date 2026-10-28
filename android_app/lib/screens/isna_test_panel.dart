@@ -170,7 +170,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             label: const Text('Сохранить подписанный XML'),
           ),
           const SizedBox(height: 8),
-          const OutlinedButton.icon(
+          OutlinedButton.icon(
             onPressed: null,
             icon: Icon(Icons.send_outlined),
             label: Text('Отправить в ИСНА (пока недоступно)'),
