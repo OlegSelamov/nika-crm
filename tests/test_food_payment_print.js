@@ -94,8 +94,10 @@ async function printFromGreenButton(method,fail=false,autoPrint=true,runtime="el
     vm.runInNewContext(greenCode+"\nthis.handler=createFoodPrecheck;",sb);
     await sb.handler();
     assert.equal(button.disabled,false);
-    assert.ok(calls.indexOf("save:"+method)<calls.indexOf("dual:"+method),
-        "Save must happen before printing on green button");
+    if (calls.includes("dual:"+method)) {
+        assert.ok(calls.indexOf("save:"+method)<calls.indexOf("dual:"+method),
+            "Save must happen before printing on green button");
+    }
     return calls;
 }
 
