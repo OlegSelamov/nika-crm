@@ -3,6 +3,9 @@ from calendar import monthrange
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
+import os
+import socket
+from urllib.parse import urlparse
 from io import BytesIO
 from pathlib import Path
 from urllib import error as urlerror
@@ -2983,12 +2986,69 @@ def accounting_report():
             filing=filing,
             filing_events=filing_events,
             isna_gateway_ready=bool(current_app.config.get("ISNA_GATEWAY_URL")),
+            isna_test_lab_enabled=os.getenv("APP_MODE", "").strip().lower() == "test",
         )
     finally:
         cur.close()
         pool.putconn(conn)
 
 
+
+
+
+@accounting_bp.route("/accounting/isna/test/diagnostics", methods=["GET"])
+def isna_test_diagnostics():
+    """Read-only TEST-VPS TCP diagnostic; never signs or sends tax data.
+
+    This probe runs on the TEST host, which might not have the IPsec VPN
+    configured on production. A failed probe is not evidence the production
+    VPN or Smart Bridge service is down.
+    """
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Недоступно вне тестовой среды."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Необходим вход в систему."}), 401
+    if not _require_company():
+        return jsonify({"error": "Не выбрана организация."}), 403
+
+    from services.isna_bip import configuration
+    cfg = configuration()
+    parsed = urlparse(cfg.endpoint)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    configured_id = bool(os.getenv("ISNA_BIP_SERVICE_ID", "").strip())
+    result = {
+        "environment": "test",
+        "endpoint": cfg.endpoint,
+        "gatewayHost": host or "",
+        "gatewayPort": port,
+        "serviceId": cfg.service_id,
+        "serviceIdConfigured": configured_id,
+        "senderConfigured": bool(cfg.sender_id),
+        "transportSignerConfigured": cfg.signer_ready,
+        "networkCheckedFrom": "TEST VPS",
+        "note": ("Проверка выполняется с TEST VPS. IPsec-туннель был "
+                 "настроен на другом сервере; ошибка TCP здесь не "
+                 "означает неисправность того VPN."),
+        "tcpOk": False,
+        "safe": True,
+        "soapSent": False,
+    }
+    if not host or parsed.scheme not in {"http", "https"}:
+        result["tcpMessage"] = "Не задан корректный URL шлюза."
+        return jsonify(result)
+
+    try:
+        with socket.create_connection((host, port), timeout=3):
+            pass
+        result["tcpOk"] = True
+        result["tcpMessage"] = "TCP-соединение установлено с TEST VPS."
+    except OSError:
+        # Do not expose raw infrastructure exceptions or authentication data.
+        result["tcpMessage"] = "С TEST VPS TCP-соединение не установлено."
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def _build_isna_draft_json(report, company, selected_year, selected_period):
