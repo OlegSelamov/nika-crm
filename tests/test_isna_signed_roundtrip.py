@@ -11,7 +11,7 @@ from services import isna_bip
 from services.isna_signed_roundtrip import validate_offline_signed_soap
 from services.isna_signing_lab import create_server_signing_sample
 
-FAKE_DER = b"\x30\x01\x00"  # synthetic bytes only; NEVER a real cert/signature
+FAKE_DER = b"\x30\x82\x00\x02\x00\x00"  # synthetic bytes only; NEVER a real cert/signature
 
 
 def structurally_signed_sample():
@@ -55,7 +55,7 @@ class RoundTripOfflineTests(unittest.TestCase):
         self.assertTrue(validate_offline_signed_soap(
             soap, registered_public_cert=FAKE_DER)["registeredCertMatch"])
         self.assertFalse(validate_offline_signed_soap(
-            soap, registered_public_cert=b"\x30\x01\x01")["registeredCertMatch"])
+            soap, registered_public_cert=b"\x30\x82\x00\x02\x00\x01")["registeredCertMatch"])
 
     def test_real_service_id_never_accepted(self):
         soap = structurally_signed_sample().replace(
