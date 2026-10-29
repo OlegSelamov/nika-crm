@@ -35,7 +35,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     if (busy) return;
     setState(() {
       busy = true;
-      status = 'Проверяем TCP с TEST VPS. SOAP и ФНО не отправляются…';
+      status = 'Проверяем Smart Bridge (TEST/VPN). SOAP и ФНО не отправляются…';
     });
     try {
       final response = await ApiService.isnaTestDiagnostics();
@@ -43,8 +43,10 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       final tcpOk = response['tcpOk'] == true;
       setState(() {
         status = [
-          'Источник: TEST VPS',
-          'TCP: ' + (tcpOk ? 'соединение установлено' : 'недоступно с TEST VPS'),
+          'Источник: ' + (response['networkCheckedFrom'] ?? 'TEST VPS').toString(),
+          'TCP: ' + (tcpOk ? 'соединение установлено' : 'недоступно'),
+          'HTTP: ' + (response['httpStatus']?.toString() ?? 'не проверен'),
+          'Статус: ' + (response['tcpMessage'] ?? '').toString(),
           'Адрес: ' + (response['endpoint'] ?? 'не задан').toString(),
           'senderId: ' + (response['senderConfigured'] == true ? 'указан' : 'не настроен'),
           'serviceId: ' +
