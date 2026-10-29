@@ -310,16 +310,16 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       setState(() {
         signedXml = (outer['signedXml'] ?? '').toString();
         signedFileName = 'nika-isna-fno-double-signed-OFFLINE-ONLY';
-        status = 'Пробная ФНО 000.00 подписана XMLDSig. ✅\\n'
-            'Внутренняя подпись проверена KalkanCrypt. ✅\\n'
-            'Внешний SOAP FNO_INTEGRATION подписан WS-Security. ✅\\n'
-            'Подпись SOAP Body проверена KalkanCrypt. ✅\\n'
-            'senderId вымышленный, форма заведомо недействительна.\\n'
+        status = 'Пробная ФНО 000.00 подписана XMLDSig. ✅\n'
+            'Внутренняя подпись проверена KalkanCrypt. ✅\n'
+            'Внешний SOAP FNO_INTEGRATION подписан WS-Security. ✅\n'
+            'Подпись SOAP Body проверена KalkanCrypt. ✅\n'
+            'senderId вымышленный, форма заведомо недействительна.\n'
             'Это ТОЛЬКО локальный тест: на VPS и в ШЭП ничего не отправлено.';
       });
     } catch (error) {
       if (mounted) {
-        setState(() => status = 'Ошибка локальной проверки двух подписей: $error\\n'
+        setState(() => status = 'Ошибка локальной проверки двух подписей: $error\n'
             'Ничего не отправлено в ШЭП или ИСНА.');
       }
     }
