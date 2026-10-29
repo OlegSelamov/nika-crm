@@ -20,6 +20,9 @@ WSSE = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secex
 WSU = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
 DS = "http://www.w3.org/2000/09/xmldsig#"
 DEMO = "urn:nikabusiness:offline-soap-test:1"
+BIP = "http://bip.bee.kz/SyncChannel/v10/Types"
+OFFLINE_SERVICE = "NIKA_ISNA_OFFLINE_SIGNING_ONLY"
+OFFLINE_SENDER = "nika-offline-test"
 GOST_SIGNATURE = "urn:ietf:params:xml:ns:pkigovkz:xmlsec:algorithms:gostr34102015-gostr34112015-512"
 GOST_DIGEST = "urn:ietf:params:xml:ns:pkigovkz:xmlsec:algorithms:gostr34112015-512"
 EXC_C14N = "http://www.w3.org/2001/10/xml-exc-c14n#"
@@ -66,10 +69,35 @@ def inspect(registered_cer, soap_xml):
     if not body_id or not re.fullmatch(r"id-[A-Za-z0-9-]{8,96}", body_id):
         raise InvalidSoap("SOAP Body has no valid wsu:Id.")
 
-    demos = body.findall(q(DEMO, "NikaWsSecurityTest"))
-    if len(list(body)) != 1 or len(demos) != 1:
-        raise InvalidSoap("Only the inert local Nika SOAP demo is allowed.")
-    submission = demos[0].find(q(DEMO, "Submission"))
+    operations = list(body)
+    if len(operations) != 1:
+        raise InvalidSoap("Only one offline demo operation is permitted.")
+    operation = operations[0]
+    if operation.tag == q(DEMO, "NikaWsSecurityTest"):
+        demo = operation
+        sample_type = "android-local-demo"
+    elif operation.tag == q(BIP, "SendMessage"):
+        # Synthetic BIP-shaped request from Nika TEST; NEVER a real FNO.
+        request = operation.find("request")
+        info = request.find("requestInfo") if request is not None else None
+        sender = info.find("sender") if info is not None else None
+        data = request.find("requestData/data") if request is not None else None
+        if (
+            request is None or len(operation) != 1 or len(request) != 2
+            or info is None or len(info) != 4
+            or info.findtext("serviceId") != OFFLINE_SERVICE
+            or sender is None or len(sender) != 1
+            or sender.findtext("senderId") != OFFLINE_SENDER
+            or data is None or len(data) != 1 or data.attrib
+        ):
+            raise InvalidSoap("BIP SOAP is not the safe synthetic offline signing sample.")
+        demo = data[0]
+        sample_type = "test-server-bip-demo"
+    else:
+        raise InvalidSoap("Only the inert Nika SOAP offline demo is permitted.")
+    if demo.tag != q(DEMO, "NikaWsSecurityTest"):
+        raise InvalidSoap("Missing NikaWsSecurityTest demo payload.")
+    submission = demo.find(q(DEMO, "Submission"))
     if submission is None or (submission.text or "").strip() != "false":
         raise InvalidSoap("Offline demo must contain Submission=false.")
 
@@ -113,6 +141,7 @@ def inspect(registered_cer, soap_xml):
     public = decode_cert(registered_cer)
     return {
         "structure_ok": True,
+        "sample_type": sample_type,
         "cert_match": public == embedded,
         "fingerprint": hashlib.sha256(public).hexdigest().upper(),
     }
@@ -145,6 +174,7 @@ def main():
         print("NO NETWORK, NO SOAP SUBMITTED, NO PRIVATE KEY USED.")
         return 2
     print("SOAP_STRUCTURE: OK")
+    print("SAMPLE_TYPE: " + result["sample_type"])
     print("REGISTERED_CERT_MATCH: " + ("YES" if result["cert_match"] else "NO"))
     print("CERT_SHA256: " + result["fingerprint"])
     print("CRYPTO_SIGNATURE_VERIFICATION: NOT PERFORMED HERE (Kalkan Android only)")
