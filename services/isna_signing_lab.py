@@ -1,7 +1,7 @@
 """Nika ISNA: non-filing server-to-Android signing handshake (TEST only).
 
 The payload intentionally uses a NON-EXISTENT serviceId, synthetic senderId,
-no sender password and no taxpayer data. Do not POST it to Smart Bridge.
+no sender password and no taxpayer data. It can be posted ONLY through\nthe gated manual TEST WShEP transport diagnostic, never via FNO submission.
 """
 from __future__ import annotations
 
