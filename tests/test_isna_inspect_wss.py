@@ -44,6 +44,34 @@ class WssInspectTests(unittest.TestCase):
         with self.assertRaises(InvalidSoap):
             inspect(self.cert, make_xml(submission="true"))
 
+    def test_server_generated_offline_bip_shape_supported(self):
+        xml = make_xml().decode("utf-8")
+        prior = (
+            '<soap:Body wsu:Id="id-12345678">'
+            '<d:NikaWsSecurityTest><d:Submission>false</d:Submission></d:NikaWsSecurityTest>'
+            '</soap:Body>'
+        )
+        next_body = (
+            '<soap:Body wsu:Id="id-12345678">'
+            '<typ:SendMessage xmlns:typ="http://bip.bee.kz/SyncChannel/v10/Types">'
+            '<request><requestInfo>'
+            '<messageId>test-id</messageId>'
+            '<serviceId>NIKA_ISNA_OFFLINE_SIGNING_ONLY</serviceId>'
+            '<messageDate>2026-10-29T12:00:00+05:00</messageDate>'
+            '<sender><senderId>nika-offline-test</senderId></sender>'
+            '</requestInfo><requestData><data>'
+            '<d:NikaWsSecurityTest><d:Submission>false</d:Submission></d:NikaWsSecurityTest>'
+            '</data></requestData></request></typ:SendMessage></soap:Body>'
+        )
+        self.assertIn(prior, xml)
+        checked = inspect(self.cert, xml.replace(prior, next_body).encode("utf-8"))
+        self.assertTrue(checked["cert_match"])
+        self.assertEqual(checked["sample_type"], "test-server-bip-demo")
+        with self.assertRaises(InvalidSoap):
+            inspect(self.cert, xml.replace(prior, next_body.replace(
+                "NIKA_ISNA_OFFLINE_SIGNING_ONLY", "FNO_INTEGRATION",
+            )).encode("utf-8"))
+
     def test_normal_nika_soap_without_signature_rejected(self):
         with self.assertRaises(InvalidSoap):
             inspect(self.cert, b'<soap:Envelope xmlns:soap="' + SOAP.encode() + b'"/>')
