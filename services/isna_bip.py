@@ -33,6 +33,7 @@ import requests
 SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"
 BIP_TYPES_NS = "http://bip.bee.kz/SyncChannel/v10/Types"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
+XSD_NS = "http://www.w3.org/2001/XMLSchema"
 WSU_NS = (
     "http://docs.oasis-open.org/wss/2004/01/"
     "oasis-200401-wss-wssecurity-utility-1.0.xsd"
@@ -109,12 +110,14 @@ def build_sync_envelope(
     session_id: Optional[str] = None,
     sender_id: Optional[str] = None,
     sender_password: Optional[str] = None,
+    data_encoding: str = "xml",
 ) -> str:
     """Build an unsigned BIP SyncChannel v10 SOAP envelope.
 
-    data_xml must be the *official service request element* for the selected
-    Smart Bridge service. We deliberately do not invent the FNO_INTEGRATION
-    XSD payload here.
+    data_encoding="xml": embed supplied service XML as a child element.
+    data_encoding="string": wrap the service XML as xsi:type="xs:string" text,
+    as shown in the supplied FNO_INTEGRATION service example.
+    Building an envelope NEVER sends a request or signs a document.
     """
     cfg = configuration()
     service_id = (service_id or cfg.service_id).strip()
@@ -128,6 +131,12 @@ def build_sync_envelope(
             "Smart Bridge sender ID is not configured (ISNA_BIP_SENDER_ID)."
         )
 
+    if data_encoding not in ("xml", "string"):
+        raise IsnaBipError("Invalid SOAP data encoding.")
+    if "<!DOCTYPE" in data_xml.upper() or "<!ENTITY" in data_xml.upper():
+        raise IsnaBipError("DTD/ENTITY are not allowed in SOAP service data.")
+    if len(data_xml.encode("utf-8")) > 5_000_000:
+        raise IsnaBipError("SOAP service data exceeds 5 MB.")
     try:
         data_node = ET.fromstring(data_xml)
     except ET.ParseError as exc:
@@ -161,7 +170,13 @@ def build_sync_envelope(
 
     request_data = ET.SubElement(request, "requestData")
     # SyncChannel v10 schema requires requestData/data (xsd:anyType).
-    ET.SubElement(request_data, "data").append(data_node)
+    data = ET.SubElement(request_data, "data")
+    if data_encoding == "string":
+        data.set("xmlns:xs", XSD_NS)
+        data.set(ET.QName(XSI_NS, "type"), "xs:string")
+        data.text = data_xml
+    else:
+        data.append(data_node)
 
     return ET.tostring(envelope, encoding="unicode", xml_declaration=False)
 
