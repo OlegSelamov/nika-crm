@@ -2998,12 +2998,7 @@ def accounting_report():
 
 @accounting_bp.route("/accounting/isna/test/diagnostics", methods=["GET"])
 def isna_test_diagnostics():
-    """Read-only TEST-VPS TCP diagnostic; never signs or sends tax data.
-
-    This probe runs on the TEST host, which might not have the IPsec VPN
-    configured on production. A failed probe is not evidence the production
-    VPN or Smart Bridge service is down.
-    """
+    """Strictly read-only TEST diagnostics; never submit or sign an FNO."""
     if os.getenv("APP_MODE", "").strip().lower() != "test":
         return jsonify({"error": "Недоступно вне тестовой среды."}), 404
     if not session.get("user_id"):
@@ -3011,41 +3006,72 @@ def isna_test_diagnostics():
     if not _require_company():
         return jsonify({"error": "Не выбрана организация."}), 403
 
-    from services.isna_bip import configuration
+    from services.isna_bip import DEFAULT_TEST_URL, configuration
+    from services.isna_remote_probe import probe_configured, probe_vpn_host
+
     cfg = configuration()
-    parsed = urlparse(cfg.endpoint)
-    host = parsed.hostname
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    configured_id = bool(os.getenv("ISNA_BIP_SERVICE_ID", "").strip())
     result = {
         "environment": "test",
         "endpoint": cfg.endpoint,
-        "gatewayHost": host or "",
-        "gatewayPort": port,
         "serviceId": cfg.service_id,
-        "serviceIdConfigured": configured_id,
+        "serviceIdConfigured": bool(os.getenv("ISNA_BIP_SERVICE_ID", "").strip()),
         "senderConfigured": bool(cfg.sender_id),
         "transportSignerConfigured": cfg.signer_ready,
-        "networkCheckedFrom": "TEST VPS",
-        "note": ("Проверка выполняется с TEST VPS. IPsec-туннель был "
-                 "настроен на другом сервере; ошибка TCP здесь не "
-                 "означает неисправность того VPN."),
         "tcpOk": False,
+        "httpOk": False,
+        "httpStatus": None,
         "safe": True,
         "soapSent": False,
+        "vpnProbeConfigured": probe_configured(),
+        "networkCheckedFrom": "TEST VPS",
     }
-    if not host or parsed.scheme not in {"http", "https"}:
-        result["tcpMessage"] = "Не задан корректный URL шлюза."
-        return jsonify(result)
 
-    try:
-        with socket.create_connection((host, port), timeout=3):
-            pass
-        result["tcpOk"] = True
-        result["tcpMessage"] = "TCP-соединение установлено с TEST VPS."
-    except OSError:
-        # Do not expose raw infrastructure exceptions or authentication data.
-        result["tcpMessage"] = "С TEST VPS TCP-соединение не установлено."
+    # The remote SSH command probes exactly this IP/path. Do not silently
+    # report another configured service URL as checked.
+    if cfg.endpoint.rstrip("/") != DEFAULT_TEST_URL.rstrip("/"):
+        result["tcpMessage"] = "Настроенный адрес отличается от проверяемого TEST шлюза."
+        result["note"] = "Проверка ограничена официальным фиксированным адресом TEST."
+    elif result["vpnProbeConfigured"]:
+        # Only one command is allowed: restricted SSH forced-command read-only
+        # GET/TCP probe on the VPN host. No raw tax documents or keys sent.
+        vpn = probe_vpn_host()
+        result["networkCheckedFrom"] = "VPN VPS 47167 (через SSH)"
+        result["tcpOk"] = vpn.get("tcpOk") is True
+        result["httpOk"] = vpn.get("httpOk") is True
+        result["httpStatus"] = vpn.get("httpStatus")
+        if vpn.get("ok"):
+            result["tcpMessage"] = (
+                "VPN VPS: TCP успешно." if result["tcpOk"]
+                else "VPN VPS: TCP шлюза недоступен."
+            )
+        else:
+            result["tcpMessage"] = "SSH-диагностика VPN VPS не выполнена."
+        result["note"] = (
+            "Проверка TCP/HTTP выполнена на сервере с IPsec через ограниченную "
+            "SSH-команду. SOAP, ЭЦП и налоговые данные не передавались."
+        )
+    else:
+        # Legacy local check remains available until the restricted SSH
+        # diagnostic key has been provisioned on both hosts.
+        parsed = urlparse(cfg.endpoint)
+        host = parsed.hostname
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        if not host or parsed.scheme not in {"http", "https"}:
+            result["tcpMessage"] = "Адрес шлюза некорректен."
+        else:
+            try:
+                with socket.create_connection((host, port), timeout=3):
+                    pass
+                result["tcpOk"] = True
+                result["tcpMessage"] = "TCP с TEST VPS установлен."
+            except OSError:
+                result["tcpMessage"] = "С TEST VPS TCP-соединение не установлено."
+        result["note"] = (
+            "VPN настроен на другом VPS. Для проверки через него нужно "
+            "отдельно подключить ограниченный SSH-пробник; пока проверен "
+            "только TEST VPS."
+        )
+
     response = jsonify(result)
     response.headers["Cache-Control"] = "no-store"
     return response
