@@ -3008,6 +3008,7 @@ def isna_test_diagnostics():
 
     from services.isna_bip import DEFAULT_TEST_URL, configuration
     from services.isna_remote_probe import probe_configured, probe_vpn_host
+    from scripts.isna_gateway_probe import local_source_available, probe_gateway
 
     cfg = configuration()
     result = {
@@ -3031,6 +3032,22 @@ def isna_test_diagnostics():
     if cfg.endpoint.rstrip("/") != DEFAULT_TEST_URL.rstrip("/"):
         result["tcpMessage"] = "Настроенный адрес отличается от проверяемого TEST шлюза."
         result["note"] = "Проверка ограничена официальным фиксированным адресом TEST."
+    elif local_source_available():
+        # TEST and the IPsec tunnel are co-hosted on VPS 47167. Explicitly
+        # bind the outgoing socket to the IPsec source selector. No SSH bridge.
+        gateway = probe_gateway()
+        result["networkCheckedFrom"] = "VPS 47167 (локальный IPsec)"
+        result["tcpOk"] = gateway["tcpOk"]
+        result["httpOk"] = gateway["httpOk"]
+        result["httpStatus"] = gateway["httpStatus"]
+        result["tcpMessage"] = (
+            "TCP через IPsec успешно." if result["tcpOk"]
+            else "TCP через IPsec недоступен. Проверьте туннель."
+        )
+        result["note"] = (
+            "Прямая проверка через VPN на этом же VPS: исходящий адрес "
+            "195.49.215.49. Только TCP и HTTP GET, SOAP и ФНО не отправлялись."
+        )
     elif result["vpnProbeConfigured"]:
         # Only one command is allowed: restricted SSH forced-command read-only
         # GET/TCP probe on the VPN host. No raw tax documents or keys sent.
@@ -3051,8 +3068,7 @@ def isna_test_diagnostics():
             "SSH-команду. SOAP, ЭЦП и налоговые данные не передавались."
         )
     else:
-        # Legacy local check remains available until the restricted SSH
-        # diagnostic key has been provisioned on both hosts.
+        # Only for deployments on a host without the approved IPsec source IP.
         parsed = urlparse(cfg.endpoint)
         host = parsed.hostname
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
@@ -3067,9 +3083,8 @@ def isna_test_diagnostics():
             except OSError:
                 result["tcpMessage"] = "С TEST VPS TCP-соединение не установлено."
         result["note"] = (
-            "VPN настроен на другом VPS. Для проверки через него нужно "
-            "отдельно подключить ограниченный SSH-пробник; пока проверен "
-            "только TEST VPS."
+            "На этом сервере нет исходящего IP 195.49.215.49. "
+            "Использована обычная проверка TEST VPS, не VPN."
         )
 
     response = jsonify(result)

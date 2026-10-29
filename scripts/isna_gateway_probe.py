@@ -15,7 +15,18 @@ GATEWAY_PORT = 80
 WSDL_PATH = "/bip-sync-wss-gost/"
 
 
-def main():
+def local_source_available():
+    """True only on the VPS that actually owns the approved IPsec source IP."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
+            connection.bind((SOURCE_IP, 0))
+        return True
+    except OSError:
+        return False
+
+
+def probe_gateway():
+    """Fixed IP, fixed port and fixed read-only GET; no user-supplied input."""
     result = {"schema": 1, "tcpOk": False, "httpOk": False, "httpStatus": None}
     try:
         with socket.create_connection(
@@ -42,7 +53,11 @@ def main():
         finally:
             if connection is not None:
                 connection.close()
-    print(json.dumps(result, separators=(",", ":")))
+    return result
+
+
+def main():
+    print(json.dumps(probe_gateway(), separators=(",", ":")))
 
 
 if __name__ == "__main__":
