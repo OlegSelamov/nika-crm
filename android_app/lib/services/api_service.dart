@@ -1697,6 +1697,14 @@ class ApiService {
   static Future<Map<String, dynamic>> mobileAccounting() async =>
       Map<String, dynamic>.from(await _request('GET', '/api/mobile/accounting'));
 
+  // TEST only: server-generated NON-FILING SOAP for local Android signature.
+  // The response has no tax figures, no gateway password and is never submitted.
+  static Future<Map<String, dynamic>> isnaTestUnsignedServerSoap() async =>
+      Map<String, dynamic>.from(await _request(
+        'GET', '/accounting/isna/test/soap-draft',
+        timeout: const Duration(seconds: 12),
+      ));
+
   // TEST-only, read-only Smart Bridge diagnostics (never sends tax data).
   static Future<Map<String, dynamic>> isnaTestDiagnostics() async =>
       Map<String, dynamic>.from(await _request(
