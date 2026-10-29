@@ -269,7 +269,7 @@ object KalkanJwsSigner {
             fun uniqueChild(parent: Element, localName: String, namespace: String? = null): Element {
                 val children = elements(parent)
                 if (children.size != 1 ||
-                    children[0].localName != localName ||
+                    (children[0].localName ?: children[0].tagName) != localName ||
                     children[0].namespaceURI != namespace) {
                     throw SigningException("NON_DEMO_SOAP", "Неожиданные элементы тестового SOAP")
                 }
