@@ -48,9 +48,12 @@ class IsnaCertificateComparisonTests(unittest.TestCase):
 
     def test_invalid_embedded_base64_rejected(self):
         with self.assertRaises(InvalidCertificateInput):
-            compare_certificates(self.example_der, example_xml(self.example_der).replace(
-                b"certificate", b"!invalid!!"
-            ))
+            compare_certificates(
+                self.example_der,
+                example_xml(self.example_der).replace(
+                    base64.b64encode(self.example_der), b"!invalid!"
+                ),
+            )
 
 
 if __name__ == "__main__":
