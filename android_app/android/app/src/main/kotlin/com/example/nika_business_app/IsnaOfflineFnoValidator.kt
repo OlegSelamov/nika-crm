@@ -60,9 +60,10 @@ internal object IsnaOfflineFnoValidator {
         if (sender.textContent != "nika-fno-offline-only") fail()
 
         val data = expectOne(requestParts[1], "data")
-        if (data.attributes.length != 2 ||
+        if (data.attributes.length != 3 ||
             data.getAttributeNS(XSI, "type") != "xs:string" ||
             data.getAttributeNS(XMLNS, "xs") != XSD ||
+            data.getAttributeNS(XMLNS, "xsi") != XSI ||
             children(data).isNotEmpty()) fail()
         val signedFno = data.textContent ?: fail()
         if (signedFno.length > 100_000 || signedFno.contains("<!DOCTYPE", true) ||
