@@ -13,7 +13,7 @@ import re
 import xml.etree.ElementTree as ET
 
 from scripts.isna_inspect_wss import (
-    DS, InvalidSoap, decode_cert, inspect, q,
+    BIP, DEMO, DS, SOAP, WSSE, InvalidSoap, decode_cert, inspect, q,
 )
 
 MAX_DIAGNOSTIC_BYTES = 256_000
@@ -59,6 +59,28 @@ def validate_offline_signed_soap(
     result = inspect(embedded, raw)
     if result["sample_type"] != "test-server-bip-demo":
         raise InvalidSoap("Only TEST-server-generated synthetic SOAP is accepted.")
+
+    # The diagnostic endpoint must never become a generic signed-XML upload.
+    # Accept only the exact inert server-generated body shape.
+    header = root.find(q(SOAP, "Header"))
+    if header is None or len(header) != 1 or header[0].tag != q(WSSE, "Security"):
+        raise InvalidSoap("Unexpected SOAP Header content.")
+    if len(header[0]) != 1 or header[0][0].tag != q(DS, "Signature"):
+        raise InvalidSoap("Unexpected WS-Security content.")
+    operation = root.find(q(SOAP, "Body"))
+    operation = operation.find(q(BIP, "SendMessage")) if operation is not None else None
+    data = operation.find("request/requestData/data") if operation is not None else None
+    demo = data.find(q(DEMO, "NikaWsSecurityTest")) if data is not None else None
+    if demo is None or len(demo) != 2 or demo.attrib:
+        raise InvalidSoap("Offline demo XML shape is not permitted.")
+    purpose = demo.find(q(DEMO, "Purpose"))
+    submission = demo.find(q(DEMO, "Submission"))
+    if (
+        purpose is None or submission is None
+        or (purpose.text or "").strip() != "Server-to-Android offline signature test only"
+        or (submission.text or "").strip() != "false"
+    ):
+        raise InvalidSoap("Only the synthetic TEST purpose is allowed.")
 
     match = None
     if registered_public_cert is not None:
