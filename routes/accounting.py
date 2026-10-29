@@ -2996,6 +2996,57 @@ def accounting_report():
 
 
 
+@accounting_bp.route("/accounting/isna/test/verify-signed-soap", methods=["POST"])
+def isna_test_verify_signed_soap():
+    """TEST-only signed inert SOAP roundtrip. NEVER relay to BIP or store XML."""
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Недоступно вне тестовой среды."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Необходим вход в систему."}), 401
+    if not _require_company():
+        return jsonify({"error": "Не выбрана организация."}), 403
+
+    from scripts.isna_inspect_wss import InvalidSoap
+    from services.isna_signed_roundtrip import (
+        MAX_DIAGNOSTIC_BYTES, validate_offline_signed_soap,
+    )
+
+    # Prevent oversized requests before parsing and never log raw signed XML.
+    if request.content_length is None or request.content_length > MAX_DIAGNOSTIC_BYTES:
+        return jsonify({"error": "Размер тестового SOAP не поддерживается."}), 413
+    body = request.get_json(silent=True)
+    soap_xml = body.get("soapXml") if isinstance(body, dict) else None
+    if not isinstance(soap_xml, str):
+        return jsonify({"error": "Требуется подписанный тестовый SOAP."}), 400
+
+    # Optional PUBLIC certificate file from the registered Smart Bridge entry.
+    # Never read private-key formats and never accept key material in requests.
+    registered_cer = None
+    configured_path = (os.getenv("ISNA_BIP_REGISTERED_CERT_PATH") or "").strip()
+    if configured_path:
+        path = Path(configured_path)
+        if path.suffix.lower() not in (".cer", ".crt", ".pem", ".der"):
+            return jsonify({"error": "Неверный формат публичного сертификата на сервере."}), 503
+        try:
+            if path.stat().st_size > 65536:
+                return jsonify({"error": "Публичный сертификат превышает лимит."}), 503
+            registered_cer = path.read_bytes()
+        except OSError:
+            return jsonify({"error": "Публичный сертификат недоступен."}), 503
+    try:
+        result = validate_offline_signed_soap(
+            soap_xml, registered_public_cert=registered_cer,
+        )
+    except InvalidSoap:
+        # Do not reflect untrusted SOAP, signatures or internal parsing errors.
+        return jsonify({"error": "Подписанный тестовый SOAP не прошёл проверку структуры."}), 422
+
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @accounting_bp.route("/accounting/isna/test/soap-draft", methods=["GET"])
 def isna_test_unsigned_server_soap():
     """Authenticated, strictly non-filing TEST-only SOAP for Android signing.
