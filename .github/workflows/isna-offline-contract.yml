@@ -1,0 +1,34 @@
+name: ISNA offline contract checks
+
+on:
+  pull_request:
+    branches: [test]
+    paths:
+      - 'services/isna_signed_roundtrip.py'
+      - 'services/isna_fno_integration.py'
+      - 'services/isna_bip.py'
+      - 'scripts/isna_inspect_wss.py'
+      - 'tests/test_isna_signed_roundtrip.py'
+      - 'routes/accounting.py'
+      - 'android_app/lib/screens/isna_test_panel.dart'
+      - 'android_app/lib/services/api_service.dart'
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install only offline test dependencies
+        run: python -m pip install --disable-pip-version-check requests python-dotenv
+      - name: Python syntax check
+        run: python -m compileall -q services/isna_signed_roundtrip.py routes/accounting.py
+      - name: Android-to-VPS offline contract
+        run: python -m unittest discover -s tests -p 'test_isna_signed_roundtrip.py' -v
+      - name: Existing official FNO wire-format regressions
+        run: python -m unittest discover -s tests -p 'test_isna_fno_integration.py' -v
