@@ -84,6 +84,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   String status = 'Готово к проверке. Ни одна декларация не отправлялась.';
   String? signedXml;
   String? signedServerDemoSoap;
+  bool signedServerSoapVerifiedByVps = false;
   String signedFileName = 'nika-isna-local-xml-signature-test';
 
   Future<void> _check() async {
@@ -145,6 +146,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     setState(() {
       signedXml = value;
       signedServerDemoSoap = null;
+      signedServerSoapVerifiedByVps = false;
       signedFileName = 'nika-isna-local-xml-signature-test';
       status = 'Пробный XML подписан через нативный KalkanCrypt. ✅\n'
           'Подлинность подписи ещё не проверена отдельно. '
@@ -171,6 +173,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     setState(() {
       signedXml = value;
       signedServerDemoSoap = null;
+      signedServerSoapVerifiedByVps = false;
       signedFileName = 'nika-isna-wssecurity-offline-test';
       status = 'Тестовый SOAP подписан в wsse:Security через KalkanCrypt. ✅\n'
           'Подпись SOAP Body проверена криптомодулем локально. ✅\n'
@@ -183,6 +186,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     if (busy) return;
     setState(() {
       signedServerDemoSoap = null;
+      signedServerSoapVerifiedByVps = false;
       busy = true;
       status = 'Получаем безопасный SOAP от TEST-сервера Nika Business…';
     });
@@ -215,6 +219,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       setState(() {
         signedXml = signed;
         signedServerDemoSoap = signed;
+        signedServerSoapVerifiedByVps = false;
         signedFileName = 'nika-isna-server-soap-offline-test';
         status = 'SOAP получен с TEST-сервера. ✅\n'
             'SOAP Body подписан на Android через KalkanCrypt. ✅\n'
@@ -259,6 +264,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
               ? 'НЕ совпадает с настроенным .cer на сервере. ❌'
               : 'Сравнение с .cer на VPS ещё не настроено.';
       setState(() {
+        signedServerSoapVerifiedByVps = true;
         status = 'Android → Nika TEST VPS: подписанный SOAP принят. ✅\n'
             'Синтетический SOAP прошёл проверку структуры. ✅\n'
             '$certStatus\n'
@@ -276,10 +282,74 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
   }
 
+  Future<void> _sendSignedServerSoapToShep() async {
+    final soap = signedServerDemoSoap;
+    if (busy || soap == null || !signedServerSoapVerifiedByVps) return;
+    // The gateway really receives an HTTP POST; require a separate,
+    // non-dismissible user consent before the single request.
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Отправить пробный SOAP в тестовый ШЭП?'),
+        content: const Text(
+          'Это НАСТОЯЩИЙ сетевой запрос через TEST VPS и IPsec в тестовый '
+          'ШЭП. Отправится только подписанная демонстрационная заглушка '
+          'без ИИН, БИН и налоговых данных с заведомо несуществующим '
+          'serviceId. Шлюз, скорее всего, ответит ошибкой. '
+          'Настоящая декларация НЕ подаётся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отправить тестовый SOAP'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+    setState(() {
+      busy = true;
+      signedServerSoapVerifiedByVps = false; // one explicit user action
+      status = 'Отправляем подписанный синтетический SOAP через TEST VPS → IPsec → ШЭП…';
+    });
+    try {
+      final result = await ApiService.isnaTestSendSyntheticToShep(soap);
+      if (!mounted) return;
+      final contacted = result['gatewayContacted'] == true;
+      final statusCode = result['httpStatus']?.toString() ?? 'нет';
+      final fault = result['soapFault'] == true;
+      final faultMessage = (result['faultMessage'] ?? '').toString();
+      setState(() {
+        status = contacted
+            ? 'Настоящий TEST HTTP POST выполнен. ✅\n'
+                'Ответ тестового ШЭП: HTTP $statusCode\n'
+                'SOAP Fault: ${fault ? "да" : "нет/не определён"}\n'
+                '${faultMessage.isEmpty ? "" : "Описание шлюза: $faultMessage\n"}'
+                'Это не подтверждает регистрацию системы или принятие подписи.\n'
+                'Настоящая декларация НЕ отправлялась.'
+            : 'Тестовый ШЭП не подтвердил приём HTTP POST.\n'
+                'Налоговые данные не отправлялись.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Ошибка TEST SOAP POST: $error\n'
+            'Ни одна настоящая ФНО не подавалась.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _signFnoOfflineDouble() async {
     if (busy) return;
     setState(() {
       signedServerDemoSoap = null;
+      signedServerSoapVerifiedByVps = false;
       status = 'Формируем пробную ФНО 000.00 без персональных данных…';
     });
     try {
@@ -413,6 +483,13 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
                 ? null : _verifySignedServerSoap,
             icon: const Icon(Icons.fact_check_outlined),
             label: const Text('Проверить подписанный SOAP на TEST VPS'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy || !signedServerSoapVerifiedByVps
+                ? null : _sendSignedServerSoapToShep,
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('Отправить пробный SOAP в TEST ШЭП'),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(

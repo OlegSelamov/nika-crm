@@ -1716,6 +1716,20 @@ class ApiService {
         timeout: const Duration(seconds: 18),
       ));
 
+  // One explicitly confirmed POST of the signed non-filing SOAP via TEST VPS.
+  // Does not transmit any FNO or sensitive taxpayer data.
+  static Future<Map<String, dynamic>> isnaTestSendSyntheticToShep(
+    String signedDemoSoap,
+  ) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/accounting/isna/test/send-synthetic-to-shep',
+        body: {
+          'soapXml': signedDemoSoap,
+          'confirmation': 'SEND_SYNTHETIC_ONLY',
+        },
+        timeout: const Duration(seconds: 22),
+      ));
+
   // TEST-only, read-only Smart Bridge diagnostics (never sends tax data).
   static Future<Map<String, dynamic>> isnaTestDiagnostics() async =>
       Map<String, dynamic>.from(await _request(
