@@ -127,6 +127,7 @@ jobs:
           echo "Offline ISNA SOAP structure tests (no network calls)..."
           sudo .venv/bin/python -m unittest discover -s tests -p test_isna_bip.py -v
           sudo .venv/bin/python -m unittest discover -s tests -p test_isna_compare_transport_cert.py -v
+          sudo .venv/bin/python -m unittest discover -s tests -p test_isna_inspect_wss.py -v
           sudo .venv/bin/python -m unittest discover -s tests -p test_isna_remote_probe.py -v
           sudo .venv/bin/python -m unittest discover -s tests -p test_isna_local_probe.py -v
 
