@@ -1705,6 +1705,17 @@ class ApiService {
         timeout: const Duration(seconds: 12),
       ));
 
+  // Uploads ONLY an inert signed demo to Nika TEST for STRUCTURAL inspection.
+  // The server never forwards the payload to Smart Bridge / ISNA.
+  static Future<Map<String, dynamic>> isnaTestVerifySignedSoap(
+    String signedDemoSoap,
+  ) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/accounting/isna/test/verify-signed-soap',
+        body: {'soapXml': signedDemoSoap},
+        timeout: const Duration(seconds: 18),
+      ));
+
   // TEST-only, read-only Smart Bridge diagnostics (never sends tax data).
   static Future<Map<String, dynamic>> isnaTestDiagnostics() async =>
       Map<String, dynamic>.from(await _request(
