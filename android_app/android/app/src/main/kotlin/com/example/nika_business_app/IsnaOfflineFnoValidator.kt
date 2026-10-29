@@ -28,10 +28,21 @@ internal object IsnaOfflineFnoValidator {
     private const val DIGEST_URI =
         "urn:ietf:params:xml:ns:pkigovkz:xmlsec:algorithms:gostr34112015-512"
 
-    private fun fail(): Nothing = throw KalkanJwsSigner.SigningException(
-        "NON_DEMO_SOAP",
-        "Подписание реальной ФНО запрещено в тестовом режиме",
-    )
+    private fun fail(step: String = "недопустимый SOAP"): Nothing =
+        throw KalkanJwsSigner.SigningException(
+            "NON_DEMO_SOAP",
+            "Пробная ФНО не прошла локальную проверку: $step",
+        )
+
+    // Android DOM implementations may place namespace declarations on either
+    // element during signing. We validate their resolved URIs, not their count.
+    private fun onlyNamespaceAttributes(element: Element): Boolean {
+        for (index in 0 until element.attributes.length) {
+            val attr = element.attributes.item(index)
+            if (attr.namespaceURI != "http://www.w3.org/2000/xmlns/") return false
+        }
+        return true
+    }
 
     private fun children(parent: Element): List<Element> =
         (0 until parent.childNodes.length).mapNotNull { parent.childNodes.item(it) as? Element }
@@ -67,11 +78,17 @@ internal object IsnaOfflineFnoValidator {
         if (sender.textContent != "nika-fno-offline-only") fail()
 
         val data = expectOne(requestParts[1], "data")
-        if (data.attributes.length != 3 ||
-            data.getAttributeNS(XSI, "type") != "xs:string" ||
-            data.getAttributeNS(XMLNS, "xs") != XSD ||
-            data.getAttributeNS(XMLNS, "xsi") != XSI ||
-            children(data).isNotEmpty()) fail()
+        if (data.getAttributeNS(XSI, "type") != "xs:string" ||
+            data.lookupNamespaceURI("xs") != XSD ||
+            data.lookupNamespaceURI("xsi") != XSI ||
+            children(data).isNotEmpty()) fail("вложенный SOAP data")
+        for (index in 0 until data.attributes.length) {
+            val attr = data.attributes.item(index)
+            if (attr.namespaceURI != XMLNS &&
+                !(attr.namespaceURI == XSI && attr.localName == "type")) {
+                fail("неожиданные атрибуты data")
+            }
+        }
         val signedFno = data.textContent ?: fail()
         if (signedFno.length > 100_000 || signedFno.contains("<!DOCTYPE", true) ||
             signedFno.contains("<!ENTITY", true)) fail()
@@ -79,13 +96,16 @@ internal object IsnaOfflineFnoValidator {
         val factory = DocumentBuilderFactory.newInstance()
         factory.isNamespaceAware = true
         factory.isExpandEntityReferences = false
-        // These are required for the test payload; an unsupported parser fails closed.
-        try {
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-        } catch (_: Throwable) {
-            fail()
+        // Match KalkanJwsSigner.parseXml(): some Android parsers do not
+        // implement every optional feature. DOCTYPE and ENTITY were already
+        // rejected *before* parsing, and expansion is disabled.
+        for ((feature, enabled) in listOf(
+            "http://apache.org/xml/features/disallow-doctype-decl" to true,
+            "http://xml.org/sax/features/external-general-entities" to false,
+            "http://xml.org/sax/features/external-parameter-entities" to false,
+            "http://apache.org/xml/features/nonvalidating/load-external-dtd" to false,
+        )) {
+            try { factory.setFeature(feature, enabled) } catch (_: Throwable) { }
         }
         val doc = try {
             factory.newDocumentBuilder().parse(InputSource(StringReader(signedFno)))
@@ -93,13 +113,15 @@ internal object IsnaOfflineFnoValidator {
             fail()
         }
         val root = doc.documentElement
-        if (root.tagName != "root" || root.namespaceURI != null || root.attributes.length != 0) fail()
+        if (root.tagName != "root" || root.namespaceURI != null ||
+            !onlyNamespaceAttributes(root)) fail("внутренний root")
         val innerParts = children(root)
         if (innerParts.size != 2 || innerParts[0].tagName != "data" ||
             innerParts[0].namespaceURI != null ||
             innerParts[1].localName != "Signature" || innerParts[1].namespaceURI != DS) fail()
         val plain = innerParts[0]
-        if (plain.attributes.length != 0 || children(plain).isNotEmpty()) fail()
+        if (!onlyNamespaceAttributes(plain) || children(plain).isNotEmpty())
+            fail("содержимое внутреннего data")
         val json = try { JSONObject(plain.textContent) } catch (_: Exception) { fail() }
         if (names(json) != setOf("code", "fnoDto") ||
             json.optString("code") != "000.00") fail()
@@ -126,9 +148,9 @@ internal object IsnaOfflineFnoValidator {
         // This does NOT establish trust/issuer validity; it does detect tampering.
         val certificate = try {
             val der = Base64.decode(certs.item(0).textContent.replace(Regex("\\s+"), ""), Base64.DEFAULT)
-            CertificateFactory.getInstance("X.509", provider)
+            CertificateFactory.getInstance("X.509")
                 .generateCertificate(ByteArrayInputStream(der)) as X509Certificate
-        } catch (_: Exception) { fail() }
+        } catch (_: Exception) { fail("сертификат XMLDSig") }
         val xmlSignatureClass = Class.forName("org.apache.xml.security.signature.XMLSignature")
         val signature = xmlSignatureClass
             .getConstructor(Element::class.java, String::class.java).newInstance(dsig, "")
