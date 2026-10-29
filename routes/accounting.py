@@ -2996,6 +2996,29 @@ def accounting_report():
 
 
 
+@accounting_bp.route("/accounting/isna/test/soap-draft", methods=["GET"])
+def isna_test_unsigned_server_soap():
+    """Authenticated, strictly non-filing TEST-only SOAP for Android signing.
+
+    No sensitive taxpayer fields, gateway credentials, private keys, POST,
+    persistence, or state transition. Its serviceId is deliberately invalid
+    on the real government gateway.
+    """
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Недоступно вне тестовой среды."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Необходим вход в систему."}), 401
+    if not _require_company():
+        return jsonify({"error": "Не выбрана организация."}), 403
+
+    from services.isna_signing_lab import create_server_signing_sample
+
+    response = jsonify(create_server_signing_sample())
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @accounting_bp.route("/accounting/isna/test/diagnostics", methods=["GET"])
 def isna_test_diagnostics():
     """Strictly read-only TEST diagnostics; never submit or sign an FNO."""
