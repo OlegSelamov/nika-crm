@@ -58,7 +58,9 @@
             updateStatus([
                 "Среда: TEST",
                 "Адрес: " + data.endpoint,
-                "TCP с TEST VPS: " + (data.tcpOk ? "доступен" : "не подтверждён"),
+                "Источник: " + (data.networkCheckedFrom || "TEST VPS"),
+                "TCP: " + (data.tcpOk ? "доступен" : "не подтверждён"),
+                "HTTP: " + (data.httpStatus || "не проверен"),
                 "Проверка: " + data.tcpMessage,
                 "senderId: " + (data.senderConfigured ? "указан" : "не настроен"),
                 "serviceId: " + (data.serviceIdConfigured ? "задан администратором (не проверен)" : "только значение по умолчанию (не проверено)"),
