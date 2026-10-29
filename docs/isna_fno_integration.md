@@ -75,6 +75,47 @@ the downloaded provider demo):
 The output mode is 0600 and the script refuses to overwrite an existing
 file. **This command NEVER sends SOAP**.
 
+## Server → Android transport signature handshake (TEST-only)
+
+Implemented following local KalkanCrypt WS-Security signature success and
+verification of `ISNA_BIP_SENDER_ID` in TEST settings.
+
+1. Authenticated `GET /accounting/isna/test/soap-draft` (TEST only; active
+   company required) builds **unsigned** SyncChannel-v10 SOAP with an
+   intentionally nonexistent `serviceId=NIKA_ISNA_OFFLINE_SIGNING_ONLY`,
+   synthetic `senderId=nika-offline-test`, an inert
+   `NikaWsSecurityTest/Submission=false` element and **no gateway password**.
+   It never sends to Smart Bridge or stores a filing.
+2. Android TEST `ИСНА TEST` has **«Получить SOAP с TEST-сервера и подписать
+   локально»**. The app GETs that synthetic SOAP, passes it to native
+   Kotlin KalkanCrypt on the phone, signs `soap:Body` using the private GOST
+   key, then checks XMLDSig locally after serialization. The private key
+   never leaves the phone. Users can save the signed sample.
+3. Kotlin rejects requests that lack the strict synthetic service ID,
+   synthetic sender, `Submission=false`, and expected XML element structure.
+   It **cannot** be used to sign a real FNO business SOAP in this mode.
+4. `scripts/isna_inspect_wss.py` also recognizes this synthetic BIP-shaped
+   signed SOAP for offline inspection and matching its embedded public X.509
+   certificate against the Smart Bridge `.cer`. This is structural inspection,
+   **not** an independent cryptographic signature verification.
+
+Windows CMD instructions after saving the signed server-generated XML:
+
+```cmd
+cd /d "%USERPROFILE%\Downloads"
+curl -L -o isna_inspect_wss.py https://raw.githubusercontent.com/OlegSelamov/nika-crm/test/scripts/isna_inspect_wss.py
+py isna_inspect_wss.py "registered.cer" "nika-isna-server-soap-offline-test.xml"
+```
+
+A successful result includes `SOAP_STRUCTURE: OK`,
+`SAMPLE_TYPE: test-server-bip-demo` and `REGISTERED_CERT_MATCH: YES`.
+
+**NOT implemented yet:** cryptographic verification on the TEST server, any
+POST back from Android containing a signature, acceptance by the government
+gateway, taxpayer-signed FNO serialization, real FNO signing/submission,
+idempotency/state tracking. `Transport signer: MISSING` in server diagnostics
+is still expected while only Android KalkanCrypt signs.
+
 ## Next essential work before the first TEST POST
 
 1. Verify that the user-accessible `senderId` equals the identifier
