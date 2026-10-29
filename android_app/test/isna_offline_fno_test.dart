@@ -2,6 +2,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nika_business_app/screens/isna_test_panel.dart';
 
 void main() {
+  test('transport certificate validity boundaries are enforced before WShEP POST', () {
+    expect(
+      isIsnaCertificateCurrent(
+        notBeforeMs: 1000, notAfterMs: 3000, nowMs: 2000,
+      ),
+      isTrue,
+    );
+    expect(
+      isIsnaCertificateCurrent(
+        notBeforeMs: 1000, notAfterMs: 3000, nowMs: 3000,
+      ),
+      isFalse,
+    );
+    expect(
+      isIsnaCertificateCurrent(
+        notBeforeMs: 1000, notAfterMs: 3000, nowMs: 999,
+      ),
+      isFalse,
+    );
+    expect(
+      isIsnaCertificateCurrent(
+        notBeforeMs: null, notAfterMs: 3000, nowMs: 2000,
+      ),
+      isFalse,
+    );
+  });
+
   test('synthetic FNO uses deliberately invalid code and contains no identities', () {
     final inner = buildIsnaOfflineFnoXml();
     expect(inner, contains('<root><data><![CDATA['));
