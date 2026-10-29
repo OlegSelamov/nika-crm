@@ -72,6 +72,18 @@ String buildIsnaOfflineFnoSoap(String signedFnoXml, {String? nonce}) {
       '</soap:Body></soap:Envelope>';
 }
 
+/// Validates ONLY X.509 notBefore/notAfter against local device time.
+/// Does not imply that WShEP trusts or has registered the certificate.
+bool isIsnaCertificateCurrent({
+  required int? notBeforeMs,
+  required int? notAfterMs,
+  required int nowMs,
+}) =>
+    notBeforeMs != null &&
+    notAfterMs != null &&
+    notBeforeMs <= nowMs &&
+    nowMs < notAfterMs;
+
 class IsnaTestPanel extends StatefulWidget {
   const IsnaTestPanel({super.key});
 
@@ -216,15 +228,30 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           !signed.contains('<wsse:Security')) {
         throw StateError('KalkanCrypt не подтвердил подпись SOAP.');
       }
+      // The native signer already returns the X.509 validity dates. Show
+      // them to the user before another government gateway POST instead of
+      // guessing whether a rejected transport certificate has expired.
+      final notBeforeMs = (result['certificateNotBefore'] as num?)?.toInt();
+      final notAfterMs = (result['certificateNotAfter'] as num?)?.toInt();
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final certCurrent = isIsnaCertificateCurrent(
+        notBeforeMs: notBeforeMs, notAfterMs: notAfterMs, nowMs: nowMs,
+      );
+      final validityText = notBeforeMs == null || notAfterMs == null
+          ? 'Срок действия сертификата неизвестен'
+          : 'Сертификат: ${DateTime.fromMillisecondsSinceEpoch(notBeforeMs).toLocal().toIso8601String().split(".").first} — '
+              '${DateTime.fromMillisecondsSinceEpoch(notAfterMs).toLocal().toIso8601String().split(".").first}';
       setState(() {
         signedXml = signed;
-        signedServerDemoSoap = signed;
+        signedServerDemoSoap = certCurrent ? signed : null;
         signedServerSoapVerifiedByVps = false;
         signedFileName = 'nika-isna-server-soap-offline-test';
         status = 'SOAP получен с TEST-сервера. ✅\n'
             'SOAP Body подписан на Android через KalkanCrypt. ✅\n'
             'Подпись проверена локально после сериализации. ✅\n'
-            'Это синтетический serviceId без налоговых данных и пароля.\n'
+            '$validityText\n'
+            '${certCurrent ? "Дата сертификата действительна. ✅" : "Сертификат не действует сейчас или дата неизвестна. TEST POST заблокирован. ❌"}\n'
+            'Это синтетический serviceId без налоговых данных.\n'
             'В ШЭП ничего не отправлялось.';
       });
     } catch (error) {
@@ -257,6 +284,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           result['sampleType'] != 'test-server-bip-demo') {
         throw StateError('TEST-сервер вернул неожиданный результат.');
       }
+      final publicCertFingerprint = (result['embeddedCertSha256'] ?? '').toString();
       final certMatch = result['registeredCertMatch'];
       final certStatus = certMatch == true
           ? 'Совпадает с зарегистрированным публичным .cer. ✅'
@@ -268,6 +296,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
         status = 'Android → Nika TEST VPS: подписанный SOAP принят. ✅\n'
             'Синтетический SOAP прошёл проверку структуры. ✅\n'
             '$certStatus\n'
+            'SHA-256 сертификата: $publicCertFingerprint\n'
             'Криптографически подпись проверена только на Android.\n'
             'На VPS подпись криптографически НЕ проверялась.\n'
             'В ШЭП и ИСНА ничего не отправлено, декларация не создавалась.';
@@ -324,11 +353,17 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       final statusCode = result['httpStatus']?.toString() ?? 'нет';
       final fault = result['soapFault'] == true;
       final faultMessage = (result['faultMessage'] ?? '').toString();
+      final gatewayErrorCode = (result['gatewayErrorCode'] ?? '').toString();
+      final gatewaySessionId = (result['gatewaySessionId'] ?? '').toString();
+      final gatewayErrorDate = (result['gatewayErrorDate'] ?? '').toString();
       setState(() {
         status = contacted
             ? 'Настоящий TEST HTTP POST выполнен. ✅\n'
                 'Ответ тестового ШЭП: HTTP $statusCode\n'
                 'SOAP Fault: ${fault ? "да" : "нет/не определён"}\n'
+                '${gatewayErrorCode.isEmpty ? "" : "Код ШЭП: $gatewayErrorCode\n"}'
+                '${gatewaySessionId.isEmpty ? "" : "Сессия ШЭП: $gatewaySessionId\n"}'
+                '${gatewayErrorDate.isEmpty ? "" : "Дата ответа ШЭП: $gatewayErrorDate\n"}'
                 '${faultMessage.isEmpty ? "" : "Описание шлюза: $faultMessage\n"}'
                 'Это не подтверждает регистрацию системы или принятие подписи.\n'
                 'Настоящая декларация НЕ отправлялась.'

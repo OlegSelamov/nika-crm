@@ -30,6 +30,15 @@ class TestGatewayError(RuntimeError):
     """Safe-to-expose transport error; never includes raw signed XML."""
 
 
+def _fault_detail_value(fault: ET.Element, field: str, max_length: int) -> str:
+    """Pick only bounded, non-secret diagnostic fields from SOAP Fault detail."""
+    for item in fault.iter():
+        if item.tag.rsplit("}", 1)[-1] == field:
+            value = (item.text or "").strip()
+            return re.sub(r"[\x00-\x1f\x7f]", " ", value)[:max_length]
+    return ""
+
+
 def _safe_gateway_reply(payload: bytes, truncated: bool) -> dict:
     result = {"responseType": "unrecognized", "soapFault": False, "replyTruncated": truncated}
     if re.search(rb"<!\s*(DOCTYPE|ENTITY)\b", payload, re.IGNORECASE):
@@ -49,6 +58,12 @@ def _safe_gateway_reply(payload: bytes, truncated: bool) -> dict:
         result["soapFault"] = True
         result["faultCode"] = (fault.findtext("faultcode") or "").strip()[:100]
         result["faultMessage"] = (fault.findtext("faultstring") or "").strip()[:350]
+        # WShEP often embeds an SCE code and a sessionId inside SOAP Fault/detail.
+        # This is more diagnostic than HTTP 500 and helps support investigate
+        # a rejected transport signature without sharing private keys or SOAP.
+        result["gatewayErrorCode"] = _fault_detail_value(fault, "errorCode", 32)
+        result["gatewayErrorDate"] = _fault_detail_value(fault, "errorDate", 80)
+        result["gatewaySessionId"] = _fault_detail_value(fault, "sessionId", 120)
     else:
         result["responseType"] = "soap-envelope"
         result["soapFault"] = False

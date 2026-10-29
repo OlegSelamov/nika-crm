@@ -71,6 +71,25 @@ class TestTransport(unittest.TestCase):
         self.assertEqual(kwargs["headers"]["SOAPAction"], '""')
         self.assertNotIn("FNO_INTEGRATION", sample)
 
+    def test_sce005_extracts_gateway_code_timestamp_and_session(self):
+        response = (
+            b'<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+            b'<soap:Body><soap:Fault><faultcode>soap:Server</faultcode>'
+            b'<faultstring>\\xd0\\xa2\\xd1\\x80\\xd0\\xb0\\xd0\\xbd\\xd1\\x81\\xd0\\xbf\\xd0\\xbe\\xd1\\x80\\xd1\\x82\\xd0\\xbd\\xd0\\xb0\\xd1\\x8f '
+            b'\\xd0\\xbf\\xd0\\xbe\\xd0\\xb4\\xd0\\xbf\\xd0\\xb8\\xd1\\x81\\xd1\\x8c '
+            b'\\xd0\\xbd\\xd0\\xb5 \\xd0\\xb0\\xd0\\xba\\xd1\\x82\\xd1\\x83\\xd0\\xb0\\xd0\\xbb\\xd1\\x8c\\xd0\\xbd\\xd0\\xb0\\xd1\\x8f</faultstring>'
+            b'<detail><x:Fault xmlns:x="http://bip.bee.kz/SyncChannel/v10/Types">'
+            b'<errorCode>SCE005</errorCode>'
+            b'<errorDate>2026-10-30T01:30:00+05:00</errorDate>'
+            b'<sessionId>{1234abcd-0000-4000-8000-123456789abc}</sessionId>'
+            b'</x:Fault></detail></soap:Fault></soap:Body></soap:Envelope>'
+        )
+        parsed = gate._safe_gateway_reply(response, False)
+        self.assertEqual(parsed["responseType"], "soap-fault")
+        self.assertEqual(parsed["gatewayErrorCode"], "SCE005")
+        self.assertEqual(parsed["gatewayErrorDate"], "2026-10-30T01:30:00+05:00")
+        self.assertEqual(parsed["gatewaySessionId"], "{1234abcd-0000-4000-8000-123456789abc}")
+
     @patch.object(gate.http.client, "HTTPConnection")
     def test_never_posts_actual_fno_or_arbitrary_data(self, connection):
         with patch.object(gate, "local_source_available", return_value=True):
