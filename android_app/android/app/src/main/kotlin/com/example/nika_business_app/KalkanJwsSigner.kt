@@ -62,6 +62,9 @@ object KalkanJwsSigner {
         "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
     private const val XMLDSIG_NS = "http://www.w3.org/2000/09/xmldsig#"
     private const val NIKA_SOAP_DEMO_NS = "urn:nikabusiness:offline-soap-test:1"
+    private const val NIKA_SOAP_BIP_NS = "http://bip.bee.kz/SyncChannel/v10/Types"
+    private const val NIKA_OFFLINE_SERVICE_ID = "NIKA_ISNA_OFFLINE_SIGNING_ONLY"
+    private const val NIKA_OFFLINE_SENDER_ID = "nika-offline-test"
 
     class SigningException(val code: String, message: String, cause: Throwable? = null) :
         Exception(message, cause)
@@ -257,14 +260,75 @@ object KalkanJwsSigner {
             }
             val body = bodies.item(0) as Element
             val header = headers.item(0) as Element
-            val demo = body.getElementsByTagNameNS(NIKA_SOAP_DEMO_NS, "NikaWsSecurityTest")
-            if (demo.length != 1) {
-                throw SigningException("NON_DEMO_SOAP", "Разрешена только локальная тестовая SOAP-заглушка")
+            // Local sample OR tightly constrained BIP-like server dry-run.
+            // Never sign a real FNO_INTEGRATION document via this method.
+            fun elements(parent: Element): List<Element> =
+                (0 until parent.childNodes.length).mapNotNull {
+                    parent.childNodes.item(it) as? Element
+                }
+            fun uniqueChild(parent: Element, localName: String, namespace: String? = null): Element {
+                val children = elements(parent)
+                if (children.size != 1 ||
+                    children[0].localName != localName ||
+                    children[0].namespaceURI != namespace) {
+                    throw SigningException("NON_DEMO_SOAP", "Неожиданные элементы тестового SOAP")
+                }
+                return children[0]
             }
-            val submission = (demo.item(0) as Element)
-                .getElementsByTagNameNS(NIKA_SOAP_DEMO_NS, "Submission")
-            if (submission.length != 1 || submission.item(0).textContent != "false") {
-                throw SigningException("NON_DEMO_SOAP", "Запрещена подпись SOAP с отправкой ФНО")
+
+            if (elements(header).isNotEmpty()) {
+                throw SigningException("NON_DEMO_SOAP", "SOAP Header тестового документа должен быть пуст")
+            }
+            val outer = elements(body)
+            if (outer.size != 1) {
+                throw SigningException("NON_DEMO_SOAP", "Только одна тестовая операция в SOAP Body")
+            }
+            val only = outer[0]
+            val demo: Element
+            if (only.localName == "NikaWsSecurityTest" && only.namespaceURI == NIKA_SOAP_DEMO_NS) {
+                demo = only
+            } else if (only.localName == "SendMessage" && only.namespaceURI == NIKA_SOAP_BIP_NS) {
+                val request = uniqueChild(only, "request")
+                val requestParts = elements(request)
+                if (requestParts.size != 2 ||
+                    requestParts[0].tagName != "requestInfo" ||
+                    requestParts[1].tagName != "requestData") {
+                    throw SigningException("NON_DEMO_SOAP", "Неожиданная структура SendMessage")
+                }
+                val infoParts = elements(requestParts[0])
+                if (infoParts.map { it.tagName } != listOf(
+                        "messageId", "serviceId", "messageDate", "sender")) {
+                    throw SigningException("NON_DEMO_SOAP", "Недопустимые поля тестового requestInfo")
+                }
+                if (infoParts[1].textContent != NIKA_OFFLINE_SERVICE_ID ||
+                    infoParts[0].textContent.isNullOrBlank() ||
+                    infoParts[2].textContent.isNullOrBlank()) {
+                    throw SigningException("NON_DEMO_SOAP", "Запрещён реальный serviceId")
+                }
+                val sender = uniqueChild(infoParts[3], "senderId")
+                if (sender.textContent != NIKA_OFFLINE_SENDER_ID) {
+                    throw SigningException("NON_DEMO_SOAP", "Тестовый SOAP не должен содержать учётные данные ШЭП")
+                }
+                val dataElement = uniqueChild(requestParts[1], "data")
+                if (dataElement.attributes.length != 0) {
+                    throw SigningException("NON_DEMO_SOAP", "Нестандартный формат тестовых данных")
+                }
+                demo = uniqueChild(dataElement, "NikaWsSecurityTest", NIKA_SOAP_DEMO_NS)
+            } else {
+                throw SigningException("NON_DEMO_SOAP", "Нельзя подписывать реальную ФНО в режиме теста")
+            }
+            val demoParts = elements(demo)
+            if (demoParts.size != 2 ||
+                demoParts[0].localName != "Submission" ||
+                demoParts[0].namespaceURI != NIKA_SOAP_DEMO_NS ||
+                demoParts[0].textContent.trim() != "false" ||
+                demoParts[1].localName != "Purpose" ||
+                demoParts[1].namespaceURI != NIKA_SOAP_DEMO_NS ||
+                !demoParts[1].textContent.contains("offline", ignoreCase = true)) {
+                throw SigningException("NON_DEMO_SOAP", "Нельзя подписать SOAP с налоговыми данными")
+            }
+            if (body.getElementsByTagNameNS(XMLDSIG_NS, "Signature").length != 0) {
+                throw SigningException("NON_DEMO_SOAP", "Подписанный SOAP нельзя подписывать повторно")
             }
 
             initializeXmlSecurity(material.provider)
