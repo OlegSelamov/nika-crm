@@ -1,0 +1,17 @@
+[Unit]
+Description=Restore Smart Bridge TEST VPN only when its CHILD_SA is down
+Documentation=https://github.com/OlegSelamov/nika-crm/blob/test/docs/isna_vpn_watchdog.md
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/ipsec.conf
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/nika-isna-vpn-watchdog
+TimeoutStartSec=65
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+UMask=0077
