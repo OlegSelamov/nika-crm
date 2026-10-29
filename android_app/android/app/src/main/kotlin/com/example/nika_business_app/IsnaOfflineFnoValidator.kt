@@ -36,6 +36,13 @@ internal object IsnaOfflineFnoValidator {
     private fun children(parent: Element): List<Element> =
         (0 until parent.childNodes.length).mapNotNull { parent.childNodes.item(it) as? Element }
 
+    private fun names(obj: JSONObject): Set<String> {
+        val names = mutableSetOf<String>()
+        val iterator = obj.keys()
+        while (iterator.hasNext()) names.add(iterator.next())
+        return names
+    }
+
     private fun expectOne(parent: Element, tag: String): Element {
         val list = children(parent)
         if (list.size != 1 || list[0].tagName != tag || list[0].namespaceURI != null) fail()
@@ -94,10 +101,10 @@ internal object IsnaOfflineFnoValidator {
         val plain = innerParts[0]
         if (plain.attributes.length != 0 || children(plain).isNotEmpty()) fail()
         val json = try { JSONObject(plain.textContent) } catch (_: Exception) { fail() }
-        if (json.keySet() != setOf("code", "fnoDto") ||
+        if (names(json) != setOf("code", "fnoDto") ||
             json.optString("code") != "000.00") fail()
         val dto = json.optJSONObject("fnoDto") ?: fail()
-        if (dto.keySet() != setOf("nikaOfflineDemo") ||
+        if (names(dto) != setOf("nikaOfflineDemo") ||
             dto.opt("nikaOfflineDemo") != true) fail()
 
         val dsig = innerParts[1]
