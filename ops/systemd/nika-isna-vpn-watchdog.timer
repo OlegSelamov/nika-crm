@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Smart Bridge TEST VPN status every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=nika-isna-vpn-watchdog.service
+
+[Install]
+WantedBy=timers.target
