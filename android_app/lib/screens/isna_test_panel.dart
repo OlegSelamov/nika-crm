@@ -132,11 +132,62 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     setState(() {
       signedXml = value;
       signedFileName = 'nika-isna-wssecurity-offline-test';
-      status = 'Тестовый SOAP подписан в wsse:Security через KalkanCrypt. ✅\\n'
-          'Подпись SOAP Body проверена криптомодулем локально. ✅\\n'
-          'Нет serviceId ФНО, налоговых данных и отправки в Smart Bridge.\\n'
+      status = 'Тестовый SOAP подписан в wsse:Security через KalkanCrypt. ✅\n'
+          'Подпись SOAP Body проверена криптомодулем локально. ✅\n'
+          'Нет serviceId ФНО, налоговых данных и отправки в Smart Bridge.\n'
           'Валидация подписи сервером ШЭП ещё не проводилась.';
     });
+  }
+
+  Future<void> _signServerSoap() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      status = 'Получаем безопасный SOAP от TEST-сервера Nika Business…';
+    });
+    try {
+      final response = await ApiService.isnaTestUnsignedServerSoap();
+      if (!mounted) return;
+      final xml = (response['soapXml'] ?? '').toString();
+      if (response['offlineOnly'] != true ||
+          response['soapSent'] != false ||
+          response['hasTaxpayerData'] != false ||
+          response['hasGatewayPassword'] != false ||
+          !xml.contains('NIKA_ISNA_OFFLINE_SIGNING_ONLY')) {
+        throw StateError('TEST-сервер не вернул подтверждённую офлайн-заглушку.');
+      }
+      setState(() => busy = false);
+      final result = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: xml, soapMode: true),
+      );
+      if (result == null || !mounted) {
+        if (mounted) setState(() => status = 'Подпись отменена. Ничего не отправлено.');
+        return;
+      }
+      final signed = (result['signedXml'] ?? '').toString();
+      if (result['signatureVerified'] != true ||
+          !signed.contains('<wsse:Security')) {
+        throw StateError('KalkanCrypt не подтвердил подпись SOAP.');
+      }
+      setState(() {
+        signedXml = signed;
+        signedFileName = 'nika-isna-server-soap-offline-test';
+        status = 'SOAP получен с TEST-сервера. ✅\n'
+            'SOAP Body подписан на Android через KalkanCrypt. ✅\n'
+            'Подпись проверена локально после сериализации. ✅\n'
+            'Это синтетический serviceId без налоговых данных и пароля.\n'
+            'В ШЭП ничего не отправлялось.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Ошибка теста сервер → Android: $error\n'
+            'SOAP и ФНО не отправлялись в ШЭП.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Future<void> _save() async {
@@ -213,6 +264,12 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             onPressed: busy ? null : _signSoap,
             icon: const Icon(Icons.verified_user_outlined),
             label: const Text('Подписать SOAP WS-Security (.p12) — локально'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signServerSoap,
+            icon: const Icon(Icons.cloud_download_outlined),
+            label: const Text('Получить SOAP с TEST-сервера и подписать локально'),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
