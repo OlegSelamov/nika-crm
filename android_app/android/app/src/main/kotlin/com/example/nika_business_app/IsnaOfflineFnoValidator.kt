@@ -73,9 +73,9 @@ internal object IsnaOfflineFnoValidator {
             parts.any { it.namespaceURI != null }) fail()
         if (parts[0].textContent.isNullOrBlank() ||
             parts[1].textContent != "FNO_INTEGRATION" ||
-            parts[2].textContent.isNullOrBlank()) fail()
+            parts[2].textContent.isNullOrBlank()) fail("служебные поля requestInfo")
         val sender = expectOne(parts[3], "senderId")
-        if (sender.textContent != "nika-fno-offline-only") fail()
+        if (sender.textContent != "nika-fno-offline-only") fail("пробный senderId")
 
         val data = expectOne(requestParts[1], "data")
         if (data.getAttributeNS(XSI, "type") != "xs:string" ||
@@ -91,7 +91,7 @@ internal object IsnaOfflineFnoValidator {
         }
         val signedFno = data.textContent ?: fail()
         if (signedFno.length > 100_000 || signedFno.contains("<!DOCTYPE", true) ||
-            signedFno.contains("<!ENTITY", true)) fail()
+            signedFno.contains("<!ENTITY", true)) fail("недопустимый вложенный XML")
 
         val factory = DocumentBuilderFactory.newInstance()
         factory.isNamespaceAware = true
@@ -124,7 +124,7 @@ internal object IsnaOfflineFnoValidator {
             fail("содержимое внутреннего data")
         val json = try { JSONObject(plain.textContent) } catch (_: Exception) { fail() }
         if (names(json) != setOf("code", "fnoDto") ||
-            json.optString("code") != "000.00") fail()
+            json.optString("code") != "000.00") fail("формат пробной ФНО 000.00")
         val dto = json.optJSONObject("fnoDto") ?: fail()
         if (names(dto) != setOf("nikaOfflineDemo") ||
             dto.opt("nikaOfflineDemo") != true) fail()
@@ -148,8 +148,14 @@ internal object IsnaOfflineFnoValidator {
         // This does NOT establish trust/issuer validity; it does detect tampering.
         val certificate = try {
             val der = Base64.decode(certs.item(0).textContent.replace(Regex("\\s+"), ""), Base64.DEFAULT)
-            CertificateFactory.getInstance("X.509")
-                .generateCertificate(ByteArrayInputStream(der)) as X509Certificate
+            // GOST X.509 may need Kalkan's CertificateFactory; normal Android
+            // X.509 is a fallback when the provider doesn't register it.
+            val factory = try {
+                CertificateFactory.getInstance("X.509", provider)
+            } catch (_: Exception) {
+                CertificateFactory.getInstance("X.509")
+            }
+            factory.generateCertificate(ByteArrayInputStream(der)) as X509Certificate
         } catch (_: Exception) { fail("сертификат XMLDSig") }
         val xmlSignatureClass = Class.forName("org.apache.xml.security.signature.XMLSignature")
         val signature = xmlSignatureClass
