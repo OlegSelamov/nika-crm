@@ -284,9 +284,20 @@ object KalkanJwsSigner {
                 throw SigningException("NON_DEMO_SOAP", "Только одна тестовая операция в SOAP Body")
             }
             val only = outer[0]
-            val demo: Element
+            val demo: Element?
             if (only.localName == "NikaWsSecurityTest" && only.namespaceURI == NIKA_SOAP_DEMO_NS) {
                 demo = only
+            } else if (only.localName == "SendMessage" &&
+                only.namespaceURI == NIKA_SOAP_BIP_NS &&
+                only.getElementsByTagName("serviceId").let {
+                    it.length == 1 && it.item(0).textContent == "FNO_INTEGRATION"
+                }) {
+                // Real serviceId, but an intentionally INVALID form code and
+                // a hardcoded sender with no password. This branch cannot
+                // sign any actual taxpayer data or registered gateway sender.
+                initializeXmlSecurity(material.provider)
+                IsnaOfflineFnoValidator.validate(only, material.provider)
+                demo = null
             } else if (only.localName == "SendMessage" && only.namespaceURI == NIKA_SOAP_BIP_NS) {
                 val request = uniqueChild(only, "request")
                 val requestParts = elements(request)
@@ -317,15 +328,17 @@ object KalkanJwsSigner {
             } else {
                 throw SigningException("NON_DEMO_SOAP", "Нельзя подписывать реальную ФНО в режиме теста")
             }
-            val demoParts = elements(demo)
-            if (demoParts.size != 2 ||
-                demoParts[0].localName != "Submission" ||
-                demoParts[0].namespaceURI != NIKA_SOAP_DEMO_NS ||
-                demoParts[0].textContent.trim() != "false" ||
-                demoParts[1].localName != "Purpose" ||
-                demoParts[1].namespaceURI != NIKA_SOAP_DEMO_NS ||
-                !demoParts[1].textContent.contains("offline", ignoreCase = true)) {
-                throw SigningException("NON_DEMO_SOAP", "Нельзя подписать SOAP с налоговыми данными")
+            if (demo != null) {
+                val demoParts = elements(demo)
+                if (demoParts.size != 2 ||
+                    demoParts[0].localName != "Submission" ||
+                    demoParts[0].namespaceURI != NIKA_SOAP_DEMO_NS ||
+                    demoParts[0].textContent.trim() != "false" ||
+                    demoParts[1].localName != "Purpose" ||
+                    demoParts[1].namespaceURI != NIKA_SOAP_DEMO_NS ||
+                    !demoParts[1].textContent.contains("offline", ignoreCase = true)) {
+                    throw SigningException("NON_DEMO_SOAP", "Нельзя подписать SOAP с налоговыми данными")
+                }
             }
             if (body.getElementsByTagNameNS(XMLDSIG_NS, "Signature").length != 0) {
                 throw SigningException("NON_DEMO_SOAP", "Подписанный SOAP нельзя подписывать повторно")
@@ -336,6 +349,7 @@ object KalkanJwsSigner {
             return certificateResult(material.certificate) + mapOf(
                 "signedXml" to signedXml,
                 "signatureVerified" to true,
+                "innerSignatureVerified" to (demo == null),
                 "certificate" to Base64.encodeToString(material.certificate.encoded, Base64.NO_WRAP),
                 "algorithm" to XML_SIGNATURE_URI,
                 "offlineOnly" to true,
