@@ -22,7 +22,7 @@
 - The diagnostic endpoint `GET /accounting/isna/test/diagnostics` requires login, active company and explicit `APP_MODE=test`. It never accepts a user-controlled URL or a SOAP payload.
 - The Android TEST app is native Flutter. Its Accounting screen contains **ИСНА TEST · Проверка ЭЦП** (and an **ИСНА TEST** tab). The diagnostic screen uses the native Kotlin/KalkanCrypt `MobileP12Signer.signEsfXml` file picker, not WebView or NCALayer. It signs a non-sensitive sample locally without saving the selected key (`saveKey:false`). After updating the Android source, a **new isolated TEST APK** must be installed; a website deploy alone cannot update the native Flutter interface.
 - The "Отправить в ИСНА" button in this new panel is **disabled** until we receive official ISNA service XSD, registered sender identity and working GOST WS-Security transport signer.
-- The VPN was previously verified from the main VPS, **not the TEST VPS**. Failure of the TEST-side TCP probe does not invalidate that result. We are deliberately not proxying test traffic through production.
+- The VPN was verified from the separate VPN host (`47167`), **not the TEST VPS**. The TEST app can optionally invoke a restricted read-only SSH forced-command TCP/HTTP GET probe on that VPN host. No tax documents, SOAP POST, keys or arbitrary network forwarding are enabled. This requires one-time SSH key provisioning on both servers; see [isna_vpn_probe_setup.md](isna_vpn_probe_setup.md). Until provisioned, the diagnostic is accurately labeled as a TEST VPS TCP check.
 
 ## Confirm before a signed test
 
