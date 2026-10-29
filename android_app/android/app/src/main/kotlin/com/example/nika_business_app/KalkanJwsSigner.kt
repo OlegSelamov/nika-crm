@@ -6,6 +6,7 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import org.w3c.dom.Document
+import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
 import java.io.StringWriter
@@ -53,6 +54,14 @@ object KalkanJwsSigner {
         "http://www.w3.org/2000/09/xmldsig#enveloped-signature"
     private const val XML_C14N_WITH_COMMENTS_URI =
         "http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments"
+    private const val XML_EXCLUSIVE_C14N_URI = "http://www.w3.org/2001/10/xml-exc-c14n#"
+    private const val SOAP_ENVELOPE_NS = "http://schemas.xmlsoap.org/soap/envelope/"
+    private const val WSSE_NS =
+        "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+    private const val WSU_NS =
+        "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
+    private const val XMLDSIG_NS = "http://www.w3.org/2000/09/xmldsig#"
+    private const val NIKA_SOAP_DEMO_NS = "urn:nikabusiness:offline-soap-test:1"
 
     class SigningException(val code: String, message: String, cause: Throwable? = null) :
         Exception(message, cause)
@@ -217,6 +226,140 @@ object KalkanJwsSigner {
             )
         } finally {
             Arrays.fill(passwordChars, '\u0000')
+        }
+    }
+
+    /**
+     * Offline-only SOAP WS-Security GOST experiment. The payload MUST be the
+     * inert NikaWsSecurityTest sample; never accepts official FNO business XML.
+     *
+     * Signs soap:Body (wsu:Id) with an XMLDSig in soap:Header/wsse:Security.
+     * There is NO networking, tax-submission or key export in this path.
+     */
+    fun signIsnaSoapDemo(
+        context: Context,
+        keyUri: Uri,
+        passwordChars: CharArray,
+        payload: String,
+    ): Map<String, Any?> {
+        if (payload.isBlank()) throw SigningException("EMPTY_PAYLOAD", "Нет тестового SOAP XML")
+        val material = loadKeyMaterial(context, keyUri, passwordChars)
+        try {
+            val doc = parseXml(payload)
+            val envelope = doc.documentElement
+            if (envelope.localName != "Envelope" || envelope.namespaceURI != SOAP_ENVELOPE_NS) {
+                throw SigningException("INVALID_SOAP", "Ожидался SOAP 1.1 Envelope")
+            }
+            val bodies = envelope.getElementsByTagNameNS(SOAP_ENVELOPE_NS, "Body")
+            val headers = envelope.getElementsByTagNameNS(SOAP_ENVELOPE_NS, "Header")
+            if (bodies.length != 1 || headers.length != 1) {
+                throw SigningException("INVALID_SOAP", "SOAP Header/Body должны быть единственными")
+            }
+            val body = bodies.item(0) as Element
+            val header = headers.item(0) as Element
+            val demo = body.getElementsByTagNameNS(NIKA_SOAP_DEMO_NS, "NikaWsSecurityTest")
+            if (demo.length != 1) {
+                throw SigningException("NON_DEMO_SOAP", "Разрешена только локальная тестовая SOAP-заглушка")
+            }
+            val submission = (demo.item(0) as Element)
+                .getElementsByTagNameNS(NIKA_SOAP_DEMO_NS, "Submission")
+            if (submission.length != 1 || submission.item(0).textContent != "false") {
+                throw SigningException("NON_DEMO_SOAP", "Запрещена подпись SOAP с отправкой ФНО")
+            }
+
+            initializeXmlSecurity(material.provider)
+            val signedXml = signSoapBodyWsSecurity(doc, header, body, material.privateKey, material.certificate)
+            return certificateResult(material.certificate) + mapOf(
+                "signedXml" to signedXml,
+                "signatureVerified" to true,
+                "certificate" to Base64.encodeToString(material.certificate.encoded, Base64.NO_WRAP),
+                "algorithm" to XML_SIGNATURE_URI,
+                "offlineOnly" to true,
+            )
+        } finally {
+            Arrays.fill(passwordChars, '\u0000')
+        }
+    }
+
+    private fun signSoapBodyWsSecurity(
+        document: Document,
+        header: Element,
+        body: Element,
+        privateKey: PrivateKey,
+        certificate: X509Certificate,
+    ): String {
+        var stage = "подготовка SOAP wsse:Security"
+        try {
+            val bodyId = body.getAttributeNS(WSU_NS, "Id")
+            if (!bodyId.matches(Regex("id-[A-Za-z0-9-]{8,96}"))) {
+                throw SigningException("INVALID_WSU_ID", "Некорректный wsu:Id у SOAP Body")
+            }
+            body.setIdAttributeNS(WSU_NS, "Id", true)
+
+            val security = document.createElementNS(WSSE_NS, "wsse:Security")
+            security.setAttributeNS(SOAP_ENVELOPE_NS, "soap:mustUnderstand", "1")
+            header.appendChild(security)
+
+            val xmlSignatureClass = Class.forName("org.apache.xml.security.signature.XMLSignature")
+            val transformsClass = Class.forName("org.apache.xml.security.transforms.Transforms")
+            val xmlSignature = xmlSignatureClass.getConstructor(
+                Document::class.java, String::class.java,
+                String::class.java, String::class.java,
+            ).newInstance(document, "", XML_SIGNATURE_URI, XML_EXCLUSIVE_C14N_URI)
+
+            stage = "добавление подписи в WS-Security Header"
+            security.appendChild(xmlSignatureClass.getMethod("getElement").invoke(xmlSignature) as org.w3c.dom.Node)
+            val transforms = transformsClass.getConstructor(Document::class.java).newInstance(document)
+            transformsClass.getMethod("addTransform", String::class.java)
+                .invoke(transforms, XML_EXCLUSIVE_C14N_URI)
+
+            stage = "подпись SOAP Body по wsu:Id"
+            xmlSignatureClass.getMethod(
+                "addDocument", String::class.java, transformsClass, String::class.java,
+            ).invoke(xmlSignature, "#$bodyId", transforms, XML_DIGEST_URI)
+            xmlSignatureClass.getMethod("addKeyInfo", X509Certificate::class.java)
+                .invoke(xmlSignature, certificate)
+            xmlSignatureClass.getMethod("sign", Key::class.java)
+                .invoke(xmlSignature, privateKey)
+
+            stage = "сериализация SOAP"
+            val transformer = TransformerFactory.newInstance().newTransformer()
+            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no")
+            transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
+            val writer = StringWriter()
+            transformer.transform(DOMSource(document), StreamResult(writer))
+            val signedXml = writer.toString()
+
+            stage = "локальная проверка подписи после сериализации"
+            val reparsed = parseXml(signedXml)
+            val freshBody = reparsed.getElementsByTagNameNS(SOAP_ENVELOPE_NS, "Body").item(0)
+                as? Element ?: throw SigningException("INVALID_SOAP", "SOAP Body потерян при сериализации")
+            freshBody.setIdAttributeNS(WSU_NS, "Id", true)
+            val signedElement = reparsed.getElementsByTagNameNS(XMLDSIG_NS, "Signature").item(0)
+                as? Element ?: throw SigningException("NO_SIGNATURE", "SOAP Header без ds:Signature")
+            val verifier = xmlSignatureClass.getConstructor(Element::class.java, String::class.java)
+                .newInstance(signedElement, "")
+            val isValid = xmlSignatureClass.getMethod("checkSignatureValue", X509Certificate::class.java)
+                .invoke(verifier, certificate) as? Boolean
+            if (isValid != true) {
+                throw SigningException("SIGN_VERIFY_FAILED", "Локальная проверка SOAP XMLDSig не пройдена")
+            }
+            return signedXml
+        } catch (error: SigningException) {
+            throw error
+        } catch (error: Throwable) {
+            var root: Throwable = error
+            val visited = HashSet<Throwable>()
+            while (root.cause != null && root.cause !== root && visited.add(root)) {
+                root = root.cause!!
+            }
+            val detail = root.message?.replace(Regex("\\s+"), " ")?.trim()?.take(220)
+            throw SigningException(
+                "ISNA_WSS_SIGN_FAILED",
+                "Не удалось подписать тестовый SOAP на этапе «$stage»: " +
+                    root.javaClass.simpleName + (if (detail.isNullOrBlank()) "" else ": $detail"),
+                error,
+            )
         }
     }
 

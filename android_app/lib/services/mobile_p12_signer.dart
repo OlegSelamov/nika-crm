@@ -144,6 +144,17 @@ class MobileP12Signer {
         saveKey: saveKey,
       );
 
+  static Future<Map<String, dynamic>> signIsnaSoapDemo({
+    required String payload,
+    required String password,
+  }) =>
+      _invoke(
+        'signIsnaSoapDemoWithP12',
+        payload: payload,
+        password: password,
+        saveKey: false,
+      );
+
   static Future<Map<String, dynamic>> signEsfXml({
     required String payload,
     required String password,

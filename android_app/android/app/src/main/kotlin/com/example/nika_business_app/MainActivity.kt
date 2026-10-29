@@ -203,7 +203,8 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
-                    "signEsfXmlWithP12" -> {
+                    "signEsfXmlWithP12",
+                    "signIsnaSoapDemoWithP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
                         val password = call.argument<String>("password") ?: ""
                         val saveKey = call.argument<Boolean>("saveKey") ?: false
@@ -265,6 +266,7 @@ class MainActivity : FlutterFragmentActivity() {
             "signAlatauJwsWithP12" -> "readyForAlatau"
             "signEsfRawWithP12" -> "readyForEsfRaw"
             "signEsfXmlWithP12" -> "readyForEsfXml"
+            "signIsnaSoapDemoWithP12" -> "readyForEsfXml"
             else -> null
         }
         if (capabilityKey != null && capabilities[capabilityKey] != true) {
@@ -393,6 +395,12 @@ class MainActivity : FlutterFragmentActivity() {
                                 passwordChars = password.toCharArray(),
                                 payload = payload,
                             )
+                            "signIsnaSoapDemoWithP12" -> KalkanJwsSigner.signIsnaSoapDemo(
+                                context = this@MainActivity,
+                                keyUri = keyUri,
+                                passwordChars = password.toCharArray(),
+                                payload = payload,
+                            )
                             else -> throw KalkanJwsSigner.SigningException(
                                 "UNKNOWN_SIGN_METHOD",
                                 "Неизвестный режим подписи",
@@ -488,6 +496,12 @@ class MainActivity : FlutterFragmentActivity() {
                     payload = payload,
                 )
                 "signEsfXmlWithP12" -> KalkanJwsSigner.signEsfXml(
+                    context = this,
+                    keyUri = uri,
+                    passwordChars = password,
+                    payload = payload,
+                )
+                "signIsnaSoapDemoWithP12" -> KalkanJwsSigner.signIsnaSoapDemo(
                     context = this,
                     keyUri = uri,
                     passwordChars = password,

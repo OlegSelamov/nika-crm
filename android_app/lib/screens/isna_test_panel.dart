@@ -19,6 +19,22 @@ String buildIsnaSignatureDemoXml({String? nonce}) {
       '</NikaIsnaTest>';
 }
 
+// Inert payload used only to test signing SOAP Body in wsse:Security. Never
+// contains a registered service ID, taxpayer information, or requestData.
+String buildIsnaSoapDemoXml({String? nonce}) {
+  final id = nonce ?? DateTime.now().toUtc().microsecondsSinceEpoch.toString();
+  return '<?xml version="1.0" encoding="UTF-8"?>'
+      '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
+      'xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">'
+      '<soap:Header/>'
+      '<soap:Body wsu:Id="id-$id">'
+      '<test:NikaWsSecurityTest xmlns:test="urn:nikabusiness:offline-soap-test:1">'
+      '<test:Submission>false</test:Submission>'
+      '<test:Purpose>Offline WS-Security signing compatibility only</test:Purpose>'
+      '</test:NikaWsSecurityTest>'
+      '</soap:Body></soap:Envelope>';
+}
+
 class IsnaTestPanel extends StatefulWidget {
   const IsnaTestPanel({super.key});
 
@@ -30,6 +46,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   bool busy = false;
   String status = 'Готово к проверке. Ни одна декларация не отправлялась.';
   String? signedXml;
+  String signedFileName = 'nika-isna-local-xml-signature-test';
 
   Future<void> _check() async {
     if (busy) return;
@@ -89,10 +106,36 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
     setState(() {
       signedXml = value;
+      signedFileName = 'nika-isna-local-xml-signature-test';
       status = 'Пробный XML подписан через нативный KalkanCrypt. ✅\n'
           'Подлинность подписи ещё не проверена отдельно. '
           'Это НЕ транспортная WS-Security подпись Smart Bridge.\n'
           'Ничего не отправлено в ИСНА.';
+    });
+  }
+
+  Future<void> _signSoap() async {
+    if (busy) return;
+    final soap = buildIsnaSoapDemoXml();
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _NativeIsnaSignDialog(xml: soap, soapMode: true),
+    );
+    if (result == null || !mounted) return;
+    final value = (result['signedXml'] ?? '').toString();
+    if (result['signatureVerified'] != true ||
+        !value.contains('<wsse:Security')) {
+      setState(() => status = 'Не удалось подтвердить локальную подпись SOAP.');
+      return;
+    }
+    setState(() {
+      signedXml = value;
+      signedFileName = 'nika-isna-wssecurity-offline-test';
+      status = 'Тестовый SOAP подписан в wsse:Security через KalkanCrypt. ✅\\n'
+          'Подпись SOAP Body проверена криптомодулем локально. ✅\\n'
+          'Нет serviceId ФНО, налоговых данных и отправки в Smart Bridge.\\n'
+          'Валидация подписи сервером ШЭП ещё не проводилась.';
     });
   }
 
@@ -102,7 +145,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     setState(() => busy = true);
     try {
       final path = await FileSaver.instance.saveAs(
-        name: 'nika-isna-local-xml-signature-test',
+        name: signedFileName,
         bytes: Uint8List.fromList(utf8.encode(value)),
         fileExtension: 'xml',
         mimeType: MimeType.custom,
@@ -167,6 +210,12 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
+            onPressed: busy ? null : _signSoap,
+            icon: const Icon(Icons.verified_user_outlined),
+            label: const Text('Подписать SOAP WS-Security (.p12) — локально'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
             onPressed: busy || signedXml == null ? null : _save,
             icon: const Icon(Icons.save_alt_rounded),
             label: const Text('Сохранить подписанный XML'),
@@ -200,7 +249,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
 
 class _NativeIsnaSignDialog extends StatefulWidget {
   final String xml;
-  const _NativeIsnaSignDialog({required this.xml});
+  final bool soapMode;
+  const _NativeIsnaSignDialog({required this.xml, this.soapMode = false});
 
   @override
   State<_NativeIsnaSignDialog> createState() => _NativeIsnaSignDialogState();
@@ -222,11 +272,16 @@ class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
       error = null;
     });
     try {
-      final signed = await MobileP12Signer.signEsfXml(
-        payload: widget.xml,
-        password: password.text,
-        saveKey: false,
-      );
+      final signed = widget.soapMode
+          ? await MobileP12Signer.signIsnaSoapDemo(
+              payload: widget.xml,
+              password: password.text,
+            )
+          : await MobileP12Signer.signEsfXml(
+              payload: widget.xml,
+              password: password.text,
+              saveKey: false,
+            );
       if (mounted) Navigator.of(context).pop(signed);
     } catch (exception) {
       if (mounted) setState(() => error = exception.toString());
@@ -244,7 +299,7 @@ class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Тест подписи ИСНА · .p12'),
+        title: Text(widget.soapMode ? 'Подпись SOAP WS-Security · .p12' : 'Тест подписи ИСНА · .p12'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
