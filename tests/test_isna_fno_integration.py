@@ -1,7 +1,11 @@
 """No-network regression tests for the official FNO_INTEGRATION wire format."""
+import io
 import json
 import os
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
 
@@ -118,6 +122,38 @@ class FnoOfflineTests(unittest.TestCase):
             _ = fno.build_fno_integration_soap(example_signed_fno(), sender_id="synthetic-system")
             post.assert_not_called()
 
+
+
+
+class FnoCliOfflineTests(unittest.TestCase):
+    def test_prepare_unsigned_uses_string_mode_and_creates_private_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            source = directory / "synthetic-fno.xml"
+            output = directory / "soap-draft.xml"
+            source.write_text(example_signed_fno(), encoding="utf-8")
+            env = {
+                "APP_MODE": "test",
+                "ISNA_BIP_SENDER_ID": "synthetic-system",
+                "ISNA_BIP_SERVICE_ID": "FNO_INTEGRATION",
+                "ISNA_BIP_PASSWORD": "",
+            }
+            argv = [
+                "services.isna_bip", "--prepare-unsigned", str(source),
+                "--output", str(output),
+            ]
+            with patch.dict(os.environ, env), patch.object(sys, "argv", argv), \
+                 patch("sys.stdout", new_callable=io.StringIO) as stdout, \
+                 patch.object(isna_bip.requests, "post") as post:
+                self.assertEqual(isna_bip._main(), 0)
+                post.assert_not_called()
+                self.assertIn("NOT SENT", stdout.getvalue())
+            outer = ET.parse(output).getroot()
+            body_data = outer.find(".//requestData/data")
+            self.assertEqual(body_data.get("{" + isna_bip.XSI_NS + "}type"), "xs:string")
+            self.assertEqual(body_data.text, example_signed_fno())
+            if os.name == "posix":
+                self.assertEqual(output.stat().st_mode & 0o777, 0o600)
 
 if __name__ == "__main__":
     unittest.main()
