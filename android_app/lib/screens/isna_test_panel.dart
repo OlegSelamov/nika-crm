@@ -35,6 +35,43 @@ String buildIsnaSoapDemoXml({String? nonce}) {
       '</soap:Body></soap:Envelope>';
 }
 
+// Official FNO_INTEGRATION SOAP *shape*, but an intentionally invalid form
+// code 000.00 and a fake sender. Both signatures are created on Android.
+// NEVER use this in the filing flow and NEVER forward it to Smart Bridge.
+String buildIsnaOfflineFnoXml() =>
+    '<?xml version="1.0" encoding="UTF-8"?>'
+    '<root><data><![CDATA['
+    '{"code":"000.00","fnoDto":{"nikaOfflineDemo":true}}'
+    ']]></data></root>';
+
+String buildIsnaOfflineFnoSoap(String signedFnoXml, {String? nonce}) {
+  if (signedFnoXml.length > 100000 ||
+      !signedFnoXml.contains('Signature') ||
+      signedFnoXml.contains('<!DOCTYPE') ||
+      signedFnoXml.contains('<!ENTITY')) {
+    throw StateError('Ожидалась только пробная подписанная ФНО.');
+  }
+  final id = nonce ?? DateTime.now().toUtc().microsecondsSinceEpoch.toString();
+  final date = DateTime.now().toUtc().toIso8601String();
+  final escaped = const HtmlEscape(HtmlEscapeMode.element).convert(signedFnoXml);
+  return '<?xml version="1.0" encoding="UTF-8"?>'
+      '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
+      'xmlns:typ="http://bip.bee.kz/SyncChannel/v10/Types" '
+      'xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">'
+      '<soap:Header/><soap:Body wsu:Id="id-fno-offline-$id">'
+      '<typ:SendMessage><request><requestInfo>'
+      '<messageId>00000000-0000-4000-8000-000000000001</messageId>'
+      '<serviceId>FNO_INTEGRATION</serviceId>'
+      '<messageDate>$date</messageDate>'
+      '<sender><senderId>nika-fno-offline-only</senderId></sender>'
+      '</requestInfo><requestData>'
+      '<data xmlns:xs="http://www.w3.org/2001/XMLSchema" '
+      'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+      'xsi:type="xs:string">$escaped</data>'
+      '</requestData></request></typ:SendMessage>'
+      '</soap:Body></soap:Envelope>';
+}
+
 class IsnaTestPanel extends StatefulWidget {
   const IsnaTestPanel({super.key});
 
@@ -239,6 +276,55 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
   }
 
+  Future<void> _signFnoOfflineDouble() async {
+    if (busy) return;
+    setState(() {
+      signedServerDemoSoap = null;
+      status = 'Формируем пробную ФНО 000.00 без персональных данных…';
+    });
+    try {
+      final inner = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: buildIsnaOfflineFnoXml()),
+      );
+      if (inner == null || !mounted) {
+        if (mounted) setState(() => status = 'Тест отменён. Ничего не отправлено.');
+        return;
+      }
+      final signedInner = (inner['signedXml'] ?? '').toString();
+      final unsignedSoap = buildIsnaOfflineFnoSoap(signedInner);
+      final outer = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: unsignedSoap, soapMode: true),
+      );
+      if (outer == null || !mounted) {
+        if (mounted) setState(() => status = 'Вторая подпись отменена. Ничего не отправлено.');
+        return;
+      }
+      if (outer['signatureVerified'] != true ||
+          outer['innerSignatureVerified'] != true) {
+        throw StateError('Не подтверждены обе подписи KalkanCrypt.');
+      }
+      setState(() {
+        signedXml = (outer['signedXml'] ?? '').toString();
+        signedFileName = 'nika-isna-fno-double-signed-OFFLINE-ONLY';
+        status = 'Пробная ФНО 000.00 подписана XMLDSig. ✅\n'
+            'Внутренняя подпись проверена KalkanCrypt. ✅\n'
+            'Внешний SOAP FNO_INTEGRATION подписан WS-Security. ✅\n'
+            'Подпись SOAP Body проверена KalkanCrypt. ✅\n'
+            'senderId вымышленный, форма заведомо недействительна.\n'
+            'Это ТОЛЬКО локальный тест: на VPS и в ШЭП ничего не отправлено.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Ошибка локальной проверки двух подписей: $error\n'
+            'Ничего не отправлено в ШЭП или ИСНА.');
+      }
+    }
+  }
+
   Future<void> _save() async {
     final value = signedXml;
     if (value == null || busy) return;
@@ -327,6 +413,12 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
                 ? null : _verifySignedServerSoap,
             icon: const Icon(Icons.fact_check_outlined),
             label: const Text('Проверить подписанный SOAP на TEST VPS'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signFnoOfflineDouble,
+            icon: const Icon(Icons.layers_outlined),
+            label: const Text('Проверить две подписи ФНО · локально'),
           ),
           OutlinedButton.icon(
             onPressed: busy || signedXml == null ? null : _save,
