@@ -319,14 +319,25 @@ def _main() -> int:
         if not os.getenv("ISNA_BIP_SERVICE_ID") or not cfg.sender_id:
             parser.error("Set the VERIFIED ISNA_BIP_SERVICE_ID and ISNA_BIP_SENDER_ID before preparing a request")
         payload_xml = Path(args.prepare_unsigned).read_text(encoding="utf-8")
-        unsigned_xml = build_sync_envelope(payload_xml)
+        if cfg.service_id == DEFAULT_FNO_SERVICE_ID:
+            # FNO_INTEGRATION has a service-specific wire format: signed FNO
+            # XML goes into requestData/data as xs:string, not nested nodes.
+            # Require structural taxpayer XMLDSig before wrapping.
+            from services.isna_fno_integration import build_fno_integration_soap
+            unsigned_xml = build_fno_integration_soap(
+                payload_xml,
+                sender_id=cfg.sender_id,
+                sender_password=cfg.sender_password,
+            )
+        else:
+            unsigned_xml = build_sync_envelope(payload_xml)
         # XML can contain service data and sender credentials. Never dump to stdout;
         # write only to a new private file and refuse to overwrite existing files.
         fd = os.open(args.output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as out:
             out.write(unsigned_xml)
         print("Unsigned SOAP envelope saved privately to:", args.output)
-        print("NOT SENT. Must be transport-signed; verify official service XSD/IDs first.")
+        print("NOT SENT. Taxpayer XMLDSig and transport WS-Security must both be independently verified.")
         return 0
 
     if args.probe:
