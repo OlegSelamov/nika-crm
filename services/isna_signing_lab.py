@@ -45,4 +45,5 @@ def create_server_signing_sample() -> dict:
         "soapSent": False,
         "hasTaxpayerData": False,
         "hasGatewayPassword": False,
+        "containsRealServiceId": False,
     }
