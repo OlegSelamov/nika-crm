@@ -35,7 +35,7 @@ def _fault_detail_value(fault: ET.Element, field: str, max_length: int) -> str:
     for item in fault.iter():
         if item.tag.rsplit("}", 1)[-1] == field:
             value = (item.text or "").strip()
-            return re.sub(r"[\\x00-\\x1f\\x7f]", " ", value)[:max_length]
+            return re.sub(r"[\x00-\x1f\x7f]", " ", value)[:max_length]
     return ""
 
 
