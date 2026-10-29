@@ -46,6 +46,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   bool busy = false;
   String status = 'Готово к проверке. Ни одна декларация не отправлялась.';
   String? signedXml;
+  String? signedServerDemoSoap;
   String signedFileName = 'nika-isna-local-xml-signature-test';
 
   Future<void> _check() async {
@@ -106,6 +107,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
     setState(() {
       signedXml = value;
+      signedServerDemoSoap = null;
       signedFileName = 'nika-isna-local-xml-signature-test';
       status = 'Пробный XML подписан через нативный KalkanCrypt. ✅\n'
           'Подлинность подписи ещё не проверена отдельно. '
@@ -131,6 +133,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
     setState(() {
       signedXml = value;
+      signedServerDemoSoap = null;
       signedFileName = 'nika-isna-wssecurity-offline-test';
       status = 'Тестовый SOAP подписан в wsse:Security через KalkanCrypt. ✅\n'
           'Подпись SOAP Body проверена криптомодулем локально. ✅\n'
@@ -173,6 +176,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       }
       setState(() {
         signedXml = signed;
+        signedServerDemoSoap = signed;
         signedFileName = 'nika-isna-server-soap-offline-test';
         status = 'SOAP получен с TEST-сервера. ✅\n'
             'SOAP Body подписан на Android через KalkanCrypt. ✅\n'
@@ -184,6 +188,50 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       if (mounted) {
         setState(() => status = 'Ошибка теста сервер → Android: $error\n'
             'SOAP и ФНО не отправлялись в ШЭП.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _verifySignedServerSoap() async {
+    final soap = signedServerDemoSoap;
+    if (busy || soap == null) return;
+    setState(() {
+      busy = true;
+      status = 'Проверяем подписанную офлайн-заглушку на Nika TEST VPS…';
+    });
+    try {
+      // Only a locally Kalkan-verified SYNTHETIC SOAP produced by the
+      // server -> Android signing test may reach this endpoint.
+      final result = await ApiService.isnaTestVerifySignedSoap(soap);
+      if (!mounted) return;
+      if (result['structureOk'] != true ||
+          result['offlineOnly'] != true ||
+          result['soapSent'] != false ||
+          result['filingCreated'] != false ||
+          result['cryptoVerifiedOnServer'] != false ||
+          result['sampleType'] != 'test-server-bip-demo') {
+        throw StateError('TEST-сервер вернул неожиданный результат.');
+      }
+      final certMatch = result['registeredCertMatch'];
+      final certStatus = certMatch == true
+          ? 'Совпадает с зарегистрированным публичным .cer. ✅'
+          : certMatch == false
+              ? 'НЕ совпадает с настроенным .cer на сервере. ❌'
+              : 'Сравнение с .cer на VPS ещё не настроено.';
+      setState(() {
+        status = 'Android → Nika TEST VPS: подписанный SOAP принят. ✅\n'
+            'Синтетический SOAP прошёл проверку структуры. ✅\n'
+            '$certStatus\n'
+            'Криптографически подпись проверена только на Android.\n'
+            'На VPS подпись криптографически НЕ проверялась.\n'
+            'В ШЭП и ИСНА ничего не отправлено, декларация не создавалась.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Не удалось проверить SOAP на TEST VPS: $error\n'
+            'В ШЭП и ИСНА ничего не отправлялось.');
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -241,8 +289,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
                     'KalkanCrypt. Никакого WebView, NCALayer или загрузки ЭЦП на сервер.'),
                 const SizedBox(height: 10),
                 const Text('Пока подписывается только демонстрационный XML, '
-                    'без ИИН, БИН и налоговых данных. Подписанный XML остаётся '
-                    'на телефоне, пока вы сами его не сохраните.',
+                    'без ИИН, БИН и налоговых данных. Только по отдельной кнопке '
+                    'синтетический подписанный SOAP передаётся на TEST VPS для проверки.',
                     style: TextStyle(fontSize: 12)),
               ],
             ),
@@ -272,6 +320,13 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             label: const Text('Получить SOAP с TEST-сервера и подписать локально'),
           ),
           const SizedBox(height: 8),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy || signedServerDemoSoap == null
+                ? null : _verifySignedServerSoap,
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Проверить подписанный SOAP на TEST VPS'),
+          ),
           OutlinedButton.icon(
             onPressed: busy || signedXml == null ? null : _save,
             icon: const Icon(Icons.save_alt_rounded),
@@ -294,9 +349,9 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             child: SelectableText(status, style: const TextStyle(fontSize: 13, height: 1.45)),
           ),
           const SizedBox(height: 12),
-          const Text('Для настоящей отправки ещё требуются официальная XSD '
-              'сервиса ИСНА, подтверждённые идентификаторы отправителя и '
-              'подпись SOAP по WS-Security ГОСТ.',
+          const Text('TEST-диагностика не выполняет отправку ФНО. '
+              'Реальная отправка требует проверки подписей и формата ФНО, '
+              'а также отдельного включения разрешённого SOAP POST.',
               style: TextStyle(fontSize: 12)),
         ],
       ),
