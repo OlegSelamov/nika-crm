@@ -145,6 +145,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   Future<void> _signServerSoap() async {
     if (busy) return;
     setState(() {
+      signedServerDemoSoap = null;
       busy = true;
       status = 'Получаем безопасный SOAP от TEST-сервера Nika Business…';
     });
