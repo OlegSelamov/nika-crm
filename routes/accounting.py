@@ -3047,6 +3047,57 @@ def isna_test_verify_signed_soap():
     return response
 
 
+@accounting_bp.route("/accounting/isna/test/send-synthetic-to-shep", methods=["POST"])
+def isna_test_send_synthetic_to_shep():
+    """TEST-only: submit strict NON-FILING signed demo to pinned WShEP TEST IPsec."""
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Доступно только в TEST."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Необходим вход в систему."}), 401
+    if not _require_company():
+        return jsonify({"error": "Не выбрана организация."}), 403
+
+    from services.isna_signed_roundtrip import MAX_DIAGNOSTIC_BYTES
+    from services.isna_shep_transport_test import (
+        TestGatewayError, send_synthetic_signed_soap,
+    )
+    if (request.content_length is None or
+            request.content_length > MAX_DIAGNOSTIC_BYTES):
+        return jsonify({"error": "Размер диагностического SOAP превышен."}), 413
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or data.get("confirmation") != "SEND_SYNTHETIC_ONLY":
+        return jsonify({"error": "Не подтверждена отправка тестового SOAP."}), 400
+    signed_xml = data.get("soapXml")
+    if not isinstance(signed_xml, str):
+        return jsonify({"error": "Нужен подписанный пробный SOAP."}), 400
+
+    # Optional registered PUBLIC certificate for exact DER match.
+    # No private key/password is ever read, saved or relayed.
+    public_cer = None
+    path_value = (os.getenv("ISNA_BIP_REGISTERED_CERT_PATH") or "").strip()
+    if path_value:
+        cert_path = Path(path_value)
+        if cert_path.suffix.lower() not in (".cer", ".crt", ".pem", ".der"):
+            return jsonify({"error": "Неверный формат публичного .cer."}), 503
+        try:
+            if cert_path.stat().st_size > 65536:
+                return jsonify({"error": "Публичный сертификат слишком велик."}), 503
+            public_cer = cert_path.read_bytes()
+        except OSError:
+            return jsonify({"error": "Нет доступа к публичному .cer."}), 503
+    try:
+        result = send_synthetic_signed_soap(
+            signed_xml, registered_public_cert=public_cer,
+        )
+    except TestGatewayError as error:
+        return jsonify({"error": str(error), "gatewayContacted": False}), 422
+
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @accounting_bp.route("/accounting/isna/test/soap-draft", methods=["GET"])
 def isna_test_unsigned_server_soap():
     """Authenticated, strictly non-filing TEST-only SOAP for Android signing.
