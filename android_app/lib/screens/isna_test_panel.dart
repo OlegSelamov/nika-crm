@@ -539,6 +539,12 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
         throw StateError('TEST VPS не подтвердил безопасный формат маршрута.');
       }
       final cryptoVerified = verified['cryptoVerifiedOnServer'] == true;
+      final routingCertMatch = verified['registeredCertMatch'];
+      final routingCertNote = routingCertMatch == true
+          ? 'Сертификат SOAP совпадает с контрольным SHA-256 на VPS. ✅'
+          : routingCertMatch == false
+              ? 'Сертификат SOAP НЕ совпадает с контрольным SHA-256 на VPS. ❌'
+              : 'Контрольный SHA-256 на VPS не задан (сравнение отдельно).';
       final cryptoStatus = (verified['cryptoVerificationStatus'] ?? '').toString();
       const cryptoNotes = <String, String>{
         'verified': 'Криптопроверка GOST SOAP Body на TEST VPS: успешна. ✅',
@@ -553,7 +559,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       }
       setState(() {
         routingProbeSignedSoap = soap;
-        routingProbeValidated = cryptoVerified;
+        routingProbeValidated = cryptoVerified && routingCertMatch != false;
         signedXml = soap;
         signedFileName = 'nika-isna-FNO-routing-only-NO-FNO';
         status = 'Готово к проверке настоящего сервиса FNO_INTEGRATION. ✅\n'
@@ -562,6 +568,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             'Проверка структуры на TEST VPS: успешно. ✅\n'
             'Бизнес-данные: только недействительный <root/>; настоящей ФНО нет.\n'
             '${cryptoNotes[cryptoStatus]}\n'
+            '$routingCertNote\n'
             '${cryptoVerified ? "Сетевой маршрутный тест разрешён. ✅" : "Сетевой тест заблокирован до подтверждения подписи на VPS. ⚠️"}\n'
             'В государственный ШЭП ничего не отправлено.\n'
             'Для реального тестового POST нужна отдельная кнопка.';
