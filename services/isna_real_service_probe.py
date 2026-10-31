@@ -176,6 +176,10 @@ def validate_real_service_probe(signed_xml: str, *, now: datetime | None = None)
         raise InvalidSoap("Unexpected SOAP metadata attributes.")
     fingerprint = _require_signature(root, body)
     der, _ = extract_signer_certificate(root)
+    pinned = (os.getenv("ISNA_BIP_REGISTERED_CERT_SHA256") or "").strip().replace(":", "").upper()
+    if pinned and not re.fullmatch(r"[A-F0-9]{64}", pinned):
+        raise TestGatewayError("Неверный SHA-256 сертификата в конфигурации TEST VPS.")
+    cert_match = fingerprint == pinned if pinned else None
     cryptographic = verify_soap_signature_on_vps(signed_xml, der)
     return {
         "structureOk": True,
@@ -183,6 +187,7 @@ def validate_real_service_probe(signed_xml: str, *, now: datetime | None = None)
         "senderConfigured": True,
         "nonFiling": True,
         "embeddedCertSha256": fingerprint,
+        "registeredCertMatch": cert_match,
         "certificateProfile": "key-identifier",
         **cryptographic,
         "messageId": message_id,
@@ -194,6 +199,8 @@ def send_real_service_probe(signed_xml: str):
     checked = validate_real_service_probe(signed_xml)
     if checked["cryptoVerifiedOnServer"] is not True:
         raise TestGatewayError("Подпись SOAP на TEST VPS не проверена криптографически.")
+    if checked["registeredCertMatch"] is False:
+        raise TestGatewayError("Сертификат подписи SOAP не совпадает с контрольным SHA-256.")
     if not local_source_available():
         raise TestGatewayError("Нет IPsec-адреса на TEST VPS.")
     connection = None
