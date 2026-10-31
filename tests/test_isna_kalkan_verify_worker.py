@@ -1,5 +1,6 @@
 """No native library is executed in these KalkanCrypt worker contract tests."""
 import ctypes
+import os
 import tempfile
 from pathlib import Path
 import unittest
@@ -16,9 +17,11 @@ class KalkanWorkerTests(unittest.TestCase):
             mock_api = Mock()
             mock_api.Init.return_value = 0
             mock_api.VerifyXML.return_value = 0
-            with patch("services.isna_kalkan_verify_worker.ctypes.CDLL", return_value=mock_api):
+            with patch("services.isna_kalkan_verify_worker.ctypes.CDLL", return_value=mock_api) as mock_loader:
                 self.assertTrue(verify_native(b"<signed/>", str(library)))
             mock_api.Init.assert_called_once_with()
+            _, load_kwargs = mock_loader.call_args
+            self.assertEqual(load_kwargs["mode"], os.RTLD_LAZY)
             mock_api.VerifyXML.assert_called_once()
             args = mock_api.VerifyXML.call_args.args
             self.assertEqual(args[0], b"")
