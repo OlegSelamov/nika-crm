@@ -6,7 +6,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from services.isna_kalkan_verify_worker import verify_native
+from services.isna_kalkan_verify_worker import KC_XML_EXCL_C14N, verify_native
 
 
 class KalkanWorkerTests(unittest.TestCase):
@@ -18,14 +18,14 @@ class KalkanWorkerTests(unittest.TestCase):
             mock_api.Init.return_value = 0
             mock_api.VerifyXML.return_value = 0
             with patch("services.isna_kalkan_verify_worker.ctypes.CDLL", return_value=mock_api) as mock_loader:
-                self.assertTrue(verify_native(b"<signed/>", str(library)))
+                self.assertEqual(verify_native(b"<signed/>", str(library)), (True, "0x00000000"))
             mock_api.Init.assert_called_once_with()
             _, load_kwargs = mock_loader.call_args
             self.assertEqual(load_kwargs["mode"], os.RTLD_LAZY)
             mock_api.VerifyXML.assert_called_once()
             args = mock_api.VerifyXML.call_args.args
             self.assertEqual(args[0], b"")
-            self.assertEqual(args[1], 0)
+            self.assertEqual(args[1], KC_XML_EXCL_C14N)
             self.assertIsInstance(args[2], ctypes.c_void_p)
             self.assertEqual(args[3], len(b"<signed/>"))
             mock_api.KC_LoadKeyStore.assert_not_called()
@@ -38,7 +38,7 @@ class KalkanWorkerTests(unittest.TestCase):
             mock_api.Init.return_value = 0
             mock_api.VerifyXML.return_value = 3
             with patch("services.isna_kalkan_verify_worker.ctypes.CDLL", return_value=mock_api):
-                self.assertFalse(verify_native(b"<signed/>", str(library)))
+                self.assertEqual(verify_native(b"<signed/>", str(library)), (False, "0x00000003"))
 
     def test_missing_binary_and_excess_xml_are_rejected(self):
         with self.assertRaises(ValueError):
