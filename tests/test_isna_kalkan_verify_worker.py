@@ -6,7 +6,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from services.isna_kalkan_verify_worker import KC_XML_EXCL_C14N, verify_native
+from services.isna_kalkan_verify_worker import (KC_XML_EXCL_C14N, KC_CERT_CA, KC_CERT_INTERMEDIATE, KalkanTrustError, load_test_trust, verify_native)
 
 
 class KalkanWorkerTests(unittest.TestCase):
@@ -39,6 +39,38 @@ class KalkanWorkerTests(unittest.TestCase):
             mock_api.VerifyXML.return_value = 3
             with patch("services.isna_kalkan_verify_worker.ctypes.CDLL", return_value=mock_api):
                 self.assertEqual(verify_native(b"<signed/>", str(library)), (False, "0x00000003"))
+
+    def test_trust_store_loads_root_and_intermediate_in_process_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ("root_gost_2022.pem", "nca_gost_2022.pem"):
+                (root / name).write_text("-----BEGIN CERTIFICATE-----\\nTEST\\n-----END CERTIFICATE-----")
+            native = Mock()
+            native.X509LoadCertificateFromFile.return_value = 0
+            load_test_trust(native, str(root))
+            calls = native.X509LoadCertificateFromFile.call_args_list
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(calls[0].args, (os.fsencode(root / "root_gost_2022.pem"), KC_CERT_CA))
+            self.assertEqual(calls[1].args, (os.fsencode(root / "nca_gost_2022.pem"), KC_CERT_INTERMEDIATE))
+            native.KC_LoadKeyStore.assert_not_called()
+
+    def test_trust_store_failure_blocks_cryptographic_success(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ("root_gost_2022.pem", "nca_gost_2022.pem"):
+                (root / name).write_text("mock pem")
+            native = Mock()
+            native.X509LoadCertificateFromFile.side_effect = [0, 0x08F00022]
+            with self.assertRaises(KalkanTrustError) as raised:
+                load_test_trust(native, str(root))
+            self.assertEqual(raised.exception.native_code, "0x08F00022")
+
+    def test_trust_directory_missing_file_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            native = Mock()
+            with self.assertRaises(ValueError):
+                load_test_trust(native, folder)
+            native.X509LoadCertificateFromFile.assert_not_called()
 
     def test_missing_binary_and_excess_xml_are_rejected(self):
         with self.assertRaises(ValueError):

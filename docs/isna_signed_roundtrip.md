@@ -84,6 +84,53 @@ NCA RK support. This permits library load but does not prove that future
 native operations will never call an unresolved symbol. The worker remains
 isolated and all errors fail closed. Do not change system OpenSSL for this.
 
+### Private GOST 2022 CA store for KalkanCrypt TEST
+
+For native VerifyXML error `0x08F00022` (`KCR_LOADTRUSTEDCERTSERR`),
+the official Linux SDK `production2022.zip` archive contains the public
+`root_gost_2022.pem` (root CA) and `nca_gost_2022.pem` (intermediate CA).
+These are production public *trust anchors*, even though the Nika VPS is TEST.
+Do not install their bundled `install_production.sh`: that script modifies
+the **shared** OS trust store affecting PROD.
+
+The test-safe alternative loads these two PEMs **inside the isolated
+KalkanCrypt subprocess only**, as `KC_CERT_CA` (0x201) and
+`KC_CERT_INTERMEDIATE` (0x202) before calling `VerifyXML`.
+The SDK file-loading API returned 0 for both trusted CA files in an
+isolated local native test using SDK 2.0.14. That establishes only that
+they load, not that a real Android-signed SOAP verifies.
+
+1. Upload the original **public** `production2022.zip` to
+   `/home/ubuntu/production2022.zip` on the VPS using WinSCP.
+2. With the updated TEST checkout installed, run:
+
+```bash
+sudo python3 /var/www/nika-business-test/scripts/install_isna_kalkan_trust.py /home/ubuntu/production2022.zip
+```
+
+The installer reads only two allowlisted archive members, validates their
+exact pinned SHA-256 bytes, and installs only the two public PEMs in
+`/opt/nika/kalkan/trust`. It never runs bundled scripts or modifies
+`/etc/ssl` or system-wide CA trust.
+
+3. Add to **TEST** `.env`:
+
+```env
+ISNA_KALKAN_CA_DIR=/opt/nika/kalkan/trust
+```
+
+4. Restart `nika-business-test` (never production). Check from the
+isolated worker that unsigned `<root/>` still gives `status=invalid`:
+
+```bash
+printf '<root/>' | sudo -u www-data env ISNA_KALKAN_LIBRARY=/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14 ISNA_KALKAN_CA_DIR=/opt/nika/kalkan/trust /var/www/nika-business-test/.venv/bin/python /var/www/nika-business-test/services/isna_kalkan_verify_worker.py
+```
+
+5. Generate a *fresh synthetic signed SOAP* on Android and retry
+**Проверить подписанный SOAP на TEST VPS**. A failed result remains blocked;
+its numeric `cryptoNativeCode` is safe to use for diagnosis.
+No real FNO data are transmitted.
+
 ### SDK VerifyXML flags and diagnostics
 
 The synthetic Android SOAP uses exclusive XML canonicalization for the
