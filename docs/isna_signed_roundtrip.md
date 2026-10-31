@@ -78,6 +78,12 @@ in a short-lived subprocess, never inside Gunicorn. A native crash, timeout,
 missing dependency or invalid signature fails closed. The parent parses only
 the fixed worker result, not arbitrary native stdout.
 
+SDK 2.0.14 may fail `ctypes.CDLL(path)` with `undefined symbol: SRP_Calc_A`.
+The worker intentionally loads it with `mode=os.RTLD_LAZY`, as described by
+NCA RK support. This permits library load but does not prove that future
+native operations will never call an unresolved symbol. The worker remains
+isolated and all errors fail closed. Do not change system OpenSSL for this.
+
 Symbol availability alone does not establish successful verification.
 An actual Android-signed WS-Security KeyIdentifier example must be tested on VPS.
 No network or FNO submission occurs during this verification.
