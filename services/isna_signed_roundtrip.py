@@ -1,12 +1,13 @@
 """Offline-only Android -> TEST VPS SOAP diagnostic (never sends to SHÈP).
 
 Accepts ONLY the synthetic Nika server signing sample, which deliberately
-uses an invalid serviceId. This module DOES NOT verify GOST cryptography:
-that check is performed locally by Android/KalkanCrypt before upload.
+uses an invalid serviceId. The VPS optionally performs an INDEPENDENT GOST
+verification with xmlsec1; unsupported runtimes explicitly report unverified.
 """
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import xml.etree.ElementTree as ET
 
@@ -14,6 +15,8 @@ from scripts.isna_inspect_wss import (
     BIP, DEMO, DS, SOAP, WSSE, InvalidSoap, decode_cert,
     extract_signer_certificate, inspect, q,
 )
+
+from services.isna_vps_signature_verifier import verify_soap_signature_on_vps
 
 MAX_DIAGNOSTIC_BYTES = 256_000
 
@@ -76,13 +79,25 @@ def validate_offline_signed_soap(
         if len(registered_public_cert) > 64 * 1024:
             raise InvalidSoap("Registered public certificate exceeds size limit.")
         match = decode_cert(registered_public_cert) == embedded
+
+    fingerprint = hashlib.sha256(embedded).hexdigest().upper()
+    # Supports pinning without copying even a public .cer to the TEST VPS.
+    # The administrator sets this hash from the already-compared public cert.
+    pinned = (os.getenv("ISNA_BIP_REGISTERED_CERT_SHA256") or "").strip().replace(":", "").upper()
+    if pinned:
+        if not re.fullmatch(r"[A-F0-9]{64}", pinned):
+            raise InvalidSoap("Configured public certificate SHA-256 is invalid.")
+        pinned_match = fingerprint == pinned
+        match = pinned_match if match is None else (match and pinned_match)
+
+    cryptographic = verify_soap_signature_on_vps(soap_xml, embedded)
     return {
         "structureOk": True,
         "sampleType": result["sample_type"],
         "registeredCertMatch": match,
-        "embeddedCertSha256": hashlib.sha256(embedded).hexdigest().upper(),
+        "embeddedCertSha256": fingerprint,
         "certificateProfile": cert_profile,
-        "cryptoVerifiedOnServer": False,
+        **cryptographic,
         "soapSent": False,
         "filingCreated": False,
         "offlineOnly": True,

@@ -307,7 +307,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           result['offlineOnly'] != true ||
           result['soapSent'] != false ||
           result['filingCreated'] != false ||
-          result['cryptoVerifiedOnServer'] != false ||
+          result['cryptoVerifiedOnServer'] is! bool ||
           result['sampleType'] != 'test-server-bip-demo') {
         throw StateError('TEST-сервер вернул неожиданный результат.');
       }
@@ -321,12 +321,26 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       }
       final certMatch = result['registeredCertMatch'];
       final certStatus = certMatch == true
-          ? 'Совпадает с зарегистрированным публичным .cer. ✅'
+          ? 'Соответствует контрольному .cer / SHA-256 на VPS. ✅'
           : certMatch == false
-              ? 'НЕ совпадает с настроенным .cer на сервере. ❌'
-              : 'Сравнение с .cer на VPS ещё не настроено.';
+              ? 'НЕ совпадает с контрольным сертификатом на VPS. ❌'
+              : 'На VPS не задан контрольный .cer / SHA-256 (сравнение отдельно).';
+      final serverCryptoVerified = result['cryptoVerifiedOnServer'] == true;
+      final cryptoStatus = (result['cryptoVerificationStatus'] ?? '').toString();
+      const cryptoMessages = <String, String>{
+        'verified': 'Подпись и digest SOAP Body криптографически проверены на VPS. ✅',
+        'invalid': 'Подпись или digest SOAP Body НЕ прошли проверку на VPS. ❌',
+        'unavailable': 'На VPS не установлен независимый XMLDSig-верификатор. ⚠️',
+        'unsupported': 'XMLSec на VPS не поддерживает ГОСТ 2015-512. ⚠️',
+        'error': 'Ошибка запуска криптографической проверки на VPS. ⚠️',
+      };
+      if (!cryptoMessages.containsKey(cryptoStatus) ||
+          serverCryptoVerified != (cryptoStatus == 'verified')) {
+        throw StateError('Неизвестный результат криптопроверки TEST VPS.');
+      }
       setState(() {
-        signedServerSoapVerifiedByVps = true;
+        // A structural check alone must not unlock the next test POST.
+        signedServerSoapVerifiedByVps = serverCryptoVerified && certMatch != false;
         signedTransportCertificateSha256 = publicCertFingerprint.toUpperCase();
         localCerMismatch = false;
         status = 'Android → Nika TEST VPS: подписанный SOAP принят. ✅\n'
@@ -334,8 +348,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             '$certStatus\n'
             'SHA-256 сертификата: $publicCertFingerprint\n'
             'Профиль подписи: $certProfile\n'
-            'Криптографически подпись проверена только на Android.\n'
-            'На VPS подпись криптографически НЕ проверялась.\n'
+            '${cryptoMessages[cryptoStatus]}\n'
+            '${signedServerSoapVerifiedByVps ? "Дальнейший синтетический TEST POST доступен. ✅" : "Синтетический TEST POST заблокирован до успешной проверки. ⚠️"}\n'
             'В ШЭП и ИСНА ничего не отправлено, декларация не создавалась.';
       });
     } catch (error) {
@@ -521,12 +535,31 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           verified['nonFiling'] != true ||
           verified['serviceId'] != 'FNO_INTEGRATION' ||
           verified['certificateProfile'] != 'key-identifier' ||
-          verified['cryptoVerifiedOnServer'] != false) {
+          verified['cryptoVerifiedOnServer'] is! bool) {
         throw StateError('TEST VPS не подтвердил безопасный формат маршрута.');
+      }
+      final cryptoVerified = verified['cryptoVerifiedOnServer'] == true;
+      final routingCertMatch = verified['registeredCertMatch'];
+      final routingCertNote = routingCertMatch == true
+          ? 'Сертификат SOAP совпадает с контрольным SHA-256 на VPS. ✅'
+          : routingCertMatch == false
+              ? 'Сертификат SOAP НЕ совпадает с контрольным SHA-256 на VPS. ❌'
+              : 'Контрольный SHA-256 на VPS не задан (сравнение отдельно).';
+      final cryptoStatus = (verified['cryptoVerificationStatus'] ?? '').toString();
+      const cryptoNotes = <String, String>{
+        'verified': 'Криптопроверка GOST SOAP Body на TEST VPS: успешна. ✅',
+        'invalid': 'Подпись / digest SOAP Body не прошли проверку на VPS. ❌',
+        'unavailable': 'На TEST VPS нет XMLDSig-верификатора. ⚠️',
+        'unsupported': 'XMLSec на TEST VPS не поддерживает ГОСТ 2015-512. ⚠️',
+        'error': 'Ошибка независимой проверки XMLDSig на TEST VPS. ⚠️',
+      };
+      if (!cryptoNotes.containsKey(cryptoStatus) ||
+          cryptoVerified != (cryptoStatus == 'verified')) {
+        throw StateError('Некорректный статус криптопроверки TEST VPS.');
       }
       setState(() {
         routingProbeSignedSoap = soap;
-        routingProbeValidated = true;
+        routingProbeValidated = cryptoVerified && routingCertMatch != false;
         signedXml = soap;
         signedFileName = 'nika-isna-FNO-routing-only-NO-FNO';
         status = 'Готово к проверке настоящего сервиса FNO_INTEGRATION. ✅\n'
@@ -534,7 +567,9 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             'SOAP Body подписан KalkanCrypt через WSSE KeyIdentifier. ✅\n'
             'Проверка структуры на TEST VPS: успешно. ✅\n'
             'Бизнес-данные: только недействительный <root/>; настоящей ФНО нет.\n'
-            'Подпись на VPS криптографически не проверялась.\n'
+            '${cryptoNotes[cryptoStatus]}\n'
+            '$routingCertNote\n'
+            '${cryptoVerified ? "Сетевой маршрутный тест разрешён. ✅" : "Сетевой тест заблокирован до подтверждения подписи на VPS. ⚠️"}\n'
             'В государственный ШЭП ничего не отправлено.\n'
             'Для реального тестового POST нужна отдельная кнопка.';
       });

@@ -29,6 +29,7 @@ from scripts.isna_inspect_wss import (
 from services.isna_bip import (
     IsnaBipError, DEFAULT_TEST_URL, configuration, build_sync_envelope,
 )
+from services.isna_vps_signature_verifier import verify_soap_signature_on_vps
 from services.isna_shep_transport_test import (
     TestGatewayError, _safe_gateway_reply, MAX_REPLY_BYTES,
 )
@@ -123,7 +124,7 @@ def _require_signature(root: ET.Element, body: ET.Element):
 
 
 def validate_real_service_probe(signed_xml: str, *, now: datetime | None = None):
-    """Strict structural allowlist. NOT a server-side crypto verification."""
+    """Strict structural allowlist plus optional independent GOST verification."""
     cfg = _ensure_test_config()
     if not isinstance(signed_xml, str) or not signed_xml or len(signed_xml.encode("utf-8")) > MAX_PROBE_BYTES:
         raise InvalidSoap("Invalid routing probe size.")
@@ -174,14 +175,21 @@ def validate_real_service_probe(signed_xml: str, *, now: datetime | None = None)
     if data_wrapper.attrib or info.attrib or request.attrib or operation.attrib:
         raise InvalidSoap("Unexpected SOAP metadata attributes.")
     fingerprint = _require_signature(root, body)
+    der, _ = extract_signer_certificate(root)
+    pinned = (os.getenv("ISNA_BIP_REGISTERED_CERT_SHA256") or "").strip().replace(":", "").upper()
+    if pinned and not re.fullmatch(r"[A-F0-9]{64}", pinned):
+        raise TestGatewayError("Неверный SHA-256 сертификата в конфигурации TEST VPS.")
+    cert_match = fingerprint == pinned if pinned else None
+    cryptographic = verify_soap_signature_on_vps(signed_xml, der)
     return {
         "structureOk": True,
         "serviceId": ROUTING_SERVICE,
         "senderConfigured": True,
         "nonFiling": True,
         "embeddedCertSha256": fingerprint,
+        "registeredCertMatch": cert_match,
         "certificateProfile": "key-identifier",
-        "cryptoVerifiedOnServer": False,
+        **cryptographic,
         "messageId": message_id,
     }
 
@@ -189,6 +197,10 @@ def validate_real_service_probe(signed_xml: str, *, now: datetime | None = None)
 def send_real_service_probe(signed_xml: str):
     """Send once to the pinned TEST gateway after Android consent."""
     checked = validate_real_service_probe(signed_xml)
+    if checked["cryptoVerifiedOnServer"] is not True:
+        raise TestGatewayError("Подпись SOAP на TEST VPS не проверена криптографически.")
+    if checked["registeredCertMatch"] is False:
+        raise TestGatewayError("Сертификат подписи SOAP не совпадает с контрольным SHA-256.")
     if not local_source_available():
         raise TestGatewayError("Нет IPsec-адреса на TEST VPS.")
     connection = None
