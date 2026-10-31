@@ -230,7 +230,8 @@ class MainActivity : FlutterFragmentActivity() {
                     "signEsfRawWithP12",
                     "signEsfXmlWithP12",
                     "signIsnaSoapDemoWithP12",
-                    "signIsnaSoapDemoWithP12KeyIdentifier" -> {
+                    "signIsnaSoapDemoWithP12KeyIdentifier",
+                    "signIsnaRoutingProbeWithP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
                         val password = call.argument<String>("password") ?: ""
                         val saveKey = call.argument<Boolean>("saveKey") ?: false
@@ -293,7 +294,8 @@ class MainActivity : FlutterFragmentActivity() {
             "signEsfRawWithP12" -> "readyForEsfRaw"
             "signEsfXmlWithP12" -> "readyForEsfXml"
             "signIsnaSoapDemoWithP12",
-            "signIsnaSoapDemoWithP12KeyIdentifier" -> "readyForEsfXml"
+            "signIsnaSoapDemoWithP12KeyIdentifier",
+            "signIsnaRoutingProbeWithP12" -> "readyForEsfXml"
             else -> null
         }
         if (capabilityKey != null && capabilities[capabilityKey] != true) {
@@ -549,12 +551,16 @@ class MainActivity : FlutterFragmentActivity() {
                     payload = payload,
                 )
                 "signIsnaSoapDemoWithP12",
-                "signIsnaSoapDemoWithP12KeyIdentifier" -> KalkanJwsSigner.signIsnaSoapDemo(
+                "signIsnaSoapDemoWithP12KeyIdentifier",
+                "signIsnaRoutingProbeWithP12" -> KalkanJwsSigner.signIsnaSoapDemo(
                     context = this,
                     keyUri = uri,
                     passwordChars = password,
                     payload = payload,
-                    useWsseKeyIdentifier = method == "signIsnaSoapDemoWithP12KeyIdentifier",
+                    useWsseKeyIdentifier =
+                        method == "signIsnaSoapDemoWithP12KeyIdentifier" ||
+                        method == "signIsnaRoutingProbeWithP12",
+                    isRoutingProbe = method == "signIsnaRoutingProbeWithP12",
                 )
                 else -> throw KalkanJwsSigner.SigningException(
                     "UNKNOWN_SIGN_METHOD",
