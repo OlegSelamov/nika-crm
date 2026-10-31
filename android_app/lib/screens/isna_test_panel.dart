@@ -327,6 +327,1716 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
               : 'На VPS не задан контрольный .cer / SHA-256 (сравнение отдельно).';
       final serverCryptoVerified = result['cryptoVerifiedOnServer'] == true;
       final cryptoStatus = (result['cryptoVerificationStatus'] ?? '').toString();
+      final nativeCode = (result['cryptoNativeCode'] ?? '').toString();
+      final nativeDetail = RegExp(r'^0x[0-9A-F]{8,16}
+      const cryptoMessages = <String, String>{
+        'verified': 'Подпись и digest SOAP Body криптографически проверены на VPS. ✅',
+        'invalid': 'Подпись или digest SOAP Body НЕ прошли проверку на VPS. ❌',
+        'unavailable': 'На VPS не установлен независимый XMLDSig-верификатор. ⚠️',
+        'unsupported': 'XMLSec на VPS не поддерживает ГОСТ 2015-512. ⚠️',
+        'error': 'Ошибка запуска криптографической проверки на VPS. ⚠️',
+      };
+      if (!cryptoMessages.containsKey(cryptoStatus) ||
+          serverCryptoVerified != (cryptoStatus == 'verified')) {
+        throw StateError('Неизвестный результат криптопроверки TEST VPS.');
+      }
+      setState(() {
+        // A structural check alone must not unlock the next test POST.
+        signedServerSoapVerifiedByVps = serverCryptoVerified && certMatch != false;
+        signedTransportCertificateSha256 = publicCertFingerprint.toUpperCase();
+        localCerMismatch = false;
+        status = 'Android → Nika TEST VPS: подписанный SOAP принят. ✅\n'
+            'Синтетический SOAP прошёл проверку структуры. ✅\n'
+            '$certStatus\n'
+            'SHA-256 сертификата: $publicCertFingerprint\n'
+            'Профиль подписи: $certProfile\n'
+            '${cryptoMessages[cryptoStatus]}\n'
+            '$nativeDetail'
+            '${signedServerSoapVerifiedByVps ? "Дальнейший синтетический TEST POST доступен. ✅" : "Синтетический TEST POST заблокирован до успешной проверки. ⚠️"}\n'
+            'В ШЭП и ИСНА ничего не отправлено, декларация не создавалась.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Не удалось проверить SOAP на TEST VPS: $error\n'
+            'В ШЭП и ИСНА ничего не отправлялось.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _compareLocalCerWithSignedSoap() async {
+    final expected = signedTransportCertificateSha256;
+    if (busy || expected == null) return;
+    setState(() {
+      busy = true;
+      status = 'Выбери только публичный .cer/.crt/.pem/.der на телефоне. '
+          'Файл никуда не передаётся…';
+    });
+    try {
+      final info = await MobileP12Signer.inspectIsnaLocalCer();
+      if (!mounted) return;
+      final actual = (info['sha256'] ?? '').toString();
+      if (!RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(actual)) {
+        throw StateError('Некорректный SHA-256 файла .cer.');
+      }
+      final match = isIsnaSameCertificateSha256(expected, actual);
+      final notAfter = (info['notAfterMs'] as num?)?.toInt();
+      final expires = notAfter == null ? 'неизвестна'
+          : DateTime.fromMillisecondsSinceEpoch(notAfter).toLocal()
+              .toIso8601String().split('T').first;
+      setState(() {
+        localCerMismatch = !match;
+        status = match
+            ? '✅ СЕРТИФИКАТЫ СОВПАДАЮТ!\n'
+                'Выбранный публичный .cer и сертификат в SOAP идентичны.\n'
+                'SHA-256: $actual\n'
+                'Срок действия до: $expires\n'
+                'Это ещё не подтверждает регистрацию сертификата в Smart Bridge.\n'
+                'Файл остался только на устройстве. Никаких отправок.'
+            : '❌ СЕРТИФИКАТЫ НЕ СОВПАДАЮТ!\n'
+                'В SOAP: $expected\n'
+                'В выбранном .cer: $actual\n'
+                'TEST POST заблокирован. Выбери .p12 от зарегистрированного .cer.\n'
+                'Файл остался на телефоне и никуда не передан.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status =
+            'Проверка .cer отменена или не удалась: $error\n'
+            'Сертификат не загружался на сервер.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _sendSignedServerSoapToShep() async {
+    final soap = signedServerDemoSoap;
+    if (busy || soap == null || !signedServerSoapVerifiedByVps ||
+        localCerMismatch) return;
+    // The gateway really receives an HTTP POST; require a separate,
+    // non-dismissible user consent before the single request.
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Отправить пробный SOAP в тестовый ШЭП?'),
+        content: const Text(
+          'Это НАСТОЯЩИЙ сетевой запрос через TEST VPS и IPsec в тестовый '
+          'ШЭП. Отправится только подписанная демонстрационная заглушка '
+          'без ИИН, БИН и налоговых данных с заведомо несуществующим '
+          'serviceId. Шлюз, скорее всего, ответит ошибкой. '
+          'Настоящая декларация НЕ подаётся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отправить тестовый SOAP'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+    setState(() {
+      busy = true;
+      signedServerSoapVerifiedByVps = false; // one explicit user action
+      status = 'Отправляем подписанный синтетический SOAP через TEST VPS → IPsec → ШЭП…';
+    });
+    try {
+      final result = await ApiService.isnaTestSendSyntheticToShep(soap);
+      if (!mounted) return;
+      final contacted = result['gatewayContacted'] == true;
+      final statusCode = result['httpStatus']?.toString() ?? 'нет';
+      final fault = result['soapFault'] == true;
+      final faultMessage = (result['faultMessage'] ?? '').toString();
+      final gatewayErrorCode = (result['gatewayErrorCode'] ?? '').toString();
+      final gatewaySessionId = (result['gatewaySessionId'] ?? '').toString();
+      final gatewayErrorDate = (result['gatewayErrorDate'] ?? '').toString();
+      setState(() {
+        status = contacted
+            ? 'Настоящий TEST HTTP POST выполнен. ✅\n'
+                'Ответ тестового ШЭП: HTTP $statusCode\n'
+                'SOAP Fault: ${fault ? "да" : "нет/не определён"}\n'
+                '${gatewayErrorCode.isEmpty ? "" : "Код ШЭП: $gatewayErrorCode\n"}'
+                '${gatewaySessionId.isEmpty ? "" : "Сессия ШЭП: $gatewaySessionId\n"}'
+                '${gatewayErrorDate.isEmpty ? "" : "Дата ответа ШЭП: $gatewayErrorDate\n"}'
+                '${faultMessage.isEmpty ? "" : "Описание шлюза: $faultMessage\n"}'
+                'Это не подтверждает регистрацию системы или принятие подписи.\n'
+                'Настоящая декларация НЕ отправлялась.'
+            : 'Тестовый ШЭП не подтвердил приём HTTP POST.\n'
+                'Налоговые данные не отправлялись.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Ошибка TEST SOAP POST: $error\n'
+            'Ни одна настоящая ФНО не подавалась.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _signRoutingProbe() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      routingProbeSignedSoap = null;
+      routingProbeValidated = false;
+      status = 'Готовим запрос только для проверки маршрута FNO_INTEGRATION…';
+    });
+    try {
+      final draft = await ApiService.isnaTestRoutingProbeDraft();
+      if (!mounted) return;
+      final unsigned = (draft['soapXml'] ?? '').toString();
+      if (draft['nonFiling'] != true ||
+          draft['containsTaxpayerData'] != false ||
+          draft['hasSenderPassword'] != false ||
+          draft['serviceId'] != 'FNO_INTEGRATION' ||
+          !unsigned.contains('FNO_INTEGRATION') ||
+          !unsigned.contains('&lt;root/&gt;')) {
+        throw StateError('TEST VPS вернул неожиданный или небезопасный SOAP.');
+      }
+      setState(() => busy = false);
+      final signed = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(
+          xml: unsigned, soapMode: true, routingProbeMode: true,
+        ),
+      );
+      if (signed == null || !mounted) {
+        if (mounted) setState(() => status = 'Подписание отменено. ШЭП не вызывался.');
+        return;
+      }
+      final soap = (signed['signedXml'] ?? '').toString();
+      if (signed['signatureVerified'] != true ||
+          signed['routingProbeOnly'] != true ||
+          signed['wsseCertProfile'] != 'key-identifier') {
+        throw StateError('Нет подтверждения локальной подписи KeyIdentifier.');
+      }
+      final notBefore = (signed['certificateNotBefore'] as num?)?.toInt();
+      final notAfter = (signed['certificateNotAfter'] as num?)?.toInt();
+      if (!isIsnaCertificateCurrent(
+        notBeforeMs: notBefore,
+        notAfterMs: notAfter,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      )) {
+        throw StateError('Срок действия транспортного сертификата истёк.');
+      }
+      setState(() {
+        busy = true;
+        status = 'Подпись создана. Проверяем только структуру на Nika TEST VPS…';
+      });
+      final verified = await ApiService.isnaTestVerifyRoutingProbe(soap);
+      if (!mounted) return;
+      if (verified['structureOk'] != true ||
+          verified['nonFiling'] != true ||
+          verified['serviceId'] != 'FNO_INTEGRATION' ||
+          verified['certificateProfile'] != 'key-identifier' ||
+          verified['cryptoVerifiedOnServer'] is! bool) {
+        throw StateError('TEST VPS не подтвердил безопасный формат маршрута.');
+      }
+      final cryptoVerified = verified['cryptoVerifiedOnServer'] == true;
+      final routingCertMatch = verified['registeredCertMatch'];
+      final routingCertNote = routingCertMatch == true
+          ? 'Сертификат SOAP совпадает с контрольным SHA-256 на VPS. ✅'
+          : routingCertMatch == false
+              ? 'Сертификат SOAP НЕ совпадает с контрольным SHA-256 на VPS. ❌'
+              : 'Контрольный SHA-256 на VPS не задан (сравнение отдельно).';
+      final cryptoStatus = (verified['cryptoVerificationStatus'] ?? '').toString();
+      final nativeCode = (verified['cryptoNativeCode'] ?? '').toString();
+      final nativeDetail = RegExp(r'^0x[0-9A-F]{8,16}
+      const cryptoNotes = <String, String>{
+        'verified': 'Криптопроверка GOST SOAP Body на TEST VPS: успешна. ✅',
+        'invalid': 'Подпись / digest SOAP Body не прошли проверку на VPS. ❌',
+        'unavailable': 'На TEST VPS нет XMLDSig-верификатора. ⚠️',
+        'unsupported': 'XMLSec на TEST VPS не поддерживает ГОСТ 2015-512. ⚠️',
+        'error': 'Ошибка независимой проверки XMLDSig на TEST VPS. ⚠️',
+      };
+      if (!cryptoNotes.containsKey(cryptoStatus) ||
+          cryptoVerified != (cryptoStatus == 'verified')) {
+        throw StateError('Некорректный статус криптопроверки TEST VPS.');
+      }
+      setState(() {
+        routingProbeSignedSoap = soap;
+        routingProbeValidated = cryptoVerified && routingCertMatch != false;
+        signedXml = soap;
+        signedFileName = 'nika-isna-FNO-routing-only-NO-FNO';
+        status = 'Готово к проверке настоящего сервиса FNO_INTEGRATION. ✅\n'
+            'Зарегистрированный senderId взят из TEST VPS (значение не показано).\n'
+            'SOAP Body подписан KalkanCrypt через WSSE KeyIdentifier. ✅\n'
+            'Проверка структуры на TEST VPS: успешно. ✅\n'
+            'Бизнес-данные: только недействительный <root/>; настоящей ФНО нет.\n'
+            '${cryptoNotes[cryptoStatus]}\n'
+            '$nativeDetail'
+            '$routingCertNote\n'
+            '${cryptoVerified ? "Сетевой маршрутный тест разрешён. ✅" : "Сетевой тест заблокирован до подтверждения подписи на VPS. ⚠️"}\n'
+            'В государственный ШЭП ничего не отправлено.\n'
+            'Для реального тестового POST нужна отдельная кнопка.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          routingProbeSignedSoap = null;
+          routingProbeValidated = false;
+          status = 'Ошибка проверки FNO_INTEGRATION: $error\n'
+              'Сетевая отправка в ШЭП не выполнялась.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _sendRoutingProbe() async {
+    final signedSoap = routingProbeSignedSoap;
+    if (busy || !routingProbeValidated || signedSoap == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Проверить FNO_INTEGRATION в тестовом ШЭП?'),
+        content: const Text(
+          'Это реальный SOAP POST в тестовый государственный ШЭП через IPsec. '
+          'Используется зарегистрированный senderId и настоящий serviceId FNO_INTEGRATION, '
+          'НО вместо налоговой декларации передаётся заведомо непригодный '
+          'для сдачи документ <root/> без ЭЦП налогоплательщика, ИИН, БИН и налоговых данных. '
+          'Шлюз или сервис могут вернуть ошибку. Никакая корректная ФНО не подаётся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отправить один TEST запрос'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      routingProbeValidated = false; // explicit one-shot action
+      routingProbeSignedSoap = null;
+      busy = true;
+      status = 'Отправляем один FNO_INTEGRATION routing-only запрос в TEST ШЭП…';
+    });
+    try {
+      final answer = await ApiService.isnaTestSendRoutingProbe(signedSoap);
+      if (!mounted) return;
+      final statusCode = answer['httpStatus']?.toString() ?? '?';
+      final code = (answer['gatewayErrorCode'] ?? '').toString();
+      final message = (answer['faultMessage'] ?? '').toString();
+      final sessionId = (answer['gatewaySessionId'] ?? '').toString();
+      final responseType = (answer['responseType'] ?? '').toString();
+      setState(() {
+        status = 'TEST ШЭП получил HTTP запрос к FNO_INTEGRATION. ✅\n'
+            'HTTP: $statusCode; ответ: $responseType\n'
+            '${code.isEmpty ? "" : "Код ШЭП: $code\n"}'
+            '${message.isEmpty ? "" : "Ответ: $message\n"}'
+            '${sessionId.isEmpty ? "" : "Сессия ШЭП: $sessionId\n"}'
+            'Это не подтверждение права на сервис и не приём декларации.\n'
+            'Настоящая подписанная ФНО не подавалась.';
+      });
+    } catch (error) {
+      if (mounted) setState(() => status =
+          'Ошибка отправки пробного маршрута: $error\n'
+          'Настоящая ФНО не отправлялась.');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _signFnoOfflineDouble() async {
+    if (busy) return;
+    setState(() {
+      signedServerDemoSoap = null;
+      signedServerSoapVerifiedByVps = false;
+      signedTransportCertificateSha256 = null;
+      localCerMismatch = false;
+      status = 'Формируем пробную ФНО 000.00 без персональных данных…';
+    });
+    try {
+      final inner = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: buildIsnaOfflineFnoXml()),
+      );
+      if (inner == null || !mounted) {
+        if (mounted) setState(() => status = 'Тест отменён. Ничего не отправлено.');
+        return;
+      }
+      final signedInner = (inner['signedXml'] ?? '').toString();
+      final unsignedSoap = buildIsnaOfflineFnoSoap(signedInner);
+      final outer = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: unsignedSoap, soapMode: true),
+      );
+      if (outer == null || !mounted) {
+        if (mounted) setState(() => status = 'Вторая подпись отменена. Ничего не отправлено.');
+        return;
+      }
+      if (outer['signatureVerified'] != true ||
+          outer['innerSignatureVerified'] != true) {
+        throw StateError('Не подтверждены обе подписи KalkanCrypt.');
+      }
+      setState(() {
+        signedXml = (outer['signedXml'] ?? '').toString();
+        signedFileName = 'nika-isna-fno-double-signed-OFFLINE-ONLY';
+        status = 'Пробная ФНО 000.00 подписана XMLDSig. ✅\n'
+            'Внутренняя подпись проверена KalkanCrypt. ✅\n'
+            'Внешний SOAP FNO_INTEGRATION подписан WS-Security. ✅\n'
+            'Подпись SOAP Body проверена KalkanCrypt. ✅\n'
+            'senderId вымышленный, форма заведомо недействительна.\n'
+            'Это ТОЛЬКО локальный тест: на VPS и в ШЭП ничего не отправлено.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Ошибка локальной проверки двух подписей: $error\n'
+            'Ничего не отправлено в ШЭП или ИСНА.');
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    final value = signedXml;
+    if (value == null || busy) return;
+    setState(() => busy = true);
+    try {
+      final path = await FileSaver.instance.saveAs(
+        name: signedFileName,
+        bytes: Uint8List.fromList(utf8.encode(value)),
+        fileExtension: 'xml',
+        mimeType: MimeType.custom,
+        customMimeType: 'application/xml',
+      );
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Пробный подписанный XML сохранён')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Не удалось сохранить XML: ' + error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: theme.colorScheme.primary.withOpacity(.09),
+              border: Border.all(color: theme.colorScheme.primary.withOpacity(.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('ИСНА · тестовая диагностика',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 8),
+                const Text('Нативная проверка Smart Bridge и подписи через '
+                    'KalkanCrypt. Никакого WebView, NCALayer или загрузки ЭЦП на сервер.'),
+                const SizedBox(height: 10),
+                const Text('Пока подписывается только демонстрационный XML, '
+                    'без ИИН, БИН и налоговых данных. Только по отдельной кнопке '
+                    'синтетический подписанный SOAP передаётся на TEST VPS для проверки.',
+                    style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _check,
+            icon: const Icon(Icons.network_check),
+            label: const Text('Проверить доступность Smart Bridge'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy ? null : _sign,
+            icon: const Icon(Icons.key_rounded),
+            label: const Text('Подписать пробный XML (.p12)'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signSoap,
+            icon: const Icon(Icons.verified_user_outlined),
+            label: const Text('Подписать SOAP WS-Security (.p12) — локально'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signServerSoap,
+            icon: const Icon(Icons.cloud_download_outlined),
+            label: const Text('Получить SOAP с TEST-сервера и подписать локально'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : () => _signServerSoap(useWsseKeyIdentifier: true),
+            icon: const Icon(Icons.security),
+            label: const Text('Получить SOAP и подписать WSSE KeyIdentifier · TEST'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy || signedServerDemoSoap == null
+                ? null : _verifySignedServerSoap,
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Проверить подписанный SOAP на TEST VPS'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy || signedTransportCertificateSha256 == null
+                ? null : _compareLocalCerWithSignedSoap,
+            icon: const Icon(Icons.verified_user_outlined),
+            label: const Text('Сравнить .cer с подписанным SOAP · на телефоне'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy || !signedServerSoapVerifiedByVps || localCerMismatch
+                ? null : _sendSignedServerSoapToShep,
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('Отправить пробный SOAP в TEST ШЭП'),
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 28),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signRoutingProbe,
+            icon: const Icon(Icons.route_outlined),
+            label: const Text('Проверить маршрут FNO_INTEGRATION · без ФНО'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy || !routingProbeValidated
+                ? null : _sendRoutingProbe,
+            icon: const Icon(Icons.send_outlined),
+            label: const Text('Отправить маршрутный тест в TEST ШЭП'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signFnoOfflineDouble,
+            icon: const Icon(Icons.layers_outlined),
+            label: const Text('Проверить две подписи ФНО · локально'),
+          ),
+          OutlinedButton.icon(
+            onPressed: busy || signedXml == null ? null : _save,
+            icon: const Icon(Icons.save_alt_rounded),
+            label: const Text('Сохранить подписанный XML'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: null,
+            icon: Icon(Icons.send_outlined),
+            label: Text('Отправить в ИСНА (пока недоступно)'),
+          ),
+          if (busy) const LinearProgressIndicator(),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: theme.dividerColor),
+            ),
+            child: SelectableText(status, style: const TextStyle(fontSize: 13, height: 1.45)),
+          ),
+          const SizedBox(height: 12),
+          const Text('TEST-диагностика не выполняет отправку ФНО. '
+              'Реальная отправка требует проверки подписей и формата ФНО, '
+              'а также отдельного включения разрешённого SOAP POST.',
+              style: TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _NativeIsnaSignDialog extends StatefulWidget {
+  final String xml;
+  final bool soapMode;
+  final bool useWsseKeyIdentifier;
+  final bool routingProbeMode;
+  const _NativeIsnaSignDialog({
+    required this.xml,
+    this.soapMode = false,
+    this.useWsseKeyIdentifier = false,
+    this.routingProbeMode = false,
+  });
+
+  @override
+  State<_NativeIsnaSignDialog> createState() => _NativeIsnaSignDialogState();
+}
+
+class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
+  final password = TextEditingController();
+  bool signing = false;
+  String? error;
+
+  Future<void> _sign() async {
+    if (signing) return;
+    if (password.text.isEmpty) {
+      setState(() => error = 'Введите пароль от файла ЭЦП .p12.');
+      return;
+    }
+    setState(() {
+      signing = true;
+      error = null;
+    });
+    try {
+      final signed = widget.routingProbeMode
+          ? await MobileP12Signer.signIsnaRoutingProbe(
+              payload: widget.xml,
+              password: password.text,
+            )
+          : widget.soapMode
+          ? await MobileP12Signer.signIsnaSoapDemo(
+              payload: widget.xml,
+              password: password.text,
+              useWsseKeyIdentifier: widget.useWsseKeyIdentifier,
+            )
+          : await MobileP12Signer.signEsfXml(
+              payload: widget.xml,
+              password: password.text,
+              saveKey: false,
+            );
+      if (mounted) Navigator.of(context).pop(signed);
+    } catch (exception) {
+      if (mounted) setState(() => error = exception.toString());
+    } finally {
+      if (mounted) setState(() => signing = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    password.clear();
+    password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.soapMode ? 'Подпись SOAP WS-Security · .p12' : 'Тест подписи ИСНА · .p12'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Выберите именно ЭЦП ТОО, сертификат которой '
+                  'использован в заявке Smart Bridge. '
+                  'Ключ и пароль не передаются в Nika Business. '
+                  'Файл ключа для этого теста не сохраняется.'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: password,
+                obscureText: true,
+                enabled: !signing,
+                decoration: const InputDecoration(labelText: 'Пароль ЭЦП'),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+              if (signing) const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: signing ? null : () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          FilledButton.icon(
+            onPressed: signing ? null : _sign,
+            icon: const Icon(Icons.key_rounded),
+            label: const Text('Выбрать .p12 и подписать'),
+          ),
+        ],
+      );
+}
+).hasMatch(nativeCode)
+          ? 'KalkanCrypt VerifyXML: $nativeCode (код SDK).\\n'
+          : '';
+      const cryptoMessages = <String, String>{
+        'verified': 'Подпись и digest SOAP Body криптографически проверены на VPS. ✅',
+        'invalid': 'Подпись или digest SOAP Body НЕ прошли проверку на VPS. ❌',
+        'unavailable': 'На VPS не установлен независимый XMLDSig-верификатор. ⚠️',
+        'unsupported': 'XMLSec на VPS не поддерживает ГОСТ 2015-512. ⚠️',
+        'error': 'Ошибка запуска криптографической проверки на VPS. ⚠️',
+      };
+      if (!cryptoMessages.containsKey(cryptoStatus) ||
+          serverCryptoVerified != (cryptoStatus == 'verified')) {
+        throw StateError('Неизвестный результат криптопроверки TEST VPS.');
+      }
+      setState(() {
+        // A structural check alone must not unlock the next test POST.
+        signedServerSoapVerifiedByVps = serverCryptoVerified && certMatch != false;
+        signedTransportCertificateSha256 = publicCertFingerprint.toUpperCase();
+        localCerMismatch = false;
+        status = 'Android → Nika TEST VPS: подписанный SOAP принят. ✅\n'
+            'Синтетический SOAP прошёл проверку структуры. ✅\n'
+            '$certStatus\n'
+            'SHA-256 сертификата: $publicCertFingerprint\n'
+            'Профиль подписи: $certProfile\n'
+            '${cryptoMessages[cryptoStatus]}\n'
+            '${signedServerSoapVerifiedByVps ? "Дальнейший синтетический TEST POST доступен. ✅" : "Синтетический TEST POST заблокирован до успешной проверки. ⚠️"}\n'
+            'В ШЭП и ИСНА ничего не отправлено, декларация не создавалась.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Не удалось проверить SOAP на TEST VPS: $error\n'
+            'В ШЭП и ИСНА ничего не отправлялось.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _compareLocalCerWithSignedSoap() async {
+    final expected = signedTransportCertificateSha256;
+    if (busy || expected == null) return;
+    setState(() {
+      busy = true;
+      status = 'Выбери только публичный .cer/.crt/.pem/.der на телефоне. '
+          'Файл никуда не передаётся…';
+    });
+    try {
+      final info = await MobileP12Signer.inspectIsnaLocalCer();
+      if (!mounted) return;
+      final actual = (info['sha256'] ?? '').toString();
+      if (!RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(actual)) {
+        throw StateError('Некорректный SHA-256 файла .cer.');
+      }
+      final match = isIsnaSameCertificateSha256(expected, actual);
+      final notAfter = (info['notAfterMs'] as num?)?.toInt();
+      final expires = notAfter == null ? 'неизвестна'
+          : DateTime.fromMillisecondsSinceEpoch(notAfter).toLocal()
+              .toIso8601String().split('T').first;
+      setState(() {
+        localCerMismatch = !match;
+        status = match
+            ? '✅ СЕРТИФИКАТЫ СОВПАДАЮТ!\n'
+                'Выбранный публичный .cer и сертификат в SOAP идентичны.\n'
+                'SHA-256: $actual\n'
+                'Срок действия до: $expires\n'
+                'Это ещё не подтверждает регистрацию сертификата в Smart Bridge.\n'
+                'Файл остался только на устройстве. Никаких отправок.'
+            : '❌ СЕРТИФИКАТЫ НЕ СОВПАДАЮТ!\n'
+                'В SOAP: $expected\n'
+                'В выбранном .cer: $actual\n'
+                'TEST POST заблокирован. Выбери .p12 от зарегистрированного .cer.\n'
+                'Файл остался на телефоне и никуда не передан.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status =
+            'Проверка .cer отменена или не удалась: $error\n'
+            'Сертификат не загружался на сервер.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _sendSignedServerSoapToShep() async {
+    final soap = signedServerDemoSoap;
+    if (busy || soap == null || !signedServerSoapVerifiedByVps ||
+        localCerMismatch) return;
+    // The gateway really receives an HTTP POST; require a separate,
+    // non-dismissible user consent before the single request.
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Отправить пробный SOAP в тестовый ШЭП?'),
+        content: const Text(
+          'Это НАСТОЯЩИЙ сетевой запрос через TEST VPS и IPsec в тестовый '
+          'ШЭП. Отправится только подписанная демонстрационная заглушка '
+          'без ИИН, БИН и налоговых данных с заведомо несуществующим '
+          'serviceId. Шлюз, скорее всего, ответит ошибкой. '
+          'Настоящая декларация НЕ подаётся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отправить тестовый SOAP'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+    setState(() {
+      busy = true;
+      signedServerSoapVerifiedByVps = false; // one explicit user action
+      status = 'Отправляем подписанный синтетический SOAP через TEST VPS → IPsec → ШЭП…';
+    });
+    try {
+      final result = await ApiService.isnaTestSendSyntheticToShep(soap);
+      if (!mounted) return;
+      final contacted = result['gatewayContacted'] == true;
+      final statusCode = result['httpStatus']?.toString() ?? 'нет';
+      final fault = result['soapFault'] == true;
+      final faultMessage = (result['faultMessage'] ?? '').toString();
+      final gatewayErrorCode = (result['gatewayErrorCode'] ?? '').toString();
+      final gatewaySessionId = (result['gatewaySessionId'] ?? '').toString();
+      final gatewayErrorDate = (result['gatewayErrorDate'] ?? '').toString();
+      setState(() {
+        status = contacted
+            ? 'Настоящий TEST HTTP POST выполнен. ✅\n'
+                'Ответ тестового ШЭП: HTTP $statusCode\n'
+                'SOAP Fault: ${fault ? "да" : "нет/не определён"}\n'
+                '${gatewayErrorCode.isEmpty ? "" : "Код ШЭП: $gatewayErrorCode\n"}'
+                '${gatewaySessionId.isEmpty ? "" : "Сессия ШЭП: $gatewaySessionId\n"}'
+                '${gatewayErrorDate.isEmpty ? "" : "Дата ответа ШЭП: $gatewayErrorDate\n"}'
+                '${faultMessage.isEmpty ? "" : "Описание шлюза: $faultMessage\n"}'
+                'Это не подтверждает регистрацию системы или принятие подписи.\n'
+                'Настоящая декларация НЕ отправлялась.'
+            : 'Тестовый ШЭП не подтвердил приём HTTP POST.\n'
+                'Налоговые данные не отправлялись.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Ошибка TEST SOAP POST: $error\n'
+            'Ни одна настоящая ФНО не подавалась.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _signRoutingProbe() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      routingProbeSignedSoap = null;
+      routingProbeValidated = false;
+      status = 'Готовим запрос только для проверки маршрута FNO_INTEGRATION…';
+    });
+    try {
+      final draft = await ApiService.isnaTestRoutingProbeDraft();
+      if (!mounted) return;
+      final unsigned = (draft['soapXml'] ?? '').toString();
+      if (draft['nonFiling'] != true ||
+          draft['containsTaxpayerData'] != false ||
+          draft['hasSenderPassword'] != false ||
+          draft['serviceId'] != 'FNO_INTEGRATION' ||
+          !unsigned.contains('FNO_INTEGRATION') ||
+          !unsigned.contains('&lt;root/&gt;')) {
+        throw StateError('TEST VPS вернул неожиданный или небезопасный SOAP.');
+      }
+      setState(() => busy = false);
+      final signed = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(
+          xml: unsigned, soapMode: true, routingProbeMode: true,
+        ),
+      );
+      if (signed == null || !mounted) {
+        if (mounted) setState(() => status = 'Подписание отменено. ШЭП не вызывался.');
+        return;
+      }
+      final soap = (signed['signedXml'] ?? '').toString();
+      if (signed['signatureVerified'] != true ||
+          signed['routingProbeOnly'] != true ||
+          signed['wsseCertProfile'] != 'key-identifier') {
+        throw StateError('Нет подтверждения локальной подписи KeyIdentifier.');
+      }
+      final notBefore = (signed['certificateNotBefore'] as num?)?.toInt();
+      final notAfter = (signed['certificateNotAfter'] as num?)?.toInt();
+      if (!isIsnaCertificateCurrent(
+        notBeforeMs: notBefore,
+        notAfterMs: notAfter,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      )) {
+        throw StateError('Срок действия транспортного сертификата истёк.');
+      }
+      setState(() {
+        busy = true;
+        status = 'Подпись создана. Проверяем только структуру на Nika TEST VPS…';
+      });
+      final verified = await ApiService.isnaTestVerifyRoutingProbe(soap);
+      if (!mounted) return;
+      if (verified['structureOk'] != true ||
+          verified['nonFiling'] != true ||
+          verified['serviceId'] != 'FNO_INTEGRATION' ||
+          verified['certificateProfile'] != 'key-identifier' ||
+          verified['cryptoVerifiedOnServer'] is! bool) {
+        throw StateError('TEST VPS не подтвердил безопасный формат маршрута.');
+      }
+      final cryptoVerified = verified['cryptoVerifiedOnServer'] == true;
+      final routingCertMatch = verified['registeredCertMatch'];
+      final routingCertNote = routingCertMatch == true
+          ? 'Сертификат SOAP совпадает с контрольным SHA-256 на VPS. ✅'
+          : routingCertMatch == false
+              ? 'Сертификат SOAP НЕ совпадает с контрольным SHA-256 на VPS. ❌'
+              : 'Контрольный SHA-256 на VPS не задан (сравнение отдельно).';
+      final cryptoStatus = (verified['cryptoVerificationStatus'] ?? '').toString();
+      const cryptoNotes = <String, String>{
+        'verified': 'Криптопроверка GOST SOAP Body на TEST VPS: успешна. ✅',
+        'invalid': 'Подпись / digest SOAP Body не прошли проверку на VPS. ❌',
+        'unavailable': 'На TEST VPS нет XMLDSig-верификатора. ⚠️',
+        'unsupported': 'XMLSec на TEST VPS не поддерживает ГОСТ 2015-512. ⚠️',
+        'error': 'Ошибка независимой проверки XMLDSig на TEST VPS. ⚠️',
+      };
+      if (!cryptoNotes.containsKey(cryptoStatus) ||
+          cryptoVerified != (cryptoStatus == 'verified')) {
+        throw StateError('Некорректный статус криптопроверки TEST VPS.');
+      }
+      setState(() {
+        routingProbeSignedSoap = soap;
+        routingProbeValidated = cryptoVerified && routingCertMatch != false;
+        signedXml = soap;
+        signedFileName = 'nika-isna-FNO-routing-only-NO-FNO';
+        status = 'Готово к проверке настоящего сервиса FNO_INTEGRATION. ✅\n'
+            'Зарегистрированный senderId взят из TEST VPS (значение не показано).\n'
+            'SOAP Body подписан KalkanCrypt через WSSE KeyIdentifier. ✅\n'
+            'Проверка структуры на TEST VPS: успешно. ✅\n'
+            'Бизнес-данные: только недействительный <root/>; настоящей ФНО нет.\n'
+            '${cryptoNotes[cryptoStatus]}\n'
+            '$routingCertNote\n'
+            '${cryptoVerified ? "Сетевой маршрутный тест разрешён. ✅" : "Сетевой тест заблокирован до подтверждения подписи на VPS. ⚠️"}\n'
+            'В государственный ШЭП ничего не отправлено.\n'
+            'Для реального тестового POST нужна отдельная кнопка.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          routingProbeSignedSoap = null;
+          routingProbeValidated = false;
+          status = 'Ошибка проверки FNO_INTEGRATION: $error\n'
+              'Сетевая отправка в ШЭП не выполнялась.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _sendRoutingProbe() async {
+    final signedSoap = routingProbeSignedSoap;
+    if (busy || !routingProbeValidated || signedSoap == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Проверить FNO_INTEGRATION в тестовом ШЭП?'),
+        content: const Text(
+          'Это реальный SOAP POST в тестовый государственный ШЭП через IPsec. '
+          'Используется зарегистрированный senderId и настоящий serviceId FNO_INTEGRATION, '
+          'НО вместо налоговой декларации передаётся заведомо непригодный '
+          'для сдачи документ <root/> без ЭЦП налогоплательщика, ИИН, БИН и налоговых данных. '
+          'Шлюз или сервис могут вернуть ошибку. Никакая корректная ФНО не подаётся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отправить один TEST запрос'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      routingProbeValidated = false; // explicit one-shot action
+      routingProbeSignedSoap = null;
+      busy = true;
+      status = 'Отправляем один FNO_INTEGRATION routing-only запрос в TEST ШЭП…';
+    });
+    try {
+      final answer = await ApiService.isnaTestSendRoutingProbe(signedSoap);
+      if (!mounted) return;
+      final statusCode = answer['httpStatus']?.toString() ?? '?';
+      final code = (answer['gatewayErrorCode'] ?? '').toString();
+      final message = (answer['faultMessage'] ?? '').toString();
+      final sessionId = (answer['gatewaySessionId'] ?? '').toString();
+      final responseType = (answer['responseType'] ?? '').toString();
+      setState(() {
+        status = 'TEST ШЭП получил HTTP запрос к FNO_INTEGRATION. ✅\n'
+            'HTTP: $statusCode; ответ: $responseType\n'
+            '${code.isEmpty ? "" : "Код ШЭП: $code\n"}'
+            '${message.isEmpty ? "" : "Ответ: $message\n"}'
+            '${sessionId.isEmpty ? "" : "Сессия ШЭП: $sessionId\n"}'
+            'Это не подтверждение права на сервис и не приём декларации.\n'
+            'Настоящая подписанная ФНО не подавалась.';
+      });
+    } catch (error) {
+      if (mounted) setState(() => status =
+          'Ошибка отправки пробного маршрута: $error\n'
+          'Настоящая ФНО не отправлялась.');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _signFnoOfflineDouble() async {
+    if (busy) return;
+    setState(() {
+      signedServerDemoSoap = null;
+      signedServerSoapVerifiedByVps = false;
+      signedTransportCertificateSha256 = null;
+      localCerMismatch = false;
+      status = 'Формируем пробную ФНО 000.00 без персональных данных…';
+    });
+    try {
+      final inner = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: buildIsnaOfflineFnoXml()),
+      );
+      if (inner == null || !mounted) {
+        if (mounted) setState(() => status = 'Тест отменён. Ничего не отправлено.');
+        return;
+      }
+      final signedInner = (inner['signedXml'] ?? '').toString();
+      final unsignedSoap = buildIsnaOfflineFnoSoap(signedInner);
+      final outer = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: unsignedSoap, soapMode: true),
+      );
+      if (outer == null || !mounted) {
+        if (mounted) setState(() => status = 'Вторая подпись отменена. Ничего не отправлено.');
+        return;
+      }
+      if (outer['signatureVerified'] != true ||
+          outer['innerSignatureVerified'] != true) {
+        throw StateError('Не подтверждены обе подписи KalkanCrypt.');
+      }
+      setState(() {
+        signedXml = (outer['signedXml'] ?? '').toString();
+        signedFileName = 'nika-isna-fno-double-signed-OFFLINE-ONLY';
+        status = 'Пробная ФНО 000.00 подписана XMLDSig. ✅\n'
+            'Внутренняя подпись проверена KalkanCrypt. ✅\n'
+            'Внешний SOAP FNO_INTEGRATION подписан WS-Security. ✅\n'
+            'Подпись SOAP Body проверена KalkanCrypt. ✅\n'
+            'senderId вымышленный, форма заведомо недействительна.\n'
+            'Это ТОЛЬКО локальный тест: на VPS и в ШЭП ничего не отправлено.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Ошибка локальной проверки двух подписей: $error\n'
+            'Ничего не отправлено в ШЭП или ИСНА.');
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    final value = signedXml;
+    if (value == null || busy) return;
+    setState(() => busy = true);
+    try {
+      final path = await FileSaver.instance.saveAs(
+        name: signedFileName,
+        bytes: Uint8List.fromList(utf8.encode(value)),
+        fileExtension: 'xml',
+        mimeType: MimeType.custom,
+        customMimeType: 'application/xml',
+      );
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Пробный подписанный XML сохранён')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Не удалось сохранить XML: ' + error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: theme.colorScheme.primary.withOpacity(.09),
+              border: Border.all(color: theme.colorScheme.primary.withOpacity(.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('ИСНА · тестовая диагностика',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 8),
+                const Text('Нативная проверка Smart Bridge и подписи через '
+                    'KalkanCrypt. Никакого WebView, NCALayer или загрузки ЭЦП на сервер.'),
+                const SizedBox(height: 10),
+                const Text('Пока подписывается только демонстрационный XML, '
+                    'без ИИН, БИН и налоговых данных. Только по отдельной кнопке '
+                    'синтетический подписанный SOAP передаётся на TEST VPS для проверки.',
+                    style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _check,
+            icon: const Icon(Icons.network_check),
+            label: const Text('Проверить доступность Smart Bridge'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy ? null : _sign,
+            icon: const Icon(Icons.key_rounded),
+            label: const Text('Подписать пробный XML (.p12)'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signSoap,
+            icon: const Icon(Icons.verified_user_outlined),
+            label: const Text('Подписать SOAP WS-Security (.p12) — локально'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signServerSoap,
+            icon: const Icon(Icons.cloud_download_outlined),
+            label: const Text('Получить SOAP с TEST-сервера и подписать локально'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : () => _signServerSoap(useWsseKeyIdentifier: true),
+            icon: const Icon(Icons.security),
+            label: const Text('Получить SOAP и подписать WSSE KeyIdentifier · TEST'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy || signedServerDemoSoap == null
+                ? null : _verifySignedServerSoap,
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Проверить подписанный SOAP на TEST VPS'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy || signedTransportCertificateSha256 == null
+                ? null : _compareLocalCerWithSignedSoap,
+            icon: const Icon(Icons.verified_user_outlined),
+            label: const Text('Сравнить .cer с подписанным SOAP · на телефоне'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy || !signedServerSoapVerifiedByVps || localCerMismatch
+                ? null : _sendSignedServerSoapToShep,
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('Отправить пробный SOAP в TEST ШЭП'),
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 28),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signRoutingProbe,
+            icon: const Icon(Icons.route_outlined),
+            label: const Text('Проверить маршрут FNO_INTEGRATION · без ФНО'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy || !routingProbeValidated
+                ? null : _sendRoutingProbe,
+            icon: const Icon(Icons.send_outlined),
+            label: const Text('Отправить маршрутный тест в TEST ШЭП'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signFnoOfflineDouble,
+            icon: const Icon(Icons.layers_outlined),
+            label: const Text('Проверить две подписи ФНО · локально'),
+          ),
+          OutlinedButton.icon(
+            onPressed: busy || signedXml == null ? null : _save,
+            icon: const Icon(Icons.save_alt_rounded),
+            label: const Text('Сохранить подписанный XML'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: null,
+            icon: Icon(Icons.send_outlined),
+            label: Text('Отправить в ИСНА (пока недоступно)'),
+          ),
+          if (busy) const LinearProgressIndicator(),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: theme.dividerColor),
+            ),
+            child: SelectableText(status, style: const TextStyle(fontSize: 13, height: 1.45)),
+          ),
+          const SizedBox(height: 12),
+          const Text('TEST-диагностика не выполняет отправку ФНО. '
+              'Реальная отправка требует проверки подписей и формата ФНО, '
+              'а также отдельного включения разрешённого SOAP POST.',
+              style: TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _NativeIsnaSignDialog extends StatefulWidget {
+  final String xml;
+  final bool soapMode;
+  final bool useWsseKeyIdentifier;
+  final bool routingProbeMode;
+  const _NativeIsnaSignDialog({
+    required this.xml,
+    this.soapMode = false,
+    this.useWsseKeyIdentifier = false,
+    this.routingProbeMode = false,
+  });
+
+  @override
+  State<_NativeIsnaSignDialog> createState() => _NativeIsnaSignDialogState();
+}
+
+class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
+  final password = TextEditingController();
+  bool signing = false;
+  String? error;
+
+  Future<void> _sign() async {
+    if (signing) return;
+    if (password.text.isEmpty) {
+      setState(() => error = 'Введите пароль от файла ЭЦП .p12.');
+      return;
+    }
+    setState(() {
+      signing = true;
+      error = null;
+    });
+    try {
+      final signed = widget.routingProbeMode
+          ? await MobileP12Signer.signIsnaRoutingProbe(
+              payload: widget.xml,
+              password: password.text,
+            )
+          : widget.soapMode
+          ? await MobileP12Signer.signIsnaSoapDemo(
+              payload: widget.xml,
+              password: password.text,
+              useWsseKeyIdentifier: widget.useWsseKeyIdentifier,
+            )
+          : await MobileP12Signer.signEsfXml(
+              payload: widget.xml,
+              password: password.text,
+              saveKey: false,
+            );
+      if (mounted) Navigator.of(context).pop(signed);
+    } catch (exception) {
+      if (mounted) setState(() => error = exception.toString());
+    } finally {
+      if (mounted) setState(() => signing = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    password.clear();
+    password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.soapMode ? 'Подпись SOAP WS-Security · .p12' : 'Тест подписи ИСНА · .p12'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Выберите именно ЭЦП ТОО, сертификат которой '
+                  'использован в заявке Smart Bridge. '
+                  'Ключ и пароль не передаются в Nika Business. '
+                  'Файл ключа для этого теста не сохраняется.'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: password,
+                obscureText: true,
+                enabled: !signing,
+                decoration: const InputDecoration(labelText: 'Пароль ЭЦП'),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+              if (signing) const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: signing ? null : () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          FilledButton.icon(
+            onPressed: signing ? null : _sign,
+            icon: const Icon(Icons.key_rounded),
+            label: const Text('Выбрать .p12 и подписать'),
+          ),
+        ],
+      );
+}
+).hasMatch(nativeCode)
+          ? 'KalkanCrypt VerifyXML: $nativeCode (код SDK).\\n'
+          : '';
+      const cryptoNotes = <String, String>{
+        'verified': 'Криптопроверка GOST SOAP Body на TEST VPS: успешна. ✅',
+        'invalid': 'Подпись / digest SOAP Body не прошли проверку на VPS. ❌',
+        'unavailable': 'На TEST VPS нет XMLDSig-верификатора. ⚠️',
+        'unsupported': 'XMLSec на TEST VPS не поддерживает ГОСТ 2015-512. ⚠️',
+        'error': 'Ошибка независимой проверки XMLDSig на TEST VPS. ⚠️',
+      };
+      if (!cryptoNotes.containsKey(cryptoStatus) ||
+          cryptoVerified != (cryptoStatus == 'verified')) {
+        throw StateError('Некорректный статус криптопроверки TEST VPS.');
+      }
+      setState(() {
+        routingProbeSignedSoap = soap;
+        routingProbeValidated = cryptoVerified && routingCertMatch != false;
+        signedXml = soap;
+        signedFileName = 'nika-isna-FNO-routing-only-NO-FNO';
+        status = 'Готово к проверке настоящего сервиса FNO_INTEGRATION. ✅\n'
+            'Зарегистрированный senderId взят из TEST VPS (значение не показано).\n'
+            'SOAP Body подписан KalkanCrypt через WSSE KeyIdentifier. ✅\n'
+            'Проверка структуры на TEST VPS: успешно. ✅\n'
+            'Бизнес-данные: только недействительный <root/>; настоящей ФНО нет.\n'
+            '${cryptoNotes[cryptoStatus]}\n'
+            '$routingCertNote\n'
+            '${cryptoVerified ? "Сетевой маршрутный тест разрешён. ✅" : "Сетевой тест заблокирован до подтверждения подписи на VPS. ⚠️"}\n'
+            'В государственный ШЭП ничего не отправлено.\n'
+            'Для реального тестового POST нужна отдельная кнопка.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          routingProbeSignedSoap = null;
+          routingProbeValidated = false;
+          status = 'Ошибка проверки FNO_INTEGRATION: $error\n'
+              'Сетевая отправка в ШЭП не выполнялась.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _sendRoutingProbe() async {
+    final signedSoap = routingProbeSignedSoap;
+    if (busy || !routingProbeValidated || signedSoap == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Проверить FNO_INTEGRATION в тестовом ШЭП?'),
+        content: const Text(
+          'Это реальный SOAP POST в тестовый государственный ШЭП через IPsec. '
+          'Используется зарегистрированный senderId и настоящий serviceId FNO_INTEGRATION, '
+          'НО вместо налоговой декларации передаётся заведомо непригодный '
+          'для сдачи документ <root/> без ЭЦП налогоплательщика, ИИН, БИН и налоговых данных. '
+          'Шлюз или сервис могут вернуть ошибку. Никакая корректная ФНО не подаётся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отправить один TEST запрос'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      routingProbeValidated = false; // explicit one-shot action
+      routingProbeSignedSoap = null;
+      busy = true;
+      status = 'Отправляем один FNO_INTEGRATION routing-only запрос в TEST ШЭП…';
+    });
+    try {
+      final answer = await ApiService.isnaTestSendRoutingProbe(signedSoap);
+      if (!mounted) return;
+      final statusCode = answer['httpStatus']?.toString() ?? '?';
+      final code = (answer['gatewayErrorCode'] ?? '').toString();
+      final message = (answer['faultMessage'] ?? '').toString();
+      final sessionId = (answer['gatewaySessionId'] ?? '').toString();
+      final responseType = (answer['responseType'] ?? '').toString();
+      setState(() {
+        status = 'TEST ШЭП получил HTTP запрос к FNO_INTEGRATION. ✅\n'
+            'HTTP: $statusCode; ответ: $responseType\n'
+            '${code.isEmpty ? "" : "Код ШЭП: $code\n"}'
+            '${message.isEmpty ? "" : "Ответ: $message\n"}'
+            '${sessionId.isEmpty ? "" : "Сессия ШЭП: $sessionId\n"}'
+            'Это не подтверждение права на сервис и не приём декларации.\n'
+            'Настоящая подписанная ФНО не подавалась.';
+      });
+    } catch (error) {
+      if (mounted) setState(() => status =
+          'Ошибка отправки пробного маршрута: $error\n'
+          'Настоящая ФНО не отправлялась.');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _signFnoOfflineDouble() async {
+    if (busy) return;
+    setState(() {
+      signedServerDemoSoap = null;
+      signedServerSoapVerifiedByVps = false;
+      signedTransportCertificateSha256 = null;
+      localCerMismatch = false;
+      status = 'Формируем пробную ФНО 000.00 без персональных данных…';
+    });
+    try {
+      final inner = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: buildIsnaOfflineFnoXml()),
+      );
+      if (inner == null || !mounted) {
+        if (mounted) setState(() => status = 'Тест отменён. Ничего не отправлено.');
+        return;
+      }
+      final signedInner = (inner['signedXml'] ?? '').toString();
+      final unsignedSoap = buildIsnaOfflineFnoSoap(signedInner);
+      final outer = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(xml: unsignedSoap, soapMode: true),
+      );
+      if (outer == null || !mounted) {
+        if (mounted) setState(() => status = 'Вторая подпись отменена. Ничего не отправлено.');
+        return;
+      }
+      if (outer['signatureVerified'] != true ||
+          outer['innerSignatureVerified'] != true) {
+        throw StateError('Не подтверждены обе подписи KalkanCrypt.');
+      }
+      setState(() {
+        signedXml = (outer['signedXml'] ?? '').toString();
+        signedFileName = 'nika-isna-fno-double-signed-OFFLINE-ONLY';
+        status = 'Пробная ФНО 000.00 подписана XMLDSig. ✅\n'
+            'Внутренняя подпись проверена KalkanCrypt. ✅\n'
+            'Внешний SOAP FNO_INTEGRATION подписан WS-Security. ✅\n'
+            'Подпись SOAP Body проверена KalkanCrypt. ✅\n'
+            'senderId вымышленный, форма заведомо недействительна.\n'
+            'Это ТОЛЬКО локальный тест: на VPS и в ШЭП ничего не отправлено.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Ошибка локальной проверки двух подписей: $error\n'
+            'Ничего не отправлено в ШЭП или ИСНА.');
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    final value = signedXml;
+    if (value == null || busy) return;
+    setState(() => busy = true);
+    try {
+      final path = await FileSaver.instance.saveAs(
+        name: signedFileName,
+        bytes: Uint8List.fromList(utf8.encode(value)),
+        fileExtension: 'xml',
+        mimeType: MimeType.custom,
+        customMimeType: 'application/xml',
+      );
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Пробный подписанный XML сохранён')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Не удалось сохранить XML: ' + error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: theme.colorScheme.primary.withOpacity(.09),
+              border: Border.all(color: theme.colorScheme.primary.withOpacity(.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('ИСНА · тестовая диагностика',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 8),
+                const Text('Нативная проверка Smart Bridge и подписи через '
+                    'KalkanCrypt. Никакого WebView, NCALayer или загрузки ЭЦП на сервер.'),
+                const SizedBox(height: 10),
+                const Text('Пока подписывается только демонстрационный XML, '
+                    'без ИИН, БИН и налоговых данных. Только по отдельной кнопке '
+                    'синтетический подписанный SOAP передаётся на TEST VPS для проверки.',
+                    style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _check,
+            icon: const Icon(Icons.network_check),
+            label: const Text('Проверить доступность Smart Bridge'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy ? null : _sign,
+            icon: const Icon(Icons.key_rounded),
+            label: const Text('Подписать пробный XML (.p12)'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signSoap,
+            icon: const Icon(Icons.verified_user_outlined),
+            label: const Text('Подписать SOAP WS-Security (.p12) — локально'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signServerSoap,
+            icon: const Icon(Icons.cloud_download_outlined),
+            label: const Text('Получить SOAP с TEST-сервера и подписать локально'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : () => _signServerSoap(useWsseKeyIdentifier: true),
+            icon: const Icon(Icons.security),
+            label: const Text('Получить SOAP и подписать WSSE KeyIdentifier · TEST'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy || signedServerDemoSoap == null
+                ? null : _verifySignedServerSoap,
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Проверить подписанный SOAP на TEST VPS'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy || signedTransportCertificateSha256 == null
+                ? null : _compareLocalCerWithSignedSoap,
+            icon: const Icon(Icons.verified_user_outlined),
+            label: const Text('Сравнить .cer с подписанным SOAP · на телефоне'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy || !signedServerSoapVerifiedByVps || localCerMismatch
+                ? null : _sendSignedServerSoapToShep,
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('Отправить пробный SOAP в TEST ШЭП'),
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 28),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signRoutingProbe,
+            icon: const Icon(Icons.route_outlined),
+            label: const Text('Проверить маршрут FNO_INTEGRATION · без ФНО'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy || !routingProbeValidated
+                ? null : _sendRoutingProbe,
+            icon: const Icon(Icons.send_outlined),
+            label: const Text('Отправить маршрутный тест в TEST ШЭП'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signFnoOfflineDouble,
+            icon: const Icon(Icons.layers_outlined),
+            label: const Text('Проверить две подписи ФНО · локально'),
+          ),
+          OutlinedButton.icon(
+            onPressed: busy || signedXml == null ? null : _save,
+            icon: const Icon(Icons.save_alt_rounded),
+            label: const Text('Сохранить подписанный XML'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: null,
+            icon: Icon(Icons.send_outlined),
+            label: Text('Отправить в ИСНА (пока недоступно)'),
+          ),
+          if (busy) const LinearProgressIndicator(),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: theme.dividerColor),
+            ),
+            child: SelectableText(status, style: const TextStyle(fontSize: 13, height: 1.45)),
+          ),
+          const SizedBox(height: 12),
+          const Text('TEST-диагностика не выполняет отправку ФНО. '
+              'Реальная отправка требует проверки подписей и формата ФНО, '
+              'а также отдельного включения разрешённого SOAP POST.',
+              style: TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _NativeIsnaSignDialog extends StatefulWidget {
+  final String xml;
+  final bool soapMode;
+  final bool useWsseKeyIdentifier;
+  final bool routingProbeMode;
+  const _NativeIsnaSignDialog({
+    required this.xml,
+    this.soapMode = false,
+    this.useWsseKeyIdentifier = false,
+    this.routingProbeMode = false,
+  });
+
+  @override
+  State<_NativeIsnaSignDialog> createState() => _NativeIsnaSignDialogState();
+}
+
+class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
+  final password = TextEditingController();
+  bool signing = false;
+  String? error;
+
+  Future<void> _sign() async {
+    if (signing) return;
+    if (password.text.isEmpty) {
+      setState(() => error = 'Введите пароль от файла ЭЦП .p12.');
+      return;
+    }
+    setState(() {
+      signing = true;
+      error = null;
+    });
+    try {
+      final signed = widget.routingProbeMode
+          ? await MobileP12Signer.signIsnaRoutingProbe(
+              payload: widget.xml,
+              password: password.text,
+            )
+          : widget.soapMode
+          ? await MobileP12Signer.signIsnaSoapDemo(
+              payload: widget.xml,
+              password: password.text,
+              useWsseKeyIdentifier: widget.useWsseKeyIdentifier,
+            )
+          : await MobileP12Signer.signEsfXml(
+              payload: widget.xml,
+              password: password.text,
+              saveKey: false,
+            );
+      if (mounted) Navigator.of(context).pop(signed);
+    } catch (exception) {
+      if (mounted) setState(() => error = exception.toString());
+    } finally {
+      if (mounted) setState(() => signing = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    password.clear();
+    password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.soapMode ? 'Подпись SOAP WS-Security · .p12' : 'Тест подписи ИСНА · .p12'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Выберите именно ЭЦП ТОО, сертификат которой '
+                  'использован в заявке Smart Bridge. '
+                  'Ключ и пароль не передаются в Nika Business. '
+                  'Файл ключа для этого теста не сохраняется.'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: password,
+                obscureText: true,
+                enabled: !signing,
+                decoration: const InputDecoration(labelText: 'Пароль ЭЦП'),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+              if (signing) const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: signing ? null : () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          FilledButton.icon(
+            onPressed: signing ? null : _sign,
+            icon: const Icon(Icons.key_rounded),
+            label: const Text('Выбрать .p12 и подписать'),
+          ),
+        ],
+      );
+}
+).hasMatch(nativeCode)
+          ? 'KalkanCrypt VerifyXML: $nativeCode (код SDK).\\n'
+          : '';
       const cryptoMessages = <String, String>{
         'verified': 'Подпись и digest SOAP Body криптографически проверены на VPS. ✅',
         'invalid': 'Подпись или digest SOAP Body НЕ прошли проверку на VPS. ❌',
