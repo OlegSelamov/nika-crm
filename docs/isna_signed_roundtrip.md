@@ -84,6 +84,21 @@ NCA RK support. This permits library load but does not prove that future
 native operations will never call an unresolved symbol. The worker remains
 isolated and all errors fail closed. Do not change system OpenSSL for this.
 
+### SDK VerifyXML flags and diagnostics
+
+The synthetic Android SOAP uses exclusive XML canonicalization for the
+ds:SignedInfo and Body reference. The server's KalkanCrypt 2.0.14
+`VerifyXML` must receive `KC_XML_EXCL_C14N` (`0x01000010`), not 0.
+The SDK returns a numeric `KCR_*` error for invalid XML/signature.
+Only the numerical `cryptoNativeCode` field is passed to Android (never
+the SDK's raw verifyInfo, signed XML, or certificate). Code `0x00000000`
+plus an explicit `verified` result is required before TEST POST can unlock.
+A test with `<root/>` should remain `invalid`, never `verified`.
+
+Failure of both Android X509Data and KeyIdentifier variants is a reason to
+inspect that native code. Common KCR codes include `0x08F00024`
+(no signature) and `0x08F00033` (ID attribute not found); do not infer a
+specific cause until the real signed SOAP's result is observed.
 Symbol availability alone does not establish successful verification.
 An actual Android-signed WS-Security KeyIdentifier example must be tested on VPS.
 No network or FNO submission occurs during this verification.

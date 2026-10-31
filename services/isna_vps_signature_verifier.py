@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -57,12 +58,24 @@ def _verify_with_kalkan(signed_xml: str) -> dict:
     except (ValueError, TypeError):
         return {**result_prefix, "cryptoVerificationStatus": "error"}
     status = result.get("status") if isinstance(result, dict) else None
+    native_code = result.get("code") if isinstance(result, dict) else None
     if status not in ("verified", "invalid", "unavailable", "error"):
+        status = "error"
+    if native_code is not None and (
+        not isinstance(native_code, str)
+        or not re.fullmatch(r"0x[0-9A-F]{8,16}", native_code)
+    ):
+        native_code = None
+        status = "error"
+    # Never treat a successful status as proof of validity unless the native
+    # verifier itself returned the SDK's KCR_OK value (0x00000000).
+    if status == "verified" and native_code != "0x00000000":
         status = "error"
     return {
         **result_prefix,
         "cryptoVerifiedOnServer": status == "verified",
         "cryptoVerificationStatus": status,
+        "cryptoNativeCode": native_code,
     }
 
 

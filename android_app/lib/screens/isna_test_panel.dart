@@ -327,6 +327,10 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
               : 'На VPS не задан контрольный .cer / SHA-256 (сравнение отдельно).';
       final serverCryptoVerified = result['cryptoVerifiedOnServer'] == true;
       final cryptoStatus = (result['cryptoVerificationStatus'] ?? '').toString();
+      final nativeCode = (result['cryptoNativeCode'] ?? '').toString();
+      final nativeDetail = RegExp(r'^0x[0-9A-F]{8,16}$').hasMatch(nativeCode)
+          ? 'KalkanCrypt VerifyXML: $nativeCode\n'
+          : '';
       const cryptoMessages = <String, String>{
         'verified': 'Подпись и digest SOAP Body криптографически проверены на VPS. ✅',
         'invalid': 'Подпись или digest SOAP Body НЕ прошли проверку на VPS. ❌',
@@ -349,6 +353,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             'SHA-256 сертификата: $publicCertFingerprint\n'
             'Профиль подписи: $certProfile\n'
             '${cryptoMessages[cryptoStatus]}\n'
+            '$nativeDetail'
             '${signedServerSoapVerifiedByVps ? "Дальнейший синтетический TEST POST доступен. ✅" : "Синтетический TEST POST заблокирован до успешной проверки. ⚠️"}\n'
             'В ШЭП и ИСНА ничего не отправлено, декларация не создавалась.';
       });
@@ -546,6 +551,10 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
               ? 'Сертификат SOAP НЕ совпадает с контрольным SHA-256 на VPS. ❌'
               : 'Контрольный SHA-256 на VPS не задан (сравнение отдельно).';
       final cryptoStatus = (verified['cryptoVerificationStatus'] ?? '').toString();
+      final nativeCode = (verified['cryptoNativeCode'] ?? '').toString();
+      final nativeDetail = RegExp(r'^0x[0-9A-F]{8,16}$').hasMatch(nativeCode)
+          ? 'KalkanCrypt VerifyXML: $nativeCode\n'
+          : '';
       const cryptoNotes = <String, String>{
         'verified': 'Криптопроверка GOST SOAP Body на TEST VPS: успешна. ✅',
         'invalid': 'Подпись / digest SOAP Body не прошли проверку на VPS. ❌',
@@ -568,6 +577,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             'Проверка структуры на TEST VPS: успешно. ✅\n'
             'Бизнес-данные: только недействительный <root/>; настоящей ФНО нет.\n'
             '${cryptoNotes[cryptoStatus]}\n'
+            '$nativeDetail'
             '$routingCertNote\n'
             '${cryptoVerified ? "Сетевой маршрутный тест разрешён. ✅" : "Сетевой тест заблокирован до подтверждения подписи на VPS. ⚠️"}\n'
             'В государственный ШЭП ничего не отправлено.\n'

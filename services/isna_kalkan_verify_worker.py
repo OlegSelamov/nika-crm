@@ -16,9 +16,12 @@ import sys
 PREFIX = "NIKA_KALKAN_XML_VERIFY_V1:"
 MAX_SOAP_BYTES = 256_000
 MAX_REPORT = 8192
+# SDK KalkanCrypt.h: KC_XML_EXCL_C14N. Android uses exclusive XML C14N
+# for both SignedInfo and its single SOAP Body Reference transform.
+KC_XML_EXCL_C14N = 0x01000010
 
 
-def verify_native(xml: bytes, library: str) -> bool:
+def verify_native(xml: bytes, library: str) -> tuple[bool, str]:
     if not 0 < len(xml) <= MAX_SOAP_BYTES:
         raise ValueError("invalid XML size")
     path = Path(library)
@@ -50,16 +53,20 @@ def verify_native(xml: bytes, library: str) -> bool:
     info_len = ctypes.c_int(MAX_REPORT)
     # No key store is loaded. Public signer certificate is embedded in SOAP.
     result = verify(
-        b"", 0, ctypes.cast(data, ctypes.c_void_p), len(xml),
+        b"", KC_XML_EXCL_C14N, ctypes.cast(data, ctypes.c_void_p), len(xml),
         ctypes.cast(info, ctypes.c_void_p), ctypes.byref(info_len),
     )
-    return result == 0
+    # Status only. Do not expose native verifyInfo: it may include parts of the
+    # untrusted SOAP or certificate. Include the numerical return code to
+    # distinguish unsigned XML, invalid digest, unsupported IDs and flags.
+    return result == 0, f"0x{int(result):08X}"
 
 
 def main() -> int:
     # Return only a fixed-status protocol; no XML, certificate or SDK diagnostic
     # text is printed. Native KalkanCrypt may write its own startup messages.
     status = "error"
+    native_code = None
     try:
         lib_path = (os.environ.get("ISNA_KALKAN_LIBRARY") or "").strip()
         if not lib_path:
@@ -69,13 +76,17 @@ def main() -> int:
             if len(data) > MAX_SOAP_BYTES:
                 status = "error"
             else:
-                status = "verified" if verify_native(data, lib_path) else "invalid"
+                valid, native_code = verify_native(data, lib_path)
+                status = "verified" if valid else "invalid"
     except (OSError, ValueError):
         status = "unavailable"
     except Exception:
         status = "error"
 
-    sys.stdout.write(PREFIX + json.dumps({"status": status}, separators=(",", ":")) + "\n")
+    payload = {"status": status}
+    if native_code is not None:
+        payload["code"] = native_code
+    sys.stdout.write(PREFIX + json.dumps(payload, separators=(",", ":")) + "\n")
     sys.stdout.flush()
     return 0
 
