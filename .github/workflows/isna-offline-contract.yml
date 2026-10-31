@@ -6,6 +6,8 @@ on:
     paths:
       - 'services/isna_signed_roundtrip.py'
       - 'services/isna_vps_signature_verifier.py'
+      - 'services/isna_kalkan_verify_worker.py'
+      - 'tests/test_isna_kalkan_verify_worker.py'
       - 'tests/test_isna_vps_signature_verifier.py'
       - 'services/isna_fno_integration.py'
       - 'services/isna_bip.py'
@@ -29,10 +31,12 @@ jobs:
       - name: Install only offline test dependencies
         run: python -m pip install --disable-pip-version-check requests python-dotenv
       - name: Python syntax check
-        run: python -m compileall -q services/isna_signed_roundtrip.py services/isna_vps_signature_verifier.py routes/accounting.py
+        run: python -m compileall -q services/isna_signed_roundtrip.py services/isna_vps_signature_verifier.py services/isna_kalkan_verify_worker.py routes/accounting.py
       - name: Android-to-VPS offline contract
         run: python -m unittest discover -s tests -p 'test_isna_signed_roundtrip.py' -v
       - name: Independent VPS verifier contract (no network)
         run: python -m unittest discover -s tests -p 'test_isna_vps_signature_verifier.py' -v
+      - name: KalkanCrypt worker contract tests (no native .so)
+        run: python -m unittest discover -s tests -p 'test_isna_kalkan_verify_worker.py' -v
       - name: Existing official FNO wire-format regressions
         run: python -m unittest discover -s tests -p 'test_isna_fno_integration.py' -v
