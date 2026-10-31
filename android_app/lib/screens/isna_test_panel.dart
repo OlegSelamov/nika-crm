@@ -208,7 +208,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     });
   }
 
-  Future<void> _signServerSoap() async {
+  Future<void> _signServerSoap({bool useWsseKeyIdentifier = false}) async {
     if (busy) return;
     setState(() {
       signedServerDemoSoap = null;
@@ -233,7 +233,9 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       final result = await showDialog<Map<String, dynamic>>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => _NativeIsnaSignDialog(xml: xml, soapMode: true),
+        builder: (_) => _NativeIsnaSignDialog(
+          xml: xml, soapMode: true, useWsseKeyIdentifier: useWsseKeyIdentifier,
+        ),
       );
       if (result == null || !mounted) {
         if (mounted) setState(() => status = 'Подпись отменена. Ничего не отправлено.');
@@ -263,8 +265,11 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
         signedServerSoapVerifiedByVps = false;
         signedTransportCertificateSha256 = null;
         localCerMismatch = false;
-        signedFileName = 'nika-isna-server-soap-offline-test';
+        signedFileName = useWsseKeyIdentifier
+            ? 'nika-isna-server-soap-keyidentifier-offline-test'
+            : 'nika-isna-server-soap-offline-test';
         status = 'SOAP получен с TEST-сервера. ✅\n'
+            '${useWsseKeyIdentifier ? "WSSE: X509v3 KeyIdentifier (альтернативный профиль)." : "WSSE: XMLDSig X509Data (старый профиль)."}\n'
             'SOAP Body подписан на Android через KalkanCrypt. ✅\n'
             'Подпись проверена локально после сериализации. ✅\n'
             '$validityText\n'
@@ -306,6 +311,10 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       if (!RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(publicCertFingerprint)) {
         throw StateError('TEST VPS не вернул корректный SHA-256 сертификата.');
       }
+      final certProfile = (result['certificateProfile'] ?? '').toString();
+      if (certProfile != 'x509-data' && certProfile != 'key-identifier') {
+        throw StateError('TEST VPS отклонил профиль сертификата WS-Security.');
+      }
       final certMatch = result['registeredCertMatch'];
       final certStatus = certMatch == true
           ? 'Совпадает с зарегистрированным публичным .cer. ✅'
@@ -320,6 +329,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             'Синтетический SOAP прошёл проверку структуры. ✅\n'
             '$certStatus\n'
             'SHA-256 сертификата: $publicCertFingerprint\n'
+            'Профиль подписи: $certProfile\n'
             'Криптографически подпись проверена только на Android.\n'
             'На VPS подпись криптографически НЕ проверялась.\n'
             'В ШЭП и ИСНА ничего не отправлено, декларация не создавалась.';
@@ -584,6 +594,11 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             label: const Text('Получить SOAP с TEST-сервера и подписать локально'),
           ),
           const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy ? null : () => _signServerSoap(useWsseKeyIdentifier: true),
+            icon: const Icon(Icons.security),
+            label: const Text('Получить SOAP и подписать WSSE KeyIdentifier · TEST'),
+          ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: busy || signedServerDemoSoap == null
@@ -646,7 +661,12 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
 class _NativeIsnaSignDialog extends StatefulWidget {
   final String xml;
   final bool soapMode;
-  const _NativeIsnaSignDialog({required this.xml, this.soapMode = false});
+  final bool useWsseKeyIdentifier;
+  const _NativeIsnaSignDialog({
+    required this.xml,
+    this.soapMode = false,
+    this.useWsseKeyIdentifier = false,
+  });
 
   @override
   State<_NativeIsnaSignDialog> createState() => _NativeIsnaSignDialogState();
@@ -672,6 +692,7 @@ class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
           ? await MobileP12Signer.signIsnaSoapDemo(
               payload: widget.xml,
               password: password.text,
+              useWsseKeyIdentifier: widget.useWsseKeyIdentifier,
             )
           : await MobileP12Signer.signEsfXml(
               payload: widget.xml,
