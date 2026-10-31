@@ -71,6 +71,16 @@ class RealServiceRoutingTests(unittest.TestCase):
         self.assertFalse(checked["cryptoVerifiedOnServer"])
         self.assertTrue(checked["nonFiling"])
 
+    def test_routing_certificate_can_be_pinned_without_cer_file(self):
+        import hashlib
+        pin = hashlib.sha256(FAKE_CERT).hexdigest().upper()
+        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": pin}):
+            checked = probe.validate_real_service_probe(make_structurally_signed())
+            self.assertTrue(checked["registeredCertMatch"])
+        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": "0" * 64}):
+            checked = probe.validate_real_service_probe(make_structurally_signed())
+            self.assertFalse(checked["registeredCertMatch"])
+
     def test_any_tax_payload_or_real_signed_fno_is_blocked(self):
         soap = make_structurally_signed()
         for edited in (
@@ -138,6 +148,17 @@ class RealServiceRoutingTests(unittest.TestCase):
         self.assertEqual(args[:2], ("POST", "/bip-sync-wss-gost/"))
         self.assertEqual(kwargs["body"], soap.encode())
         self.assertEqual(kwargs["headers"]["SOAPAction"], '""')
+
+    @patch.object(probe.http.client, "HTTPConnection")
+    def test_mismatched_pinned_certificate_never_sent(self, connection):
+        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": "0" * 64}), \
+             patch.object(probe, "verify_soap_signature_on_vps", return_value={
+                 "cryptoVerifiedOnServer": True, "cryptoVerificationStatus": "verified",
+                 "cryptoVerifier": "xmlsec1",
+             }):
+            with self.assertRaises(TestGatewayError):
+                probe.send_real_service_probe(make_structurally_signed())
+        connection.assert_not_called()
 
     @patch.object(probe.http.client, "HTTPConnection")
     def test_no_ipsec_means_no_post(self, connection):
