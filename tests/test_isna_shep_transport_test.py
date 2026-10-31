@@ -7,12 +7,15 @@ from xml.etree import ElementTree as ET
 
 from services import isna_shep_transport_test as gate
 from services.isna_signing_lab import create_server_signing_sample
-from scripts.isna_inspect_wss import SOAP, WSSE, DS, EXC_C14N, GOST_DIGEST, GOST_SIGNATURE, WSU, q
+from scripts.isna_inspect_wss import (
+    SOAP, WSSE, DS, EXC_C14N, GOST_DIGEST, GOST_SIGNATURE, WSU,
+    WSSE_BASE64_BINARY, WSSE_X509V3, q,
+)
 
 FAKE_PUBLIC_DER = b"\x30\x82\x00\x02\x00\x00"
 
 
-def demo_signed():
+def demo_signed(*, key_identifier=False):
     root = ET.fromstring(create_server_signing_sample()["soapXml"])
     header = root.find(q(SOAP, "Header"))
     body = root.find(q(SOAP, "Body"))
@@ -28,9 +31,16 @@ def demo_signed():
     ET.SubElement(ref, q(DS, "DigestValue")).text = "FAKE_TEST_DIGEST"
     ET.SubElement(signature, q(DS, "SignatureValue")).text = "FAKE_TEST_SIGNATURE"
     key = ET.SubElement(signature, q(DS, "KeyInfo"))
-    info = ET.SubElement(key, q(DS, "X509Data"))
-    ET.SubElement(info, q(DS, "X509Certificate")).text = base64.b64encode(
-        FAKE_PUBLIC_DER).decode()
+    if key_identifier:
+        token_ref = ET.SubElement(key, q(WSSE, "SecurityTokenReference"))
+        ET.SubElement(
+            token_ref, q(WSSE, "KeyIdentifier"),
+            EncodingType=WSSE_BASE64_BINARY, ValueType=WSSE_X509V3,
+        ).text = base64.b64encode(FAKE_PUBLIC_DER).decode()
+    else:
+        info = ET.SubElement(key, q(DS, "X509Data"))
+        ET.SubElement(info, q(DS, "X509Certificate")).text = base64.b64encode(
+            FAKE_PUBLIC_DER).decode()
     return ET.tostring(root, encoding="unicode")
 
 
@@ -89,6 +99,27 @@ class TestTransport(unittest.TestCase):
         self.assertEqual(parsed["gatewayErrorCode"], "SCE005")
         self.assertEqual(parsed["gatewayErrorDate"], "2026-10-30T01:30:00+05:00")
         self.assertEqual(parsed["gatewaySessionId"], "{1234abcd-0000-4000-8000-123456789abc}")
+
+    @patch.object(gate, "local_source_available", return_value=True)
+    @patch.object(gate.http.client, "HTTPConnection")
+    def test_key_identifier_profile_can_reach_only_pinned_test_gateway(self, connection, source):
+        response = MagicMock(status=500)
+        response.read.return_value = (
+            b'<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+            b'<soap:Body><soap:Fault><faultcode>soap:Client</faultcode>'
+            b'<faultstring>SCE005</faultstring></soap:Fault></soap:Body></soap:Envelope>'
+        )
+        connection.return_value.getresponse.return_value = response
+        soap = demo_signed(key_identifier=True)
+        result = gate.send_synthetic_signed_soap(soap)
+        self.assertEqual(result["httpStatus"], 500)
+        self.assertTrue(result["soapFault"])
+        self.assertEqual(result["sampleType"], "test-server-bip-demo")
+        args, kwargs = connection.return_value.request.call_args
+        self.assertEqual(args[0], "POST")
+        self.assertEqual(args[1], "/bip-sync-wss-gost/")
+        self.assertEqual(kwargs["body"], soap.encode("utf-8"))
+        self.assertNotIn("FNO_INTEGRATION", soap)
 
     @patch.object(gate.http.client, "HTTPConnection")
     def test_never_posts_actual_fno_or_arbitrary_data(self, connection):

@@ -26,6 +26,8 @@ OFFLINE_SENDER = "nika-offline-test"
 GOST_SIGNATURE = "urn:ietf:params:xml:ns:pkigovkz:xmlsec:algorithms:gostr34102015-gostr34112015-512"
 GOST_DIGEST = "urn:ietf:params:xml:ns:pkigovkz:xmlsec:algorithms:gostr34112015-512"
 EXC_C14N = "http://www.w3.org/2001/10/xml-exc-c14n#"
+WSSE_BASE64_BINARY = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary"
+WSSE_X509V3 = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3"
 CERT_LIMIT = 64 * 1024
 XML_LIMIT = 4 * 1024 * 1024
 
@@ -51,6 +53,52 @@ def decode_cert(source):
     if not raw.startswith(b"\x30"):
         raise InvalidSoap("Registered .cer is not an X.509 DER certificate.")
     return raw
+
+
+def extract_signer_certificate(root):
+    """The one signer certificate in an allowlisted WSSE KeyInfo profile.
+
+    Returns (DER bytes, profile) and fails closed on ambiguous tokens/refs.
+    This is *structural* parsing, not GOST verification or trust validation.
+    """
+    signatures = root.findall(".//" + q(DS, "Signature"))
+    if len(signatures) != 1:
+        raise InvalidSoap("Exactly one signed SOAP XMLDSig is required.")
+    signature = signatures[0]
+    key_info = signature.find(q(DS, "KeyInfo"))
+    if key_info is None or len(key_info) != 1 or key_info.attrib:
+        raise InvalidSoap("SOAP signer KeyInfo must contain exactly one token.")
+    token = key_info[0]
+    if token.tag == q(DS, "X509Data"):
+        if len(token) != 1 or token[0].tag != q(DS, "X509Certificate") or token.attrib:
+            raise InvalidSoap("Invalid XMLDSig X509Data certificate structure.")
+        cert_element = token[0]
+        if cert_element.attrib:
+            raise InvalidSoap("Unexpected X509Certificate attributes.")
+        profile = "x509-data"
+    elif token.tag == q(WSSE, "SecurityTokenReference"):
+        if len(token) != 1 or token[0].tag != q(WSSE, "KeyIdentifier") or token.attrib:
+            raise InvalidSoap("Invalid WS-Security SecurityTokenReference structure.")
+        cert_element = token[0]
+        if cert_element.attrib != {
+            "EncodingType": WSSE_BASE64_BINARY,
+            "ValueType": WSSE_X509V3,
+        }:
+            raise InvalidSoap("Unsupported WS-Security KeyIdentifier token.")
+        profile = "key-identifier"
+    else:
+        raise InvalidSoap("Unknown WS-Security certificate token profile.")
+
+    text = (cert_element.text or "").strip()
+    if not text or len(cert_element):
+        raise InvalidSoap("Missing embedded signer X.509 certificate.")
+    try:
+        embedded = base64.b64decode(re.sub(r"\s+", "", text), validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise InvalidSoap("Invalid signer X.509 base64 encoding.") from error
+    if not 3 <= len(embedded) <= CERT_LIMIT or embedded[0] != 0x30:
+        raise InvalidSoap("Invalid signer X.509 DER data.")
+    return embedded, profile
 
 
 def inspect(registered_cer, soap_xml):
@@ -130,20 +178,14 @@ def inspect(registered_cer, soap_xml):
     value = sig.find(q(DS, "SignatureValue"))
     if value is None or not (value.text or "").strip():
         raise InvalidSoap("Signed XML has no ds:SignatureValue.")
-    cert = sig.find(".//" + q(DS, "X509Certificate"))
-    if cert is None or not (cert.text or "").strip():
-        raise InvalidSoap("Missing embedded public X.509 certificate.")
-    try:
-        embedded = base64.b64decode(re.sub(r"\s+", "", cert.text), validate=True)
-    except (binascii.Error, ValueError) as e:
-        raise InvalidSoap("Invalid base64 embedded X.509 certificate.") from e
-
+    embedded, cert_profile = extract_signer_certificate(root)
     public = decode_cert(registered_cer)
     return {
         "structure_ok": True,
         "sample_type": sample_type,
         "cert_match": public == embedded,
         "fingerprint": hashlib.sha256(public).hexdigest().upper(),
+        "certificate_profile": cert_profile,
     }
 
 

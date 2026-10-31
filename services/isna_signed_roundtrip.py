@@ -6,14 +6,13 @@ that check is performed locally by Android/KalkanCrypt before upload.
 """
 from __future__ import annotations
 
-import base64
-import binascii
 import hashlib
 import re
 import xml.etree.ElementTree as ET
 
 from scripts.isna_inspect_wss import (
-    BIP, DEMO, DS, SOAP, WSSE, InvalidSoap, decode_cert, inspect, q,
+    BIP, DEMO, DS, SOAP, WSSE, InvalidSoap, decode_cert,
+    extract_signer_certificate, inspect, q,
 )
 
 MAX_DIAGNOSTIC_BYTES = 256_000
@@ -40,17 +39,7 @@ def validate_offline_signed_soap(
     except ET.ParseError as exc:
         raise InvalidSoap("Signed SOAP is malformed XML.") from exc
 
-    embedded_nodes = root.findall(".//" + q(DS, "X509Certificate"))
-    if len(embedded_nodes) != 1 or not (embedded_nodes[0].text or "").strip():
-        raise InvalidSoap("Exactly one public signer certificate is required.")
-    try:
-        embedded = base64.b64decode(
-            re.sub(r"\s+", "", embedded_nodes[0].text), validate=True,
-        )
-    except (binascii.Error, ValueError) as exc:
-        raise InvalidSoap("Invalid embedded public certificate.") from exc
-    if len(embedded) < 3 or len(embedded) > 64 * 1024 or embedded[0] != 0x30:
-        raise InvalidSoap("Embedded X.509 public certificate has invalid format.")
+    embedded, cert_profile = extract_signer_certificate(root)
 
     # This legacy inspector enforces the NON-FILING serviceId, sender, payload,
     # ds:Reference to Body, and the expected GOST algorithm URIs. It compares
@@ -92,6 +81,7 @@ def validate_offline_signed_soap(
         "sampleType": result["sample_type"],
         "registeredCertMatch": match,
         "embeddedCertSha256": hashlib.sha256(embedded).hexdigest().upper(),
+        "certificateProfile": cert_profile,
         "cryptoVerifiedOnServer": False,
         "soapSent": False,
         "filingCreated": False,
