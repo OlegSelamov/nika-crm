@@ -17,10 +17,11 @@ class VpsGostVerifierTests(unittest.TestCase):
              patch("services.isna_vps_signature_verifier.subprocess.run") as run:
             run.return_value = Mock(
                 returncode=0,
-                stdout=b'NIKA_KALKAN_XML_VERIFY_V1:{"status":"verified"}' + bytes([10]),
+                stdout=b'NIKA_KALKAN_XML_VERIFY_V1:{"status":"verified","code":"0x00000000"}' + bytes([10]),
             )
             result = verify_soap_signature_on_vps("<signed/>", b"cert")
             self.assertTrue(result["cryptoVerifiedOnServer"])
+            self.assertEqual(result["cryptoNativeCode"], "0x00000000")
             self.assertEqual(result["cryptoVerifier"], "KalkanCrypt")
             self.assertEqual(run.call_args.kwargs["input"], b"<signed/>")
             self.assertEqual(run.call_args.kwargs["timeout"], 10)
@@ -34,6 +35,18 @@ class VpsGostVerifierTests(unittest.TestCase):
                 result = verify_soap_signature_on_vps("<signed/>", b"cert")
                 self.assertFalse(result["cryptoVerifiedOnServer"])
                 self.assertEqual(result["cryptoVerificationStatus"], "error")
+
+    def test_native_result_nonzero_never_treated_as_valid(self):
+        with patch.dict(os.environ, {"ISNA_KALKAN_LIBRARY": "/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14"}), \
+             patch("services.isna_vps_signature_verifier.subprocess.run") as run:
+            for response in (
+                b'NIKA_KALKAN_XML_VERIFY_V1:{"status":"invalid","code":"0x08F0001C"}',
+                b'NIKA_KALKAN_XML_VERIFY_V1:{"status":"verified","code":"0x08F0001C"}',
+                b'NIKA_KALKAN_XML_VERIFY_V1:{"status":"verified"}',
+            ):
+                run.return_value = Mock(returncode=0, stdout=response)
+                result = verify_soap_signature_on_vps("<signed/>", b"cert")
+                self.assertFalse(result["cryptoVerifiedOnServer"])
 
     def test_missing_binary_fails_closed(self):
         with patch("services.isna_vps_signature_verifier.shutil.which", return_value=None):
