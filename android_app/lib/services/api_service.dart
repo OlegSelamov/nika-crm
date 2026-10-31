@@ -1730,6 +1730,35 @@ class ApiService {
         timeout: const Duration(seconds: 22),
       ));
 
+  // The only permitted real-service TEST probe is an INVALID unsigned
+  // <root/> payload; no taxpayer ID, no business FNO, no password.
+  static Future<Map<String, dynamic>> isnaTestRoutingProbeDraft() async =>
+      Map<String, dynamic>.from(await _request(
+        'GET', '/accounting/isna/test/routing-probe-draft',
+        timeout: const Duration(seconds: 12),
+      ));
+
+  static Future<Map<String, dynamic>> isnaTestVerifyRoutingProbe(
+    String signedSoap,
+  ) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/accounting/isna/test/routing-probe-verify',
+        body: {'soapXml': signedSoap},
+        timeout: const Duration(seconds: 18),
+      ));
+
+  static Future<Map<String, dynamic>> isnaTestSendRoutingProbe(
+    String signedSoap,
+  ) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/accounting/isna/test/routing-probe-send',
+        body: {
+          'soapXml': signedSoap,
+          'confirmation': 'ROUTING_ONLY_NO_FNO',
+        },
+        timeout: const Duration(seconds: 22),
+      ));
+
   // TEST-only, read-only Smart Bridge diagnostics (never sends tax data).
   static Future<Map<String, dynamic>> isnaTestDiagnostics() async =>
       Map<String, dynamic>.from(await _request(

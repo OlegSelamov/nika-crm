@@ -107,6 +107,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   bool signedServerSoapVerifiedByVps = false;
   String? signedTransportCertificateSha256;
   bool localCerMismatch = false;
+  String? routingProbeSignedSoap;
+  bool routingProbeValidated = false;
   String signedFileName = 'nika-isna-local-xml-signature-test';
 
   Future<void> _check() async {
@@ -462,6 +464,154 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
   }
 
+  Future<void> _signRoutingProbe() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      routingProbeSignedSoap = null;
+      routingProbeValidated = false;
+      status = 'Готовим запрос только для проверки маршрута FNO_INTEGRATION…';
+    });
+    try {
+      final draft = await ApiService.isnaTestRoutingProbeDraft();
+      if (!mounted) return;
+      final unsigned = (draft['soapXml'] ?? '').toString();
+      if (draft['nonFiling'] != true ||
+          draft['containsTaxpayerData'] != false ||
+          draft['hasSenderPassword'] != false ||
+          draft['serviceId'] != 'FNO_INTEGRATION' ||
+          !unsigned.contains('FNO_INTEGRATION') ||
+          !unsigned.contains('&lt;root/&gt;')) {
+        throw StateError('TEST VPS вернул неожиданный или небезопасный SOAP.');
+      }
+      setState(() => busy = false);
+      final signed = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(
+          xml: unsigned, soapMode: true, routingProbeMode: true,
+        ),
+      );
+      if (signed == null || !mounted) {
+        if (mounted) setState(() => status = 'Подписание отменено. ШЭП не вызывался.');
+        return;
+      }
+      final soap = (signed['signedXml'] ?? '').toString();
+      if (signed['signatureVerified'] != true ||
+          signed['routingProbeOnly'] != true ||
+          signed['wsseCertProfile'] != 'key-identifier') {
+        throw StateError('Нет подтверждения локальной подписи KeyIdentifier.');
+      }
+      final notBefore = (signed['certificateNotBefore'] as num?)?.toInt();
+      final notAfter = (signed['certificateNotAfter'] as num?)?.toInt();
+      if (!isIsnaCertificateCurrent(
+        notBeforeMs: notBefore,
+        notAfterMs: notAfter,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      )) {
+        throw StateError('Срок действия транспортного сертификата истёк.');
+      }
+      setState(() {
+        busy = true;
+        status = 'Подпись создана. Проверяем только структуру на Nika TEST VPS…';
+      });
+      final verified = await ApiService.isnaTestVerifyRoutingProbe(soap);
+      if (!mounted) return;
+      if (verified['structureOk'] != true ||
+          verified['nonFiling'] != true ||
+          verified['serviceId'] != 'FNO_INTEGRATION' ||
+          verified['certificateProfile'] != 'key-identifier' ||
+          verified['cryptoVerifiedOnServer'] != false) {
+        throw StateError('TEST VPS не подтвердил безопасный формат маршрута.');
+      }
+      setState(() {
+        routingProbeSignedSoap = soap;
+        routingProbeValidated = true;
+        signedXml = soap;
+        signedFileName = 'nika-isna-FNO-routing-only-NO-FNO';
+        status = 'Готово к проверке настоящего сервиса FNO_INTEGRATION. ✅\n'
+            'Зарегистрированный senderId взят из TEST VPS (значение не показано).\n'
+            'SOAP Body подписан KalkanCrypt через WSSE KeyIdentifier. ✅\n'
+            'Проверка структуры на TEST VPS: успешно. ✅\n'
+            'Бизнес-данные: только недействительный <root/>; настоящей ФНО нет.\n'
+            'Подпись на VPS криптографически не проверялась.\n'
+            'В государственный ШЭП ничего не отправлено.\n'
+            'Для реального тестового POST нужна отдельная кнопка.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          routingProbeSignedSoap = null;
+          routingProbeValidated = false;
+          status = 'Ошибка проверки FNO_INTEGRATION: $error\n'
+              'Сетевая отправка в ШЭП не выполнялась.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _sendRoutingProbe() async {
+    final signedSoap = routingProbeSignedSoap;
+    if (busy || !routingProbeValidated || signedSoap == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Проверить FNO_INTEGRATION в тестовом ШЭП?'),
+        content: const Text(
+          'Это реальный SOAP POST в тестовый государственный ШЭП через IPsec. '
+          'Используется зарегистрированный senderId и настоящий serviceId FNO_INTEGRATION, '
+          'НО вместо налоговой декларации передаётся заведомо непригодный '
+          'для сдачи документ <root/> без ЭЦП налогоплательщика, ИИН, БИН и налоговых данных. '
+          'Шлюз или сервис могут вернуть ошибку. Никакая корректная ФНО не подаётся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отправить один TEST запрос'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      routingProbeValidated = false; // explicit one-shot action
+      routingProbeSignedSoap = null;
+      busy = true;
+      status = 'Отправляем один FNO_INTEGRATION routing-only запрос в TEST ШЭП…';
+    });
+    try {
+      final answer = await ApiService.isnaTestSendRoutingProbe(signedSoap);
+      if (!mounted) return;
+      final statusCode = answer['httpStatus']?.toString() ?? '?';
+      final code = (answer['gatewayErrorCode'] ?? '').toString();
+      final message = (answer['faultMessage'] ?? '').toString();
+      final sessionId = (answer['gatewaySessionId'] ?? '').toString();
+      final responseType = (answer['responseType'] ?? '').toString();
+      setState(() {
+        status = 'TEST ШЭП получил HTTP запрос к FNO_INTEGRATION. ✅\n'
+            'HTTP: $statusCode; ответ: $responseType\n'
+            '${code.isEmpty ? "" : "Код ШЭП: $code\n"}'
+            '${message.isEmpty ? "" : "Ответ: $message\n"}'
+            '${sessionId.isEmpty ? "" : "Сессия ШЭП: $sessionId\n"}'
+            'Это не подтверждение права на сервис и не приём декларации.\n'
+            'Настоящая подписанная ФНО не подавалась.';
+      });
+    } catch (error) {
+      if (mounted) setState(() => status =
+          'Ошибка отправки пробного маршрута: $error\n'
+          'Настоящая ФНО не отправлялась.');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _signFnoOfflineDouble() async {
     if (busy) return;
     setState(() {
@@ -623,6 +773,20 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             label: const Text('Отправить пробный SOAP в TEST ШЭП'),
           ),
           const SizedBox(height: 8),
+          const Divider(height: 28),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _signRoutingProbe,
+            icon: const Icon(Icons.route_outlined),
+            label: const Text('Проверить маршрут FNO_INTEGRATION · без ФНО'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy || !routingProbeValidated
+                ? null : _sendRoutingProbe,
+            icon: const Icon(Icons.send_outlined),
+            label: const Text('Отправить маршрутный тест в TEST ШЭП'),
+          ),
+          const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: busy ? null : _signFnoOfflineDouble,
             icon: const Icon(Icons.layers_outlined),
@@ -664,10 +828,12 @@ class _NativeIsnaSignDialog extends StatefulWidget {
   final String xml;
   final bool soapMode;
   final bool useWsseKeyIdentifier;
+  final bool routingProbeMode;
   const _NativeIsnaSignDialog({
     required this.xml,
     this.soapMode = false,
     this.useWsseKeyIdentifier = false,
+    this.routingProbeMode = false,
   });
 
   @override
@@ -690,7 +856,12 @@ class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
       error = null;
     });
     try {
-      final signed = widget.soapMode
+      final signed = widget.routingProbeMode
+          ? await MobileP12Signer.signIsnaRoutingProbe(
+              payload: widget.xml,
+              password: password.text,
+            )
+          : widget.soapMode
           ? await MobileP12Signer.signIsnaSoapDemo(
               payload: widget.xml,
               password: password.text,

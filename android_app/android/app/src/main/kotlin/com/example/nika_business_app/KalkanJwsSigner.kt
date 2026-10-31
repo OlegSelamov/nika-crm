@@ -249,10 +249,15 @@ object KalkanJwsSigner {
         passwordChars: CharArray,
         payload: String,
         useWsseKeyIdentifier: Boolean = false,
+        isRoutingProbe: Boolean = false,
     ): Map<String, Any?> {
         if (payload.isBlank()) throw SigningException("EMPTY_PAYLOAD", "Нет тестового SOAP XML")
+        if (isRoutingProbe && !useWsseKeyIdentifier) {
+            throw SigningException("UNSAFE_FNO_PROBE", "Для маршрутизации обязателен WSSE KeyIdentifier")
+        }
         val material = loadKeyMaterial(context, keyUri, passwordChars)
         try {
+            if (isRoutingProbe) material.certificate.checkValidity()
             val doc = parseXml(payload)
             val envelope = doc.documentElement
             if (envelope.localName != "Envelope" || envelope.namespaceURI != SOAP_ENVELOPE_NS) {
@@ -292,6 +297,10 @@ object KalkanJwsSigner {
             val demo: Element?
             if (only.localName == "NikaWsSecurityTest" && only.namespaceURI == NIKA_SOAP_DEMO_NS) {
                 demo = only
+            } else if (isRoutingProbe &&
+                only.localName == "SendMessage" && only.namespaceURI == NIKA_SOAP_BIP_NS) {
+                IsnaRoutingProbeValidator.validate(only)
+                demo = null
             } else if (only.localName == "SendMessage" &&
                 only.namespaceURI == NIKA_SOAP_BIP_NS &&
                 only.getElementsByTagName("serviceId").let {
@@ -359,6 +368,7 @@ object KalkanJwsSigner {
                 "signatureVerified" to true,
                 "innerSignatureVerified" to (demo == null),
                 "wsseCertProfile" to (if (useWsseKeyIdentifier) "key-identifier" else "x509-data"),
+                "routingProbeOnly" to isRoutingProbe,
                 "certificate" to Base64.encodeToString(material.certificate.encoded, Base64.NO_WRAP),
                 "algorithm" to XML_SIGNATURE_URI,
                 "offlineOnly" to true,

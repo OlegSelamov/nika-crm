@@ -169,6 +169,19 @@ class MobileP12Signer {
         saveKey: false,
       );
 
+  /// Only an invalid <root/> routing probe with FNO_INTEGRATION is allowed
+  /// by the native Kotlin validator. Never signs a real tax declaration.
+  static Future<Map<String, dynamic>> signIsnaRoutingProbe({
+    required String payload,
+    required String password,
+  }) =>
+      _invoke(
+        'signIsnaRoutingProbeWithP12',
+        payload: payload,
+        password: password,
+        saveKey: false,
+      );
+
   static Future<Map<String, dynamic>> signEsfXml({
     required String payload,
     required String password,

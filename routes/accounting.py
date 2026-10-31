@@ -3098,6 +3098,76 @@ def isna_test_send_synthetic_to_shep():
     return response
 
 
+@accounting_bp.route("/accounting/isna/test/routing-probe-draft", methods=["GET"])
+def isna_real_service_routing_probe_draft():
+    """Build ONLY the invalid <root/> FNO_INTEGRATION routing probe; NO POST."""
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Только TEST."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Требуется вход."}), 401
+    if not _require_company():
+        return jsonify({"error": "Не выбрана организация."}), 403
+    from services.isna_real_service_probe import draft_real_service_probe
+    from services.isna_shep_transport_test import TestGatewayError
+    try:
+        response = jsonify(draft_real_service_probe())
+    except TestGatewayError as exc:
+        return jsonify({"error": str(exc)}), 422
+    response.headers["Cache-Control"] = "no-store, private"
+    return response
+
+
+@accounting_bp.route("/accounting/isna/test/routing-probe-verify", methods=["POST"])
+def isna_real_service_routing_probe_verify():
+    """Strict no-network verification of the non-filing FNO routing SOAP."""
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Только TEST."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Требуется вход."}), 401
+    if not _require_company():
+        return jsonify({"error": "Не выбрана организация."}), 403
+    from services.isna_real_service_probe import MAX_PROBE_BYTES, validate_real_service_probe
+    from services.isna_shep_transport_test import TestGatewayError
+    from scripts.isna_inspect_wss import InvalidSoap
+    if request.content_length is None or request.content_length > MAX_PROBE_BYTES:
+        return jsonify({"error": "Превышен размер тестового SOAP."}), 413
+    data = request.get_json(silent=True)
+    soap = data.get("soapXml") if isinstance(data, dict) else None
+    try:
+        result = validate_real_service_probe(soap)
+    except (InvalidSoap, TestGatewayError):
+        return jsonify({"error": "Некорректный или недопустимый FNO routing SOAP."}), 422
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "no-store, private"
+    return response
+
+
+@accounting_bp.route("/accounting/isna/test/routing-probe-send", methods=["POST"])
+def isna_real_service_routing_probe_send():
+    """One user-confirmed FNO_INTEGRATION TEST POST with INVALID empty FNO payload."""
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Только TEST."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Требуется вход."}), 401
+    if not _require_company():
+        return jsonify({"error": "Не выбрана организация."}), 403
+    from services.isna_real_service_probe import MAX_PROBE_BYTES, send_real_service_probe
+    from services.isna_shep_transport_test import TestGatewayError
+    from scripts.isna_inspect_wss import InvalidSoap
+    if request.content_length is None or request.content_length > MAX_PROBE_BYTES:
+        return jsonify({"error": "Превышен размер тестового SOAP."}), 413
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or data.get("confirmation") != "ROUTING_ONLY_NO_FNO":
+        return jsonify({"error": "Требуется явное подтверждение сетевого теста."}), 400
+    try:
+        result = send_real_service_probe(data.get("soapXml"))
+    except (InvalidSoap, TestGatewayError):
+        return jsonify({"error": "Тестовый запрос не прошёл проверку или шлюз недоступен."}), 422
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "no-store, private"
+    return response
+
+
 @accounting_bp.route("/accounting/isna/test/soap-draft", methods=["GET"])
 def isna_test_unsigned_server_soap():
     """Authenticated, strictly non-filing TEST-only SOAP for Android signing.
