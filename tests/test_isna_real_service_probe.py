@@ -120,7 +120,11 @@ class RealServiceRoutingTests(unittest.TestCase):
         )
         connection.return_value.getresponse.return_value = response
         soap = make_structurally_signed()
-        result = probe.send_real_service_probe(soap)
+        with patch.object(probe, "verify_soap_signature_on_vps", return_value={
+            "cryptoVerifiedOnServer": True, "cryptoVerificationStatus": "verified",
+            "cryptoVerifier": "xmlsec1",
+        }):
+            result = probe.send_real_service_probe(soap)
         self.assertTrue(result["gatewayContacted"])
         self.assertEqual(result["serviceId"], "FNO_INTEGRATION")
         self.assertIsNone(result["businessAccepted"])
@@ -137,7 +141,22 @@ class RealServiceRoutingTests(unittest.TestCase):
 
     @patch.object(probe.http.client, "HTTPConnection")
     def test_no_ipsec_means_no_post(self, connection):
-        with patch.object(probe, "local_source_available", return_value=False):
+        with patch.object(probe, "verify_soap_signature_on_vps", return_value={
+            "cryptoVerifiedOnServer": True, "cryptoVerificationStatus": "verified",
+            "cryptoVerifier": "xmlsec1",
+        }), patch.object(probe, "local_source_available", return_value=False):
+            with self.assertRaises(TestGatewayError):
+                probe.send_real_service_probe(make_structurally_signed())
+        connection.assert_not_called()
+
+    @patch.object(probe.http.client, "HTTPConnection")
+    def test_unverified_gost_signature_never_sent_to_shep(self, connection):
+        with patch.object(probe, "verify_soap_signature_on_vps", return_value={
+            "cryptoVerifiedOnServer": False, "cryptoVerificationStatus": "unsupported",
+            "cryptoVerifier": "xmlsec1",
+        }):
+            checked = probe.validate_real_service_probe(make_structurally_signed())
+            self.assertEqual(checked["cryptoVerificationStatus"], "unsupported")
             with self.assertRaises(TestGatewayError):
                 probe.send_real_service_probe(make_structurally_signed())
         connection.assert_not_called()
