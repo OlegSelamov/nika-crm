@@ -26,7 +26,11 @@ def verify_native(xml: bytes, library: str) -> bool:
         raise ValueError("KalkanCrypt shared library unavailable")
     # ctypes.CDLL is NOT safe to call from the Flask/Gunicorn process; native
     # crashes and hidden SDK global state remain contained in this child.
-    api = ctypes.CDLL(str(path))
+    # SDK 2.0.14 exports unresolved legacy SRP_Calc_A references, which
+    # prevent RTLD_NOW loading even when VerifyXML/Init work. The NCA RK
+    # forum recommends RTLD_LAZY. Keep this inside the disposable subprocess:
+    # if a missing symbol is actually called, the child fails closed.
+    api = ctypes.CDLL(str(path), mode=os.RTLD_LAZY)
     init = api.Init
     init.argtypes = []
     init.restype = ctypes.c_ulong
