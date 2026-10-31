@@ -25,6 +25,8 @@ class MainActivity : FlutterFragmentActivity() {
     private val scannerChannel = "com.nikabusiness.app/scanner"
     private val signingChannel = "com.nikabusiness.app/signing"
     private val p12RequestCode = 9301
+    private val isnaCerRequestCode = 9302
+    private var pendingIsnaCerResult: MethodChannel.Result? = null
     private var pendingSigningResult: MethodChannel.Result? = null
     private var pendingSigningPayload: String? = null
     private var pendingSigningPassword: CharArray? = null
@@ -200,6 +202,29 @@ class MainActivity : FlutterFragmentActivity() {
                     "signEsfXmlWithSavedP12" -> {
                         val payload = call.argument<String>("payload") ?: ""
                         startSavedP12Signing("signEsfXmlWithP12", payload, null, result)
+                    }
+                    "inspectIsnaLocalCer" -> {
+                        if (pendingIsnaCerResult != null) {
+                            result.error("CERT_PICKER_BUSY", "Уже открыт выбор сертификата", null)
+                        } else {
+                            pendingIsnaCerResult = result
+                            try {
+                                startActivityForResult(
+                                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        type = "*/*"
+                                    },
+                                    isnaCerRequestCode,
+                                )
+                            } catch (error: Exception) {
+                                pendingIsnaCerResult = null
+                                result.error(
+                                    "CERT_PICKER_UNAVAILABLE",
+                                    "Не удалось открыть выбор публичного сертификата",
+                                    null,
+                                )
+                            }
+                        }
                     }
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
@@ -457,6 +482,26 @@ class MainActivity : FlutterFragmentActivity() {
 
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == isnaCerRequestCode) {
+            val callback = pendingIsnaCerResult
+            pendingIsnaCerResult = null
+            if (callback == null) return
+            if (resultCode != RESULT_OK || data?.data == null) {
+                callback.error("CER_SELECTION_CANCELLED", "Выбор .cer отменён", null)
+                return
+            }
+            try {
+                // Only a local SHA-256 is returned; the .cer never reaches Nika VPS.
+                callback.success(IsnaLocalCerInspector.inspect(this, data.data!!))
+            } catch (error: Exception) {
+                callback.error(
+                    "CER_READ_FAILED",
+                    error.message ?: "Не удалось проверить публичный сертификат",
+                    null,
+                )
+            }
+            return
+        }
         if (requestCode != p12RequestCode) {
             super.onActivityResult(requestCode, resultCode, data)
             return
@@ -556,6 +601,8 @@ class MainActivity : FlutterFragmentActivity() {
         scannerTone?.release()
         scannerTone = null
         pendingSigningResult?.error("ACTIVITY_DESTROYED", "Окно приложения закрыто", null)
+        pendingIsnaCerResult?.error("ACTIVITY_DESTROYED", "Окно приложения закрыто", null)
+        pendingIsnaCerResult = null
         clearPendingSigning()
         super.onDestroy()
     }

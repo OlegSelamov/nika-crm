@@ -84,6 +84,14 @@ bool isIsnaCertificateCurrent({
     notBeforeMs <= nowMs &&
     nowMs < notAfterMs;
 
+/// Compares canonical DER SHA-256 fingerprints of public X.509 certificates.
+bool isIsnaSameCertificateSha256(String expected, String selected) {
+  final pattern = RegExp(r'^[a-fA-F0-9]{64}$');
+  return pattern.hasMatch(expected) &&
+      pattern.hasMatch(selected) &&
+      expected.toUpperCase() == selected.toUpperCase();
+}
+
 class IsnaTestPanel extends StatefulWidget {
   const IsnaTestPanel({super.key});
 
@@ -97,6 +105,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   String? signedXml;
   String? signedServerDemoSoap;
   bool signedServerSoapVerifiedByVps = false;
+  String? signedTransportCertificateSha256;
+  bool localCerMismatch = false;
   String signedFileName = 'nika-isna-local-xml-signature-test';
 
   Future<void> _check() async {
@@ -159,6 +169,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       signedXml = value;
       signedServerDemoSoap = null;
       signedServerSoapVerifiedByVps = false;
+      signedTransportCertificateSha256 = null;
+      localCerMismatch = false;
       signedFileName = 'nika-isna-local-xml-signature-test';
       status = 'Пробный XML подписан через нативный KalkanCrypt. ✅\n'
           'Подлинность подписи ещё не проверена отдельно. '
@@ -186,6 +198,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       signedXml = value;
       signedServerDemoSoap = null;
       signedServerSoapVerifiedByVps = false;
+      signedTransportCertificateSha256 = null;
+      localCerMismatch = false;
       signedFileName = 'nika-isna-wssecurity-offline-test';
       status = 'Тестовый SOAP подписан в wsse:Security через KalkanCrypt. ✅\n'
           'Подпись SOAP Body проверена криптомодулем локально. ✅\n'
@@ -199,6 +213,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     setState(() {
       signedServerDemoSoap = null;
       signedServerSoapVerifiedByVps = false;
+      signedTransportCertificateSha256 = null;
+      localCerMismatch = false;
       busy = true;
       status = 'Получаем безопасный SOAP от TEST-сервера Nika Business…';
     });
@@ -245,6 +261,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
         signedXml = signed;
         signedServerDemoSoap = certCurrent ? signed : null;
         signedServerSoapVerifiedByVps = false;
+        signedTransportCertificateSha256 = null;
+        localCerMismatch = false;
         signedFileName = 'nika-isna-server-soap-offline-test';
         status = 'SOAP получен с TEST-сервера. ✅\n'
             'SOAP Body подписан на Android через KalkanCrypt. ✅\n'
@@ -285,6 +303,9 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
         throw StateError('TEST-сервер вернул неожиданный результат.');
       }
       final publicCertFingerprint = (result['embeddedCertSha256'] ?? '').toString();
+      if (!RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(publicCertFingerprint)) {
+        throw StateError('TEST VPS не вернул корректный SHA-256 сертификата.');
+      }
       final certMatch = result['registeredCertMatch'];
       final certStatus = certMatch == true
           ? 'Совпадает с зарегистрированным публичным .cer. ✅'
@@ -293,6 +314,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
               : 'Сравнение с .cer на VPS ещё не настроено.';
       setState(() {
         signedServerSoapVerifiedByVps = true;
+        signedTransportCertificateSha256 = publicCertFingerprint.toUpperCase();
+        localCerMismatch = false;
         status = 'Android → Nika TEST VPS: подписанный SOAP принят. ✅\n'
             'Синтетический SOAP прошёл проверку структуры. ✅\n'
             '$certStatus\n'
@@ -311,9 +334,56 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
   }
 
+  Future<void> _compareLocalCerWithSignedSoap() async {
+    final expected = signedTransportCertificateSha256;
+    if (busy || expected == null) return;
+    setState(() {
+      busy = true;
+      status = 'Выбери только публичный .cer/.crt/.pem/.der на телефоне. '
+          'Файл никуда не передаётся…';
+    });
+    try {
+      final info = await MobileP12Signer.inspectIsnaLocalCer();
+      if (!mounted) return;
+      final actual = (info['sha256'] ?? '').toString();
+      if (!RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(actual)) {
+        throw StateError('Некорректный SHA-256 файла .cer.');
+      }
+      final match = isIsnaSameCertificateSha256(expected, actual);
+      final notAfter = (info['notAfterMs'] as num?)?.toInt();
+      final expires = notAfter == null ? 'неизвестна'
+          : DateTime.fromMillisecondsSinceEpoch(notAfter).toLocal()
+              .toIso8601String().split('T').first;
+      setState(() {
+        localCerMismatch = !match;
+        status = match
+            ? '✅ СЕРТИФИКАТЫ СОВПАДАЮТ!\n'
+                'Выбранный публичный .cer и сертификат в SOAP идентичны.\n'
+                'SHA-256: $actual\n'
+                'Срок действия до: $expires\n'
+                'Это ещё не подтверждает регистрацию сертификата в Smart Bridge.\n'
+                'Файл остался только на устройстве. Никаких отправок.'
+            : '❌ СЕРТИФИКАТЫ НЕ СОВПАДАЮТ!\n'
+                'В SOAP: $expected\n'
+                'В выбранном .cer: $actual\n'
+                'TEST POST заблокирован. Выбери .p12 от зарегистрированного .cer.\n'
+                'Файл остался на телефоне и никуда не передан.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status =
+            'Проверка .cer отменена или не удалась: $error\n'
+            'Сертификат не загружался на сервер.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _sendSignedServerSoapToShep() async {
     final soap = signedServerDemoSoap;
-    if (busy || soap == null || !signedServerSoapVerifiedByVps) return;
+    if (busy || soap == null || !signedServerSoapVerifiedByVps ||
+        localCerMismatch) return;
     // The gateway really receives an HTTP POST; require a separate,
     // non-dismissible user consent before the single request.
     final approved = await showDialog<bool>(
@@ -385,6 +455,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     setState(() {
       signedServerDemoSoap = null;
       signedServerSoapVerifiedByVps = false;
+      signedTransportCertificateSha256 = null;
+      localCerMismatch = false;
       status = 'Формируем пробную ФНО 000.00 без персональных данных…';
     });
     try {
@@ -520,8 +592,15 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             label: const Text('Проверить подписанный SOAP на TEST VPS'),
           ),
           const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: busy || signedTransportCertificateSha256 == null
+                ? null : _compareLocalCerWithSignedSoap,
+            icon: const Icon(Icons.verified_user_outlined),
+            label: const Text('Сравнить .cer с подписанным SOAP · на телефоне'),
+          ),
+          const SizedBox(height: 8),
           FilledButton.icon(
-            onPressed: busy || !signedServerSoapVerifiedByVps
+            onPressed: busy || !signedServerSoapVerifiedByVps || localCerMismatch
                 ? null : _sendSignedServerSoapToShep,
             icon: const Icon(Icons.send_rounded),
             label: const Text('Отправить пробный SOAP в TEST ШЭП'),

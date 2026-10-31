@@ -144,6 +144,17 @@ class MobileP12Signer {
         saveKey: saveKey,
       );
 
+  /// Reads a public .cer/.crt/.pem/.der on Android only.
+  /// No bytes are uploaded to Nika VPS or retained by this service.
+  static Future<Map<String, dynamic>> inspectIsnaLocalCer() async {
+    final result = await _channel.invokeMethod<dynamic>('inspectIsnaLocalCer');
+    if (result is Map) return Map<String, dynamic>.from(result);
+    throw PlatformException(
+      code: 'CER_INVALID_RESULT',
+      message: 'Android не вернул SHA-256 публичного сертификата',
+    );
+  }
+
   static Future<Map<String, dynamic>> signIsnaSoapDemo({
     required String payload,
     required String password,
