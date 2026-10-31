@@ -17,7 +17,7 @@ class VpsGostVerifierTests(unittest.TestCase):
              patch("services.isna_vps_signature_verifier.subprocess.run") as run:
             run.return_value = Mock(
                 returncode=0,
-                stdout=b"NIKA_KALKAN_XML_VERIFY_V1:{\\"status\\":\\"verified\\"}\\n",
+                stdout=b'NIKA_KALKAN_XML_VERIFY_V1:{"status":"verified"}' + bytes([10]),
             )
             result = verify_soap_signature_on_vps("<signed/>", b"cert")
             self.assertTrue(result["cryptoVerifiedOnServer"])
@@ -29,7 +29,7 @@ class VpsGostVerifierTests(unittest.TestCase):
         from unittest.mock import Mock
         with patch.dict(os.environ, {"ISNA_KALKAN_LIBRARY": "/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14"}), \
              patch("services.isna_vps_signature_verifier.subprocess.run") as run:
-            for code, output in [(139, b""), (0, b"GOST engine loaded\\n"), (0, b"NIKA_KALKAN_XML_VERIFY_V1:{invalid}")]:
+            for code, output in [(139, b""), (0, b"GOST engine loaded"), (0, b"NIKA_KALKAN_XML_VERIFY_V1:{invalid}")]:
                 run.return_value = Mock(returncode=code, stdout=output)
                 result = verify_soap_signature_on_vps("<signed/>", b"cert")
                 self.assertFalse(result["cryptoVerifiedOnServer"])
