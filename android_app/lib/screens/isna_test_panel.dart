@@ -243,8 +243,10 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       }
       final signed = (result['signedXml'] ?? '').toString();
       if (result['signatureVerified'] != true ||
-          !signed.contains('<wsse:Security')) {
-        throw StateError('KalkanCrypt не подтвердил подпись SOAP.');
+          !signed.contains('<wsse:Security') ||
+          result['wsseCertProfile'] !=
+              (useWsseKeyIdentifier ? 'key-identifier' : 'x509-data')) {
+        throw StateError('KalkanCrypt не подтвердил выбранный WS-Security профиль.');
       }
       // The native signer already returns the X.509 validity dates. Show
       // them to the user before another government gateway POST instead of
