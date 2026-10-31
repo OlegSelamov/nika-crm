@@ -10,14 +10,61 @@ never sends a network request, logs the SOAP, or writes persistent artifacts.
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 GOST_TRANSFORM = "gostr34102015-gostr34112015-512"
 TIMEOUT_SECONDS = 10
+_KALKAN_PROTOCOL = "NIKA_KALKAN_XML_VERIFY_V1:"
+
+
+def _verify_with_kalkan(signed_xml: str) -> dict:
+    """Run native KalkanCrypt in a child, never the Gunicorn process.
+
+    Configuration is opt-in. A crash, timeout, missing SDK dependency or
+    malformed worker result fails closed and never unlocks a TEST POST.
+    """
+    result_prefix = {
+        "cryptoVerifiedOnServer": False,
+        "cryptoVerifier": "KalkanCrypt",
+    }
+    worker = Path(__file__).with_name("isna_kalkan_verify_worker.py")
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(worker)],
+            input=signed_xml.encode("utf-8"),
+            capture_output=True, timeout=TIMEOUT_SECONDS, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {**result_prefix, "cryptoVerificationStatus": "error"}
+    if completed.returncode != 0 or len(completed.stdout) > 8192:
+        return {**result_prefix, "cryptoVerificationStatus": "error"}
+    # SDK may write its own harmless log line; parse only our explicit protocol
+    # record and never expose native text to Android or logs.
+    status_lines = [
+        line for line in completed.stdout.decode("utf-8", errors="replace").splitlines()
+        if line.startswith(_KALKAN_PROTOCOL)
+    ]
+    if len(status_lines) != 1:
+        return {**result_prefix, "cryptoVerificationStatus": "error"}
+    try:
+        result = json.loads(status_lines[0][len(_KALKAN_PROTOCOL):])
+    except (ValueError, TypeError):
+        return {**result_prefix, "cryptoVerificationStatus": "error"}
+    status = result.get("status") if isinstance(result, dict) else None
+    if status not in ("verified", "invalid", "unavailable", "error"):
+        status = "error"
+    return {
+        **result_prefix,
+        "cryptoVerifiedOnServer": status == "verified",
+        "cryptoVerificationStatus": status,
+    }
+
 
 
 def verify_soap_signature_on_vps(signed_xml: str, signer_cert_der: bytes) -> dict:
@@ -28,6 +75,11 @@ def verify_soap_signature_on_vps(signed_xml: str, signer_cert_der: bytes) -> dic
     revocation status. Caller compares the embedded public certificate with
     the expected SHA-256 fingerprint or public .cer independently.
     """
+    # Prefer the provided KalkanCrypt Linux SDK only when explicitly enabled.
+    # No .so file is checked into GitHub or loaded into Flask itself.
+    if (os.getenv("ISNA_KALKAN_LIBRARY") or "").strip():
+        return _verify_with_kalkan(signed_xml)
+
     executable = (os.getenv("ISNA_XMLSEC1_BIN") or "xmlsec1").strip()
     if not executable or not shutil.which(executable):
         return {
