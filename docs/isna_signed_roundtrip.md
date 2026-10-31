@@ -43,6 +43,51 @@ compared on Android. If both file and hash are configured, both must match.
 This is a public certificate pin, not proof that the gateway registered it.
 
 
+## KalkanCrypt SDK 2.0.14 on Ubuntu TEST VPS (preferred)
+
+The Linux SDK library is proprietary: do NOT commit it to GitHub or put it in the Flask web root.
+The public certificate is embedded in SOAP; no .p12 or extra .cer file is needed to verify XMLDSig.
+
+Files inspected from the official SDK:
+- `libkalkancryptwr-64.so.2.0.14` is an x86-64 ELF shared object (8,009,488 bytes).
+- Its SHA-256: `4e0aaf7ba7752678f165ae015d60cca9a2bc9b27141f99594f0b07af1ab848ab`.
+- `libkalkancryptwr-64.so` is a 29-byte text pointer, NOT a shared library. Create a real symlink.
+- ELF dependencies: `libz.so.1`, `libltdl.so.7`, `libpcsclite.so.1`, `libc.so.6`.
+
+Copy ONLY the versioned ELF binary to `/home/ubuntu/` on TEST VPS through WinSCP.
+Then on TEST VPS:
+
+```bash
+sudo apt-get install -y zlib1g libltdl7 libpcsclite1
+sudo install -d -m 0755 /opt/nika/kalkan
+sudo install -m 0644 ~/libkalkancryptwr-64.so.2.0.14 /opt/nika/kalkan/
+sudo ln -sfn libkalkancryptwr-64.so.2.0.14 /opt/nika/kalkan/libkalkancryptwr-64.so
+sha256sum /opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14
+readelf -d /opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14 | grep NEEDED
+```
+
+Set in TEST `.env` (never PROD):
+
+```env
+ISNA_KALKAN_LIBRARY=/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14
+```
+
+Restart the TEST web service. Sign a FRESH inert SOAP on Android and use
+**Проверить подписанный SOAP на TEST VPS**. Native Init/VerifyXML calls run
+in a short-lived subprocess, never inside Gunicorn. A native crash, timeout,
+missing dependency or invalid signature fails closed. The parent parses only
+the fixed worker result, not arbitrary native stdout.
+
+Symbol availability alone does not establish successful verification.
+An actual Android-signed WS-Security KeyIdentifier example must be tested on VPS.
+No network or FNO submission occurs during this verification.
+
+Mocked offline tests:
+
+```bash
+cd /var/www/nika-business-test
+sudo -u www-data .venv/bin/python -m unittest discover -s tests -p 'test_isna_kalkan_verify_worker.py' -v
+```
 ## Independent cryptographic verification on TEST VPS
 
 - The server extracts the public X.509 DER from the signed SOAP itself.
