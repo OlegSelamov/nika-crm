@@ -25,7 +25,7 @@ class KalkanWorkerTests(unittest.TestCase):
             self.assertEqual(args[1], 0)
             self.assertIsInstance(args[2], ctypes.c_void_p)
             self.assertEqual(args[3], len(b"<signed/>"))
-            self.assertFalse(hasattr(mock_api, "KC_LoadKeyStore_called"))
+            mock_api.KC_LoadKeyStore.assert_not_called()
 
     def test_bad_signature_is_false_even_when_library_loads(self):
         with tempfile.TemporaryDirectory() as folder:
