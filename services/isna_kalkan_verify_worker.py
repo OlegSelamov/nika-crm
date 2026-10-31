@@ -19,6 +19,39 @@ MAX_REPORT = 8192
 # SDK KalkanCrypt.h: KC_XML_EXCL_C14N. Android uses exclusive XML C14N
 # for both SignedInfo and its single SOAP Body Reference transform.
 KC_XML_EXCL_C14N = 0x01000010
+# Official KalkanCrypt.h: certificate role values.
+KC_CERT_CA = 0x00000201
+KC_CERT_INTERMEDIATE = 0x00000202
+
+
+class KalkanTrustError(RuntimeError):
+    def __init__(self, native_code: int):
+        self.native_code = f'0x{int(native_code):08X}'
+        super().__init__('KalkanCrypt trust load failed')
+
+
+def load_test_trust(api: ctypes.CDLL, directory: str) -> None:
+    # Load only the two pinned 2022 GOST CA files in this verifier process.
+    # This must NEVER add a new OS-wide trust anchor or use a private key.
+    if not directory:
+        return
+    root = Path(directory)
+    if not root.is_absolute() or not root.is_dir() or root.is_symlink():
+        raise ValueError('KalkanCrypt TEST trust directory unavailable')
+    load = api.X509LoadCertificateFromFile
+    load.argtypes = [ctypes.c_char_p, ctypes.c_int]
+    load.restype = ctypes.c_ulong
+    for filename, cert_type in (
+        ('root_gost_2022.pem', KC_CERT_CA),
+        ('nca_gost_2022.pem', KC_CERT_INTERMEDIATE),
+    ):
+        file = root / filename
+        if not file.is_file() or file.is_symlink() or file.stat().st_size > 32768:
+            raise ValueError('Required KalkanCrypt TEST CA missing')
+        code = load(os.fsencode(file), cert_type)
+        if code != 0:
+            raise KalkanTrustError(code)
+
 
 
 def verify_native(xml: bytes, library: str) -> tuple[bool, str]:
@@ -39,6 +72,7 @@ def verify_native(xml: bytes, library: str) -> tuple[bool, str]:
     init.restype = ctypes.c_ulong
     if init() != 0:
         raise RuntimeError("KalkanCrypt Init failed")
+    load_test_trust(api, (os.getenv('ISNA_KALKAN_CA_DIR') or '').strip())
 
     # Linux x86-64 KalkanCrypt SDK 2.0.14 C ABI:
     # VerifyXML(alias, flags, xml, xmlLen, verifyInfo, verifyInfoLen*)
@@ -78,6 +112,9 @@ def main() -> int:
             else:
                 valid, native_code = verify_native(data, lib_path)
                 status = "verified" if valid else "invalid"
+    except KalkanTrustError as exc:
+        status = "error"
+        native_code = exc.native_code
     except (OSError, ValueError):
         status = "unavailable"
     except Exception:
