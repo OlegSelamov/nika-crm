@@ -11,7 +11,7 @@ import re
 import xml.etree.ElementTree as ET
 
 from scripts.isna_inspect_wss import (
-    BIP, DEMO, SOAP, WSSE, InvalidSoap, decode_cert,
+    BIP, DEMO, DS, SOAP, WSSE, InvalidSoap, decode_cert,
     extract_signer_certificate, inspect, q,
 )
 
