@@ -78,7 +78,7 @@ class RealServiceRoutingTests(unittest.TestCase):
             soap.replace("FNO_INTEGRATION", "FNO_INTEGRATION_STATUS"),
             soap.replace("nika-registered-test", "another-sender"),
             soap.replace("root/&gt;", "root&gt;ABC&lt;/root&gt;"),
-            soap.replace("key-identifier", "unknown"),
+            soap.replace(WSSE_X509V3, "urn:unknown:certificate"),
             soap.replace("KeyIdentifier", "X509Certificate"),
             soap.replace("TEST_DIGEST_ONLY", ""),
             soap.replace("</sender>", "<password>x</password></sender>"),
