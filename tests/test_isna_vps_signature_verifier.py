@@ -1,5 +1,6 @@
 """No-network tests for the independent TEST VPS cryptographic verifier."""
 from pathlib import Path
+import os
 import subprocess
 import unittest
 from unittest.mock import patch, Mock
@@ -10,6 +11,30 @@ from services.isna_vps_signature_verifier import (
 
 
 class VpsGostVerifierTests(unittest.TestCase):
+    def test_isolated_kalkan_worker_verified_with_explicit_protocol(self):
+        from unittest.mock import Mock
+        with patch.dict(os.environ, {"ISNA_KALKAN_LIBRARY": "/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14"}), \
+             patch("services.isna_vps_signature_verifier.subprocess.run") as run:
+            run.return_value = Mock(
+                returncode=0,
+                stdout=b'NIKA_KALKAN_XML_VERIFY_V1:{"status":"verified"}' + bytes([10]),
+            )
+            result = verify_soap_signature_on_vps("<signed/>", b"cert")
+            self.assertTrue(result["cryptoVerifiedOnServer"])
+            self.assertEqual(result["cryptoVerifier"], "KalkanCrypt")
+            self.assertEqual(run.call_args.kwargs["input"], b"<signed/>")
+            self.assertEqual(run.call_args.kwargs["timeout"], 10)
+
+    def test_kalkan_worker_crash_and_bad_output_never_verifies(self):
+        from unittest.mock import Mock
+        with patch.dict(os.environ, {"ISNA_KALKAN_LIBRARY": "/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14"}), \
+             patch("services.isna_vps_signature_verifier.subprocess.run") as run:
+            for code, output in [(139, b""), (0, b"GOST engine loaded"), (0, b"NIKA_KALKAN_XML_VERIFY_V1:{invalid}")]:
+                run.return_value = Mock(returncode=code, stdout=output)
+                result = verify_soap_signature_on_vps("<signed/>", b"cert")
+                self.assertFalse(result["cryptoVerifiedOnServer"])
+                self.assertEqual(result["cryptoVerificationStatus"], "error")
+
     def test_missing_binary_fails_closed(self):
         with patch("services.isna_vps_signature_verifier.shutil.which", return_value=None):
             result = verify_soap_signature_on_vps("<signed/>", b"cert")
