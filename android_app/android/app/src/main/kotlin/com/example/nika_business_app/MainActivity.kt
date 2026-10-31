@@ -229,7 +229,8 @@ class MainActivity : FlutterFragmentActivity() {
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
                     "signEsfXmlWithP12",
-                    "signIsnaSoapDemoWithP12" -> {
+                    "signIsnaSoapDemoWithP12",
+                    "signIsnaSoapDemoWithP12KeyIdentifier" -> {
                         val payload = call.argument<String>("payload") ?: ""
                         val password = call.argument<String>("password") ?: ""
                         val saveKey = call.argument<Boolean>("saveKey") ?: false
@@ -291,7 +292,8 @@ class MainActivity : FlutterFragmentActivity() {
             "signAlatauJwsWithP12" -> "readyForAlatau"
             "signEsfRawWithP12" -> "readyForEsfRaw"
             "signEsfXmlWithP12" -> "readyForEsfXml"
-            "signIsnaSoapDemoWithP12" -> "readyForEsfXml"
+            "signIsnaSoapDemoWithP12",
+            "signIsnaSoapDemoWithP12KeyIdentifier" -> "readyForEsfXml"
             else -> null
         }
         if (capabilityKey != null && capabilities[capabilityKey] != true) {
@@ -546,11 +548,13 @@ class MainActivity : FlutterFragmentActivity() {
                     passwordChars = password,
                     payload = payload,
                 )
-                "signIsnaSoapDemoWithP12" -> KalkanJwsSigner.signIsnaSoapDemo(
+                "signIsnaSoapDemoWithP12",
+                "signIsnaSoapDemoWithP12KeyIdentifier" -> KalkanJwsSigner.signIsnaSoapDemo(
                     context = this,
                     keyUri = uri,
                     passwordChars = password,
                     payload = payload,
+                    useWsseKeyIdentifier = method == "signIsnaSoapDemoWithP12KeyIdentifier",
                 )
                 else -> throw KalkanJwsSigner.SigningException(
                     "UNKNOWN_SIGN_METHOD",
