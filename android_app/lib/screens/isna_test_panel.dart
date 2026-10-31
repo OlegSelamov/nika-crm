@@ -328,7 +328,9 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       final serverCryptoVerified = result['cryptoVerifiedOnServer'] == true;
       final cryptoStatus = (result['cryptoVerificationStatus'] ?? '').toString();
       final nativeCode = (result['cryptoNativeCode'] ?? '').toString();
-      final nativeDetail = RegExp(r'^0x[0-9A-F]{8,16}
+      final nativeDetail = nativeCode.startsWith('0x') && nativeCode.length <= 18
+          ? 'KalkanCrypt VerifyXML: $nativeCode\\n'
+          : '';
       const cryptoMessages = <String, String>{
         'verified': 'Подпись и digest SOAP Body криптографически проверены на VPS. ✅',
         'invalid': 'Подпись или digest SOAP Body НЕ прошли проверку на VPS. ❌',
@@ -550,7 +552,9 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
               : 'Контрольный SHA-256 на VPS не задан (сравнение отдельно).';
       final cryptoStatus = (verified['cryptoVerificationStatus'] ?? '').toString();
       final nativeCode = (verified['cryptoNativeCode'] ?? '').toString();
-      final nativeDetail = RegExp(r'^0x[0-9A-F]{8,16}
+      final nativeDetail = nativeCode.startsWith('0x') && nativeCode.length <= 18
+          ? 'KalkanCrypt VerifyXML: $nativeCode\\n'
+          : '';
       const cryptoNotes = <String, String>{
         'verified': 'Криптопроверка GOST SOAP Body на TEST VPS: успешна. ✅',
         'invalid': 'Подпись / digest SOAP Body не прошли проверку на VPS. ❌',
