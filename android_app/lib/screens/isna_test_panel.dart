@@ -535,12 +535,25 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           verified['nonFiling'] != true ||
           verified['serviceId'] != 'FNO_INTEGRATION' ||
           verified['certificateProfile'] != 'key-identifier' ||
-          verified['cryptoVerifiedOnServer'] != false) {
+          verified['cryptoVerifiedOnServer'] is! bool) {
         throw StateError('TEST VPS не подтвердил безопасный формат маршрута.');
+      }
+      final cryptoVerified = verified['cryptoVerifiedOnServer'] == true;
+      final cryptoStatus = (verified['cryptoVerificationStatus'] ?? '').toString();
+      const cryptoNotes = <String, String>{
+        'verified': 'Криптопроверка GOST SOAP Body на TEST VPS: успешна. ✅',
+        'invalid': 'Подпись / digest SOAP Body не прошли проверку на VPS. ❌',
+        'unavailable': 'На TEST VPS нет XMLDSig-верификатора. ⚠️',
+        'unsupported': 'XMLSec на TEST VPS не поддерживает ГОСТ 2015-512. ⚠️',
+        'error': 'Ошибка независимой проверки XMLDSig на TEST VPS. ⚠️',
+      };
+      if (!cryptoNotes.containsKey(cryptoStatus) ||
+          cryptoVerified != (cryptoStatus == 'verified')) {
+        throw StateError('Некорректный статус криптопроверки TEST VPS.');
       }
       setState(() {
         routingProbeSignedSoap = soap;
-        routingProbeValidated = true;
+        routingProbeValidated = cryptoVerified;
         signedXml = soap;
         signedFileName = 'nika-isna-FNO-routing-only-NO-FNO';
         status = 'Готово к проверке настоящего сервиса FNO_INTEGRATION. ✅\n'
@@ -548,7 +561,8 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             'SOAP Body подписан KalkanCrypt через WSSE KeyIdentifier. ✅\n'
             'Проверка структуры на TEST VPS: успешно. ✅\n'
             'Бизнес-данные: только недействительный <root/>; настоящей ФНО нет.\n'
-            'Подпись на VPS криптографически не проверялась.\n'
+            '${cryptoNotes[cryptoStatus]}\n'
+            '${cryptoVerified ? "Сетевой маршрутный тест разрешён. ✅" : "Сетевой тест заблокирован до подтверждения подписи на VPS. ⚠️"}\n'
             'В государственный ШЭП ничего не отправлено.\n'
             'Для реального тестового POST нужна отдельная кнопка.';
       });
