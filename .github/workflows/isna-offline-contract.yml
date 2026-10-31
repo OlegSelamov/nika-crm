@@ -7,6 +7,8 @@ on:
       - 'services/isna_signed_roundtrip.py'
       - 'services/isna_vps_signature_verifier.py'
       - 'services/isna_kalkan_verify_worker.py'
+      - 'scripts/install_isna_kalkan_trust.py'
+      - 'tests/test_isna_kalkan_trust_installer.py'
       - 'tests/test_isna_kalkan_verify_worker.py'
       - 'tests/test_isna_vps_signature_verifier.py'
       - 'services/isna_fno_integration.py'
@@ -38,5 +40,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_isna_vps_signature_verifier.py' -v
       - name: KalkanCrypt worker contract tests (no native .so)
         run: python -m unittest discover -s tests -p 'test_isna_kalkan_verify_worker.py' -v
+      - name: Pinned TEST public CA ZIP installer (no native calls)
+        run: python -m unittest discover -s tests -p 'test_isna_kalkan_trust_installer.py' -v
       - name: Existing official FNO wire-format regressions
         run: python -m unittest discover -s tests -p 'test_isna_fno_integration.py' -v
