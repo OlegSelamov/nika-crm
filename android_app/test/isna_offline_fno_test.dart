@@ -2,6 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nika_business_app/screens/isna_test_panel.dart';
 
 void main() {
+  test('local certificate comparison needs valid matching SHA-256 fingerprints', () {
+    const a = 'CC9955B21C8977FB40EE2AA446029D4A5ECEF873855B1D614D3C16C4E3D3BE30';
+    const b = 'CC9955B21C8977FB40EE2AA446029D4A5ECEF873855B1D614D3C16C4E3D3BE31';
+    expect(isIsnaSameCertificateSha256(a, a.toLowerCase()), isTrue);
+    expect(isIsnaSameCertificateSha256(a, b), isFalse);
+    expect(isIsnaSameCertificateSha256('', a), isFalse);
+    expect(isIsnaSameCertificateSha256(a, 'not-a-certificate'), isFalse);
+    expect(isIsnaSameCertificateSha256(a, a + '0'), isFalse);
+  });
+
   test('transport certificate validity boundaries are enforced before WShEP POST', () {
     expect(
       isIsnaCertificateCurrent(
