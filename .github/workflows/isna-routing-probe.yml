@@ -1,0 +1,33 @@
+name: ISNA safe FNO routing probe checks
+
+on:
+  pull_request:
+    branches: [test]
+    paths:
+      - 'services/isna_real_service_probe.py'
+      - 'android_app/android/app/src/main/kotlin/com/example/nika_business_app/IsnaRoutingProbeValidator.kt'
+      - 'android_app/android/app/src/main/kotlin/com/example/nika_business_app/KalkanJwsSigner.kt'
+      - 'android_app/lib/screens/isna_test_panel.dart'
+      - 'tests/test_isna_real_service_probe.py'
+      - '.github/workflows/isna-routing-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  no-network-routing-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline test dependencies
+        run: python -m pip install --disable-pip-version-check requests python-dotenv
+      - name: Compile safe routing probe
+        run: python -m compileall -q routes/accounting.py services/isna_real_service_probe.py
+      - name: Run mocked TEST-only gateway validations
+        run: |
+          python -m unittest discover -s tests -p 'test_isna_real_service_probe.py' -v
+          python -m unittest discover -s tests -p 'test_isna_shep_transport_test.py' -v
+          python -m unittest discover -s tests -p 'test_isna_signed_roundtrip.py' -v
