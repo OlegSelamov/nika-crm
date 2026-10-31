@@ -5,7 +5,8 @@ from unittest.mock import patch
 from xml.etree import ElementTree as ET
 
 from scripts.isna_inspect_wss import (
-    DS, EXC_C14N, GOST_DIGEST, GOST_SIGNATURE, InvalidSoap, SOAP, WSSE, q,
+    DS, EXC_C14N, GOST_DIGEST, GOST_SIGNATURE, InvalidSoap, SOAP, WSSE,
+    WSSE_X509V3, WSSE_BASE64_BINARY, q,
 )
 from services import isna_bip
 from services.isna_signed_roundtrip import validate_offline_signed_soap
@@ -14,7 +15,7 @@ from services.isna_signing_lab import create_server_signing_sample
 FAKE_DER = b"\x30\x82\x00\x02\x00\x00"  # synthetic bytes only; NEVER a real cert/signature
 
 
-def structurally_signed_sample():
+def structurally_signed_sample(*, key_identifier=False):
     root = ET.fromstring(create_server_signing_sample()["soapXml"])
     header = root.find(q(SOAP, "Header"))
     body = root.find(q(SOAP, "Body"))
@@ -31,9 +32,16 @@ def structurally_signed_sample():
     ET.SubElement(ref, q(DS, "DigestValue")).text = "synthetic"
     ET.SubElement(sig, q(DS, "SignatureValue")).text = "synthetic"
     key_info = ET.SubElement(sig, q(DS, "KeyInfo"))
-    x509_data = ET.SubElement(key_info, q(DS, "X509Data"))
-    ET.SubElement(x509_data, q(DS, "X509Certificate")).text = base64.b64encode(
-        FAKE_DER).decode("ascii")
+    if key_identifier:
+        ref = ET.SubElement(key_info, q(WSSE, "SecurityTokenReference"))
+        ET.SubElement(
+            ref, q(WSSE, "KeyIdentifier"),
+            EncodingType=WSSE_BASE64_BINARY, ValueType=WSSE_X509V3,
+        ).text = base64.b64encode(FAKE_DER).decode("ascii")
+    else:
+        x509_data = ET.SubElement(key_info, q(DS, "X509Data"))
+        ET.SubElement(x509_data, q(DS, "X509Certificate")).text = base64.b64encode(
+            FAKE_DER).decode("ascii")
     return ET.tostring(root, encoding="unicode")
 
 
@@ -45,6 +53,7 @@ class RoundTripOfflineTests(unittest.TestCase):
             post.assert_not_called()
         self.assertTrue(result["structureOk"])
         self.assertEqual(result["sampleType"], "test-server-bip-demo")
+        self.assertEqual(result["certificateProfile"], "x509-data")
         self.assertIsNone(result["registeredCertMatch"])
         self.assertFalse(result["cryptoVerifiedOnServer"])
         self.assertFalse(result["soapSent"])
@@ -56,6 +65,29 @@ class RoundTripOfflineTests(unittest.TestCase):
             soap, registered_public_cert=FAKE_DER)["registeredCertMatch"])
         self.assertFalse(validate_offline_signed_soap(
             soap, registered_public_cert=b"\x30\x82\x00\x02\x00\x01")["registeredCertMatch"])
+
+    def test_key_identifier_profile_is_structural_not_cryptographic(self):
+        soap = structurally_signed_sample(key_identifier=True)
+        result = validate_offline_signed_soap(soap)
+        self.assertTrue(result["structureOk"])
+        self.assertEqual(result["certificateProfile"], "key-identifier")
+        self.assertEqual(result["sampleType"], "test-server-bip-demo")
+        self.assertFalse(result["cryptoVerifiedOnServer"])
+        self.assertTrue(validate_offline_signed_soap(
+            soap, registered_public_cert=FAKE_DER)["registeredCertMatch"])
+
+    def test_rejects_bad_or_ambiguous_security_token_reference(self):
+        soap = structurally_signed_sample(key_identifier=True)
+        for mutated in (
+            soap.replace(WSSE_X509V3, "urn:unknown:certificate"),
+            soap.replace(WSSE_BASE64_BINARY, "urn:wrong-encoding"),
+            soap.replace("KeyIdentifier", "OtherToken"),
+            soap.replace("NIKA_ISNA_OFFLINE_SIGNING_ONLY", "FNO_INTEGRATION"),
+            soap.replace("nika-offline-test", "real-registered-sender"),
+        ):
+            with self.subTest(mutated=mutated[:200]):
+                with self.assertRaises(InvalidSoap):
+                    validate_offline_signed_soap(mutated)
 
     def test_real_service_id_never_accepted(self):
         soap = structurally_signed_sample().replace(
