@@ -58,6 +58,10 @@ object KalkanJwsSigner {
     private const val SOAP_ENVELOPE_NS = "http://schemas.xmlsoap.org/soap/envelope/"
     private const val WSSE_NS =
         "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+    private const val WSSE_BASE64_BINARY =
+        "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary"
+    private const val WSSE_X509V3 =
+        "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3"
     private const val WSU_NS =
         "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
     private const val XMLDSIG_NS = "http://www.w3.org/2000/09/xmldsig#"
@@ -244,6 +248,7 @@ object KalkanJwsSigner {
         keyUri: Uri,
         passwordChars: CharArray,
         payload: String,
+        useWsseKeyIdentifier: Boolean = false,
     ): Map<String, Any?> {
         if (payload.isBlank()) throw SigningException("EMPTY_PAYLOAD", "Нет тестового SOAP XML")
         val material = loadKeyMaterial(context, keyUri, passwordChars)
@@ -345,11 +350,15 @@ object KalkanJwsSigner {
             }
 
             initializeXmlSecurity(material.provider)
-            val signedXml = signSoapBodyWsSecurity(doc, header, body, material.privateKey, material.certificate)
+            val signedXml = signSoapBodyWsSecurity(
+                doc, header, body, material.privateKey, material.certificate,
+                useWsseKeyIdentifier = useWsseKeyIdentifier,
+            )
             return certificateResult(material.certificate) + mapOf(
                 "signedXml" to signedXml,
                 "signatureVerified" to true,
                 "innerSignatureVerified" to (demo == null),
+                "wsseCertProfile" to (if (useWsseKeyIdentifier) "key-identifier" else "x509-data"),
                 "certificate" to Base64.encodeToString(material.certificate.encoded, Base64.NO_WRAP),
                 "algorithm" to XML_SIGNATURE_URI,
                 "offlineOnly" to true,
@@ -365,6 +374,7 @@ object KalkanJwsSigner {
         body: Element,
         privateKey: PrivateKey,
         certificate: X509Certificate,
+        useWsseKeyIdentifier: Boolean = false,
     ): String {
         var stage = "подготовка SOAP wsse:Security"
         try {
@@ -395,8 +405,27 @@ object KalkanJwsSigner {
             xmlSignatureClass.getMethod(
                 "addDocument", String::class.java, transformsClass, String::class.java,
             ).invoke(xmlSignature, "#$bodyId", transforms, XML_DIGEST_URI)
-            xmlSignatureClass.getMethod("addKeyInfo", X509Certificate::class.java)
-                .invoke(xmlSignature, certificate)
+            if (useWsseKeyIdentifier) {
+                // Android's Java SDK has no native SignWSSE() API. This is a
+                // *separate experimental profile* modelled on the WS-Security
+                // X509v3 KeyIdentifier produced by KalkanCryptCOM SignWSSE.
+                // It stays inside the signed XMLDSig and retains the same
+                // GOST SignatureMethod, exclusive C14N and Body wsu:Id ref.
+                val signatureElement = xmlSignatureClass.getMethod("getElement")
+                    .invoke(xmlSignature) as Element
+                val keyInfo = document.createElementNS(XMLDSIG_NS, "ds:KeyInfo")
+                val reference = document.createElementNS(WSSE_NS, "wsse:SecurityTokenReference")
+                val identifier = document.createElementNS(WSSE_NS, "wsse:KeyIdentifier")
+                identifier.setAttribute("EncodingType", WSSE_BASE64_BINARY)
+                identifier.setAttribute("ValueType", WSSE_X509V3)
+                identifier.textContent = Base64.encodeToString(certificate.encoded, Base64.NO_WRAP)
+                reference.appendChild(identifier)
+                keyInfo.appendChild(reference)
+                signatureElement.appendChild(keyInfo)
+            } else {
+                xmlSignatureClass.getMethod("addKeyInfo", X509Certificate::class.java)
+                    .invoke(xmlSignature, certificate)
+            }
             xmlSignatureClass.getMethod("sign", Key::class.java)
                 .invoke(xmlSignature, privateKey)
 
