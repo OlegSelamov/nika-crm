@@ -89,6 +89,31 @@ class RoundTripOfflineTests(unittest.TestCase):
                 with self.assertRaises(InvalidSoap):
                     validate_offline_signed_soap(mutated)
 
+    def test_independent_vps_crypto_result_not_mistaken_for_structure(self):
+        signed = structurally_signed_sample(key_identifier=True)
+        with patch("services.isna_signed_roundtrip.verify_soap_signature_on_vps") as verify:
+            verify.return_value = {
+                "cryptoVerifiedOnServer": True,
+                "cryptoVerificationStatus": "verified",
+                "cryptoVerifier": "xmlsec1",
+            }
+            result = validate_offline_signed_soap(signed)
+            verify.assert_called_once()
+            self.assertEqual(verify.call_args.args[0], signed)
+            self.assertEqual(verify.call_args.args[1], FAKE_DER)
+        self.assertTrue(result["structureOk"])
+        self.assertTrue(result["cryptoVerifiedOnServer"])
+
+    def test_fingerprint_pinning_without_cer_upload(self):
+        import hashlib
+        fingerprint = hashlib.sha256(FAKE_DER).hexdigest()
+        with patch.dict("os.environ", {"ISNA_BIP_REGISTERED_CERT_SHA256": fingerprint}):
+            result = validate_offline_signed_soap(structurally_signed_sample())
+            self.assertTrue(result["registeredCertMatch"])
+        with patch.dict("os.environ", {"ISNA_BIP_REGISTERED_CERT_SHA256": "0" * 64}):
+            result = validate_offline_signed_soap(structurally_signed_sample())
+            self.assertFalse(result["registeredCertMatch"])
+
     def test_real_service_id_never_accepted(self):
         soap = structurally_signed_sample().replace(
             "NIKA_ISNA_OFFLINE_SIGNING_ONLY", "FNO_INTEGRATION")
