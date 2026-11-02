@@ -681,31 +681,70 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       final outer = await showDialog<Map<String, dynamic>>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => _NativeIsnaSignDialog(xml: unsignedSoap, soapMode: true),
+        builder: (_) => _NativeIsnaSignDialog(
+          xml: unsignedSoap, soapMode: true, useWsseKeyIdentifier: true,
+        ),
       );
       if (outer == null || !mounted) {
         if (mounted) setState(() => status = 'Вторая подпись отменена. Ничего не отправлено.');
         return;
       }
       if (outer['signatureVerified'] != true ||
-          outer['innerSignatureVerified'] != true) {
-        throw StateError('Не подтверждены обе подписи KalkanCrypt.');
+          outer['innerSignatureVerified'] != true ||
+          outer['wsseCertProfile'] != 'key-identifier') {
+        throw StateError('KalkanCrypt не подтвердил две подписи и профиль KeyIdentifier.');
       }
+      final signedSoap = (outer['signedXml'] ?? '').toString();
+      if (signedSoap.isEmpty) throw StateError('Вторая подпись SOAP отсутствует.');
       setState(() {
-        signedXml = (outer['signedXml'] ?? '').toString();
+        signedXml = signedSoap;
         signedFileName = 'nika-isna-fno-double-signed-OFFLINE-ONLY';
-        status = 'Пробная ФНО 000.00 подписана XMLDSig. ✅\n'
-            'Внутренняя подпись проверена KalkanCrypt. ✅\n'
-            'Внешний SOAP FNO_INTEGRATION подписан WS-Security. ✅\n'
-            'Подпись SOAP Body проверена KalkanCrypt. ✅\n'
-            'senderId вымышленный, форма заведомо недействительна.\n'
-            'Это ТОЛЬКО локальный тест: на VPS и в ШЭП ничего не отправлено.';
+        busy = true;
+        status = 'Обе подписи проверены локально на Android. ✅\n'
+            'WSSE: KeyIdentifier. ✅\n'
+            'Проверяем ОБЕ подписи независимо на TEST VPS…\n'
+            'В ШЭП и ИСНА ничего не отправлено.';
+      });
+      final verified = await ApiService.isnaTestVerifyDoubleFnoOffline(signedSoap);
+      if (!mounted) return;
+      if (verified['structureOk'] != true ||
+          verified['sampleType'] != 'invalid-fno-000.00-offline-double' ||
+          verified['certificateProfile'] != 'key-identifier' ||
+          verified['offlineOnly'] != true ||
+          verified['gatewayContacted'] != false ||
+          verified['filingCreated'] != false ||
+          verified['innerCryptoVerified'] is! bool ||
+          verified['outerCryptoVerified'] is! bool ||
+          verified['bothVerified'] is! bool) {
+        throw StateError('TEST VPS вернул неожиданный результат проверки двух подписей.');
+      }
+      final innerOk = verified['innerCryptoVerified'] == true;
+      final outerOk = verified['outerCryptoVerified'] == true;
+      final bothOk = verified['bothVerified'] == true;
+      if (bothOk != (innerOk && outerOk)) {
+        throw StateError('TEST VPS вернул противоречивые результаты проверки.');
+      }
+      final innerCode = (verified['innerNativeCode'] ?? '').toString();
+      final outerCode = (verified['outerNativeCode'] ?? '').toString();
+      setState(() {
+        status = 'ДВОЙНАЯ ПОДПИСЬ · NIKA TEST VPS\n'
+            'Android: внутренняя XMLDSig проверена. ✅\n'
+            'Android: SOAP WSSE KeyIdentifier проверен. ✅\n'
+            'VPS: подпись ФНО 000.00 — ${innerOk ? "✅" : "❌"}\n'
+            'KalkanCrypt (ФНО): ${innerCode.isEmpty ? "нет кода" : innerCode}\n'
+            'VPS: подпись SOAP Body — ${outerOk ? "✅" : "❌"}\n'
+            'KalkanCrypt (SOAP): ${outerCode.isEmpty ? "нет кода" : outerCode}\n'
+            '${bothOk ? "Обе подписи независимо подтверждены. ✅" : "Одна или обе подписи НЕ прошли проверку VPS. ❌"}\n'
+            'Это только заведомо недействительная ФНО 000.00.\n'
+            'В ШЭП и ИСНА ничего не отправлено.';
       });
     } catch (error) {
       if (mounted) {
-        setState(() => status = 'Ошибка локальной проверки двух подписей: $error\n'
+        setState(() => status = 'Ошибка проверки двойной подписи: $error\n'
             'Ничего не отправлено в ШЭП или ИСНА.');
       }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
