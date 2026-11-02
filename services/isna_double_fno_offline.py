@@ -182,7 +182,7 @@ def extract_taxpayer_public_cert(inner_xml: str) -> bytes:
         key_info = unique_child(signature, q(DS, "KeyInfo"))
         x509_data = single_element(key_info, q(DS, "X509Data"))
         cert_text = single_element(x509_data, q(DS, "X509Certificate")).text or ""
-        return base64.b64decode(re.sub(r"\\s+", "", cert_text), validate=True)
+        return base64.b64decode(re.sub(r"\s+", "", cert_text), validate=True)
     except (ET.ParseError, ValueError, binascii.Error):
         reject("unreadable inner signing certificate")
 
