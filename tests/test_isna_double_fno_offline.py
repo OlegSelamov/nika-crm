@@ -73,7 +73,7 @@ class DoubleFnoOfflineTests(unittest.TestCase):
         original, _ = self.make_sample()
         for altered in (
             original.replace("nika-fno-offline-only", "registered-sender"),
-            original.replace('"code":"000.00"', '"code":"910.00"'),
+            original.replace('000.00', '910.00'),
             original.replace('"#id-fno-offline-12345"', '"#id-wrong"'),
             original.replace("<serviceId>FNO_INTEGRATION</serviceId>",
                              "<serviceId>FNO_INTEGRATION_STATUS</serviceId>"),
