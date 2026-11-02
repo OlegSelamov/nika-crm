@@ -108,8 +108,8 @@ class DoubleFnoOfflineTests(unittest.TestCase):
             self.assertTrue(result["bothVerified"])
 
     def test_roles_match_only_registered_transport_cert(self):
-        cert_a = b"\\x30\\x82\\x01\\x01"
-        cert_b = b"\\x30\\x82\\x01\\x02"
+        cert_a = b"\x30\x82\x01\x01"
+        cert_b = b"\x30\x82\x01\x02"
         pin_b = hashlib.sha256(cert_b).hexdigest().upper()
         with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": ""}):
             same = compare_certificate_roles(cert_a, cert_a)
@@ -130,8 +130,8 @@ class DoubleFnoOfflineTests(unittest.TestCase):
 
     def test_offline_verifier_reports_two_roles_without_authorizing_filing(self):
         soap, _ = self.make_sample()
-        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": ""}), \\
-             patch("services.isna_double_fno_offline.verify_soap_signature_on_vps") as outer, \\
+        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": ""}), \
+             patch("services.isna_double_fno_offline.verify_soap_signature_on_vps") as outer, \
              patch("services.isna_double_fno_offline.verify_inner_fno_signature_on_vps") as inner_check:
             response = dict(cryptoVerifiedOnServer=True, cryptoVerificationStatus="verified",
                             cryptoNativeCode="0x00000000")
@@ -142,8 +142,8 @@ class DoubleFnoOfflineTests(unittest.TestCase):
             self.assertFalse(report["taxpayerAuthorityChecked"])
             self.assertIsNone(report["governmentCertificateAccepted"])
             self.assertFalse(report["filingCreated"])
-            different = base64.b64encode(b"\\x30\\x82\\x01\\x02").decode()
-            original = base64.b64encode(b"\\x30\\x82\\x01\\x01").decode()
+            different = base64.b64encode(b"\x30\x82\x01\x02").decode()
+            original = base64.b64encode(b"\x30\x82\x01\x01").decode()
             distinct_soap = soap.replace(
                 ">" + original + "</wsse:KeyIdentifier>",
                 ">" + different + "</wsse:KeyIdentifier>",
