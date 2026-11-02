@@ -874,7 +874,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           OutlinedButton.icon(
             onPressed: busy ? null : _signFnoOfflineDouble,
             icon: const Icon(Icons.layers_outlined),
-            label: const Text('Проверить две подписи ФНО · локально'),
+            label: const Text('Проверить две подписи ФНО · Android + TEST VPS'),
           ),
           OutlinedButton.icon(
             onPressed: busy || signedXml == null ? null : _save,
