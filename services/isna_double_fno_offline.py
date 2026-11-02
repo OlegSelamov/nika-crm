@@ -22,6 +22,7 @@ from scripts.isna_inspect_wss import (
 from services.isna_vps_signature_verifier import (
     verify_soap_signature_on_vps, verify_inner_fno_signature_on_vps,
 )
+from services.isna_transport_certificate import registered_transport_certificate_sha256
 
 MAX_DOUBLE_SOAP_BYTES = 256_000
 DEMO_SENDER = "nika-fno-offline-only"
@@ -196,9 +197,7 @@ def compare_certificate_roles(inner_cert: bytes, outer_cert: bytes) -> dict:
     """
     inner_hash = hashlib.sha256(inner_cert).hexdigest().upper()
     outer_hash = hashlib.sha256(outer_cert).hexdigest().upper()
-    pinned = (os.getenv("ISNA_BIP_REGISTERED_CERT_SHA256") or "").strip().replace(":", "").upper()
-    if pinned and not re.fullmatch(r"[A-F0-9]{64}", pinned):
-        reject("invalid configured transport certificate fingerprint")
+    pinned = registered_transport_certificate_sha256()
     return {
         "taxpayerCertSha256": inner_hash,
         "transportCertSha256": outer_hash,
@@ -207,6 +206,7 @@ def compare_certificate_roles(inner_cert: bytes, outer_cert: bytes) -> dict:
         "transportCertMatchesConfiguredPin": outer_hash == pinned if pinned else None,
         "taxpayerAuthorityChecked": False,
         "governmentCertificateAccepted": None,
+        "transportCertificateIdentityReady": bool(pinned) and inner_hash != outer_hash and outer_hash == pinned,
     }
 
 
