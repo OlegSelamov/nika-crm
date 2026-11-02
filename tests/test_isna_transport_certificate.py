@@ -1,10 +1,11 @@
 """No-network tests for public registered signer pin and offline-only CLI."""
+import ctypes
 import hashlib
 import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from scripts.isna_inspect_wss import InvalidSoap
 from services.isna_transport_certificate import registered_transport_certificate_sha256
@@ -85,6 +86,35 @@ class TransportCertificateTests(unittest.TestCase):
             sign_test_soap_native(b"", library="/unused.so",
                                   key_path=Path("/missing/key.p12"),
                                   password=b"secret", body_id="id-demo123")
+
+    def test_native_sign_uses_exclusive_c14n_and_only_dedicated_p12(self):
+        native = MagicMock()
+        native.Init.return_value = 0
+        native.KC_LoadKeyStore.return_value = 0
+        soap_out = b"<soap:Envelope>inert-signed-test</soap:Envelope>"
+        def produce_wsse(alias, flags, data, input_size, out, out_size, node_id):
+            self.assertEqual(flags, 0x01000010)
+            self.assertEqual(node_id, b"id-test-1234")
+            self.assertEqual(data, b"<soap/>")
+            self.assertEqual(input_size, len(data))
+            ctypes.memmove(out, soap_out, len(soap_out))
+            ctypes.cast(out_size, ctypes.POINTER(ctypes.c_int)).contents.value = len(soap_out)
+            return 0
+        native.SignWSSE.side_effect = produce_wsse
+        with patch("services.isna_transport_signer_cli.ctypes.CDLL", return_value=native), \\
+             patch("services.isna_transport_signer_cli._private_key_location"), \\
+             patch("pathlib.Path.is_file", return_value=True), \\
+             patch("pathlib.Path.is_symlink", return_value=False):
+            signed, load_code, sign_code = sign_test_soap_native(
+                b"<soap/>", library="/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14",
+                key_path=Path("/private/key.p12"),
+                password=b"test-only-not-a-real-password", body_id="id-test-1234",
+            )
+        self.assertEqual(signed, soap_out)
+        self.assertEqual((load_code, sign_code), ("0x00000000", "0x00000000"))
+        self.assertEqual(native.KC_LoadKeyStore.call_count, 1)
+        self.assertEqual(native.SignWSSE.call_count, 1)
+        native.KC_Finalize.assert_called_once()
 
     def test_cli_does_not_provide_flask_api_or_gateway_method(self):
         import services.isna_transport_signer_cli as signer
