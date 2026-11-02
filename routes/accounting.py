@@ -2996,6 +2996,36 @@ def accounting_report():
 
 
 
+@accounting_bp.route("/accounting/isna/test/verify-double-fno-offline", methods=["POST"])
+def isna_test_verify_double_fno_offline():
+    """Only a fixed fake FNO 000.00; verify both signatures, NEVER POST to SHÈP."""
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Только TEST."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Необходим вход."}), 401
+    if not _require_company():
+        return jsonify({"error": "Не выбрана организация."}), 403
+    from scripts.isna_inspect_wss import InvalidSoap
+    from services.isna_double_fno_offline import (
+        MAX_DOUBLE_SOAP_BYTES, verify_offline_double_soap,
+    )
+    # JSON escaping adds bytes beyond the signed SOAP payload itself.
+    if request.content_length is None or request.content_length > MAX_DOUBLE_SOAP_BYTES + 32768:
+        return jsonify({"error": "Слишком большой тестовый SOAP."}), 413
+    body = request.get_json(silent=True)
+    soap_xml = body.get("soapXml") if isinstance(body, dict) else None
+    if not isinstance(soap_xml, str):
+        return jsonify({"error": "Требуется подписанный пробный SOAP."}), 400
+    try:
+        result = verify_offline_double_soap(soap_xml)
+    except (InvalidSoap, ValueError):
+        return jsonify({"error": "Недопустимая структура пробной двойной подписи."}), 422
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @accounting_bp.route("/accounting/isna/test/verify-signed-soap", methods=["POST"])
 def isna_test_verify_signed_soap():
     """TEST-only signed inert SOAP roundtrip. NEVER relay to BIP or store XML."""
