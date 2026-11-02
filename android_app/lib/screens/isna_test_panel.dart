@@ -743,10 +743,10 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             'VPS: подпись SOAP Body — ${outerOk ? "✅" : "❌"}\n'
             'KalkanCrypt (SOAP): ${outerCode.isEmpty ? "нет кода" : outerCode}\n'
             '${bothOk ? "Обе подписи независимо подтверждены. ✅" : "Одна или обе подписи НЕ прошли проверку VPS. ❌"}\n'
-            'ЭЦП налогоплательщика: ${taxpayerFingerprint.substring(0, 12)}…\\n'
-            'ЭЦП транспорта: ${transportFingerprint.substring(0, 12)}…\\n'
-            '$roleNote\\n'
-            '$pinNote\\n'
+            'ЭЦП налогоплательщика: ${taxpayerFingerprint.substring(0, 12)}…\n'
+            'ЭЦП транспорта: ${transportFingerprint.substring(0, 12)}…\n'
+            '$roleNote\n'
+            '$pinNote\n'
             'Это только заведомо недействительная ФНО 000.00.\n'
             'В ШЭП и ИСНА ничего не отправлено.';
       });
