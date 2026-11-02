@@ -101,9 +101,9 @@ class TransportCertificateTests(unittest.TestCase):
             ctypes.cast(out_size, ctypes.POINTER(ctypes.c_int)).contents.value = len(soap_out)
             return 0
         native.SignWSSE.side_effect = produce_wsse
-        with patch("services.isna_transport_signer_cli.ctypes.CDLL", return_value=native), \\
-             patch("services.isna_transport_signer_cli._private_key_location"), \\
-             patch("pathlib.Path.is_file", return_value=True), \\
+        with patch("services.isna_transport_signer_cli.ctypes.CDLL", return_value=native), \
+             patch("services.isna_transport_signer_cli._private_key_location"), \
+             patch("pathlib.Path.is_file", return_value=True), \
              patch("pathlib.Path.is_symlink", return_value=False):
             signed, load_code, sign_code = sign_test_soap_native(
                 b"<soap/>", library="/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14",
