@@ -24,7 +24,7 @@ TIMEOUT_SECONDS = 10
 _KALKAN_PROTOCOL = "NIKA_KALKAN_XML_VERIFY_V1:"
 
 
-def _verify_with_kalkan(signed_xml: str) -> dict:
+def _verify_with_kalkan(signed_xml: str, *, inclusive: bool = False) -> dict:
     """Run native KalkanCrypt in a child, never the Gunicorn process.
 
     Configuration is opt-in. A crash, timeout, missing SDK dependency or
@@ -37,7 +37,7 @@ def _verify_with_kalkan(signed_xml: str) -> dict:
     worker = Path(__file__).with_name("isna_kalkan_verify_worker.py")
     try:
         completed = subprocess.run(
-            [sys.executable, str(worker)],
+            [sys.executable, str(worker)] + (["--inclusive"] if inclusive else []),
             input=signed_xml.encode("utf-8"),
             capture_output=True, timeout=TIMEOUT_SECONDS, check=False,
         )
@@ -78,6 +78,24 @@ def _verify_with_kalkan(signed_xml: str) -> dict:
         "cryptoNativeCode": native_code,
     }
 
+
+
+def verify_inner_fno_signature_on_vps(signed_xml: str) -> dict:
+    """Independently verify the *entire* enclosed offline FNO XMLDSig.
+
+    Called only after a strict fixed-payload and X509Data structural check.
+    Native KalkanCrypt uses inclusive C14N for Android's 3-arg XMLSignature
+    SignedInfo. A missing SDK must fail closed; do not assume OS xmlsec has GOST.
+    No request is sent to Smart Bridge.
+    """
+    if not (os.getenv("ISNA_KALKAN_LIBRARY") or "").strip():
+        return {
+            "cryptoVerifiedOnServer": False,
+            "cryptoVerificationStatus": "unavailable",
+            "cryptoVerifier": "KalkanCrypt",
+            "cryptoNativeCode": None,
+        }
+    return _verify_with_kalkan(signed_xml, inclusive=True)
 
 
 def verify_soap_signature_on_vps(signed_xml: str, signer_cert_der: bytes) -> dict:
