@@ -19,6 +19,7 @@ MAX_REPORT = 8192
 # SDK KalkanCrypt.h: KC_XML_EXCL_C14N. Android uses exclusive XML C14N
 # for both SignedInfo and its single SOAP Body Reference transform.
 KC_XML_EXCL_C14N = 0x01000010
+KC_XML_INCL_C14N = 0x01000001
 # Official KalkanCrypt.h: certificate role values.
 KC_CERT_CA = 0x00000201
 KC_CERT_INTERMEDIATE = 0x00000202
@@ -54,7 +55,9 @@ def load_test_trust(api: ctypes.CDLL, directory: str) -> None:
 
 
 
-def verify_native(xml: bytes, library: str) -> tuple[bool, str]:
+def verify_native(xml: bytes, library: str, *, c14n_flags: int = KC_XML_EXCL_C14N) -> tuple[bool, str]:
+    if c14n_flags not in (KC_XML_EXCL_C14N, KC_XML_INCL_C14N):
+        raise ValueError('Unsupported XML canonicalization profile')
     if not 0 < len(xml) <= MAX_SOAP_BYTES:
         raise ValueError("invalid XML size")
     path = Path(library)
@@ -87,7 +90,7 @@ def verify_native(xml: bytes, library: str) -> tuple[bool, str]:
     info_len = ctypes.c_int(MAX_REPORT)
     # No key store is loaded. Public signer certificate is embedded in SOAP.
     result = verify(
-        b"", KC_XML_EXCL_C14N, ctypes.cast(data, ctypes.c_void_p), len(xml),
+        b"", c14n_flags, ctypes.cast(data, ctypes.c_void_p), len(xml),
         ctypes.cast(info, ctypes.c_void_p), ctypes.byref(info_len),
     )
     # Status only. Do not expose native verifyInfo: it may include parts of the
@@ -110,7 +113,13 @@ def main() -> int:
             if len(data) > MAX_SOAP_BYTES:
                 status = "error"
             else:
-                valid, native_code = verify_native(data, lib_path)
+                # This is used solely for the local-only signed FNO sample.
+                # Inclusive mode must be requested explicitly; TEST SOAP
+                # continues using exclusive C14N as before.
+                c14n_flags = KC_XML_INCL_C14N if sys.argv[1:] == ["--inclusive"] else KC_XML_EXCL_C14N
+                if sys.argv[1:] not in ([], ["--inclusive"]):
+                    raise ValueError('Invalid verifier mode')
+                valid, native_code = verify_native(data, lib_path, c14n_flags=c14n_flags)
                 status = "verified" if valid else "invalid"
     except KalkanTrustError as exc:
         status = "error"

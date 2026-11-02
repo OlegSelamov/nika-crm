@@ -30,6 +30,39 @@ FNO_INTEGRATION / SOAP POST to Smart Bridge is made by this feature.
    `filingCreated=false`, an embedded-public-cert SHA256 fingerprint,
    and optional `registeredCertMatch`.
 
+## Two independent signatures for intentionally invalid FNO 000.00 (TEST only)
+
+The Android **Проверить две подписи ФНО · локально** test now signs an
+inert XML document with an inner `ds:Signature` (the same structure used in
+the FNO_INTEGRATION example), escapes that signed XML as `xs:string` inside
+a SOAP 1.1 `SendMessage`, and signs the outer SOAP Body as WSSE
+**KeyIdentifier**. Both signatures are verified on Android.
+
+Android then calls the authenticated **TEST-only** endpoint
+`POST /accounting/isna/test/verify-double-fno-offline`. This endpoint is
+completely separate from the government gateway POST functions and
+accepts ONLY the fixed invalid code `000.00`, the JSON marker
+`{"code":"000.00","fnoDto":{"nikaOfflineDemo":true}}`, the
+hardcoded dummy sender `nika-fno-offline-only`, and a single outer
+KeyIdentifier signature. Other company/taxpayer values, different
+serviceIds, untrusted transform algorithms, or signed XML with extra
+fields are rejected before the crypto worker runs.
+
+The server independently checks the outer SOAP Body XMLDSig using the
+already tested KalkanCrypt exclusive C14N mode, and checks the inner
+XMLDSig with the separate KalkanCrypt inclusive C14N mode expected by
+Android's 3-argument XMLSignature constructor. Each check reports its
+own bool and native error code. A missing SDK, crash, invalid digest, or
+unexpected result is NOT a success. This route does not store payloads,
+contact IPsec/ŠEP, submit a filing, or unlock any submission button.
+
+**Important:** Local or TEST VPS success does NOT prove that a real FNO 910/200
+schema is valid, that the taxpayer's certificate is authorized, or that
+ŠEP has registered the transport signer. For real filing, use actual
+provider-supplied form data schemas/DTO rules, production-grade certificate
+authorization, FNO status handling, and explicit user consent. No real
+filing POST is included or enabled in this feature.
+
 ## Optional registered public certificate match
 
 Install the public Smart Bridge `.cer` on the TEST VPS (outside a web root).

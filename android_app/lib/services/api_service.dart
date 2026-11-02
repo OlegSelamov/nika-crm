@@ -1759,6 +1759,18 @@ class ApiService {
         timeout: const Duration(seconds: 22),
       ));
 
+  // Only a fake 000.00 FNO double signature is permitted. TEST VPS
+  // independently verifies INNER XMLDSig and OUTER SOAP Body WS-Security.
+  // This route NEVER sends anything to the government gateway.
+  static Future<Map<String, dynamic>> isnaTestVerifyDoubleFnoOffline(
+    String signedSoap,
+  ) async =>
+      Map<String, dynamic>.from(await _request(
+        'POST', '/accounting/isna/test/verify-double-fno-offline',
+        body: {'soapXml': signedSoap},
+        timeout: const Duration(seconds: 28),
+      ));
+
   // TEST-only, read-only Smart Bridge diagnostics (never sends tax data).
   static Future<Map<String, dynamic>> isnaTestDiagnostics() async =>
       Map<String, dynamic>.from(await _request(
