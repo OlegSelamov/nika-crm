@@ -154,7 +154,7 @@ def inspect_offline_double_soap(soap_xml: str) -> tuple[str, bytes]:
         reject("real taxpayer data or FNO code forbidden")
     signature_info(inner_sig, "", expected_c14n=(XML_C14N_INCLUSIVE, XML_C14N_INCL_COMMENTS),
                    expected_transforms=INNER_DIGEST_TRANSFORMS)
-    key_info = single_element(inner_sig, q(DS, "KeyInfo"))
+    key_info = unique_child(inner_sig, q(DS, "KeyInfo"))
     x509_data = single_element(key_info, q(DS, "X509Data"))
     cert_node = single_element(x509_data, q(DS, "X509Certificate"))
     if cert_node.attrib or len(cert_node) or not (cert_node.text or "").strip():
