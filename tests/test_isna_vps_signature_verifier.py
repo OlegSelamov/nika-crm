@@ -26,6 +26,19 @@ class VpsGostVerifierTests(unittest.TestCase):
             self.assertEqual(run.call_args.kwargs["input"], b"<signed/>")
             self.assertEqual(run.call_args.kwargs["timeout"], 10)
 
+    def test_inclusive_inner_verifier_invokes_worker_mode_and_requires_kcr_ok(self):
+        from services.isna_vps_signature_verifier import verify_inner_fno_signature_on_vps
+        with patch.dict(os.environ, {"ISNA_KALKAN_LIBRARY": "/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14"}), \
+             patch("services.isna_vps_signature_verifier.subprocess.run") as run:
+            run.return_value = Mock(
+                returncode=0,
+                stdout=b'NIKA_KALKAN_XML_VERIFY_V1:{"status":"verified","code":"0x00000000"}',
+            )
+            result = verify_inner_fno_signature_on_vps("<root/>")
+            self.assertTrue(result["cryptoVerifiedOnServer"])
+            self.assertEqual(run.call_args.args[0][-1], "--inclusive")
+            self.assertEqual(run.call_args.kwargs["input"], b"<root/>")
+
     def test_kalkan_worker_crash_and_bad_output_never_verifies(self):
         from unittest.mock import Mock
         with patch.dict(os.environ, {"ISNA_KALKAN_LIBRARY": "/opt/nika/kalkan/libkalkancryptwr-64.so.2.0.14"}), \
