@@ -670,7 +670,9 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       final inner = await showDialog<Map<String, dynamic>>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => _NativeIsnaSignDialog(xml: buildIsnaOfflineFnoXml()),
+        builder: (_) => _NativeIsnaSignDialog(
+          xml: buildIsnaOfflineFnoXml(), signerPurpose: 'taxpayer-demo',
+        ),
       );
       if (inner == null || !mounted) {
         if (mounted) setState(() => status = 'Тест отменён. Ничего не отправлено.');
@@ -683,6 +685,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
         barrierDismissible: false,
         builder: (_) => _NativeIsnaSignDialog(
           xml: unsignedSoap, soapMode: true, useWsseKeyIdentifier: true,
+          signerPurpose: 'system-transport-demo',
         ),
       );
       if (outer == null || !mounted) {
@@ -724,6 +727,29 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       if (bothOk != (innerOk && outerOk)) {
         throw StateError('TEST VPS вернул противоречивые результаты проверки.');
       }
+      final sameCert = verified['sameCertificateUsed'];
+      final pinConfigured = verified['transportCertPinConfigured'];
+      final transportPinMatch = verified['transportCertMatchesConfiguredPin'];
+      final taxpayerFingerprint = (verified['taxpayerCertSha256'] ?? '').toString();
+      final transportFingerprint = (verified['transportCertSha256'] ?? '').toString();
+      final shaPattern = RegExp(r'^[A-F0-9]{64}$');
+      if (sameCert is! bool ||
+          pinConfigured is! bool ||
+          !shaPattern.hasMatch(taxpayerFingerprint) ||
+          !shaPattern.hasMatch(transportFingerprint) ||
+          (pinConfigured && transportPinMatch is! bool) ||
+          (!pinConfigured && transportPinMatch != null) ||
+          sameCert != (taxpayerFingerprint == transportFingerprint)) {
+        throw StateError('Некорректные сведения о сертификатах двух подписантов.');
+      }
+      final roleNote = sameCert
+          ? '⚠️ Выбран ОДИН сертификат дважды. Это лишь криптографический тест, а не две роли.'
+          : '✅ Выбраны разные сертификаты налогоплательщика и транспортной системы.';
+      final pinNote = !pinConfigured
+          ? '⚠️ Отпечаток зарегистрированного сертификата ИС на TEST VPS не задан.'
+          : transportPinMatch == true
+              ? '✅ Транспортный сертификат совпадает с контрольным SHA-256 на VPS.'
+              : '❌ Транспортный сертификат НЕ совпадает с контрольным SHA-256 на VPS.';
       final innerCode = (verified['innerNativeCode'] ?? '').toString();
       final outerCode = (verified['outerNativeCode'] ?? '').toString();
       setState(() {
@@ -735,6 +761,10 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             'VPS: подпись SOAP Body — ${outerOk ? "✅" : "❌"}\n'
             'KalkanCrypt (SOAP): ${outerCode.isEmpty ? "нет кода" : outerCode}\n'
             '${bothOk ? "Обе подписи независимо подтверждены. ✅" : "Одна или обе подписи НЕ прошли проверку VPS. ❌"}\n'
+            'ЭЦП налогоплательщика: ${taxpayerFingerprint.substring(0, 12)}…\n'
+            'ЭЦП транспорта: ${transportFingerprint.substring(0, 12)}…\n'
+            '$roleNote\n'
+            '$pinNote\n'
             'Это только заведомо недействительная ФНО 000.00.\n'
             'В ШЭП и ИСНА ничего не отправлено.';
       });
@@ -913,11 +943,13 @@ class _NativeIsnaSignDialog extends StatefulWidget {
   final bool soapMode;
   final bool useWsseKeyIdentifier;
   final bool routingProbeMode;
+  final String? signerPurpose;
   const _NativeIsnaSignDialog({
     required this.xml,
     this.soapMode = false,
     this.useWsseKeyIdentifier = false,
     this.routingProbeMode = false,
+    this.signerPurpose,
   });
 
   @override
@@ -973,16 +1005,30 @@ class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: Text(widget.soapMode ? 'Подпись SOAP WS-Security · .p12' : 'Тест подписи ИСНА · .p12'),
+        title: Text(widget.signerPurpose == 'taxpayer-demo'
+            ? '1/2 · Подпись налогоплательщика'
+            : widget.signerPurpose == 'system-transport-demo'
+                ? '2/2 · Транспортная подпись Nika'
+                : widget.soapMode
+                    ? 'Подпись SOAP WS-Security · .p12'
+                    : 'Тест подписи ИСНА · .p12'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Выберите именно ЭЦП ТОО, сертификат которой '
-                  'использован в заявке Smart Bridge. '
-                  'Ключ и пароль не передаются в Nika Business. '
-                  'Файл ключа для этого теста не сохраняется.'),
+              Text(widget.signerPurpose == 'taxpayer-demo'
+                  ? 'Выбери ЭЦП налогоплательщика — она подписывает саму ФНО. '
+                    'Сейчас это только недействительный образец 000.00. '
+                    'Ключ и пароль остаются на телефоне.'
+                  : widget.signerPurpose == 'system-transport-demo'
+                      ? 'Выбери транспортную ЭЦП информационной системы Nika '
+                        '(зарегистрированную для ШЭП). Это отдельная роль, '
+                        'не ключ налогоплательщика. В рабочем процессе '
+                        'транспортное подписание будет организовано отдельно: '
+                        'клиенту не потребуется выбирать этот ключ.'
+                      : 'Выберите ЭЦП для теста. Закрытый ключ и пароль '
+                        'не передаются на VPS, а файл ключа не сохраняется.'),
               const SizedBox(height: 14),
               TextField(
                 controller: password,

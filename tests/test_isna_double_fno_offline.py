@@ -1,5 +1,7 @@
 """Offline-only double FNO preflight: no private keys or government HTTP."""
 import base64
+import hashlib
+import os
 from html import escape
 import unittest
 from unittest.mock import patch
@@ -12,6 +14,7 @@ from scripts.isna_inspect_wss import (
 from services.isna_double_fno_offline import (
     inspect_offline_double_soap, verify_offline_double_soap,
     XML_C14N_INCLUSIVE, XML_C14N_INCL_COMMENTS, XML_ENVELOPED,
+    compare_certificate_roles,
 )
 from services.isna_vps_signature_verifier import verify_inner_fno_signature_on_vps
 
@@ -103,6 +106,56 @@ class DoubleFnoOfflineTests(unittest.TestCase):
                                             cryptoNativeCode="0x00000000")
             result = verify_offline_double_soap(soap)
             self.assertTrue(result["bothVerified"])
+
+    def test_roles_match_only_registered_transport_cert(self):
+        cert_a = b"\x30\x82\x01\x01"
+        cert_b = b"\x30\x82\x01\x02"
+        pin_b = hashlib.sha256(cert_b).hexdigest().upper()
+        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": ""}):
+            same = compare_certificate_roles(cert_a, cert_a)
+            self.assertTrue(same["sameCertificateUsed"])
+            self.assertFalse(same["transportCertPinConfigured"])
+            self.assertIsNone(same["transportCertMatchesConfiguredPin"])
+            self.assertFalse(same["taxpayerAuthorityChecked"])
+        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": pin_b}):
+            distinct = compare_certificate_roles(cert_a, cert_b)
+            self.assertFalse(distinct["sameCertificateUsed"])
+            self.assertTrue(distinct["transportCertPinConfigured"])
+            self.assertTrue(distinct["transportCertMatchesConfiguredPin"])
+            wrong = compare_certificate_roles(cert_a, cert_a)
+            self.assertFalse(wrong["transportCertMatchesConfiguredPin"])
+        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": "NOT-A-SHA"}):
+            with self.assertRaises(InvalidSoap):
+                compare_certificate_roles(cert_a, cert_b)
+
+    def test_offline_verifier_reports_two_roles_without_authorizing_filing(self):
+        soap, _ = self.make_sample()
+        with patch.dict(os.environ, {"ISNA_BIP_REGISTERED_CERT_SHA256": ""}), \
+             patch("services.isna_double_fno_offline.verify_soap_signature_on_vps") as outer, \
+             patch("services.isna_double_fno_offline.verify_inner_fno_signature_on_vps") as inner_check:
+            response = dict(cryptoVerifiedOnServer=True, cryptoVerificationStatus="verified",
+                            cryptoNativeCode="0x00000000")
+            outer.return_value = inner_check.return_value = response
+            report = verify_offline_double_soap(soap)
+            self.assertTrue(report["bothVerified"])
+            self.assertTrue(report["sameCertificateUsed"])
+            self.assertFalse(report["taxpayerAuthorityChecked"])
+            self.assertIsNone(report["governmentCertificateAccepted"])
+            self.assertFalse(report["filingCreated"])
+            different = base64.b64encode(b"\x30\x82\x01\x02").decode()
+            original = base64.b64encode(b"\x30\x82\x01\x01").decode()
+            distinct_soap = soap.replace(
+                ">" + original + "</wsse:KeyIdentifier>",
+                ">" + different + "</wsse:KeyIdentifier>",
+            )
+            self.assertNotEqual(distinct_soap, soap)
+            other_report = verify_offline_double_soap(distinct_soap)
+            self.assertFalse(other_report["sameCertificateUsed"])
+            self.assertTrue(other_report["bothVerified"])
+            self.assertNotEqual(
+                other_report["taxpayerCertSha256"],
+                other_report["transportCertSha256"],
+            )
 
     def test_inner_verification_fails_closed_without_configured_native_sdk(self):
         with patch.dict("os.environ", {"ISNA_KALKAN_LIBRARY": ""}):

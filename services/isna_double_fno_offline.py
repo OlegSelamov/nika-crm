@@ -8,6 +8,8 @@ Outer SOAP and inner signed XML must each verify independently on TEST VPS.
 from __future__ import annotations
 
 import base64
+import hashlib
+import os
 import binascii
 import json
 import re
@@ -168,8 +170,49 @@ def inspect_offline_double_soap(soap_xml: str) -> tuple[str, bytes]:
     return inner_xml, public_cert
 
 
+def extract_taxpayer_public_cert(inner_xml: str) -> bytes:
+    """Read the *already structurally allowlisted* inner signer X.509 DER.
+
+    This never opens a P12 or trusts the embedded cert as an authority.
+    The cryptographic check is performed by a separate isolated worker.
+    """
+    try:
+        inner = ET.fromstring(inner_xml.encode("utf-8"))
+        signature = unique_child(inner, q(DS, "Signature"))
+        key_info = unique_child(signature, q(DS, "KeyInfo"))
+        x509_data = single_element(key_info, q(DS, "X509Data"))
+        cert_text = single_element(x509_data, q(DS, "X509Certificate")).text or ""
+        return base64.b64decode(re.sub(r"\s+", "", cert_text), validate=True)
+    except (ET.ParseError, ValueError, binascii.Error):
+        reject("unreadable inner signing certificate")
+
+
+def compare_certificate_roles(inner_cert: bytes, outer_cert: bytes) -> dict:
+    """Report certificate identity; NEVER mistake identity for permission.
+
+    An optional server-side SHA-256 PIN must refer to the *registered*
+    information-system transport cert, not the taxpayer's public cert.
+    Missing PIN is reported as unknown, not matched.
+    """
+    inner_hash = hashlib.sha256(inner_cert).hexdigest().upper()
+    outer_hash = hashlib.sha256(outer_cert).hexdigest().upper()
+    pinned = (os.getenv("ISNA_BIP_REGISTERED_CERT_SHA256") or "").strip().replace(":", "").upper()
+    if pinned and not re.fullmatch(r"[A-F0-9]{64}", pinned):
+        reject("invalid configured transport certificate fingerprint")
+    return {
+        "taxpayerCertSha256": inner_hash,
+        "transportCertSha256": outer_hash,
+        "sameCertificateUsed": inner_hash == outer_hash,
+        "transportCertPinConfigured": bool(pinned),
+        "transportCertMatchesConfiguredPin": outer_hash == pinned if pinned else None,
+        "taxpayerAuthorityChecked": False,
+        "governmentCertificateAccepted": None,
+    }
+
+
 def verify_offline_double_soap(soap_xml: str) -> dict:
     inner_xml, outer_cert = inspect_offline_double_soap(soap_xml)
+    certificate_roles = compare_certificate_roles(extract_taxpayer_public_cert(inner_xml), outer_cert)
     # Independent native calls. A valid outer signature does NOT imply a
     # valid inner signature, and vice versa. Neither unlocks gateway POST.
     outer = verify_soap_signature_on_vps(soap_xml, outer_cert)
@@ -177,6 +220,7 @@ def verify_offline_double_soap(soap_xml: str) -> dict:
     return {
         "structureOk": True,
         "sampleType": "invalid-fno-000.00-offline-double",
+        **certificate_roles,
         "certificateProfile": "key-identifier",
         "outerCryptoVerified": outer["cryptoVerifiedOnServer"] is True,
         "outerVerificationStatus": outer["cryptoVerificationStatus"],
