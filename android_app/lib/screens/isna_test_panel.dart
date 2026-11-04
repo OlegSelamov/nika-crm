@@ -1018,6 +1018,113 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   }
 }
 
+class _RealFnoInputDialog extends StatefulWidget {
+  const _RealFnoInputDialog();
+
+  @override
+  State<_RealFnoInputDialog> createState() => _RealFnoInputDialogState();
+}
+
+class _RealFnoInputDialogState extends State<_RealFnoInputDialog> {
+  final controller = TextEditingController();
+  String code = '910.00';
+  String? error;
+  bool authorized = false;
+
+  void _prepare() {
+    try {
+      // No network calls. The official source JSON remains on the phone.
+      final result = buildUnsignedRealFnoXml(
+        sourceJson: controller.text, expectedCode: code,
+      );
+      Navigator.of(context).pop(result);
+    } on FormatException catch (exception) {
+      setState(() => error = exception.message);
+    }
+  }
+
+  @override
+  void dispose() {
+    controller.clear();
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Настоящая ФНО · подготовка подписи'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Скопируйте проверенный JSON официального FNO_INTEGRATION '
+            'с полями code и fnoDto. Значения должны относиться к '
+            'нужному ТОО и налоговому периоду.',
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: code,
+            decoration: const InputDecoration(labelText: 'Форма'),
+            items: const [
+              DropdownMenuItem(value: '910.00', child: Text('ФНО 910.00')),
+              DropdownMenuItem(value: '200.00', child: Text('ФНО 200.00')),
+            ],
+            onChanged: (next) => setState(() => code = next ?? code),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            maxLines: 8,
+            minLines: 4,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(
+              labelText: 'Полный JSON с code + fnoDto',
+              hintText: '{"code":"910.00","fnoDto":{...}}',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Важно: Values object из кабинета может отличаться от '
+            'сервисного fnoDto. Не заменяйте поля предположениями. '
+            'Подпись не означает, что налоговая примет документ.',
+            style: TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            value: authorized,
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              'Данные и полномочия подписанта проверены. '
+              'Я подтверждаю локальное подписание настоящей ФНО.',
+              style: TextStyle(fontSize: 12),
+            ),
+            onChanged: (next) => setState(() => authorized = next ?? false),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 6),
+            Text(error!, style: const TextStyle(color: Colors.red)),
+          ],
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Отмена'),
+      ),
+      FilledButton(
+        onPressed: authorized ? _prepare : null,
+        child: const Text('Проверить JSON и выбрать ЭЦП'),
+      ),
+    ],
+  );
+}
+
 class _NativeIsnaSignDialog extends StatefulWidget {
   final String xml;
   final bool soapMode;
