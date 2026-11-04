@@ -65,3 +65,31 @@ def normalize_sale_line(item, unit=None):
             total = requested_total
 
     return price, quantity, total
+
+
+def normalize_discounted_sale_line(item, unit=None):
+    """Verify a retail cashier's discount snapshot before recording a sale.
+
+    base_price and discount_percent are sent together by updated POS clients.
+    Legacy carts (including food modifiers) still use their recorded price.
+    The original quoted price stays fixed for offline replay; never apply the
+    discount twice or silently change the amount after a POS charge.
+    """
+    if "base_price" not in item and "discount_percent" not in item:
+        return normalize_sale_line(item, unit)
+    if "base_price" not in item or "discount_percent" not in item:
+        raise ValueError("У скидки отсутствует исходная цена или процент.")
+    base = _decimal(item["base_price"], None)
+    discount = _decimal(item["discount_percent"], None)
+    submitted_price = _decimal(item.get("price"), None)
+    if (base is None or discount is None or submitted_price is None
+            or base < 0 or discount < 0 or discount > 100
+            or discount != discount.to_integral_value()):
+        raise ValueError("Скидка должна быть целым процентом от 0 до 100.")
+    expected_price = (base * (Decimal("100") - discount) / Decimal("100")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP,
+    )
+    if abs(expected_price - submitted_price) > Decimal("0.009"):
+        raise ValueError("Цена не совпадает со скидкой. Обновите корзину перед оплатой.")
+    discounted = dict(item, price=str(expected_price))
+    return normalize_sale_line(discounted, unit)
