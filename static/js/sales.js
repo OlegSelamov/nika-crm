@@ -462,6 +462,10 @@ function renderCart() {
             <tr>
                 <td>
                     <div class="cart-product-name">${item.name}</div>
+                    ${item.discount_percent > 0
+                        ? '<small style="color:#16946a;font-weight:700">−' + item.discount_percent +
+                          '% · экономия ' + saleMoney(nikaSaleSavings(item)) + '</small>'
+                        : ''}
                     ${(item.gtin || item.ntin) ? `<div class="cart-product-code">${item.gtin || item.ntin}</div>` : ""}
                 </td>
                 <td>
@@ -473,6 +477,7 @@ function renderCart() {
                 </td>
                 <td><strong>${sum.toLocaleString("ru-RU")} ₸</strong></td>
                 <td>
+                    <button type="button" onclick="updateCartDiscount(${index})" title="Скидка на позицию" style="border:0;background:transparent;color:#7257ff;font-weight:800;padding:6px">%</button>
                     <button type="button" class="remove-cart-btn" onclick="removeItem(${index})" aria-label="Удалить"><img src="/static/icons/delete-item.png" alt=""></button>
                 </td>
             </tr>
@@ -483,6 +488,11 @@ function renderCart() {
 	    renderMobileCart();
 	document.getElementById("totalAmount").innerText =
 		total.toLocaleString("ru-RU") + " ₸";
+    const savingsNode = document.getElementById("saleSavingsTotal");
+    if (savingsNode) {
+        const savings = cart.reduce((sum, item) => sum + nikaSaleSavings(item), 0);
+        savingsNode.textContent = savings > 0.009 ? "Экономия: " + saleMoney(savings) : "";
+    }
 }
 
 function renderMobileCart() {
@@ -501,7 +511,9 @@ function renderMobileCart() {
 
 					<div class="mobile-cart-name">
 						${item.name}
-					</div>
+					${item.discount_percent > 0 ? '<small style="display:block;color:#16946a">−' +
+                            item.discount_percent + '% · экономия ' + saleMoney(nikaSaleSavings(item)) + '</small>' : ''}
+                    </div>
 
 					<div class="mobile-cart-price">
 						${sum.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₸
@@ -512,7 +524,8 @@ function renderMobileCart() {
 				<div class="mobile-cart-bottom">
 
 					<div class="mobile-qty">
-						<button onclick="changeQty(${index}, -1)">−</button>
+						<button type="button" onclick="updateCartDiscount(${index})" title="Скидка на позицию">%</button>
+                        <button onclick="changeQty(${index}, -1)">−</button>
 						<span>${formatQuantity(qty, item.unit)}</span>
 						<button onclick="changeQty(${index}, 1)">+</button>
 					</div>
@@ -906,15 +919,15 @@ function renderItemSearchResults(items, hasMore) {
             showImagePlaceholder();
         }
 
-        if (showCatalogImages && Number(item.discount_percent || 0) > 0) {
+        const info = document.createElement("div");
+        info.className = "item-info";
+
+        if (nikaSaleDiscountPercent(item.discount_percent) > 0) {
             const badge = document.createElement("div");
             badge.className = "discount-badge";
             badge.textContent = `-${item.discount_percent}%`;
-            imageBlock.appendChild(badge);
+            (showCatalogImages ? imageBlock : info).appendChild(badge);
         }
-
-        const info = document.createElement("div");
-        info.className = "item-info";
 
         const name = document.createElement("div");
         name.className = "item-name";
@@ -923,16 +936,16 @@ function renderItemSearchResults(items, hasMore) {
         const priceBlock = document.createElement("div");
         priceBlock.className = "item-price-block";
 
-        if (item.old_price) {
+        if (nikaSaleDiscountPercent(item.discount_percent) > 0) {
             const oldPrice = document.createElement("div");
             oldPrice.className = "old-price";
-            oldPrice.textContent = `${item.old_price} ₸`;
+            oldPrice.textContent = saleMoney(item.retail_price);
             priceBlock.appendChild(oldPrice);
         }
 
         const price = document.createElement("div");
         price.className = "new-price";
-        price.textContent = `${item.retail_price || 0} ₸`;
+        price.textContent = saleMoney(nikaSaleDiscountedPrice(item.retail_price, item.discount_percent));
         priceBlock.appendChild(price);
 
         info.appendChild(name);
@@ -947,7 +960,9 @@ function renderItemSearchResults(items, hasMore) {
                 Number(item.retail_price || 0),
                 item.unit || "шт",
                 item.gtin || "",
-                item.ntin || ""
+                item.ntin || "",
+                "",
+                item.discount_percent ?? 0
             );
         });
 
@@ -2031,7 +2046,8 @@ function handleBarcode(code) {
                 data.unit || "шт",
                 data.gtin || "",
                 data.ntin || "",
-                data.excise_stamp || ""
+                data.excise_stamp || "",
+                data.discount_percent ?? 0
             );
 
         }
