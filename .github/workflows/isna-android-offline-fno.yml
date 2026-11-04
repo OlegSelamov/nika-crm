@@ -5,10 +5,10 @@ on:
     branches: [test]
     paths:
       - 'android_app/lib/screens/isna_test_panel.dart'
-      - 'android_app/lib/services/isna_real_fno_payload.dart'
+      - 'android_app/lib/services/api_service.dart'
       - 'android_app/lib/services/mobile_p12_signer.dart'
       - 'android_app/android/app/src/main/kotlin/com/example/nika_business_app/MainActivity.kt'
-      - 'android_app/test/isna_real_fno_payload_test.dart'
+      - 'android_app/test/isna_auto_report_ui_test.dart'
       - 'android_app/android/app/src/main/kotlin/com/example/nika_business_app/KalkanJwsSigner.kt'
       - 'android_app/android/app/src/main/kotlin/com/example/nika_business_app/IsnaOfflineFnoValidator.kt'
       - 'android_app/test/isna_offline_fno_test.dart'
@@ -37,9 +37,9 @@ jobs:
       - name: Unit checks for inert FNO
         working-directory: android_app
         run: flutter test test/isna_offline_fno_test.dart
-      - name: Unit checks for real JSON preparation (no network)
+      - name: Check automatic FNO source UI (no manual JSON)
         working-directory: android_app
-        run: flutter test test/isna_real_fno_payload_test.dart
+        run: flutter test test/isna_auto_report_ui_test.dart
       - name: Compile Android including Kotlin GOST validator
         working-directory: android_app
         run: flutter build apk --debug
