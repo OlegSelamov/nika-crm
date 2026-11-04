@@ -560,14 +560,17 @@ class ApiService {
 
   static Future<Map<String, dynamic>> barcode(String barcode) async {
     final cached = await OfflineStore.instance.findItem(barcode);
-    if (cached != null) {
+    if (serverUnavailable && cached != null) {
       return OfflineStore.instance.barcodeResult(cached, barcode);
     }
 
+    // A catalog offer or base price can change between two scans. Prefer the
+    // current server price when online; fall back to the saved catalog offline.
     try {
       final result = Map<String, dynamic>.from(await _request(
         'POST',
         '/api/barcode',
+        timeout: const Duration(seconds: 5),
         body: {'barcode': barcode},
       ));
       if (result['found'] == true) {
@@ -576,6 +579,7 @@ class ApiService {
       return result;
     } on ApiException catch (error) {
       if (error.statusCode != null) rethrow;
+      if (cached != null) return OfflineStore.instance.barcodeResult(cached, barcode);
       return {'found': false, 'offline': true};
     }
   }
