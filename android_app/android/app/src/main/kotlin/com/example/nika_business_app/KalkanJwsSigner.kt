@@ -237,6 +237,109 @@ object KalkanJwsSigner {
     }
 
     /**
+     * Sign an actual taxpayer FNO XML *only on this phone*.
+     *
+     * Caller supplies the official, already-filled JSON (code + fnoDto).
+     * No upload, no SOAP transport signature and no submission. A taxpayer
+     * signing certificate is a different role from Nika's transport P12.
+     */
+    fun signIsnaTaxpayerFno(
+        context: Context,
+        keyUri: Uri,
+        passwordChars: CharArray,
+        payload: String,
+    ): Map<String, Any?> {
+        if (payload.toByteArray(StandardCharsets.UTF_8).size > 120_000) {
+            throw SigningException("FNO_TOO_LARGE", "ФНО превышает лимит подписи Android")
+        }
+        // Check format BEFORE loading private key material.
+        val document = parseXml(payload)
+        val root = document.documentElement
+        val children = (0 until root.childNodes.length).mapNotNull {
+            root.childNodes.item(it) as? Element
+        }
+        if (root.tagName != "root" || root.namespaceURI != null ||
+            root.attributes.length != 0 || children.size != 1 ||
+            children[0].tagName != "data" || children[0].namespaceURI != null ||
+            children[0].attributes.length != 0 ||
+            children[0].getElementsByTagName("*").length != 0) {
+            throw SigningException("INVALID_REAL_FNO", "Ожидается один unsigned root/data")
+        }
+        val json = try {
+            JSONObject(children[0].textContent ?: "")
+        } catch (_: Exception) {
+            throw SigningException("INVALID_FNO_JSON", "Содержимое ФНО не JSON")
+        }
+        val names = mutableSetOf<String>()
+        val iterator = json.keys()
+        while (iterator.hasNext()) names.add(iterator.next())
+        val formCode = json.optString("code", "")
+        if (names != setOf("code", "fnoDto") ||
+            formCode !in setOf("200.00", "910.00") ||
+            (json.optJSONObject("fnoDto")?.length() ?: 0) <= 0 ||
+            (json.optJSONObject("fnoDto")?.has("nikaOfflineDemo") == true)) {
+            throw SigningException(
+                "INVALID_REAL_FNO",
+                "Требуется официальная ФНО 200.00/910.00 с заполненным fnoDto",
+            )
+        }
+        val originalJson = children[0].textContent
+        val material = loadKeyMaterial(context, keyUri, passwordChars)
+        try {
+            val keyUsage = material.certificate.keyUsage
+            if (keyUsage != null && (keyUsage.isEmpty() || !keyUsage[0])) {
+                throw SigningException(
+                    "NOT_A_SIGNING_CERT",
+                    "Выбранная ЭЦП не предназначена для подписи документов",
+                )
+            }
+            initializeXmlSecurity(material.provider)
+            val signedXml = signXmlDocument(
+                document, material.privateKey, material.certificate,
+            )
+            // Verify the serialized document again before exposing any output.
+            val reparsed = parseXml(signedXml)
+            val signedRoot = reparsed.documentElement
+            val signedParts = (0 until signedRoot.childNodes.length).mapNotNull {
+                signedRoot.childNodes.item(it) as? Element
+            }
+            if (signedRoot.tagName != "root" || signedParts.size != 2 ||
+                signedParts[0].tagName != "data" ||
+                signedParts[0].textContent != originalJson ||
+                signedParts[1].localName != "Signature" ||
+                signedParts[1].namespaceURI != XMLDSIG_NS) {
+                throw SigningException(
+                    "FNO_CHANGED_DURING_SIGNING",
+                    "Данные ФНО изменились при подписании",
+                )
+            }
+            val xmlSignatureClass = Class.forName("org.apache.xml.security.signature.XMLSignature")
+            val verifier = xmlSignatureClass
+                .getConstructor(Element::class.java, String::class.java)
+                .newInstance(signedParts[1], "")
+            val valid = xmlSignatureClass
+                .getMethod("checkSignatureValue", X509Certificate::class.java)
+                .invoke(verifier, material.certificate) as? Boolean
+            if (valid != true) {
+                throw SigningException(
+                    "FNO_SIGN_VERIFY_FAILED",
+                    "Криптопроверка подписи настоящей ФНО на телефоне не пройдена",
+                )
+            }
+            return certificateResult(material.certificate) + mapOf(
+                "signedXml" to signedXml,
+                "formCode" to formCode,
+                "signatureVerified" to true,
+                "gatewayContacted" to false,
+                "filingCreated" to false,
+                "algorithm" to XML_SIGNATURE_URI,
+            )
+        } finally {
+            Arrays.fill(passwordChars, '\u0000')
+        }
+    }
+
+    /**
      * Offline-only SOAP WS-Security GOST experiment. The payload MUST be the
      * inert NikaWsSecurityTest sample; never accepts official FNO business XML.
      *
