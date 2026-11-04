@@ -41,6 +41,17 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 items_bp = Blueprint("items", __name__)
 
 
+def _catalog_discount_percent(value):
+    """Catalog offers must be whole percentages between zero and 100."""
+    try:
+        number = Decimal(str(value if value not in (None, "") else 0))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError("Скидка должна быть целым числом от 0 до 100.") from None
+    if not number.is_finite() or number != number.to_integral_value() or not 0 <= number <= 100:
+        raise ValueError("Скидка должна быть целым числом от 0 до 100.")
+    return int(number)
+
+
 def _ean13_check_digit(first_twelve):
     digits = [int(value) for value in str(first_twelve)]
     total = sum(digits[::2]) + 3 * sum(digits[1::2])
@@ -529,7 +540,7 @@ def add_item():
             0.0 if item_type == "ingredient" else float(request.form.get("retail_price") or 0),
             float(request.form.get("wholesale_price") or 0),
             float(request.form.get("purchase_price") or 0),
-            int(request.form.get("discount_percent") or 0),
+            _catalog_discount_percent(request.form.get("discount_percent")),
             barcode,
             request.form.get("gtin"),
             request.form.get("ntin"),
@@ -669,7 +680,7 @@ def edit_item(item_id):
             0.0 if item_type == "ingredient" else float(request.form.get("retail_price") or 0),
             float(request.form.get("wholesale_price") or 0),
             float(request.form.get("purchase_price") or 0),
-            int(request.form.get("discount_percent") or 0),
+            _catalog_discount_percent(request.form.get("discount_percent")),
             barcode,
             request.form.get("gtin"),
             request.form.get("ntin") if item_type == "product" else "",
@@ -1155,6 +1166,10 @@ def api_create_item():
     if service_sale_mode not in ("order", "booking", "request"):
         service_sale_mode = "order" if item_type == "service" else None
 
+    try:
+        _catalog_discount_percent(data.get("discount_percent"))
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
     conn = get_db()
     cur = conn.cursor()
     barcode = _item_barcode(cur, data.get("barcode"), item_type)
@@ -1190,7 +1205,7 @@ def api_create_item():
         float(data.get("retail_price") or 0),
         float(data.get("purchase_price") or 0),
         float(data.get("wholesale_price") or 0),
-        int(data.get("discount_percent") or 0),
+        _catalog_discount_percent(data.get("discount_percent")),
         barcode,
         data.get("gtin", ""),
         data.get("ntin", ""),
@@ -1247,6 +1262,10 @@ def api_update_item(item_id):
     name = str(data.get("name") or "").strip()
     if not name:
         return jsonify({"success": False, "message": "Укажите название позиции"}), 400
+    try:
+        _catalog_discount_percent(data.get("discount_percent"))
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
 
     conn = get_db()
     cur = conn.cursor()
@@ -1269,7 +1288,7 @@ def api_update_item(item_id):
             float(data.get("retail_price") or 0),
             float(data.get("purchase_price") or 0),
             float(data.get("wholesale_price") or 0),
-            int(float(data.get("discount_percent") or 0)),
+            _catalog_discount_percent(data.get("discount_percent")),
             barcode,
             str(data.get("gtin") or "").strip() if item_type == "product" else "",
             str(data.get("ntin") or "").strip() if item_type == "product" else "",
@@ -1649,7 +1668,7 @@ def import_items_xlsx():
                 purchase_price = _catalog_number(value(row, "purchase_price"))
                 wholesale_price = _catalog_number(value(row, "wholesale_price"))
                 retail_price = _catalog_number(value(row, "retail_price"))
-                discount_percent = int(_catalog_number(value(row, "discount_percent")))
+                discount_percent = _catalog_discount_percent(value(row, "discount_percent"))
                 description = _catalog_text(value(row, "description"))
                 quantity = _catalog_number(value(row, "quantity")) if item_type == "product" else Decimal("0")
                 image_urls = _catalog_image_urls(
