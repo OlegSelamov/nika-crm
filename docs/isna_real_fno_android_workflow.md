@@ -1,71 +1,63 @@
-# ISNA real FNO 200.00 / 910.00 — first Android taxpayer signature
+# ИСНА: автоматическое формирование ФНО из Nika Business
 
-This implementation is separate from **synthetic** FNO 000.00 tests.
+Ручной ввод JSON отменён. Источник данных — существующий модуль
+**Бухгалтерия → Налоговая отчётность** для активной организации.
 
-## Preparing the official declaration
+## Android TEST
 
-In the actual tax cabinet, select the authorized organization's profile,
-complete the correct form and period, review the identifying fields and figures.
-Do not file the form in the cabinet when the purpose is to test Nika's filing
-process (to avoid an accidental duplicate).
+1. Войти в Nika Business и выбрать нужную организацию.
+2. Открыть **ИСНА · тестирование** и нажать
+   **«Сформировать ФНО из Nika Business»**.
+3. Выбрать только форму (910.00 либо 200.00), год и период.
+4. Android автоматически вызывает
+   `GET /accounting/isna/test/auto-report?form_type=910&year=2026&period=1`.
+5. TEST сервер выбирает компанию из **авторизованной сессии**, читает
+   актуальную налоговую страницу и возвращает расчёты, проверочные
+   замечания, отпечаток исходных данных и статус готовности.
+   В интерфейсе нет поля для вставки JSON или налоговых сумм.
 
-The KGD official guidance on obtaining form data is:
-https://www.gov.kz/org/kgd/press/article/details/233841?lang=ru
-(Question 3: Developer Tools / Console / last `Values object` / Copy object).
-**Important:** a copied browser `Values object` is NOT automatically the
-`fnoDto` data contract for the FNO_INTEGRATION service. Check the
-service-specific JSON schema and resulting full `code` + `fnoDto` object
-before signing. We fail closed rather than invent a mapping.
+## Что подтягивается из Nika
 
-The mobile signer accepts exactly this *service request representation*:
+- 910.00: доходы из продаж, возвраты, облагаемый доход, ставка, налог,
+  помесячная сводка.
+- 200.00: зарплата работников, ИПН, ОПВ, СО, ОСМС, ОПВР,
+  помесячные расчёты.
+- Организация: БИН, название и привязка к активному `company_id`.
+- Формы/периоды строго валидируются на TEST сервере. Запрос не может
+  выбрать произвольный `company_id`.
 
-```json
-{
-  "code": "910.00",
-  "fnoDto": {
-    "OFFICIAL_FIELDS_ONLY": "example not a declaration"
-  }
-}
-```
+## Что ещё не готово
 
-The above is purely an **illustration of nesting**, NOT a real form.
-Never submit or sign an illustrative DTO. No exact form field mapping was
-claimed or fabricated here. Select 910.00 or 200.00 according to the form
-and the taxpayer's applicable reporting obligations.
+Имеющийся `ISNA_DRAFT` — внутренний расчёт, **не** официальный `fnoDto`
+сервиса `FNO_INTEGRATION`. Пока не подтверждены все обязательные поля,
+приложения и форматно-логический контроль для конкретного периода.
+Суммы продаж могут не включать прочие доходы. Налоговый режим/ставку,
+полномочия подписанта и обязательные сведения по работникам нужно проверить.
 
-## Android TEST workflow (no outbound FNO transmission)
+Официальную документацию JSON КГД публикует здесь:
+https://www.gov.kz/org/kgd/press/article/details/233841
+(ссылка на каталог схем внутри вопроса №3).
+Нельзя выдавать внутренние поля Nika за официальные имена полей ИСНА.
 
-1. Open **ИСНА · тестирование** in the isolated Nika Android TEST app.
-2. Click **Подписать настоящую ФНО 910/200 · локально**.
-3. Choose the same form code that appears in the official completed JSON.
-4. Paste the full official `{"code":"...","fnoDto":{...}}` request, not
-   guessed tax fields. The app builds an unsigned `root/data` XML locally.
-5. Confirm the data and authorization, select the actual **taxpayer's**
-   signing P12, and enter the password only on Android.
-6. Kotlin verifies the input XML, runs local Kalkan XMLDSig signing and
-   **verifies the final serialized signature with the selected X509
-   certificate** before returning the result. Neither original JSON
-   nor private P12 is sent to a Nika server during this operation.
-7. Click **Сохранить подписанный XML**. Store it securely because it
-   contains sensitive tax data. The selected file name begins
-   `nika-isna-real-fno-910-00-signed.xml` (or `200-00`).
+Поэтому сервер пока всегда возвращает:
+`officialMappingReady=false`, `readyToSign=false`,
+`readyToSubmit=false`, `unsignedXml=null`.
+Android НЕ подписывает черновик, НЕ отправляет ФНО,
+а показывает причины блокировки. После внедрения официальной
+версии схемы из этого же источника будет формироваться нужный
+`fnoDto`, затем XMLDSig налогоплательщика и отдельный SOAP WSSE Nika.
+Копировать JSON пользователю не потребуется.
 
-An XMLDSig verification means the **bits** were signed by the matching
-private key. It does not by itself prove Smart Bridge registration,
-taxpayer organization/representative authorization, tax-form correctness,
-or acceptance by IСНА.
+## Защита старого веб-процесса
 
-## Next step: one controlled TEST gateway POST
+Раньше страница `/accounting/report` позволяла сохранять произвольную
+подпись к `ISNA_DRAFT` без криптопроверки и отправлять черновик через
+произвольный шлюз. Теперь подписание и отправка **именно таких
+внутренних черновиков** отклоняются кодом HTTP 409.
+На налоговой странице добавлена кнопка
+«Проверить данные ФНО из Nika Business» для автозагрузки.
 
-After verifying the signed content and its signer, transfer the signed
-XML only through an operator-approved secure channel to the private TEST
-signer OS account (outside `/var/www`, owner-only access).
-The already deployed server CLI:
-`services/isna_real_fno_submission.py` has a real, opt-in
-`FNO_INTEGRATION` POST. It requires independent GOST verification of
-the taxpayer's signature, a registered Nika **transport** certificate
-and separate system P12, a private deduplication journal, and explicit
-one-shot consent. See `docs/isna_real_fno_test_submission.md`.
-
-It is **not** the disabled legacy Android button `Отправить в ИСНА`;
-and it does not submit anything automatically or target PROD.
+Операторский реальный TEST POST из
+`services/isna_real_fno_submission.py` остаётся отдельной командой:
+он не запускается из этого preview и требует настоящей подписанной
+ФНО + зарегистрированного транспорта. PROD этим этапом не меняется.

@@ -5,7 +5,6 @@ import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
-import '../services/isna_real_fno_payload.dart';
 import '../services/mobile_p12_signer.dart';
 
 // Deliberately contains no taxpayer/company data and is not an official
@@ -779,67 +778,104 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
   }
 
-  Future<void> _signRealFnoLocal() async {
+  Future<void> _loadAutomaticFno() async {
     if (busy) return;
-    final unsignedXml = await showDialog<String>(
+    final selection = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _RealFnoInputDialog(),
+      builder: (_) => const _AutoFnoPeriodDialog(),
     );
-    if (unsignedXml == null || !mounted) return;
+    if (selection == null || !mounted) return;
     setState(() {
-      // Actual taxpayer XML must never be mistaken for a synthetic SOAP.
       signedXml = null;
       signedServerDemoSoap = null;
       signedServerSoapVerifiedByVps = false;
       routingProbeSignedSoap = null;
       routingProbeValidated = false;
-      status = 'Подпишите настоящую ФНО на телефоне. В ШЭП ничего не отправляется.';
+      busy = true;
+      status = 'Читаем данные выбранной организации из бухгалтерии Nika Business…';
     });
     try {
-      final result = await showDialog<Map<String, dynamic>>(
+      final result = await ApiService.isnaTestAutoFnoFromAccounting(
+        formType: selection['form_type'].toString(),
+        year: selection['year'] as int,
+        period: selection['period'].toString(),
+      );
+      if (!mounted) return;
+      if (result['sourceLoaded'] != true ||
+          result['source'] != 'nika-business-accounting') {
+        throw StateError('Сервер не подтвердил получение данных из Nika Business.');
+      }
+      final warnings = (result['issues'] is List)
+          ? (result['issues'] as List).map((item) => '• $item').join('\n')
+          : '';
+      final summary = result['summary'] is Map
+          ? Map<String, dynamic>.from(result['summary'] as Map)
+          : <String, dynamic>{};
+      final details = summary.entries
+          .map((item) => '${item.key}: ${item.value}')
+          .join('\n');
+      final formCode = (result['formCode'] ?? '').toString();
+      final companyName = (result['companyName'] ?? '').toString();
+      final periodLabel = (result['periodLabel'] ?? '').toString();
+      final display = 'Источник: бухгалтерия Nika Business ✅\n'
+          'Организация: $companyName\n'
+          'Форма: $formCode · $periodLabel\n'
+          '${details.isEmpty ? "" : "$details\n"}'
+          '${warnings.isEmpty ? "" : "Требует проверки:\n$warnings\n"}'
+          '${result["message"] ?? ""}\n'
+          'Ни один документ не подписан и не отправлен.';
+
+      // Never sign an internal accounting draft. Only a versioned, officially
+      // verified mapping and tax FLC may enable the real document signer.
+      if (result['readyToSign'] != true ||
+          result['officialContractValidated'] != true ||
+          result['unsignedXml'] is! String) {
+        setState(() { status = display; });
+        return;
+      }
+      final unsignedXml = result['unsignedXml'] as String;
+      final signed = await showDialog<Map<String, dynamic>>(
         context: context,
         barrierDismissible: false,
         builder: (_) => _NativeIsnaSignDialog(
           xml: unsignedXml,
-          signerPurpose: 'taxpayer-real',
           realFnoMode: true,
+          signerPurpose: 'taxpayer-real',
         ),
       );
       if (!mounted) return;
-      if (result == null) {
-        setState(() => status = 'Подпись ФНО отменена. Ничего не отправлено.');
+      if (signed == null) {
+        setState(() => status = '$display\nПодпись отменена.');
         return;
       }
-      final xml = (result['signedXml'] ?? '').toString();
-      final formCode = (result['formCode'] ?? '').toString();
-      if (result['signatureVerified'] != true ||
-          result['filingCreated'] != false ||
-          result['gatewayContacted'] != false ||
-          !const {'200.00', '910.00'}.contains(formCode) ||
+      final xml = (signed['signedXml'] ?? '').toString();
+      if (signed['signatureVerified'] != true ||
+          signed['gatewayContacted'] != false ||
+          signed['filingCreated'] != false ||
+          signed['formCode'] != formCode ||
           !xml.contains('Signature')) {
-        throw StateError('Android не подтвердил подпись реальной ФНО.');
+        throw StateError('Нельзя сохранить ФНО без проверенной подписи Android.');
       }
       setState(() {
         signedXml = xml;
         signedFileName = 'nika-isna-real-fno-XXX-signed'.replaceFirst(
           'XXX', formCode.replaceAll('.', '-'));
-        status = 'ФНО $formCode подписана ЭЦП налогоплательщика. ✅\n'
-            'Подпись криптографически проверена на Android. ✅\n'
-            'Документ готов к сохранению как приватный XML.\n'
-            'ФНО НЕ отправлена в ШЭП или ИСНА.\n'
-            'Для подачи нужны отдельно транспортная подпись Nika, '
-            'проверка полномочий и серверное подтверждение отправки.';
+        status = '$display\nЭЦП налогоплательщика проверена на Android. '
+            'Нажмите «Сохранить подписанный XML». '
+            'В ИСНА ничего не отправлено.';
       });
     } catch (error) {
       if (mounted) {
-        setState(() => status = 'Не удалось подписать ФНО: $error\n'
+        setState(() => status = 'Не удалось автоматически сформировать ФНО: $error\n'
             'Ничего не отправлено.');
       }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
-  Future<void> _save() async {
+    Future<void> _save() async {
     final value = signedXml;
     if (value == null || busy) return;
     setState(() => busy = true);
@@ -965,20 +1001,20 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           ),
           const SizedBox(height: 8),
           const Divider(height: 28),
-          const Text('Настоящая ФНО · только локальная подпись',
+          const Text('Автоматическая ФНО · данные из Nika',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           const Text(
-            'Вставьте полный JSON с code и fnoDto из официального формата. '
-            'Выберите ЭЦП уполномоченного подписанта ТОО. '
-            'Документ не загружается на сервер при подписи.',
+            'ФНО собирается автоматически по данным активной организации: '
+            'продажи, возвраты, начисления и налоговые настройки. '
+            'Вручную JSON вводить не нужно.'
             style: TextStyle(fontSize: 12),
           ),
           const SizedBox(height: 8),
           FilledButton.icon(
-            onPressed: busy ? null : _signRealFnoLocal,
+            onPressed: busy ? null : _loadAutomaticFno,
             icon: const Icon(Icons.draw_outlined),
-            label: const Text('Подписать настоящую ФНО 910/200 · локально'),
+            label: const Text('Сформировать ФНО из Nika Business'),
           ),
           const Divider(height: 28),
           OutlinedButton.icon(
@@ -1018,97 +1054,73 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   }
 }
 
-class _RealFnoInputDialog extends StatefulWidget {
-  const _RealFnoInputDialog();
+class _AutoFnoPeriodDialog extends StatefulWidget {
+  const _AutoFnoPeriodDialog();
 
   @override
-  State<_RealFnoInputDialog> createState() => _RealFnoInputDialogState();
+  State<_AutoFnoPeriodDialog> createState() => _AutoFnoPeriodDialogState();
 }
 
-class _RealFnoInputDialogState extends State<_RealFnoInputDialog> {
-  final controller = TextEditingController();
-  String code = '910.00';
-  String? error;
-  bool authorized = false;
-
-  void _prepare() {
-    try {
-      // No network calls. The official source JSON remains on the phone.
-      final result = buildUnsignedRealFnoXml(
-        sourceJson: controller.text, expectedCode: code,
-      );
-      Navigator.of(context).pop(result);
-    } on FormatException catch (exception) {
-      setState(() => error = exception.message);
-    }
-  }
-
-  @override
-  void dispose() {
-    controller.clear();
-    controller.dispose();
-    super.dispose();
-  }
+class _AutoFnoPeriodDialogState extends State<_AutoFnoPeriodDialog> {
+  String formType = '910';
+  String period = '1';
+  int year = DateTime.now().year;
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Настоящая ФНО · подготовка подписи'),
+    title: const Text('Сформировать ФНО из Nika Business'),
     content: SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Скопируйте проверенный JSON официального FNO_INTEGRATION '
-            'с полями code и fnoDto. Значения должны относиться к '
-            'нужному ТОО и налоговому периоду.',
+            'Все суммы будут рассчитаны системой по активной организации. '
+            'Никаких JSON-файлов или ручного ввода налоговых данных.',
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: code,
+            value: formType,
             decoration: const InputDecoration(labelText: 'Форма'),
             items: const [
-              DropdownMenuItem(value: '910.00', child: Text('ФНО 910.00')),
-              DropdownMenuItem(value: '200.00', child: Text('ФНО 200.00')),
+              DropdownMenuItem(value: '910', child: Text('910.00 · полугодие')),
+              DropdownMenuItem(value: '200', child: Text('200.00 · квартал')),
             ],
-            onChanged: (next) => setState(() => code = next ?? code),
+            onChanged: (next) => setState(() {
+              formType = next ?? formType;
+              period = '1';
+            }),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: controller,
-            maxLines: 8,
-            minLines: 4,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: const InputDecoration(
-              labelText: 'Полный JSON с code + fnoDto',
-              hintText: '{"code":"910.00","fnoDto":{...}}',
-              border: OutlineInputBorder(),
-            ),
+          DropdownButtonFormField<int>(
+            value: year,
+            decoration: const InputDecoration(labelText: 'Год'),
+            items: List.generate(4, (index) {
+              final value = DateTime.now().year - index;
+              return DropdownMenuItem(value: value, child: Text('$value'));
+            }),
+            onChanged: (next) => setState(() => year = next ?? year),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: period,
+            decoration: const InputDecoration(labelText: 'Период'),
+            items: List.generate(formType == '910' ? 2 : 4, (index) {
+              final value = '${index + 1}';
+              final label = formType == '910'
+                  ? '${index + 1}-е полугодие'
+                  : '${index + 1}-й квартал';
+              return DropdownMenuItem(value: value, child: Text(label));
+            }),
+            onChanged: (next) => setState(() => period = next ?? period),
+          ),
+          const SizedBox(height: 12),
           const Text(
-            'Важно: Values object из кабинета может отличаться от '
-            'сервисного fnoDto. Не заменяйте поля предположениями. '
-            'Подпись не означает, что налоговая примет документ.',
+            'Подготовка и проверка выполняются в TEST. '
+            'Подпись и отправка будут доступны только после '
+            'подтверждения официальной структуры ФНО и ФЛК.',
             style: TextStyle(fontSize: 12),
           ),
-          const SizedBox(height: 8),
-          CheckboxListTile(
-            value: authorized,
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'Данные и полномочия подписанта проверены. '
-              'Я подтверждаю локальное подписание настоящей ФНО.',
-              style: TextStyle(fontSize: 12),
-            ),
-            onChanged: (next) => setState(() => authorized = next ?? false),
-          ),
-          if (error != null) ...[
-            const SizedBox(height: 6),
-            Text(error!, style: const TextStyle(color: Colors.red)),
-          ],
         ],
       ),
     ),
@@ -1118,8 +1130,12 @@ class _RealFnoInputDialogState extends State<_RealFnoInputDialog> {
         child: const Text('Отмена'),
       ),
       FilledButton(
-        onPressed: authorized ? _prepare : null,
-        child: const Text('Проверить JSON и выбрать ЭЦП'),
+        onPressed: () => Navigator.of(context).pop({
+          'form_type': formType,
+          'year': year,
+          'period': period,
+        }),
+        child: const Text('Загрузить данные из Nika'),
       ),
     ],
   );

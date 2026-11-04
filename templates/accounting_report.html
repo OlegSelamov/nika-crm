@@ -437,7 +437,7 @@
             </a>
             <a class="report-btn report-btn--light"
                href="/accounting/report/export-json?form_type={{ report.form_type }}&year={{ selected_year }}&period={{ selected_period }}">
-                Скачать JSON
+                Скачать внутренний JSON-черновик
             </a>
             <button class="report-btn report-btn--primary"
                     type="button"
@@ -495,7 +495,7 @@
     <div class="report-status-grid">
         <article class="report-status {% if report.ready %}report-status--ready{% else %}report-status--warning{% endif %}">
             <span>Статус</span>
-            <strong>{{ "Готово" if report.ready else "Нужна проверка" }}</strong>
+            <strong>{{ "Предварительно рассчитано" if report.ready else "Нужна проверка" }}</strong>
             <small>{{ "Основные данные заполнены" if report.ready else "Есть незаполненные данные" }}</small>
         </article>
 
@@ -526,8 +526,8 @@
     <section class="isna-workflow" id="isnaWorkflow">
         <div class="isna-workflow__head">
             <div>
-                <h2>Отправка в ИСНА</h2>
-                <p>Проверка → фиксация версии → локальная ЭЦП → защищённая отправка</p>
+                <h2>Автоматическое формирование ФНО</h2>
+                <p>Данные активной организации уже берутся из продаж, зарплаты и настроек. JSON вручную вводить не требуется.</p>
             </div>
             <span class="isna-state">{{ status_labels.get(filing_status, filing_status) }}</span>
         </div>
@@ -539,6 +539,18 @@
             <div class="isna-step {% if filing_status in ['sent','accepted'] %}is-done{% endif %}">4. Передано в ИСНА</div>
         </div>
 
+        {% if isna_test_lab_enabled %}
+        <div class="isna-test-lab__actions">
+            <button type="button" class="report-btn report-btn--primary"
+                    id="isnaAutoReportFetch"
+                    data-url="/accounting/isna/test/auto-report?form_type={{ report.form_type }}&year={{ selected_year }}&period={{ selected_period }}">
+                Проверить данные ФНО из Nika Business
+            </button>
+        </div>
+        <div id="isnaAutoReportStatus" class="isna-test-lab__status" role="status" aria-live="polite">
+            Автоматическое заполнение использует текущую организацию и выбранный отчётный период.
+        </div>
+        {% endif %}
         <div class="isna-workflow__actions">
             {% if not filing or filing_status in ['prepared','failed'] %}
             <form method="post" action="/accounting/report/prepare">
@@ -546,12 +558,12 @@
                 <input type="hidden" name="year" value="{{ selected_year }}">
                 <input type="hidden" name="period" value="{{ selected_period }}">
                 <button class="report-btn report-btn--primary" type="submit" {% if not report.ready %}disabled{% endif %}>
-                    {{ 'Обновить пакет' if filing else 'Подготовить к подписи' }}
+                    {{ 'Обновить черновик' if filing else 'Сохранить расчётный черновик' }}
                 </button>
             </form>
             {% endif %}
 
-            {% if filing_status == 'signed' %}
+            {% if filing_status == 'signed' and false %}
             <form method="post" action="/accounting/filings/{{ filing.id }}/send">
                 <button class="report-btn report-btn--primary" type="submit" {% if not isna_gateway_ready %}disabled title="Шлюз ИСНА не настроен"{% endif %}
                         onclick="return confirm('Отправить подписанную форму в ИСНА? Повторная отправка будет заблокирована.')">
@@ -569,12 +581,7 @@
         </div>
 
         {% if filing and filing_status in ['prepared','failed'] %}
-        <form class="isna-signature-form" method="post" action="/accounting/filings/{{ filing.id }}/signature">
-            <textarea name="signature" rows="2" required minlength="32" placeholder="Подпись, полученная локально через NCALayer / Nika Sign"></textarea>
-            <input name="certificate_subject" placeholder="Владелец сертификата (необязательно)">
-            <button class="report-btn report-btn--light" type="submit">Сохранить подпись</button>
-        </form>
-        <p>Закрытый ключ ЭЦП не отправляется и не хранится в Nika — сохраняется только подпись зафиксированного пакета.</p>
+        <p class="isna-warning">Это внутренний расчётный пакет, а не официальный JSON ФНО. Подпись и отправка заблокированы до внедрения утверждённого формата и ФЛК.</p>
         {% endif %}
 
         {% if filing and filing.error_message %}<p class="isna-warning">{{ filing.error_message }}</p>{% endif %}
@@ -884,6 +891,47 @@
         </div>
     </section>
 </div>
+
+{% if isna_test_lab_enabled %}
+<script>
+(() => {
+  const button = document.getElementById('isnaAutoReportFetch');
+  const output = document.getElementById('isnaAutoReportStatus');
+  if (!button || !output) return;
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    output.textContent = 'Получаем расчёт из бухгалтерии Nika Business...';
+    try {
+      const response = await fetch(button.dataset.url, {
+        method: 'GET', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Accept': 'application/json' },
+      });
+      const data = await response.json();
+      if (!response.ok || data.sourceLoaded !== true) {
+        throw new Error(data.error || 'Не удалось загрузить отчёт.');
+      }
+      const lines = [
+        'Организация: ' + data.companyName,
+        'ФНО: ' + data.formCode + ' · ' + data.periodLabel,
+        'Источник: бухгалтерия Nika Business',
+      ];
+      for (const [key, value] of Object.entries(data.summary || {})) {
+        lines.push(key + ': ' + value);
+      }
+      if (Array.isArray(data.issues) && data.issues.length) {
+        lines.push('Требует проверки:', ...data.issues.map(item => '• ' + item));
+      }
+      lines.push(data.message || '', 'Подпись и отправка ФНО не выполнялись.');
+      output.textContent = lines.join('\n');
+    } catch (error) {
+      output.textContent = 'Ошибка автоматического заполнения: ' + error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+})();
+</script>
+{% endif %}
 
 {% if isna_test_lab_enabled %}
 {# base.html renders page_js only in embedded mode; this lab must also work
