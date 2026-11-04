@@ -139,7 +139,7 @@
 
 <input name="purchase_price" id="purchase_price" value="{{ item.purchase_price if item else '' }}" placeholder="Цена закупа">
 
-<input name="discount_percent" value="{{ item.discount_percent if item else '' }}" placeholder="Скидка %">
+<input type="number" name="discount_percent" min="0" max="100" step="1" value="{{ item.discount_percent if item else 0 }}" placeholder="Скидка %" title="Целый процент от 0 до 100">
 
 <input
     type="number"
