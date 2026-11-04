@@ -345,28 +345,64 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт"
     document.getElementById("search").value = "";
 }
 
+// A real in-page dialog works in Chromium, Electron and Android WebView;
+// window.prompt() is not implemented by several Electron versions.
+let salesDiscountTargetIndex = null;
+
 function updateCartDiscount(index = null) {
     if (salePaymentBusy || window.nikaKaspiPosActive) {
         alert("Дождитесь завершения оплаты, прежде чем менять скидку.");
         return;
     }
     if (!cart.length) return;
+    const popup = document.getElementById("salesDiscountModal");
+    const field = document.getElementById("salesDiscountPercent");
+    if (!popup || !field) return;
+    salesDiscountTargetIndex = index;
     const current = index === null ? 0 : nikaSaleDiscountPercent(cart[index].discount_percent);
-    const answer = prompt(index === null ? "Скидка на весь чек, % (0–100):" :
-        "Скидка на позицию, % (0–100):", String(current));
-    if (answer === null) return;
-    const percent = Number(answer.trim());
-    if (!Number.isInteger(percent) || percent < 0 || percent > 100 || !answer.trim()) {
-        alert("Введите целый процент от 0 до 100.");
+    document.getElementById("salesDiscountTitle").textContent =
+        index === null ? "Скидка на весь чек" : "Скидка на позицию";
+    document.getElementById("salesDiscountError").textContent = "";
+    field.value = current;
+    popup.hidden = false;
+    popup.style.display = "flex";
+    popup.setAttribute("aria-hidden", "false");
+    window.setTimeout(() => { field.focus(); field.select(); }, 60);
+}
+
+function closeCartDiscount() {
+    const popup = document.getElementById("salesDiscountModal");
+    if (!popup) return;
+    popup.style.display = "none";
+    popup.hidden = true;
+    popup.setAttribute("aria-hidden", "true");
+    salesDiscountTargetIndex = null;
+}
+
+function applyCartDiscount() {
+    if (salePaymentBusy || window.nikaKaspiPosActive) return;
+    const field = document.getElementById("salesDiscountPercent");
+    const raw = String(field?.value ?? "").trim();
+    const percent = Number(raw);
+    if (raw === "" || !Number.isInteger(percent) || percent < 0 || percent > 100) {
+        document.getElementById("salesDiscountError").textContent =
+            "Введите целый процент от 0 до 100.";
         return;
     }
-    (index === null ? cart : [cart[index]]).forEach(item => {
+    const index = salesDiscountTargetIndex;
+    if (index !== null && !cart[index]) {
+        closeCartDiscount();
+        return;
+    }
+    const chosen = index === null ? cart : [cart[index]];
+    chosen.forEach(item => {
         const base = Number(item.base_price ?? item.price) || 0;
         if (nikaSaleDiscountPercent(item.discount_percent) !== percent) delete item.line_total;
         item.base_price = base;
         item.discount_percent = percent;
         item.price = nikaSaleDiscountedPrice(base, percent);
     });
+    closeCartDiscount();
     renderCart();
 }
 
