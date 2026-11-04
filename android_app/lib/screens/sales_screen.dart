@@ -1034,7 +1034,7 @@ class SalesScreenState extends State<SalesScreen> {
         DateTime.now().difference(loadedAt) < const Duration(minutes: 3)) {
       return voiceCatalogCache;
     }
-    final response = await ApiService.saleItems(limit: 100);
+    final response = await ApiService.saleItems(limit: 100, forceRemote: true);
     final loaded = List<dynamic>.from(response['items'] ?? const [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
@@ -2307,7 +2307,7 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
       setState(() => loadingMore = true);
     }
     try {
-      final result = await ApiService.saleItems(query: query, page: page, limit: 30);
+      final result = await ApiService.saleItems(query: query, page: page, limit: 30, forceRemote: true);
       final loaded = List<dynamic>.from(result['items'] ?? const []).map((raw) => Map<String, dynamic>.from(raw as Map)).toList();
       if (!mounted || currentRequest != requestId) return;
       setState(() {
