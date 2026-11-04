@@ -1771,6 +1771,25 @@ class ApiService {
         timeout: const Duration(seconds: 28),
       ));
 
+  // Automatically uses the selected company's existing accounting data.
+  // No manual JSON. No tax document signing or WShEP POST. The service
+  // returns readyToSign=false until the official per-form schema/FLC is mapped.
+  static Future<Map<String, dynamic>> isnaTestAutoFnoFromAccounting({
+    required String formType,
+    required int year,
+    required String period,
+  }) async =>
+      Map<String, dynamic>.from(await _request(
+        'GET',
+        '/accounting/isna/test/auto-report',
+        query: {
+          'form_type': formType,
+          'year': year.toString(),
+          'period': period,
+        },
+        timeout: const Duration(seconds: 20),
+      ));
+
   // TEST-only, read-only Smart Bridge diagnostics (never sends tax data).
   static Future<Map<String, dynamic>> isnaTestDiagnostics() async =>
       Map<String, dynamic>.from(await _request(
