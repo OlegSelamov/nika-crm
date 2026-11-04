@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify website food modifier editor
         run: |
+          node --check static/js/sales.js
           node --check static/js/food_sales.js
           node --check static/js/isna_test_lab.js
           node tests/test_isna_test_lab.js
@@ -125,6 +126,7 @@ jobs:
           sudo .venv/bin/python -m py_compile scripts/isna_gateway_probe.py
           bash -n scripts/isna_vpn_watchdog.sh
           echo "Offline ISNA SOAP structure tests (no network calls)..."
+          sudo .venv/bin/python -m unittest discover -s tests -p test_sale_discounts.py -v
           sudo .venv/bin/python -m unittest discover -s tests -p test_isna_bip.py -v
           sudo .venv/bin/python -m unittest discover -s tests -p test_isna_fno_integration.py -v
           sudo .venv/bin/python -m unittest discover -s tests -p test_isna_signing_lab.py -v
