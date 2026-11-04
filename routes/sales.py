@@ -5,7 +5,7 @@ from services.receipt_settings import receipt_context
 from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz, now_kz_for_timestamp
-from utils.sale_amounts import normalize_sale_line
+from utils.sale_amounts import normalize_sale_line, normalize_discounted_sale_line
 from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from flask import render_template
 from num2words import num2words
@@ -406,13 +406,20 @@ def pay_sale():
         normalized_cart = []
         for item in cart:
             cur.execute(
-                "SELECT unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s",
-                (item.get("id"),)
+                "SELECT unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s AND company_id = %s",
+                (item.get("id"), company_id),
             )
             db_item = cur.fetchone()
             unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
             item_type = (db_item["item_type"] if db_item else "product") or "product"
-            price, qty, line_total = normalize_sale_line(item, unit)
+            try:
+                price, qty, line_total = (
+                    normalize_sale_line(item, unit) if food_order_id or data.get("food_mode") is True
+                    else normalize_discounted_sale_line(item, unit)
+                )
+            except ValueError as exc:
+                conn.rollback()
+                return jsonify({"success": False, "error": str(exc)}), 400
 
             marking_value = item.get("excise_stamp")
             if marking_value:
@@ -1192,14 +1199,19 @@ def create_invoice():
     normalized_cart = []
     for item in cart:
         cur.execute(
-            "SELECT name, unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s",
-            (item.get("id"),)
+            "SELECT name, unit, COALESCE(item_type, 'product') AS item_type FROM items WHERE id = %s AND company_id = %s",
+            (item.get("id"), company_id),
         )
         db_item = cur.fetchone()
         name = db_item["name"] if db_item else "Товар"
         unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
         item_type = (db_item["item_type"] if db_item else "product") or "product"
-        price, qty, line_total = normalize_sale_line(item, unit)
+        try:
+            price, qty, line_total = normalize_discounted_sale_line(item, unit)
+        except ValueError as exc:
+            conn.rollback()
+            pool.putconn(conn)
+            return jsonify({"success": False, "error": str(exc)}), 400
         normalized_cart.append((item, name, unit, item_type, price, qty, line_total))
 
     total = sum((line[6] for line in normalized_cart), start=0)
@@ -3127,6 +3139,7 @@ def barcode():
             "id": item["id"],
             "name": item["name"],
             "price": item["retail_price"],
+            "discount_percent": item.get("discount_percent") or 0,
             "unit": item.get("unit"),
             "barcode": item.get("barcode"),
             "gtin": item.get("gtin") or scanned_code.gtin,
@@ -3747,6 +3760,7 @@ def find_by_gtin():
         "id": item["id"],
         "name": item["name"],
         "price": item["retail_price"],
+        "discount_percent": item.get("discount_percent") or 0,
         "unit": item.get("unit"),
         "barcode": item.get("barcode"),
         "gtin": item["gtin"],
@@ -3771,6 +3785,7 @@ def search_items():
             i.id,
             i.name,
             i.retail_price,
+            COALESCE(i.discount_percent, 0) AS discount_percent,
             i.barcode,
             i.unit,
             i.gtin,
