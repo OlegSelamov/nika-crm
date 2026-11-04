@@ -1007,7 +1007,7 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
           const Text(
             'ФНО собирается автоматически по данным активной организации: '
             'продажи, возвраты, начисления и налоговые настройки. '
-            'Вручную JSON вводить не нужно.'
+            'Вручную JSON вводить не нужно.',
             style: TextStyle(fontSize: 12),
           ),
           const SizedBox(height: 8),
