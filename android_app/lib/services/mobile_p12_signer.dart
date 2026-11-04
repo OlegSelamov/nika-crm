@@ -144,6 +144,20 @@ class MobileP12Signer {
         saveKey: saveKey,
       );
 
+  /// Signs a complete taxpayer FNO 200/910 XML on the Android device.
+  /// This does NOT sign the transport SOAP Body or submit anything.
+  /// Never saves the P12 and never transmits private key material.
+  static Future<Map<String, dynamic>> signIsnaTaxpayerFno({
+    required String payload,
+    required String password,
+  }) =>
+      _invoke(
+        'signIsnaTaxpayerFnoWithP12',
+        payload: payload,
+        password: password,
+        saveKey: false,
+      );
+
   /// Reads a public .cer/.crt/.pem/.der on Android only.
   /// No bytes are uploaded to Nika VPS or retained by this service.
   static Future<Map<String, dynamic>> inspectIsnaLocalCer() async {
