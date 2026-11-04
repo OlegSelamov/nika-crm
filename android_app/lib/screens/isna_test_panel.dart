@@ -5,6 +5,7 @@ import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/isna_real_fno_payload.dart';
 import '../services/mobile_p12_signer.dart';
 
 // Deliberately contains no taxpayer/company data and is not an official
@@ -778,6 +779,66 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
     }
   }
 
+  Future<void> _signRealFnoLocal() async {
+    if (busy) return;
+    final unsignedXml = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _RealFnoInputDialog(),
+    );
+    if (unsignedXml == null || !mounted) return;
+    setState(() {
+      // Actual taxpayer XML must never be mistaken for a synthetic SOAP.
+      signedXml = null;
+      signedServerDemoSoap = null;
+      signedServerSoapVerifiedByVps = false;
+      routingProbeSignedSoap = null;
+      routingProbeValidated = false;
+      status = 'Подпишите настоящую ФНО на телефоне. В ШЭП ничего не отправляется.';
+    });
+    try {
+      final result = await showDialog<Map<String, dynamic>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _NativeIsnaSignDialog(
+          xml: unsignedXml,
+          signerPurpose: 'taxpayer-real',
+          realFnoMode: true,
+        ),
+      );
+      if (!mounted) return;
+      if (result == null) {
+        setState(() => status = 'Подпись ФНО отменена. Ничего не отправлено.');
+        return;
+      }
+      final xml = (result['signedXml'] ?? '').toString();
+      final formCode = (result['formCode'] ?? '').toString();
+      if (result['signatureVerified'] != true ||
+          result['filingCreated'] != false ||
+          result['gatewayContacted'] != false ||
+          !const {'200.00', '910.00'}.contains(formCode) ||
+          !xml.contains('Signature')) {
+        throw StateError('Android не подтвердил подпись реальной ФНО.');
+      }
+      setState(() {
+        signedXml = xml;
+        signedFileName = 'nika-isna-real-fno-XXX-signed'.replaceFirst(
+          'XXX', formCode.replaceAll('.', '-'));
+        status = 'ФНО $formCode подписана ЭЦП налогоплательщика. ✅\n'
+            'Подпись криптографически проверена на Android. ✅\n'
+            'Документ готов к сохранению как приватный XML.\n'
+            'ФНО НЕ отправлена в ШЭП или ИСНА.\n'
+            'Для подачи нужны отдельно транспортная подпись Nika, '
+            'проверка полномочий и серверное подтверждение отправки.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => status = 'Не удалось подписать ФНО: $error\n'
+            'Ничего не отправлено.');
+      }
+    }
+  }
+
   Future<void> _save() async {
     final value = signedXml;
     if (value == null || busy) return;
@@ -792,7 +853,9 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
       );
       if (mounted && path != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Пробный подписанный XML сохранён')),
+          SnackBar(content: Text(signedFileName.startsWith('nika-isna-real-fno-')
+              ? 'Настоящая подписанная ФНО сохранена локально (НЕ отправлена)'
+              : 'Пробный подписанный XML сохранён')),
         );
       }
     } catch (error) {
@@ -901,6 +964,23 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
             label: const Text('Отправить маршрутный тест в TEST ШЭП'),
           ),
           const SizedBox(height: 8),
+          const Divider(height: 28),
+          const Text('Настоящая ФНО · только локальная подпись',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          const Text(
+            'Вставьте полный JSON с code и fnoDto из официального формата. '
+            'Выберите ЭЦП уполномоченного подписанта ТОО. '
+            'Документ не загружается на сервер при подписи.',
+            style: TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: busy ? null : _signRealFnoLocal,
+            icon: const Icon(Icons.draw_outlined),
+            label: const Text('Подписать настоящую ФНО 910/200 · локально'),
+          ),
+          const Divider(height: 28),
           OutlinedButton.icon(
             onPressed: busy ? null : _signFnoOfflineDouble,
             icon: const Icon(Icons.layers_outlined),
@@ -938,17 +1018,126 @@ class _IsnaTestPanelState extends State<IsnaTestPanel> {
   }
 }
 
+class _RealFnoInputDialog extends StatefulWidget {
+  const _RealFnoInputDialog();
+
+  @override
+  State<_RealFnoInputDialog> createState() => _RealFnoInputDialogState();
+}
+
+class _RealFnoInputDialogState extends State<_RealFnoInputDialog> {
+  final controller = TextEditingController();
+  String code = '910.00';
+  String? error;
+  bool authorized = false;
+
+  void _prepare() {
+    try {
+      // No network calls. The official source JSON remains on the phone.
+      final result = buildUnsignedRealFnoXml(
+        sourceJson: controller.text, expectedCode: code,
+      );
+      Navigator.of(context).pop(result);
+    } on FormatException catch (exception) {
+      setState(() => error = exception.message);
+    }
+  }
+
+  @override
+  void dispose() {
+    controller.clear();
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Настоящая ФНО · подготовка подписи'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Скопируйте проверенный JSON официального FNO_INTEGRATION '
+            'с полями code и fnoDto. Значения должны относиться к '
+            'нужному ТОО и налоговому периоду.',
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: code,
+            decoration: const InputDecoration(labelText: 'Форма'),
+            items: const [
+              DropdownMenuItem(value: '910.00', child: Text('ФНО 910.00')),
+              DropdownMenuItem(value: '200.00', child: Text('ФНО 200.00')),
+            ],
+            onChanged: (next) => setState(() => code = next ?? code),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            maxLines: 8,
+            minLines: 4,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(
+              labelText: 'Полный JSON с code + fnoDto',
+              hintText: '{"code":"910.00","fnoDto":{...}}',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Важно: Values object из кабинета может отличаться от '
+            'сервисного fnoDto. Не заменяйте поля предположениями. '
+            'Подпись не означает, что налоговая примет документ.',
+            style: TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            value: authorized,
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              'Данные и полномочия подписанта проверены. '
+              'Я подтверждаю локальное подписание настоящей ФНО.',
+              style: TextStyle(fontSize: 12),
+            ),
+            onChanged: (next) => setState(() => authorized = next ?? false),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 6),
+            Text(error!, style: const TextStyle(color: Colors.red)),
+          ],
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Отмена'),
+      ),
+      FilledButton(
+        onPressed: authorized ? _prepare : null,
+        child: const Text('Проверить JSON и выбрать ЭЦП'),
+      ),
+    ],
+  );
+}
+
 class _NativeIsnaSignDialog extends StatefulWidget {
   final String xml;
   final bool soapMode;
   final bool useWsseKeyIdentifier;
   final bool routingProbeMode;
+  final bool realFnoMode;
   final String? signerPurpose;
   const _NativeIsnaSignDialog({
     required this.xml,
     this.soapMode = false,
     this.useWsseKeyIdentifier = false,
     this.routingProbeMode = false,
+    this.realFnoMode = false,
     this.signerPurpose,
   });
 
@@ -972,7 +1161,12 @@ class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
       error = null;
     });
     try {
-      final signed = widget.routingProbeMode
+      final signed = widget.realFnoMode
+          ? await MobileP12Signer.signIsnaTaxpayerFno(
+              payload: widget.xml,
+              password: password.text,
+            )
+          : widget.routingProbeMode
           ? await MobileP12Signer.signIsnaRoutingProbe(
               payload: widget.xml,
               password: password.text,
@@ -1005,7 +1199,9 @@ class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: Text(widget.signerPurpose == 'taxpayer-demo'
+        title: Text(widget.signerPurpose == 'taxpayer-real'
+            ? 'Подписать настоящую ФНО'
+            : widget.signerPurpose == 'taxpayer-demo'
             ? '1/2 · Подпись налогоплательщика'
             : widget.signerPurpose == 'system-transport-demo'
                 ? '2/2 · Транспортная подпись Nika'
@@ -1017,7 +1213,11 @@ class _NativeIsnaSignDialogState extends State<_NativeIsnaSignDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(widget.signerPurpose == 'taxpayer-demo'
+              Text(widget.signerPurpose == 'taxpayer-real'
+                  ? 'Выберите ЭЦП уполномоченного подписанта налогоплательщика. '
+                    'Подписывается настоящая ФНО, но на этом этапе '
+                    'она сохраняется только на телефоне. В ИСНА ничего не отправится.'
+                  : widget.signerPurpose == 'taxpayer-demo'
                   ? 'Выбери ЭЦП налогоплательщика — она подписывает саму ФНО. '
                     'Сейчас это только недействительный образец 000.00. '
                     'Ключ и пароль остаются на телефоне.'

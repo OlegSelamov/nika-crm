@@ -229,6 +229,7 @@ class MainActivity : FlutterFragmentActivity() {
                     "signAlatauJwsWithP12",
                     "signEsfRawWithP12",
                     "signEsfXmlWithP12",
+                    "signIsnaTaxpayerFnoWithP12",
                     "signIsnaSoapDemoWithP12",
                     "signIsnaSoapDemoWithP12KeyIdentifier",
                     "signIsnaRoutingProbeWithP12" -> {
@@ -292,7 +293,8 @@ class MainActivity : FlutterFragmentActivity() {
         val capabilityKey = when (method) {
             "signAlatauJwsWithP12" -> "readyForAlatau"
             "signEsfRawWithP12" -> "readyForEsfRaw"
-            "signEsfXmlWithP12" -> "readyForEsfXml"
+            "signEsfXmlWithP12",
+            "signIsnaTaxpayerFnoWithP12" -> "readyForEsfXml"
             "signIsnaSoapDemoWithP12",
             "signIsnaSoapDemoWithP12KeyIdentifier",
             "signIsnaRoutingProbeWithP12" -> "readyForEsfXml"
@@ -545,6 +547,12 @@ class MainActivity : FlutterFragmentActivity() {
                     payload = payload,
                 )
                 "signEsfXmlWithP12" -> KalkanJwsSigner.signEsfXml(
+                    context = this,
+                    keyUri = uri,
+                    passwordChars = password,
+                    payload = payload,
+                )
+                "signIsnaTaxpayerFnoWithP12" -> KalkanJwsSigner.signIsnaTaxpayerFno(
                     context = this,
                     keyUri = uri,
                     passwordChars = password,
