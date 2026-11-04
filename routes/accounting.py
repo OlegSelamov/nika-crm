@@ -2996,6 +2996,69 @@ def accounting_report():
 
 
 
+@accounting_bp.route("/accounting/isna/test/auto-report", methods=["GET"])
+def isna_auto_report_from_accounting():
+    """Load existing company/tax figures, not user-supplied JSON.
+
+    This endpoint is read-only, tenant-scoped and TEST-only.
+    It does NOT return unsigned filing XML until an official ISNA mapper/FLC
+    for the selected form and tax period has been validated.
+    """
+    if os.getenv("APP_MODE", "").strip().lower() != "test":
+        return jsonify({"error": "Только TEST."}), 404
+    if not session.get("user_id"):
+        return jsonify({"error": "Необходим вход."}), 401
+    company_id = _require_company()
+    if not company_id:
+        return jsonify({"error": "Активная организация не выбрана."}), 403
+
+    form_type = str(request.args.get("form_type") or "").strip()
+    year_raw = str(request.args.get("year") or "")
+    period = str(request.args.get("period") or "").strip()
+    if form_type not in {"910", "200"} or not re.fullmatch(r"\d{4}", year_raw):
+        return jsonify({"error": "Укажите ФНО 910/200 и год."}), 400
+    year = int(year_raw)
+    from services.isna_auto_reporting import (
+        AutomaticFnoError, build_accounting_fno_snapshot,
+    )
+    if year < 2025 or year > 2100:
+        return jsonify({"error": "Неверный год."}), 400
+    if period not in ({"1", "2"} if form_type == "910" else {"1", "2", "3", "4"}):
+        return jsonify({"error": "Неверный отчётный период."}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        _ensure_accounting_tables(cur)
+        _ensure_tax_tables(cur)
+        cur.execute("""
+            SELECT id, name, bin, address, director
+            FROM companies WHERE id=%s
+        """, (company_id,))
+        company = cur.fetchone()
+        if not company:
+            return jsonify({"error": "Организация не найдена."}), 404
+        report = (
+            _build_910_report(cur, company_id, year, period)
+            if form_type == "910" else
+            _build_200_report(cur, company_id, year, period)
+        )
+        snapshot = build_accounting_fno_snapshot(
+            company=company, report=report, year=year, period=period,
+        )
+        response = jsonify(snapshot)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except AutomaticFnoError as error:
+        return jsonify({"error": str(error)}), 422
+    except Exception:
+        current_app.logger.exception("ISNA automatic accounting snapshot failed")
+        return jsonify({"error": "Не удалось рассчитать ФНО из базы Nika."}), 500
+    finally:
+        cur.close()
+        pool.putconn(conn)
+
+
 @accounting_bp.route("/accounting/isna/test/verify-double-fno-offline", methods=["POST"])
 def isna_test_verify_double_fno_offline():
     """Only a fixed fake FNO 000.00; verify both signatures, NEVER POST to SHÈP."""
