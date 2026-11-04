@@ -82,6 +82,14 @@ class RealFnoSubmissionTests(unittest.TestCase):
                  b'<faultstring>Rejected</faultstring></s:Fault></s:Body></s:Envelope>')
         self.assertEqual(real._interpret_reply(500, fault, False)["outcome"], "rejected")
 
+    def test_same_business_json_with_new_signature_deduplicates(self):
+        first = _signed_sample()
+        second = first.replace("FAKE_FOR_OFFLINE_TESTS", "DIFFERENT_SIGNATURE")
+        self.assertNotEqual(hashlib.sha256(first.encode()).hexdigest(),
+                            hashlib.sha256(second.encode()).hexdigest())
+        self.assertEqual(real._canonical_business_digest(first),
+                         real._canonical_business_digest(second))
+
     def test_journal_claim_is_exclusive_and_atomic(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
@@ -137,7 +145,7 @@ class RealFnoSubmissionTests(unittest.TestCase):
             if raises:
                 with self.assertRaises(real.FnoSubmissionBlocked):
                     real.submit_test_fno(args)
-                return digest, post_mock.call_count
+                return real._canonical_business_digest(fno), post_mock.call_count
             result = real.submit_test_fno(args)
             return result, post_mock.call_count
 
