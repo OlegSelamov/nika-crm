@@ -11,6 +11,7 @@ import '../services/kaspi_pos_service.dart';
 import '../services/nika_assistant_controller.dart';
 import '../services/product_code_parser.dart';
 import '../services/sales_voice_bridge.dart';
+import '../services/sale_discounts.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/hold_scanner_button.dart';
@@ -112,6 +113,66 @@ class SalesScreenState extends State<SalesScreen> {
         0,
         (sum, item) => sum + _cartItemTotal(item),
       );
+
+  double get totalSavings => cart.fold<double>(
+        0,
+        (sum, item) => sum + saleLineSaving(item, _cartItemTotal(item)),
+      );
+
+  Future<void> editDiscount({int? index}) async {
+    if (cart.isEmpty || paying) return;
+    final initial = index == null ? 0 : saleDiscountPercent(cart[index]['discount_percent']);
+    final controller = TextEditingController(text: '$initial');
+    final title = index == null ? 'Скидка на весь чек' : 'Скидка на позицию';
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Процент скидки (0–100)', suffixText: '%'),
+          ),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: () {
+              final raw = int.tryParse(controller.text.trim());
+              if (raw == null || raw < 0 || raw > 100) {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  const SnackBar(content: Text('Введите целый процент от 0 до 100')),
+                );
+                return;
+              }
+              Navigator.pop(sheetContext, raw);
+            },
+            child: const Text('Применить скидку'),
+          ),
+        ]),
+      ),
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+    setState(() {
+      _clearPendingVoicePayment();
+      final targets = index == null ? cart : [cart[index]];
+      for (final item in targets) {
+        final base = asDouble(item['base_price'] ?? item['price']);
+        final previous = saleDiscountPercent(item['discount_percent']);
+        if (previous != result) item.remove('line_total');
+        item['base_price'] = base;
+        item['discount_percent'] = result;
+        item['price'] = saleDiscountedPrice(base, result);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -235,7 +296,11 @@ class SalesScreenState extends State<SalesScreen> {
     bool requestMeasuredQuantity = true,
   }) async {
     final item = Map<String, dynamic>.from(source);
-    item['price'] = asDouble(item['price'] ?? item['retail_price']);
+    final originalPrice = asDouble(item['base_price'] ?? item['retail_price'] ?? item['price']);
+    final catalogDiscount = saleDiscountPercent(item['discount_percent']);
+    item['base_price'] = originalPrice;
+    item['discount_percent'] = catalogDiscount;
+    item['price'] = saleDiscountedPrice(originalPrice, catalogDiscount);
     item['qty'] = asDouble(item['qty'] ?? 1);
     final unit = _normalizedUnit(item['unit']);
     final measuredUnit = _isVariableQuantityUnit(unit);
@@ -256,7 +321,9 @@ class SalesScreenState extends State<SalesScreen> {
       final canMerge = index >= 0 &&
           item['excise_stamp'] == null &&
           item['line_total'] == null &&
-          cart[index]['line_total'] == null;
+          cart[index]['line_total'] == null &&
+          asDouble(cart[index]['price']) == asDouble(item['price']) &&
+          saleDiscountPercent(cart[index]['discount_percent']) == catalogDiscount;
       if (canMerge) {
         cart[index]['qty'] = asDouble(cart[index]['qty']) + asDouble(item['qty']);
       } else {
@@ -264,6 +331,8 @@ class SalesScreenState extends State<SalesScreen> {
           'id': item['id'],
           'name': item['name'] ?? 'Без названия',
           'price': asDouble(item['price']),
+          'base_price': originalPrice,
+          'discount_percent': catalogDiscount,
           'qty': asDouble(item['qty']),
           'unit': item['unit'] ?? 'шт',
           'item_type': item['item_type'] ?? 'product',
@@ -1693,7 +1762,20 @@ class SalesScreenState extends State<SalesScreen> {
                           const SizedBox(width: 8),
                           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                             Text(money(_cartItemTotal(item)), style: const TextStyle(fontWeight: FontWeight.w900)),
-                            IconButton(onPressed: () => setState(() { cart.removeAt(index); _clearPendingVoicePayment(); }), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger), tooltip: 'Удалить'),
+                            if (saleDiscountPercent(item['discount_percent']) > 0)
+                              Text(
+                                '-${saleDiscountPercent(item['discount_percent'])}% · ' +
+                                    money(saleLineSaving(item, _cartItemTotal(item))),
+                                style: const TextStyle(fontSize: 11, color: AppColors.success),
+                              ),
+                            Row(mainAxisSize: MainAxisSize.min, children: [
+                              IconButton(
+                                onPressed: paying ? null : () => editDiscount(index: index),
+                                icon: const Icon(Icons.percent_rounded),
+                                tooltip: 'Изменить скидку',
+                              ),
+                              IconButton(onPressed: () => setState(() { cart.removeAt(index); _clearPendingVoicePayment(); }), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger), tooltip: 'Удалить'),
+                            ]),
                           ]),
                         ]),
                       ),
@@ -1736,13 +1818,21 @@ class SalesScreenState extends State<SalesScreen> {
                     style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900, letterSpacing: -.8),
                   ),
                 ),
+                if (totalSavings > 0.009)
+                  Text('Экономия: ${money(totalSavings)}',
+                      style: const TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
                 Text(
                   '${cart.length} ${cart.length == 1 ? 'позиция' : 'позиций'}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 9),
+                TextButton.icon(
+                  onPressed: cart.isEmpty || paying ? null : () => editDiscount(),
+                  icon: const Icon(Icons.percent_rounded, size: 18),
+                  label: const Text('Скидка на весь чек'),
+                ),
+                const SizedBox(height: 4),
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -2285,8 +2375,25 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
                                 child: ListTile(
                                   leading: _CatalogThumb(item: item, service: service),
                                   title: Text('${item['name'] ?? 'Без названия'}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-                                  subtitle: Text(service ? 'Услуга' : 'Остаток: ${item['quantity'] ?? 0} ${item['unit'] ?? 'шт'}'),
-                                  trailing: Text(money(item['retail_price']), style: const TextStyle(fontWeight: FontWeight.w900)),
+                                  subtitle: Text(
+                                    (service ? 'Услуга' : 'Остаток: ${item['quantity'] ?? 0} ${item['unit'] ?? 'шт'}') +
+                                      (saleDiscountPercent(item['discount_percent']) > 0
+                                          ? '  ·  -${saleDiscountPercent(item['discount_percent'])}%' : ''),
+                                  ),
+                                  trailing: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (saleDiscountPercent(item['discount_percent']) > 0)
+                                        Text(money(item['retail_price']),
+                                            style: const TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: AppColors.muted)),
+                                      Text(
+                                        money(saleDiscountedPrice(asDouble(item['retail_price']), saleDiscountPercent(item['discount_percent']))),
+                                        style: const TextStyle(fontWeight: FontWeight.w900),
+                                      ),
+                                    ],
+                                  ),
                                   onTap: () => Navigator.pop(context, item),
                                 ),
                               );
