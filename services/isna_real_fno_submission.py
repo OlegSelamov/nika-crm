@@ -27,7 +27,7 @@ import xml.etree.ElementTree as ET
 from scripts.isna_gateway_probe import (
     SOURCE_IP, GATEWAY_IP, GATEWAY_PORT, WSDL_PATH, local_source_available,
 )
-from scripts.isna_inspect_wss import extract_signer_certificate
+from scripts.isna_inspect_wss import InvalidSoap, extract_signer_certificate
 from services.isna_bip import (
     SOAP_NS, BIP_TYPES_NS, WSU_NS, DEFAULT_TEST_URL, configuration,
 )
@@ -38,7 +38,7 @@ from services.isna_fno_integration import (
 from services.isna_shep_transport_test import _safe_gateway_reply
 from services.isna_transport_certificate import registered_transport_certificate_sha256
 from services.isna_transport_signer_cli import (
-    _private_key_location, sign_test_soap_native,
+    SigningUnavailable, _private_key_location, sign_test_soap_native,
 )
 from services.isna_vps_signature_verifier import (
     verify_inner_fno_signature_on_vps, verify_soap_signature_on_vps,
@@ -61,6 +61,21 @@ def _clean_pin(value: str) -> str:
     if not re.fullmatch(r"[A-F0-9]{64}", value):
         raise FnoSubmissionBlocked("A valid 64-hex SHA-256 confirmation is required.")
     return value
+
+
+def _canonical_business_digest(signed_fno: str) -> str:
+    """Stable idempotency key for JSON content across multiple XML signatures.
+
+    Does not prevent a different declaration with different fields but
+    prevents signing and sending exactly the same business data twice.
+    """
+    try:
+        root = ET.fromstring(signed_fno)
+        data = json.loads(root.findtext("data") or "")
+        canonical = json.dumps(data, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    except (ET.ParseError, json.JSONDecodeError, TypeError):
+        raise FnoSubmissionBlocked("Cannot derive a stable business-data idempotency key.") from None
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest().upper()
 
 
 def _now() -> str:
@@ -159,7 +174,7 @@ def _assert_signed_body(signed_soap: str, signed_fno: str, sender: str, message_
         if profile != "key-identifier":
             raise ValueError("WSSE KeyIdentifier required")
         return signer_cert
-    except (ET.ParseError, ValueError, TypeError, AttributeError):
+    except (ET.ParseError, InvalidSoap, ValueError, TypeError, AttributeError):
         raise FnoSubmissionBlocked("Signer altered the FNO SOAP or used an unsupported WSSE profile.") from None
 
 
@@ -299,10 +314,12 @@ def submit_test_fno(args: argparse.Namespace) -> dict:
     if verified_outer.get("cryptoVerifiedOnServer") is not True:
         raise FnoSubmissionBlocked("Transport SOAP Body failed independent KalkanCrypt verification.")
 
-    journal = args.journal_dir / (payload_hash.lower() + ".json")
+    business_hash = _canonical_business_digest(inner_xml)
+    journal = args.journal_dir / (business_hash.lower() + ".json")
     record = {
         "version": 1, "createdAt": _now(),
-        "payloadSha256": payload_hash, "formCode": args.expected_code,
+        "payloadSha256": payload_hash, "businessSha256": business_hash,
+        "formCode": args.expected_code,
         "messageId": message_id, "environment": "test",
         "serviceId": "FNO_INTEGRATION", "state": "prepared",
     }
@@ -351,7 +368,7 @@ def main() -> int:
         result = submit_test_fno(args)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["state"] == "service-reported-success" else 3
-    except (FnoSubmissionBlocked, ValueError, OSError) as exc:
+    except (FnoSubmissionBlocked, SigningUnavailable, ValueError, OSError, EOFError) as exc:
         if isinstance(exc, FnoSubmissionBlocked):
             print(f"Real TEST FNO blocked: {exc}", file=sys.stderr)
         else:
