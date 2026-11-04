@@ -608,7 +608,27 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     )
                   : _priceField('Розничная цена, ₸ *', retailController, 'retail'),
               const SizedBox(height: 16),
-              _field('Скидка, %', discountController, type: TextInputType.number),
+              _field(
+                'Скидка в каталоге, %',
+                discountController,
+                type: TextInputType.number,
+                validator: (value) {
+                  final raw = (value ?? '').trim();
+                  if (raw.isEmpty) return null;
+                  final percent = int.tryParse(raw);
+                  return percent == null || percent < 0 || percent > 100
+                      ? 'Введите целый процент от 0 до 100'
+                      : null;
+                },
+              ),
+              if (_double(discountController) > 0 && _double(discountController) <= 100)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Цена со скидкой: ${(_double(retailController) * (100 - _double(discountController)) / 100).toStringAsFixed(2)} ₸',
+                    style: const TextStyle(color: AppColors.success),
+                  ),
+                ),
               if (itemType == 'product') ...[
                 const SizedBox(height: 16),
                 _field(
