@@ -2177,7 +2177,7 @@ def mobile_sale_items():
     try:
         cur.execute("""
             SELECT
-                i.id,i.name,i.retail_price,i.barcode,i.unit,i.gtin,i.ntin,
+                i.id,i.name,i.retail_price,COALESCE(i.discount_percent, 0) AS discount_percent,i.barcode,i.unit,i.gtin,i.ntin,
                 (SELECT ii.image FROM item_images ii WHERE ii.item_id=i.id ORDER BY COALESCE(ii.is_main, FALSE) DESC, ii.id LIMIT 1) AS image,
                 COALESCE(i.item_type,'product') AS item_type,
                 CASE
