@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # publish ONLY the isolated TEST APK as a public prerelease asset
 
 concurrency:
   group: nika-android-test
@@ -72,6 +72,11 @@ jobs:
       - name: Build isolated Android test APK
         working-directory: android_app
         run: flutter build apk --debug
+      - name: Check automatic ISNA source and inert FNO UI
+        working-directory: android_app
+        run: |
+          flutter test test/isna_auto_report_ui_test.dart
+          flutter test test/isna_offline_fno_test.dart
       - name: Upload TEST APK (never a production release)
         uses: actions/upload-artifact@v4
         with:
@@ -79,3 +84,26 @@ jobs:
           path: android_app/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish permanent direct TEST APK link (no main / prod release)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          TAG="nika-test-latest"
+          FILE="NikaBusiness-TEST.apk"
+          mkdir -p test-release
+          cp android_app/build/app/outputs/flutter-apk/app-debug.apk "test-release/$FILE"
+          (cd test-release && sha256sum "$FILE" > "$FILE.sha256")
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" \
+              --title "Nika Business TEST (Android)" --prerelease \
+              --notes "Только тестовая сборка: отдельный package .test и API test.nikabusiness.com. Не production."
+          fi
+          gh release upload "$TAG" "test-release/$FILE" "test-release/$FILE.sha256" --clobber
+          gh release edit "$TAG" --prerelease \
+            --notes "Тестовая APK из ветки test, commit $GITHUB_SHA. API: https://test.nikabusiness.com. Не production."
+          echo "### Прямая ссылка на Android TEST APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$FILE" >> "$GITHUB_STEP_SUMMARY"
