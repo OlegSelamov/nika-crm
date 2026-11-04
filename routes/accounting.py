@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 import os
+import re
 import socket
 from urllib.parse import urlparse
 from io import BytesIO
