@@ -129,6 +129,22 @@ function roundedMeasuredTotal(price, quantity) {
     return Math.round((Number(price) || 0) * (Number(quantity) || 0));
 }
 
+// Catalog price is the reference; only the cart unit price changes.
+function nikaSaleDiscountPercent(value) {
+    const percent = Number(value);
+    return Number.isInteger(percent) && percent >= 0 && percent <= 100 ? percent : 0;
+}
+
+function nikaSaleDiscountedPrice(original, percent) {
+    const cents = Math.round((Number(original) || 0) * 100);
+    return Math.round(cents * (100 - nikaSaleDiscountPercent(percent)) / 100) / 100;
+}
+
+function nikaSaleSavings(item) {
+    if (item.base_price == null) return 0;
+    return Math.max(0, (Number(item.base_price) || 0) * (Number(item.qty) || 0) - cartItemTotal(item));
+}
+
 function cartItemTotal(item) {
     const exact = Number(item.line_total);
     if (item.line_total !== undefined && item.line_total !== null && Number.isFinite(exact)) {
@@ -138,13 +154,13 @@ function cartItemTotal(item) {
     return isVariableQuantityUnit(item.unit) ? Math.round(raw) : raw;
 }
 
-function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "", exciseStamp = "") {
+function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "", exciseStamp = "", discountPercent = null) {
     if (isVariableQuantityUnit(unit)) {
-        openQuantityModal({ id, name, price, unit, gtin, ntin, exciseStamp });
+        const netPrice = discountPercent === null ? Number(price) : nikaSaleDiscountedPrice(price, discountPercent);
+        openQuantityModal({ id, name, price: netPrice, basePrice: price, discountPercent, unit, gtin, ntin, exciseStamp });
         return;
     }
-
-    addToCart(id, name, price, 1, gtin, ntin, unit, exciseStamp);
+    addToCart(id, name, price, 1, gtin, ntin, unit, exciseStamp, null, discountPercent);
 }
 
 function openQuantityModal(item) {
@@ -289,18 +305,22 @@ function confirmQuantity() {
             return;
         }
     }
-    addToCart(item.id, item.name, item.price, qty, item.gtin, item.ntin, item.unit, item.exciseStamp, lineTotal);
+    addToCart(item.id, item.name, item.basePrice ?? item.price, qty, item.gtin, item.ntin, item.unit, item.exciseStamp, lineTotal, item.discountPercent);
     closeQuantityModal();
 }
 
 // добавление в корзину
-function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт", exciseStamp = "", lineTotal = null) {
+function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт", exciseStamp = "", lineTotal = null, discountPercent = null) {
 
     // Every marked unit keeps its own DataMatrix code. Ordinary products can
     // still be merged into one cart row by quantity.
+    const percent = discountPercent === null ? null : nikaSaleDiscountPercent(discountPercent);
+    const salePrice = percent === null ? Number(price) : nikaSaleDiscountedPrice(price, percent);
     const existing = exciseStamp || lineTotal !== null
         ? null
-        : cart.find(i => i.id === id && !i.excise_stamp && i.line_total === undefined);
+        : cart.find(i => i.id === id && !i.excise_stamp && i.line_total === undefined &&
+            Math.abs(Number(i.price) - salePrice) < 0.001 &&
+            (i.discount_percent ?? null) === percent);
 
     if (existing) {
         existing.qty += Number(qty) || 1;
@@ -308,7 +328,8 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт"
 		const cartItem = {
 			id,
 			name,
-			price,
+			price: salePrice,
+            ...(percent === null ? {} : { base_price: Number(price), discount_percent: percent }),
 			qty,
 			gtin,
 			ntin,
@@ -322,6 +343,31 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт"
     renderCart();
 	document.getElementById("itemsList").style.display = "none";
     document.getElementById("search").value = "";
+}
+
+function updateCartDiscount(index = null) {
+    if (salePaymentBusy || window.nikaKaspiPosActive) {
+        alert("Дождитесь завершения оплаты, прежде чем менять скидку.");
+        return;
+    }
+    if (!cart.length) return;
+    const current = index === null ? 0 : nikaSaleDiscountPercent(cart[index].discount_percent);
+    const answer = prompt(index === null ? "Скидка на весь чек, % (0–100):" :
+        "Скидка на позицию, % (0–100):", String(current));
+    if (answer === null) return;
+    const percent = Number(answer.trim());
+    if (!Number.isInteger(percent) || percent < 0 || percent > 100 || !answer.trim()) {
+        alert("Введите целый процент от 0 до 100.");
+        return;
+    }
+    (index === null ? cart : [cart[index]]).forEach(item => {
+        const base = Number(item.base_price ?? item.price) || 0;
+        if (nikaSaleDiscountPercent(item.discount_percent) !== percent) delete item.line_total;
+        item.base_price = base;
+        item.discount_percent = percent;
+        item.price = nikaSaleDiscountedPrice(base, percent);
+    });
+    renderCart();
 }
 
 function importStorefrontOrderToSales() {
