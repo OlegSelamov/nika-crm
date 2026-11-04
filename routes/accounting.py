@@ -3549,6 +3549,10 @@ def save_accounting_filing_signature(filing_id):
         filing = cur.fetchone()
         if not filing:
             return "Форма не найдена", 404
+        # The legacy JSON snapshot is NOT the signed official FNO XML.
+        # An arbitrary pasted signature must never upgrade it to 'signed'.
+        if (filing.get("payload") or {}).get("meta", {}).get("format") == "ISNA_DRAFT":
+            return "Нельзя подписать внутренний расчёт вместо официальной ФНО ИСНА", 409
         if filing["status"] not in {"prepared", "signed", "failed"}:
             return "Форму нельзя подписать в текущем статусе", 409
         previous_status = filing["status"]
@@ -3584,6 +3588,10 @@ def send_accounting_filing(filing_id):
         filing = cur.fetchone()
         if not filing:
             return "Форма не найдена", 404
+        # Never deliver accounting draft JSON to an arbitrary gateway URL
+        # or interpret its response as acceptance by the tax authority.
+        if (filing.get("payload") or {}).get("meta", {}).get("format") == "ISNA_DRAFT":
+            return "Черновик Nika Business не является формой FNO_INTEGRATION", 409
         if filing["status"] != "signed" or not filing["signature"]:
             return "Сначала подпишите форму ЭЦП", 409
         envelope = json.dumps({
