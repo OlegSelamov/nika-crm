@@ -101,7 +101,15 @@
                                 <small>{% if i.barcode %}Основной штрихкод{% else %}Не указан{% endif %}</small>
                             </div>
                         </td>
-                        <td><span class="catalog-price">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</span></td>
+                        <td>
+                            {% if (i.discount_percent or 0) > 0 %}
+                                <small style="display:block;color:#8190a4;text-decoration:line-through">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</small>
+                                <span class="catalog-price">{{ "{:,.2f}".format((i.retail_price or 0) * (100 - i.discount_percent) / 100).replace(',', ' ') }} ₸</span>
+                                <small style="display:block;color:#15966c">−{{ i.discount_percent }}%</small>
+                            {% else %}
+                                <span class="catalog-price">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</span>
+                            {% endif %}
+                        </td>
                         <td><span class="catalog-unit">{{ i.unit or 'шт' }}</span></td>
                         <td>
                             <div class="catalog-actions">
@@ -124,6 +132,7 @@
                                         "gtin": i.gtin or "",
                                         "ntin": i.ntin or "",
                                         "retail_price": i.retail_price or 0,
+                                        "discount_percent": i.discount_percent|default(0, true),
                                         "purchase_price": i.purchase_price|default(0),
                                         "unit": i.unit or "шт",
                                         "is_marked": i.is_marked|default(false),
@@ -156,7 +165,9 @@
                             <small>{{ category_name }}</small>
                         </div>
                     </div>
-                    <span class="catalog-price">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</span>
+                    {% if (i.discount_percent or 0) > 0 %}
+                        <span class="catalog-price"><small style="display:block;color:#8190a4;text-decoration:line-through">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</small>{{ "{:,.2f}".format((i.retail_price or 0) * (100 - i.discount_percent) / 100).replace(',', ' ') }} ₸ <small style="color:#15966c">−{{ i.discount_percent }}%</small></span>
+                    {% else %}<span class="catalog-price">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</span>{% endif %}
                 </div>
                 <div class="catalog-mobile-card__meta">
                     <div><small>Штрихкод</small>{{ i.barcode or '—' }}</div>
@@ -177,6 +188,7 @@
                         "gtin": i.gtin or "",
                         "ntin": i.ntin or "",
                         "retail_price": i.retail_price or 0,
+                        "discount_percent": i.discount_percent|default(0, true),
                         "purchase_price": i.purchase_price|default(0),
                         "unit": i.unit or "шт",
                         "is_marked": i.is_marked|default(false),
@@ -524,6 +536,12 @@
                 <label class="catalog-field" id="itemRetailPriceField">
                     <span id="itemRetailPriceLabel">Розничная цена, ₸ *</span>
                     <input type="number" name="retail_price" id="itemRetailPrice" min="0" step="1" required placeholder="0">
+                </label>
+
+                <label class="catalog-field">
+                    <span>Скидка на товар / услугу, %</span>
+                    <input type="number" name="discount_percent" id="itemDiscountPercent" min="0" max="100" step="1" value="0" placeholder="0">
+                    <small>Цена в каталоге остаётся прежней. В продажах скидка применяется автоматически.</small>
                 </label>
 
                 <div class="catalog-field catalog-field--wide catalog-media-field">
