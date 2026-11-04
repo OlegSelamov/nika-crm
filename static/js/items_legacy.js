@@ -116,6 +116,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
+            var discountInput = document.getElementById('itemDiscountPercent');
+            var rawDiscount = discountInput ? String(discountInput.value || '0').trim() : '0';
+            var percent = Number(rawDiscount);
+            if (!/^(?:0|[1-9][0-9]?|100)$/.test(rawDiscount) ||
+                    !Number.isInteger(percent) || percent < 0 || percent > 100) {
+                event.preventDefault();
+                if (discountInput) {
+                    discountInput.setCustomValidity('Введите целый процент от 0 до 100');
+                    discountInput.reportValidity();
+                    discountInput.focus();
+                    discountInput.addEventListener('input', function () {
+                        discountInput.setCustomValidity('');
+                    }, {once: true});
+                }
+                return;
+            }
             syncCategoryName(true);
             if (submitButton) {
                 submitButton.disabled = true;
@@ -200,6 +216,19 @@ function formatCatalogPrice(value) {
     return Math.round(Number(value) || 0).toLocaleString('ru-RU') + ' ₸';
 }
 
+function catalogDiscountPriceHtml(item) {
+    var original = Number(item.retail_price) || 0;
+    var percent = Number(item.discount_percent) || 0;
+    if (!Number.isInteger(percent) || percent <= 0 || percent > 100) {
+        return '<span class="catalog-price">' + formatCatalogPrice(original) + '</span>';
+    }
+    var discounted = Math.round(Math.round(original * 100) * (100 - percent) / 100) / 100;
+    return '<small style="display:block;color:#8491a5;text-decoration:line-through">' +
+        formatCatalogPrice(original) + '</small>' +
+        '<span class="catalog-price">' + discounted.toLocaleString('ru-RU', {maximumFractionDigits: 2}) + ' ₸</span>' +
+        '<small style="display:block;color:#15966c;font-weight:800">−' + percent + '%</small>';
+}
+
 function catalogItemData(item) {
     return {
         id: item.id,
@@ -211,6 +240,7 @@ function catalogItemData(item) {
         gtin: item.gtin || '',
         ntin: item.ntin || '',
         retail_price: item.retail_price || 0,
+        discount_percent: item.discount_percent || 0,
         purchase_price: item.purchase_price || 0,
         unit: item.unit || 'шт',
         is_marked: Boolean(item.is_marked),
@@ -243,7 +273,7 @@ function catalogDesktopRow(item) {
         '<td><span class="catalog-category">' + category + '</span></td>' +
         '<td><div class="catalog-code"><strong>' + escapeCatalogHtml(data.barcode || '—') + '</strong>' +
             '<small>' + (data.barcode ? 'Основной штрихкод' : 'Не указан') + '</small></div></td>' +
-        '<td><span class="catalog-price">' + formatCatalogPrice(data.retail_price) + '</span></td>' +
+        '<td>' + catalogDiscountPriceHtml(data) + '</td>' +
         '<td><span class="catalog-unit">' + escapeCatalogHtml(data.unit) + '</span></td>' +
         '<td><div class="catalog-actions">' +
             ((itemType === 'product' || itemType === 'dish') ? '<button class="catalog-icon-btn catalog-label-btn" type="button" title="Печатать этикетку" data-catalog-label-id="' + id + '">▥</button>' : '') +
@@ -272,7 +302,7 @@ function catalogMobileCard(item) {
             '<div class="catalog-product__info"><strong>' + escapeCatalogHtml(data.name) +
             ' <span class="catalog-item-type catalog-item-type--' + itemType + '">' + typeLabel + '</span></strong>' +
             '<small>' + escapeCatalogHtml(data.category) + '</small></div></div>' +
-            '<span class="catalog-price">' + formatCatalogPrice(data.retail_price) + '</span></div>' +
+            catalogDiscountPriceHtml(data) + '</div>' +
         '<div class="catalog-mobile-card__meta">' +
             '<div><small>Штрихкод</small>' + escapeCatalogHtml(data.barcode || '—') + '</div>' +
             '<div><small>Единица</small>' + escapeCatalogHtml(data.unit) + '</div>' +
@@ -1282,6 +1312,7 @@ function openEditItemModal(item) {
     setValue('itemNtin', item.ntin);
     setValue('itemPurchasePrice', item.purchase_price);
     setValue('itemRetailPrice', item.retail_price);
+    setValue('itemDiscountPercent', item.discount_percent || 0);
     setValue('itemUnit', item.unit || 'шт');
     document.getElementById('itemIsMarked').checked = Boolean(item.is_marked);
     updateMarkedBadge();
