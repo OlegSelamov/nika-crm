@@ -1048,10 +1048,12 @@ function renderItemSearchResults(items, hasMore) {
         const info = document.createElement("div");
         info.className = "item-info";
 
-        if (nikaSaleDiscountPercent(item.discount_percent) > 0) {
+        if (nikaSaleDiscountPercent(item.discount_percent) > 0 ||
+            (item.discount_type === 'amount' && Number(item.discount_amount) > 0)) {
             const badge = document.createElement("div");
             badge.className = "discount-badge";
-            badge.textContent = `-${item.discount_percent}%`;
+            badge.textContent = item.discount_type === 'amount'
+                ? `−${item.discount_amount} ₸` : `−${item.discount_percent}%`;
             (showCatalogImages ? imageBlock : info).appendChild(badge);
         }
 
@@ -1062,7 +1064,8 @@ function renderItemSearchResults(items, hasMore) {
         const priceBlock = document.createElement("div");
         priceBlock.className = "item-price-block";
 
-        if (nikaSaleDiscountPercent(item.discount_percent) > 0) {
+        if (nikaSaleDiscountPercent(item.discount_percent) > 0 ||
+            (item.discount_type === 'amount' && Number(item.discount_amount) > 0)) {
             const oldPrice = document.createElement("div");
             oldPrice.className = "old-price";
             oldPrice.textContent = saleMoney(item.retail_price);
@@ -1071,7 +1074,9 @@ function renderItemSearchResults(items, hasMore) {
 
         const price = document.createElement("div");
         price.className = "new-price";
-        price.textContent = saleMoney(nikaSaleDiscountedPrice(item.retail_price, item.discount_percent));
+        price.textContent = saleMoney(item.discount_type === 'amount'
+            ? Math.max(0, Number(item.retail_price) - Number(item.discount_amount || 0))
+            : nikaSaleDiscountedPrice(item.retail_price, item.discount_percent));
         priceBlock.appendChild(price);
 
         info.appendChild(name);
@@ -1088,7 +1093,9 @@ function renderItemSearchResults(items, hasMore) {
                 item.gtin || "",
                 item.ntin || "",
                 "",
-                item.discount_percent ?? 0
+                item.discount_percent ?? 0,
+                item.discount_amount ?? 0,
+                item.discount_type ?? 'percent'
             );
         });
 
@@ -2173,7 +2180,9 @@ function handleBarcode(code) {
                 data.gtin || "",
                 data.ntin || "",
                 data.excise_stamp || "",
-                data.discount_percent ?? 0
+                data.discount_percent ?? 0,
+                data.discount_amount ?? 0,
+                data.discount_type ?? 'percent'
             );
 
         }
