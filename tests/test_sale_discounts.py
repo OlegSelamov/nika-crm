@@ -2,7 +2,7 @@
 import unittest
 from decimal import Decimal
 
-from utils.sale_amounts import normalize_discounted_sale_line
+from utils.sale_amounts import normalize_discounted_sale_line, discount_sale_rows
 
 
 class SaleDiscountsTest(unittest.TestCase):
@@ -46,6 +46,44 @@ class SaleDiscountsTest(unittest.TestCase):
                 "qty": "2", "line_total": None}
         self.assertEqual(normalize_discounted_sale_line(cart)[2], Decimal("2550.00"))
         self.assertEqual(normalize_discounted_sale_line(cart)[2], Decimal("2550.00"))
+
+    def test_fixed_tenge_discount_on_one_unit(self):
+        rows = discount_sale_rows(
+            {"base_price": 2000, "price": 1750, "qty": 1,
+             "discount_type": "amount", "discount_amount": 250, "line_total": 1750},
+            "шт",
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["total"], Decimal("1750.00"))
+        self.assertEqual(rows[0]["discount_amount"], Decimal("250.00"))
+
+    def test_fixed_tenge_discount_on_three_units_stays_exact_and_fiscal_safe(self):
+        rows = discount_sale_rows(
+            {"base_price": 1000, "price": 983.33, "qty": 3,
+             "discount_type": "amount", "discount_amount": 50, "line_total": 2950},
+            "шт",
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(sum((row["qty"] for row in rows), Decimal("0")), 3)
+        self.assertEqual(sum((row["total"] for row in rows), Decimal("0")), Decimal("2950.00"))
+        self.assertEqual(sum((row["discount_amount"] for row in rows), Decimal("0")), Decimal("50.00"))
+        for row in rows:
+            self.assertEqual(row["total"], row["qty"] * row["price"])
+
+    def test_bad_fixed_discount_does_not_change_fiscal_charge(self):
+        for money in (-1, 1100, "nan"):
+            with self.subTest(money=money), self.assertRaises(ValueError):
+                discount_sale_rows(
+                    {"base_price": 1000, "price": 950, "qty": 1,
+                     "discount_type": "amount", "discount_amount": money, "line_total": 950},
+                    "шт",
+                )
+        with self.assertRaises(ValueError):
+            discount_sale_rows(
+                {"base_price": 1000, "price": 900, "qty": 1,
+                 "discount_type": "amount", "discount_amount": 100, "line_total": 1000},
+                "шт",
+            )
 
     def test_legacy_food_or_old_clients_unchanged(self):
         self.assertEqual(normalize_discounted_sale_line({"price": 3010, "qty": 0.333}, "кг")[2],
