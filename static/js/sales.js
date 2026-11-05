@@ -158,6 +158,7 @@ function nikaSetFixedDiscount(item, cents) {
     const discount = Math.min(Math.max(0, cents), gross);
     const quantity = Number(item.qty) || 1;
     item.base_price = Number(item.base_price ?? item.price) || 0;
+    delete item.catalog_discount_per_unit;
     item.discount_type = 'amount';
     item.discount_percent = null;
     item.discount_amount = discount / 100;
@@ -676,9 +677,20 @@ function changeQty(index, delta) {
     const unit = normalizeUnit(item.unit);
     const step = ["кг", "килограмм", "килограммы", "литр", "л", "литры"].includes(unit) ? 0.1 : 1;
     item.qty = Number(((item.qty || step) + (delta * step)).toFixed(3));
-    if (item.discount_type === 'amount' && Number(item.qty) > 0)
-        nikaSetFixedDiscount(item, Math.round((Number(item.discount_amount) || 0) * 100));
-    else delete item.line_total;
+    if (item.discount_type === 'amount' && Number(item.qty) > 0) {
+        if (item.catalog_discount_per_unit != null) {
+            const unitDiscount = Number(item.catalog_discount_per_unit) || 0;
+            const basePrice = Number(item.base_price ?? item.price) || 0;
+            const netRaw = Math.max(0, basePrice - unitDiscount) * item.qty;
+            const net = isVariableQuantityUnit(item.unit) ? Math.round(netRaw)
+                : Math.round(netRaw * 100) / 100;
+            item.price = Math.max(0, basePrice - unitDiscount);
+            item.line_total = net;
+            item.discount_amount = Math.max(0, nikaDiscountGross(item) / 100 - net);
+        } else {
+            nikaSetFixedDiscount(item, Math.round((Number(item.discount_amount) || 0) * 100));
+        }
+    } else delete item.line_total;
 
     if (cart[index].qty <= 0) {
         cart.splice(index, 1);
