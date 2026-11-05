@@ -244,7 +244,7 @@ def _catalog_item_payload(item):
     data = dict(item)
     for field in (
         "retail_price", "purchase_price", "wholesale_price", "quantity",
-        "discount_percent", "markup_percent",
+        "discount_percent", "discount_amount", "markup_percent",
     ):
         value = data.get(field)
         if isinstance(value, Decimal):
@@ -1207,7 +1207,7 @@ def api_create_item():
         service_sale_mode = "order" if item_type == "service" else None
 
     try:
-        _catalog_discount_percent(data.get("discount_percent"))
+        discount_type, discount_percent, discount_amount = _catalog_offer_values(data)
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
     conn = get_db()
@@ -1225,6 +1225,8 @@ def api_create_item():
             purchase_price,
             wholesale_price,
             discount_percent,
+            discount_type,
+            discount_amount,
             barcode,
             gtin,
             ntin,
@@ -1234,7 +1236,7 @@ def api_create_item():
             quantity,
             company_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """, (
         data.get("name", ""),
@@ -1245,7 +1247,9 @@ def api_create_item():
         float(data.get("retail_price") or 0),
         float(data.get("purchase_price") or 0),
         float(data.get("wholesale_price") or 0),
-        _catalog_discount_percent(data.get("discount_percent")),
+        discount_percent,
+        discount_type,
+        discount_amount,
         barcode,
         data.get("gtin", ""),
         data.get("ntin", ""),
@@ -1303,7 +1307,7 @@ def api_update_item(item_id):
     if not name:
         return jsonify({"success": False, "message": "Укажите название позиции"}), 400
     try:
-        _catalog_discount_percent(data.get("discount_percent"))
+        discount_type, discount_percent, discount_amount = _catalog_offer_values(data)
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
 
@@ -1315,7 +1319,7 @@ def api_update_item(item_id):
             UPDATE items SET
                 name=%s, category=%s, unit=%s, type=%s, description=%s,
                 retail_price=%s, purchase_price=%s, wholesale_price=%s,
-                discount_percent=%s, barcode=%s, gtin=%s, ntin=%s,
+                discount_percent=%s, discount_type=%s, discount_amount=%s, barcode=%s, gtin=%s, ntin=%s,
                 is_marked=%s, item_type=%s, service_sale_mode=%s
             WHERE id=%s AND company_id=%s
             RETURNING *
@@ -1328,7 +1332,9 @@ def api_update_item(item_id):
             float(data.get("retail_price") or 0),
             float(data.get("purchase_price") or 0),
             float(data.get("wholesale_price") or 0),
-            _catalog_discount_percent(data.get("discount_percent")),
+            discount_percent,
+            discount_type,
+            discount_amount,
             barcode,
             str(data.get("gtin") or "").strip() if item_type == "product" else "",
             str(data.get("ntin") or "").strip() if item_type == "product" else "",
