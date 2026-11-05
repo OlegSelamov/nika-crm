@@ -121,56 +121,92 @@ class SalesScreenState extends State<SalesScreen> {
 
   Future<void> editDiscount({int? index}) async {
     if (cart.isEmpty || paying) return;
-    final initial = index == null ? 0 : saleDiscountPercent(cart[index]['discount_percent']);
-    final controller = TextEditingController(text: '$initial');
+    final selected = index == null ? null : cart[index];
+    var mode = selected?['discount_type'] == 'amount' ? 'amount' : 'percent';
+    final initialValue = mode == 'amount'
+        ? asDouble(selected?['discount_amount']).toStringAsFixed(2)
+        : '${saleDiscountPercent(selected?['discount_percent'])}';
+    final controller = TextEditingController(text: initialValue);
     final title = index == null ? 'Скидка на весь чек' : 'Скидка на позицию';
-    final result = await showModalBottomSheet<int>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20, 20, 20, MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, updateSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20, 20, 20, MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+            const SizedBox(height: 14),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'percent', label: Text('Проценты (%)')),
+                ButtonSegment(value: 'amount', label: Text('Тенге (₸)')),
+              ],
+              selected: {mode},
+              onSelectionChanged: (choice) {
+                updateSheet(() {
+                  mode = choice.first;
+                  controller.text = '0';
+                  controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: mode == 'percent' ? 'Размер скидки, %' : 'Сумма скидки, ₸',
+                suffixText: mode == 'percent' ? '%' : '₸',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              mode == 'amount' ? 'Сумма в тенге за позицию или весь чек (не с единицы товара)'
+                  : 'Целый процент от 0 до 100',
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () {
+                final value = double.tryParse(controller.text.trim().replaceAll(',', '.'));
+                if (value == null || !value.isFinite || value < 0 ||
+                    (mode == 'percent' && (value > 100 || value != value.roundToDouble())) ||
+                    (mode == 'amount' && (value * 100 - (value * 100).round()).abs() > .000001)) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
+                    SnackBar(content: Text(mode == 'amount'
+                        ? 'Введите сумму в тенге с точностью до тиына'
+                        : 'Введите целый процент от 0 до 100')),
+                  );
+                  return;
+                }
+                final selectedRows = index == null ? cart : [cart[index]];
+                final gross = selectedRows.fold<double>(0, (sum, line) => sum + saleGross(line));
+                if (mode == 'amount' && value > gross + .001) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
+                    const SnackBar(content: Text('Скидка превышает стоимость товаров')),
+                  );
+                  return;
+                }
+                Navigator.pop(sheetContext, {'mode': mode, 'value': value});
+              },
+              child: const Text('Применить скидку'),
+            ),
+          ]),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: controller,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Процент скидки (0–100)', suffixText: '%'),
-          ),
-          const SizedBox(height: 14),
-          FilledButton(
-            onPressed: () {
-              final raw = int.tryParse(controller.text.trim());
-              if (raw == null || raw < 0 || raw > 100) {
-                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                  const SnackBar(content: Text('Введите целый процент от 0 до 100')),
-                );
-                return;
-              }
-              Navigator.pop(sheetContext, raw);
-            },
-            child: const Text('Применить скидку'),
-          ),
-        ]),
       ),
     );
     controller.dispose();
     if (result == null || !mounted) return;
     setState(() {
       _clearPendingVoicePayment();
-      final targets = index == null ? cart : [cart[index]];
-      for (final item in targets) {
-        final base = asDouble(item['base_price'] ?? item['price']);
-        final previous = saleDiscountPercent(item['discount_percent']);
-        if (previous != result) item.remove('line_total');
-        item['base_price'] = base;
-        item['discount_percent'] = result;
-        item['price'] = saleDiscountedPrice(base, result);
-      }
+      applySaleCartDiscount(cart, index: index,
+          mode: result['mode'] as String, value: result['value'] as double);
     });
   }
 
@@ -322,6 +358,7 @@ class SalesScreenState extends State<SalesScreen> {
           item['excise_stamp'] == null &&
           item['line_total'] == null &&
           cart[index]['line_total'] == null &&
+          cart[index]['discount_type'] != 'amount' &&
           asDouble(cart[index]['price']) == asDouble(item['price']) &&
           saleDiscountPercent(cart[index]['discount_percent']) == catalogDiscount;
       if (canMerge) {
@@ -333,6 +370,7 @@ class SalesScreenState extends State<SalesScreen> {
           'price': asDouble(item['price']),
           'base_price': originalPrice,
           'discount_percent': catalogDiscount,
+          'discount_type': 'percent',
           'qty': asDouble(item['qty']),
           'unit': item['unit'] ?? 'шт',
           'item_type': item['item_type'] ?? 'product',
@@ -1659,11 +1697,16 @@ class SalesScreenState extends State<SalesScreen> {
               ? 0.1
               : 1.0;
       final next = asDouble(cart[index]['qty']) + (delta * step);
-      cart[index].remove('line_total');
       if (next <= 0) {
         cart.removeAt(index);
       } else {
         cart[index]['qty'] = double.parse(next.toStringAsFixed(3));
+        if (cart[index]['discount_type'] == 'amount') {
+          applySaleFixedDiscount(cart[index],
+              (asDouble(cart[index]['discount_amount']) * 100).round());
+        } else {
+          cart[index].remove('line_total');
+        }
       }
     });
   }
@@ -1762,9 +1805,9 @@ class SalesScreenState extends State<SalesScreen> {
                           const SizedBox(width: 8),
                           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                             Text(money(_cartItemTotal(item)), style: const TextStyle(fontWeight: FontWeight.w900)),
-                            if (saleDiscountPercent(item['discount_percent']) > 0)
+                            if (saleDiscountLabel(item).isNotEmpty)
                               Text(
-                                '-${saleDiscountPercent(item['discount_percent'])}% · ' +
+                                '${saleDiscountLabel(item)} · ' +
                                     money(saleLineSaving(item, _cartItemTotal(item))),
                                 style: const TextStyle(fontSize: 11, color: AppColors.success),
                               ),
