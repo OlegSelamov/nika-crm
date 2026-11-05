@@ -21,6 +21,7 @@ jobs:
       - name: Verify website food modifier editor
         run: |
           node --check static/js/sales.js
+          node tests/test_retail_discounts.js
           node --check static/js/food_sales.js
           node --check static/js/isna_test_lab.js
           node tests/test_isna_test_lab.js
