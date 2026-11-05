@@ -140,6 +140,31 @@ function nikaSaleDiscountedPrice(original, percent) {
     return Math.round(cents * (100 - nikaSaleDiscountPercent(percent)) / 100) / 100;
 }
 
+function nikaDiscountDescription(item) {
+    if (item.discount_type === 'amount' && Number(item.discount_amount) > 0)
+        return '−' + saleMoney(item.discount_amount);
+    if (nikaSaleDiscountPercent(item.discount_percent) > 0)
+        return '−' + nikaSaleDiscountPercent(item.discount_percent) + '%';
+    return '';
+}
+
+function nikaDiscountGross(item) {
+    const raw = (Number(item.base_price ?? item.price) || 0) * (Number(item.qty) || 0);
+    return Math.round((isVariableQuantityUnit(item.unit) ? Math.round(raw) : raw) * 100);
+}
+
+function nikaSetFixedDiscount(item, cents) {
+    const gross = nikaDiscountGross(item);
+    const discount = Math.min(Math.max(0, cents), gross);
+    const quantity = Number(item.qty) || 1;
+    item.base_price = Number(item.base_price ?? item.price) || 0;
+    item.discount_type = 'amount';
+    item.discount_percent = null;
+    item.discount_amount = discount / 100;
+    item.line_total = (gross - discount) / 100;
+    item.price = Math.round((gross - discount) / quantity) / 100;
+}
+
 function nikaSaleSavings(item) {
     if (item.base_price == null) return 0;
     return Math.max(0, (Number(item.base_price) || 0) * (Number(item.qty) || 0) - cartItemTotal(item));
@@ -318,7 +343,7 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт"
     const salePrice = percent === null ? Number(price) : nikaSaleDiscountedPrice(price, percent);
     const existing = exciseStamp || lineTotal !== null
         ? null
-        : cart.find(i => i.id === id && !i.excise_stamp && i.line_total === undefined &&
+        : cart.find(i => i.id === id && !i.excise_stamp && i.line_total === undefined && i.discount_type !== 'amount' &&
             Math.abs(Number(i.price) - salePrice) < 0.001 &&
             (i.discount_percent ?? null) === percent);
 
@@ -359,11 +384,18 @@ function updateCartDiscount(index = null) {
     const field = document.getElementById("salesDiscountPercent");
     if (!popup || !field) return;
     salesDiscountTargetIndex = index;
-    const current = index === null ? 0 : nikaSaleDiscountPercent(cart[index].discount_percent);
+    const selected = index === null ? null : cart[index];
+    const kind = selected?.discount_type === 'amount' ? 'amount' : 'percent';
     document.getElementById("salesDiscountTitle").textContent =
         index === null ? "Скидка на весь чек" : "Скидка на позицию";
     document.getElementById("salesDiscountError").textContent = "";
-    field.value = current;
+    document.querySelectorAll('input[name="salesDiscountKind"]').forEach(radio => {
+        radio.checked = radio.value === kind;
+    });
+    field.value = kind === 'amount'
+        ? Number(selected?.discount_amount || 0)
+        : (selected ? nikaSaleDiscountPercent(selected.discount_percent) : 0);
+    changeCartDiscountKind();
     popup.hidden = false;
     popup.style.display = "flex";
     popup.setAttribute("aria-hidden", "false");
@@ -379,29 +411,65 @@ function closeCartDiscount() {
     salesDiscountTargetIndex = null;
 }
 
+function changeCartDiscountKind() {
+    const mode = document.querySelector('input[name="salesDiscountKind"]:checked')?.value || 'percent';
+    const field = document.getElementById("salesDiscountPercent");
+    const label = document.getElementById("salesDiscountValueLabel");
+    if (field) {
+        field.step = mode === 'amount' ? '0.01' : '1';
+        field.max = mode === 'percent' ? '100' : '';
+        field.placeholder = mode === 'amount' ? 'Например: 500' : 'Например: 10';
+        field.value = '0';
+    }
+    if (label) label.textContent = mode === 'amount' ? 'Размер скидки, ₸' : 'Размер скидки, %';
+    document.getElementById("salesDiscountError").textContent = "";
+}
+
 function applyCartDiscount() {
     if (salePaymentBusy || window.nikaKaspiPosActive) return;
     const field = document.getElementById("salesDiscountPercent");
-    const raw = String(field?.value ?? "").trim();
-    const percent = Number(raw);
-    if (raw === "" || !Number.isInteger(percent) || percent < 0 || percent > 100) {
-        document.getElementById("salesDiscountError").textContent =
-            "Введите целый процент от 0 до 100.";
+    const raw = String(field?.value ?? "").trim().replace(',', '.');
+    const value = Number(raw);
+    const kind = document.querySelector('input[name="salesDiscountKind"]:checked')?.value || 'percent';
+    const error = document.getElementById("salesDiscountError");
+    if (raw === '' || !Number.isFinite(value) || value < 0 ||
+        (kind === 'percent' && (!Number.isInteger(value) || value > 100)) ||
+        (kind === 'amount' && Math.round(value * 100) / 100 !== value)) {
+        error.textContent = kind === 'amount'
+            ? 'Введите сумму в тенге (точность до тиына).'
+            : 'Введите целый процент от 0 до 100.';
         return;
     }
     const index = salesDiscountTargetIndex;
-    if (index !== null && !cart[index]) {
-        closeCartDiscount();
-        return;
-    }
+    if (index !== null && !cart[index]) { closeCartDiscount(); return; }
     const chosen = index === null ? cart : [cart[index]];
-    chosen.forEach(item => {
-        const base = Number(item.base_price ?? item.price) || 0;
-        if (nikaSaleDiscountPercent(item.discount_percent) !== percent) delete item.line_total;
-        item.base_price = base;
-        item.discount_percent = percent;
-        item.price = nikaSaleDiscountedPrice(base, percent);
-    });
+    if (kind === 'amount') {
+        const amountCents = Math.round(value * 100);
+        const totalCents = chosen.reduce((sum, item) => sum + nikaDiscountGross(item), 0);
+        if (amountCents > totalCents) {
+            error.textContent = 'Скидка не может быть больше стоимости выбранных товаров.';
+            return;
+        }
+        let remaining = amountCents;
+        chosen.forEach((item, i) => {
+            const allocated = i === chosen.length - 1
+                ? remaining
+                : Math.round(amountCents * nikaDiscountGross(item) / (totalCents || 1));
+            const use = Math.min(remaining, allocated, nikaDiscountGross(item));
+            remaining -= use;
+            nikaSetFixedDiscount(item, use);
+        });
+    } else {
+        chosen.forEach(item => {
+            const base = Number(item.base_price ?? item.price) || 0;
+            delete item.line_total;
+            delete item.discount_amount;
+            item.base_price = base;
+            item.discount_type = 'percent';
+            item.discount_percent = value;
+            item.price = nikaSaleDiscountedPrice(base, value);
+        });
+    }
     closeCartDiscount();
     renderCart();
 }
@@ -498,9 +566,9 @@ function renderCart() {
             <tr>
                 <td>
                     <div class="cart-product-name">${item.name}</div>
-                    ${item.discount_percent > 0
-                        ? '<small style="color:#16946a;font-weight:700">−' + item.discount_percent +
-                          '% · экономия ' + saleMoney(nikaSaleSavings(item)) + '</small>'
+                    ${nikaDiscountDescription(item)
+                        ? '<small style="color:#16946a;font-weight:700">' + nikaDiscountDescription(item) +
+                          ' · экономия ' + saleMoney(nikaSaleSavings(item)) + '</small>'
                         : ''}
                     ${(item.gtin || item.ntin) ? `<div class="cart-product-code">${item.gtin || item.ntin}</div>` : ""}
                 </td>
@@ -547,8 +615,8 @@ function renderMobileCart() {
 
 					<div class="mobile-cart-name">
 						${item.name}
-					${item.discount_percent > 0 ? '<small style="display:block;color:#16946a">−' +
-                            item.discount_percent + '% · экономия ' + saleMoney(nikaSaleSavings(item)) + '</small>' : ''}
+					${nikaDiscountDescription(item) ? '<small style="display:block;color:#16946a">' +
+                            nikaDiscountDescription(item) + ' · экономия ' + saleMoney(nikaSaleSavings(item)) + '</small>' : ''}
                     </div>
 
 					<div class="mobile-cart-price">
@@ -588,7 +656,9 @@ function changeQty(index, delta) {
     const unit = normalizeUnit(item.unit);
     const step = ["кг", "килограмм", "килограммы", "литр", "л", "литры"].includes(unit) ? 0.1 : 1;
     item.qty = Number(((item.qty || step) + (delta * step)).toFixed(3));
-    delete item.line_total;
+    if (item.discount_type === 'amount' && Number(item.qty) > 0)
+        nikaSetFixedDiscount(item, Math.round((Number(item.discount_amount) || 0) * 100));
+    else delete item.line_total;
 
     if (cart[index].qty <= 0) {
         cart.splice(index, 1);
