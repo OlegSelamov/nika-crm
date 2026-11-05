@@ -5,7 +5,7 @@ from services.receipt_settings import receipt_context
 from datetime import datetime, timedelta
 from utils.product_codes import parse_scanned_product_code
 from utils.timezone import now_kz, now_kz_for_timestamp
-from utils.sale_amounts import normalize_sale_line, normalize_discounted_sale_line
+from utils.sale_amounts import normalize_sale_line, discount_sale_rows
 from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from flask import render_template
 from num2words import num2words
@@ -413,10 +413,13 @@ def pay_sale():
             unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
             item_type = (db_item["item_type"] if db_item else "product") or "product"
             try:
-                price, qty, line_total = (
-                    normalize_sale_line(item, unit) if food_order_id or data.get("food_mode") is True
-                    else normalize_discounted_sale_line(item, unit)
-                )
+                if food_order_id or data.get("food_mode") is True:
+                    price, qty, line_total = normalize_sale_line(item, unit)
+                    priced_rows = [{"price": price, "qty": qty, "total": line_total,
+                                    "base_price": None, "discount_amount": 0,
+                                    "discount_percent": None, "discount_type": None}]
+                else:
+                    priced_rows = discount_sale_rows(item, unit)
             except ValueError as exc:
                 conn.rollback()
                 return jsonify({"success": False, "error": str(exc)}), 400
@@ -432,7 +435,7 @@ def pay_sale():
                 # ВАЖНО: excise_stamp сохраняем ровно как пришёл со сканера.
                 # Нормализованный payload используется только для поиска GTIN.
                 item["excise_stamp"] = parsed_mark.raw
-                if qty != 1:
+                if len(priced_rows) != 1 or priced_rows[0]["qty"] != 1:
                     return jsonify({
                         "success": False,
                         "error": "Маркированная единица должна продаваться отдельно. Отсканируйте DataMatrix каждой упаковки.",
@@ -441,7 +444,8 @@ def pay_sale():
             excluded_ingredients = normalize_excluded_ingredients(
                 cur, company_id, int(item["id"]), item_type, item.get("excluded_ingredients")
             )
-            normalized_cart.append((item, unit, item_type, price, qty, line_total, excluded_ingredients))
+            for priced_row in priced_rows:
+                normalized_cart.append((item, unit, item_type, priced_row, excluded_ingredients))
 
         marking_codes = [
             line[0].get("excise_stamp")
@@ -454,7 +458,7 @@ def pay_sale():
                 "error": "Один и тот же DataMatrix отсканирован в чеке дважды",
             }), 400
 
-        total = sum((line[5] for line in normalized_cart), start=0)
+        total = sum((line[3]["total"] for line in normalized_cart), start=0)
         cash = total if payment_method == "cash" else 0
         card = total if payment_method == "card" else 0
         kaspi = total if payment_method == "kaspi" else 0
@@ -509,7 +513,7 @@ def pay_sale():
 
         sale_id = cur.fetchone()["id"]
 
-        for item, unit, item_type, price, qty, line_total, excluded_ingredients in normalized_cart:
+        for item, unit, item_type, priced, excluded_ingredients in normalized_cart:
 
             cur.execute("""
                 INSERT INTO sale_items (
@@ -525,23 +529,26 @@ def pay_sale():
                     excise_stamp,
                     item_type,
                     modifiers,
-                    excluded_ingredients
+                    excluded_ingredients,
+                    base_price, discount_amount, discount_percent, discount_type
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 sale_id,
                 item.get("id"),
                 item.get("name") or f"Товар #{item.get('id')}",
-                price,
-                qty,
-                line_total,
+                priced["price"],
+                priced["qty"],
+                priced["total"],
                 unit,
                 item.get("gtin"),
                 item.get("ntin"),
                 item.get("excise_stamp"),
                 item_type,
                 json.dumps(item.get("modifiers") or [], ensure_ascii=False),
-                json.dumps(excluded_ingredients, ensure_ascii=False)
+                json.dumps(excluded_ingredients, ensure_ascii=False),
+                priced["base_price"], priced["discount_amount"],
+                priced["discount_percent"], priced["discount_type"]
             ))
 
         process_sale(conn, sale_id)
@@ -1207,14 +1214,15 @@ def create_invoice():
         unit = db_item["unit"] if db_item and db_item["unit"] else "шт"
         item_type = (db_item["item_type"] if db_item else "product") or "product"
         try:
-            price, qty, line_total = normalize_discounted_sale_line(item, unit)
+            priced_rows = discount_sale_rows(item, unit)
         except ValueError as exc:
             conn.rollback()
             pool.putconn(conn)
             return jsonify({"success": False, "error": str(exc)}), 400
-        normalized_cart.append((item, name, unit, item_type, price, qty, line_total))
+        for priced in priced_rows:
+            normalized_cart.append((item, name, unit, item_type, priced))
 
-    total = sum((line[6] for line in normalized_cart), start=0)
+    total = sum((line[4]["total"] for line in normalized_cart), start=0)
         
     cur.execute("""
         SELECT COALESCE(MAX(sale_number), 0) + 1 AS next_number
@@ -1250,20 +1258,23 @@ def create_invoice():
 
     sale_id = cur.fetchone()["id"]
 
-    for item, name, unit, item_type, price, qty, line_total in normalized_cart:
+    for item, name, unit, item_type, priced in normalized_cart:
 
         cur.execute("""
-            INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, unit, item_type)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO sale_items (sale_id, item_id, name, price, quantity, total, unit, item_type,
+                                    base_price,discount_amount,discount_percent,discount_type)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             sale_id,
             item.get("id"),
             name,
-            price,
-            qty,
-            line_total,
+            priced["price"],
+            priced["qty"],
+            priced["total"],
             unit,
-            item_type
+            item_type,
+            priced["base_price"], priced["discount_amount"],
+            priced["discount_percent"], priced["discount_type"]
         ))
 
     conn.commit()
