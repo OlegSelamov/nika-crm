@@ -269,6 +269,13 @@ def init_db():
     except:
         conn.rollback()
 
+    cur.execute("""
+        ALTER TABLE items
+        ADD COLUMN IF NOT EXISTS discount_type TEXT NOT NULL DEFAULT 'percent',
+        ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0
+    """)
+    conn.commit()
+
     try:
         cur.execute("ALTER TABLE items ADD COLUMN purchase_price INTEGER")
         conn.commit()
