@@ -102,7 +102,11 @@
                             </div>
                         </td>
                         <td>
-                            {% if (i.discount_percent or 0) > 0 %}
+                            {% if i.discount_type|default('percent', true) == 'amount' and (i.discount_amount or 0) > 0 %}
+                                <small style="display:block;color:#8190a4;text-decoration:line-through">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</small>
+                                <span class="catalog-price">{{ "{:,.2f}".format((i.retail_price or 0) - (i.discount_amount or 0)).replace(',', ' ') }} ₸</span>
+                                <small style="display:block;color:#15966c">−{{ i.discount_amount }} ₸</small>
+                            {% elif (i.discount_percent or 0) > 0 %}
                                 <small style="display:block;color:#8190a4;text-decoration:line-through">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</small>
                                 <span class="catalog-price">{{ "{:,.2f}".format((i.retail_price or 0) * (100 - i.discount_percent) / 100).replace(',', ' ') }} ₸</span>
                                 <small style="display:block;color:#15966c">−{{ i.discount_percent }}%</small>
@@ -133,6 +137,8 @@
                                         "ntin": i.ntin or "",
                                         "retail_price": i.retail_price or 0,
                                         "discount_percent": i.discount_percent|default(0, true),
+                                        "discount_type": i.discount_type|default("percent", true),
+                                        "discount_amount": i.discount_amount|default(0, true),
                                         "purchase_price": i.purchase_price|default(0),
                                         "unit": i.unit or "шт",
                                         "is_marked": i.is_marked|default(false),
@@ -165,7 +171,11 @@
                             <small>{{ category_name }}</small>
                         </div>
                     </div>
-                    {% if (i.discount_percent or 0) > 0 %}
+                    {% if i.discount_type|default('percent', true) == 'amount' and (i.discount_amount or 0) > 0 %}
+                                <small style="display:block;color:#8190a4;text-decoration:line-through">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</small>
+                                <span class="catalog-price">{{ "{:,.2f}".format((i.retail_price or 0) - (i.discount_amount or 0)).replace(',', ' ') }} ₸</span>
+                                <small style="display:block;color:#15966c">−{{ i.discount_amount }} ₸</small>
+                            {% elif (i.discount_percent or 0) > 0 %}
                         <span class="catalog-price"><small style="display:block;color:#8190a4;text-decoration:line-through">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</small>{{ "{:,.2f}".format((i.retail_price or 0) * (100 - i.discount_percent) / 100).replace(',', ' ') }} ₸ <small style="color:#15966c">−{{ i.discount_percent }}%</small></span>
                     {% else %}<span class="catalog-price">{{ "{:,.0f}".format(i.retail_price or 0).replace(',', ' ') }} ₸</span>{% endif %}
                 </div>
@@ -189,6 +199,8 @@
                         "ntin": i.ntin or "",
                         "retail_price": i.retail_price or 0,
                         "discount_percent": i.discount_percent|default(0, true),
+                        "discount_type": i.discount_type|default("percent", true),
+                        "discount_amount": i.discount_amount|default(0, true),
                         "purchase_price": i.purchase_price|default(0),
                         "unit": i.unit or "шт",
                         "is_marked": i.is_marked|default(false),
@@ -539,9 +551,20 @@
                 </label>
 
                 <label class="catalog-field">
-                    <span>Скидка на товар / услугу, %</span>
+                    <span>Тип скидки</span>
+                    <select id="itemDiscountType" name="discount_type" onchange="updateCatalogDiscountType()">
+                        <option value="percent">В процентах (%)</option>
+                        <option value="amount">Суммой в тенге (₸)</option>
+                    </select>
+                    <small>Скидка в тенге — с одной единицы товара.</small>
+                </label>
+                <label class="catalog-field" id="itemDiscountPercentField">
+                    <span>Скидка, %</span>
                     <input type="number" name="discount_percent" id="itemDiscountPercent" min="0" max="100" step="1" value="0" placeholder="0">
-                    <small>Цена в каталоге остаётся прежней. В продажах скидка применяется автоматически.</small>
+                </label>
+                <label class="catalog-field" id="itemDiscountAmountField" hidden>
+                    <span>Скидка за единицу, ₸</span>
+                    <input type="number" name="discount_amount" id="itemDiscountAmount" min="0" step="0.01" value="0" placeholder="0">
                 </label>
 
                 <div class="catalog-field catalog-field--wide catalog-media-field">
