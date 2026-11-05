@@ -388,6 +388,7 @@ class SalesScreenState extends State<SalesScreen> {
           'discount_percent': item['discount_percent'],
           'discount_type': item['discount_type'],
           if (isCatalogMoney) 'discount_amount': item['discount_amount'],
+          if (isCatalogMoney) 'catalog_discount_per_unit': catalogMoneyPerUnit,
           'qty': asDouble(item['qty']),
           'unit': item['unit'] ?? 'шт',
           'item_type': item['item_type'] ?? 'product',
@@ -1719,8 +1720,22 @@ class SalesScreenState extends State<SalesScreen> {
       } else {
         cart[index]['qty'] = double.parse(next.toStringAsFixed(3));
         if (cart[index]['discount_type'] == 'amount') {
-          applySaleFixedDiscount(cart[index],
-              (asDouble(cart[index]['discount_amount']) * 100).round());
+          final item = cart[index];
+          if (item['catalog_discount_per_unit'] != null) {
+            final base = asDouble(item['base_price'] ?? item['price']);
+            final unitDiscount = asDouble(item['catalog_discount_per_unit']);
+            final netPrice = (base - unitDiscount).clamp(0, double.infinity).toDouble();
+            final raw = netPrice * asDouble(item['qty']);
+            final net = _isVariableQuantityUnit(item['unit'])
+                ? raw.roundToDouble() : (raw * 100).round() / 100;
+            item['price'] = netPrice;
+            item['line_total'] = net;
+            item['discount_amount'] = ((saleGross(item) - net)
+                .clamp(0, double.infinity) * 100).round() / 100;
+          } else {
+            applySaleFixedDiscount(item,
+                (asDouble(item['discount_amount']) * 100).round());
+          }
         } else {
           cart[index].remove('line_total');
         }
