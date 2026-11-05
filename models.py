@@ -146,7 +146,11 @@ def init_db():
         quantity NUMERIC(12,3),
         total NUMERIC(12,2),
         profit NUMERIC(12,2) DEFAULT 0,
-        item_type TEXT
+        item_type TEXT,
+        base_price NUMERIC(12,2),
+        discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+        discount_percent NUMERIC(5,2),
+        discount_type TEXT
     )
     """)
     
