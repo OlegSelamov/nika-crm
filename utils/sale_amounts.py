@@ -128,7 +128,12 @@ def discount_sale_rows(item, unit=None):
         raise ValueError("Сумма скидки не совпадает с итогом позиции.")
     quoted = (desired / qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if abs(quoted - price) > Decimal("0.009"):
-        raise ValueError("Цена не совпадает со скидкой в тенге.")
+        # When the unit is weighted, the fiscal total is rounded to the whole
+        # tenge. A catalog unit reduction can yield an exact net sum even
+        # though desired/quantity is not the original discounted unit rate.
+        measured_total = (price * qty).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        if not measured or measured_total != desired:
+            raise ValueError("Цена не совпадает со скидкой в тенге.")
     # Ordinary multi-unit goods may require two fiscal prices, e.g.
     # 3 × 1 000 ₸ − 50 ₸ = 2 × 983.33 ₸ + 1 × 983.34 ₸.
     if not measured and qty == qty.to_integral_value() and qty > 1:
