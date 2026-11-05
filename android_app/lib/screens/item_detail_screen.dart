@@ -137,7 +137,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 _row(isService ? 'Стоимость' : 'Закупочная цена', money(item['purchase_price']), Icons.shopping_cart_outlined),
                 _row('Оптовая цена', money(item['wholesale_price']), Icons.inventory_outlined),
                 _row(isService ? 'Цена услуги' : 'Розничная цена', money(item['retail_price']), Icons.payments_outlined),
-                _row('Скидка', '${item['discount_percent'] ?? 0}%', Icons.percent),
+                _row('Скидка',
+                    item['discount_type'] == 'amount'
+                        ? '${money(item['discount_amount'] ?? 0)} за единицу'
+                        : '${item['discount_percent'] ?? 0}%',
+                    Icons.percent),
                 if (isService)
                   _row('Продажа', _serviceMode(), Icons.language)
                 else ...[
