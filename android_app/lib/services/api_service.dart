@@ -993,6 +993,8 @@ class ApiService {
     String serviceSaleMode = 'order',
     double wholesalePrice = 0,
     int discountPercent = 0,
+    String discountType = 'percent',
+    double discountAmount = 0,
   }) async =>
       Map<String, dynamic>.from(await _request(
         'POST',
@@ -1013,6 +1015,8 @@ class ApiService {
           'service_sale_mode': serviceSaleMode,
           'wholesale_price': wholesalePrice,
           'discount_percent': discountPercent,
+          'discount_type': discountType,
+          'discount_amount': discountAmount,
         },
       ));
 
