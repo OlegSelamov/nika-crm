@@ -556,9 +556,12 @@ class _CheckScreenState extends State<CheckScreen> {
 
     buffer.writeln("");
 
-    buffer.writeln(
-      "${receiptDiscount > 0 ? 'Без скидки: ${((double.tryParse('${sale!["total_amount"] ?? 0}') ?? 0) + receiptDiscount).toStringAsFixed(2)} ₸\\nЭкономия: −${receiptDiscount.toStringAsFixed(2)} ₸\\n' : ''}ИТОГО: ${sale!["total_amount"]} ₸",
-    );
+    if (receiptDiscount > 0) {
+      final amountPaid = double.tryParse('${sale!["total_amount"] ?? 0}') ?? 0;
+      buffer.writeln("Без скидки: ${(amountPaid + receiptDiscount).toStringAsFixed(2)} ₸");
+      buffer.writeln("Экономия: −${receiptDiscount.toStringAsFixed(2)} ₸");
+    }
+    buffer.writeln("ИТОГО: ${sale!["total_amount"]} ₸");
 
     buffer.writeln("");
 
