@@ -1223,7 +1223,8 @@ def _sale_document(cur, company_id, sale_id, kind):
         return None
 
     cur.execute("""
-        SELECT name,quantity,price,total,unit,gtin,ntin
+        SELECT name,quantity,price,total,unit,gtin,ntin,
+               base_price,discount_amount,discount_percent,discount_type
         FROM sale_items WHERE sale_id=%s ORDER BY id
     """, (sale_id,))
     items = [{
@@ -1231,6 +1232,10 @@ def _sale_document(cur, company_id, sale_id, kind):
         "quantity": _number(row.get("quantity")),
         "price": _number(row.get("price")),
         "total": _number(row.get("total")),
+        "base_price": _number(row.get("base_price")) if row.get("base_price") is not None else None,
+        "discount_amount": _number(row.get("discount_amount")),
+        "discount_percent": _number(row.get("discount_percent")) if row.get("discount_percent") is not None else None,
+        "discount_type": row.get("discount_type"),
         "unit": row.get("unit") or "шт",
         "gtin": row.get("gtin") or "",
         "ntin": row.get("ntin") or "",
