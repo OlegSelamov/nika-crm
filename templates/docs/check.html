@@ -296,10 +296,10 @@
 
 <div class="line"></div>
 
-{% if receipt_discount_total|float > 0 %}
+{% if receipt_discount_total|default(0)|float > 0 %}
 <div class="payment">
     <span>{{ receipt_label('discount') }}</span>
-    <span>−{{ "%.2f"|format(receipt_discount_total|float) }} ₸</span>
+    <span>−{{ "%.2f"|format(receipt_discount_total|default(0)|float) }} ₸</span>
 </div>
 {% endif %}
 <div class="total">
