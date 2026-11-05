@@ -42,7 +42,7 @@ double saleGross(Map<String, dynamic> item) {
 
 void applySaleFixedDiscount(Map<String, dynamic> item, int discountCents) {
   final grossCents = (saleGross(item) * 100).round();
-  final applied = discountCents.clamp(0, grossCents);
+  final applied = discountCents.clamp(0, grossCents).toInt();
   final qty = double.tryParse('${item['qty'] ?? 1}') ?? 1;
   item['base_price'] = item['base_price'] ?? item['price'];
   item['discount_type'] = 'amount';
@@ -84,7 +84,7 @@ void applySaleCartDiscount(
       final lineGross = (saleGross(chosen[i]) * 100).round();
       final share = i == chosen.length - 1 ? remaining
           : (cents * lineGross / (originalCents == 0 ? 1 : originalCents)).round();
-      final applied = share.clamp(0, lineGross).clamp(0, remaining);
+      final applied = share.clamp(0, lineGross).clamp(0, remaining).toInt();
       remaining -= applied;
       applySaleFixedDiscount(chosen[i], applied);
     }
