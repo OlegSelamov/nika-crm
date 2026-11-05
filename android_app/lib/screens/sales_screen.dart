@@ -333,10 +333,15 @@ class SalesScreenState extends State<SalesScreen> {
   }) async {
     final item = Map<String, dynamic>.from(source);
     final originalPrice = asDouble(item['base_price'] ?? item['retail_price'] ?? item['price']);
-    final catalogDiscount = saleDiscountPercent(item['discount_percent']);
+    final isCatalogMoney = item['discount_type'] == 'amount';
+    final catalogMoneyPerUnit = isCatalogMoney ? asDouble(item['discount_amount']) : 0.0;
+    final catalogDiscount = isCatalogMoney ? 0 : saleDiscountPercent(item['discount_percent']);
     item['base_price'] = originalPrice;
-    item['discount_percent'] = catalogDiscount;
-    item['price'] = saleDiscountedPrice(originalPrice, catalogDiscount);
+    item['discount_percent'] = isCatalogMoney ? null : catalogDiscount;
+    item['discount_type'] = isCatalogMoney ? 'amount' : 'percent';
+    item['price'] = isCatalogMoney
+        ? (originalPrice - catalogMoneyPerUnit).clamp(0, double.infinity).toDouble()
+        : saleDiscountedPrice(originalPrice, catalogDiscount);
     item['qty'] = asDouble(item['qty'] ?? 1);
     final unit = _normalizedUnit(item['unit']);
     final measuredUnit = _isVariableQuantityUnit(unit);
@@ -351,6 +356,16 @@ class SalesScreenState extends State<SalesScreen> {
       }
     }
 
+    if (isCatalogMoney) {
+      final gross = saleGross(item);
+      final netRaw = item['line_total'] == null
+          ? asDouble(item['price']) * asDouble(item['qty'])
+          : asDouble(item['line_total']);
+      final net = _isVariableQuantityUnit(item['unit'])
+          ? netRaw.roundToDouble() : (netRaw * 100).round() / 100;
+      item['line_total'] = net;
+      item['discount_amount'] = ((gross - net).clamp(0, double.infinity) * 100).round() / 100;
+    }
     final index = cart.indexWhere((value) => value['id'] == item['id']);
     setState(() {
       _clearPendingVoicePayment();
@@ -360,7 +375,8 @@ class SalesScreenState extends State<SalesScreen> {
           cart[index]['line_total'] == null &&
           cart[index]['discount_type'] != 'amount' &&
           asDouble(cart[index]['price']) == asDouble(item['price']) &&
-          saleDiscountPercent(cart[index]['discount_percent']) == catalogDiscount;
+          saleDiscountPercent(cart[index]['discount_percent']) == catalogDiscount &&
+          !isCatalogMoney;
       if (canMerge) {
         cart[index]['qty'] = asDouble(cart[index]['qty']) + asDouble(item['qty']);
       } else {
@@ -369,8 +385,9 @@ class SalesScreenState extends State<SalesScreen> {
           'name': item['name'] ?? 'Без названия',
           'price': asDouble(item['price']),
           'base_price': originalPrice,
-          'discount_percent': catalogDiscount,
-          'discount_type': 'percent',
+          'discount_percent': item['discount_percent'],
+          'discount_type': item['discount_type'],
+          if (isCatalogMoney) 'discount_amount': item['discount_amount'],
           'qty': asDouble(item['qty']),
           'unit': item['unit'] ?? 'шт',
           'item_type': item['item_type'] ?? 'product',
@@ -2420,19 +2437,24 @@ class _ItemPickerSheetState extends State<_ItemPickerSheet> {
                                   title: Text('${item['name'] ?? 'Без названия'}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
                                   subtitle: Text(
                                     (service ? 'Услуга' : 'Остаток: ${item['quantity'] ?? 0} ${item['unit'] ?? 'шт'}') +
-                                      (saleDiscountPercent(item['discount_percent']) > 0
-                                          ? '  ·  -${saleDiscountPercent(item['discount_percent'])}%' : ''),
+                                      (item['discount_type'] == 'amount' && asDouble(item['discount_amount']) > 0
+                                          ? '  ·  −${money(item['discount_amount'])}'
+                                          : saleDiscountPercent(item['discount_percent']) > 0
+                                              ? '  ·  −${saleDiscountPercent(item['discount_percent'])}%' : ''),
                                   ),
                                   trailing: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      if (saleDiscountPercent(item['discount_percent']) > 0)
+                                      if (saleDiscountPercent(item['discount_percent']) > 0 ||
+                                          (item['discount_type'] == 'amount' && asDouble(item['discount_amount']) > 0))
                                         Text(money(item['retail_price']),
                                             style: const TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: AppColors.muted)),
                                       Text(
-                                        money(saleDiscountedPrice(asDouble(item['retail_price']), saleDiscountPercent(item['discount_percent']))),
+                                        money(item['discount_type'] == 'amount'
+                                            ? (asDouble(item['retail_price']) - asDouble(item['discount_amount'])).clamp(0, double.infinity)
+                                            : saleDiscountedPrice(asDouble(item['retail_price']), saleDiscountPercent(item['discount_percent']))),
                                         style: const TextStyle(fontWeight: FontWeight.w900),
                                       ),
                                     ],
