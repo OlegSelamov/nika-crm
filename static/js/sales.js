@@ -485,6 +485,7 @@ function applyCartDiscount() {
             const base = Number(item.base_price ?? item.price) || 0;
             delete item.line_total;
             delete item.discount_amount;
+            delete item.catalog_discount_per_unit;
             item.base_price = base;
             item.discount_type = 'percent';
             item.discount_percent = value;
