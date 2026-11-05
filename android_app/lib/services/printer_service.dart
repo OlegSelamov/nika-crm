@@ -322,15 +322,6 @@ class PrinterService {
         width: width,
       ));
 
-      final discount = double.tryParse('${item["discount_amount"] ?? 0}') ?? 0;
-      if (discount > .001) {
-        final base = item["base_price"] ?? item["price"];
-        buffer.writeln(lineLR("Цена без скидки:", "$base тг", width: width));
-        final percent = item["discount_type"] == "percent" && item["discount_percent"] != null
-            ? " ${item["discount_percent"]}%" : "";
-        buffer.writeln(lineLR("Скидка$percent:", "-${discount.toStringAsFixed(2)} тг", width: width));
-      }
-
       if ((item["gtin"] ?? "")
           .toString()
           .isNotEmpty) {
@@ -357,9 +348,7 @@ class PrinterService {
       return sum + (double.tryParse('${raw["discount_amount"] ?? 0}') ?? 0);
     });
     if (totalDiscount > .001) {
-      final net = double.tryParse('${sale["total_amount"] ?? 0}') ?? 0;
-      buffer.writeln(lineLR("Без скидки:", "${(net + totalDiscount).toStringAsFixed(2)} тг", width: width));
-      buffer.writeln(lineLR("Экономия:", "-${totalDiscount.toStringAsFixed(2)} тг", width: width));
+      buffer.writeln(lineLR("Скидка:", "-${totalDiscount.toStringAsFixed(2)} тг", width: width));
     }
     buffer.writeln(
       lineLR(
