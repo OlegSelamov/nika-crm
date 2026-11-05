@@ -52,6 +52,28 @@ def _catalog_discount_percent(value):
     return int(number)
 
 
+def _catalog_offer_values(data):
+    kind = str(data.get("discount_type") or "percent").strip().lower()
+    if kind not in ("percent", "amount"):
+        raise ValueError("Выберите скидку в процентах или тенге.")
+    try:
+        retail = Decimal(str(data.get("retail_price") or 0))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError("Некорректная розничная цена.") from None
+    if not retail.is_finite() or retail < 0:
+        raise ValueError("Некорректная розничная цена.")
+    if kind == "percent":
+        return "percent", _catalog_discount_percent(data.get("discount_percent")), Decimal("0")
+    try:
+        amount = Decimal(str(data.get("discount_amount") or 0))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError("Скидка в тенге должна быть числом.") from None
+    if (not amount.is_finite() or amount < 0 or amount > retail
+            or amount != amount.quantize(Decimal("0.01"))):
+        raise ValueError("Скидка в тенге должна быть от 0 до цены товара, с точностью до тиына.")
+    return "amount", 0, amount
+
+
 def _ean13_check_digit(first_twelve):
     digits = [int(value) for value in str(first_twelve)]
     total = sum(digits[::2]) + 3 * sum(digits[1::2])
@@ -511,6 +533,11 @@ def add_item():
         company_id = session.get("company_id")
         item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish", "ingredient", "semi_finished"} else "product"
         barcode = _item_barcode(cur, request.form.get("barcode"), item_type)
+        try:
+            discount_type, discount_percent, discount_amount = _catalog_offer_values(request.form)
+        except ValueError as exc:
+            pool.putconn(conn)
+            return str(exc), 400
 
         cur.execute("""
             INSERT INTO items (
@@ -522,6 +549,8 @@ def add_item():
                 wholesale_price,
                 purchase_price,
                 discount_percent,
+                discount_type,
+                discount_amount,
                 barcode,
                 gtin,
                 ntin,
@@ -530,7 +559,7 @@ def add_item():
                 service_sale_mode,
                 company_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             request.form["name"],
@@ -540,7 +569,9 @@ def add_item():
             0.0 if item_type == "ingredient" else float(request.form.get("retail_price") or 0),
             float(request.form.get("wholesale_price") or 0),
             float(request.form.get("purchase_price") or 0),
-            _catalog_discount_percent(request.form.get("discount_percent")),
+            discount_percent,
+            discount_type,
+            discount_amount,
             barcode,
             request.form.get("gtin"),
             request.form.get("ntin"),
@@ -654,6 +685,11 @@ def edit_item(item_id):
     if request.method == "POST":
         item_type = request.form.get("item_type") if request.form.get("item_type") in {"product", "service", "dish", "ingredient", "semi_finished"} else "product"
         barcode = _item_barcode(cur, request.form.get("barcode"), item_type)
+        try:
+            discount_type, discount_percent, discount_amount = _catalog_offer_values(request.form)
+        except ValueError as exc:
+            pool.putconn(conn)
+            return str(exc), 400
         cur.execute("""
             UPDATE items
             SET 
@@ -665,6 +701,8 @@ def edit_item(item_id):
                 wholesale_price = %s,
                 purchase_price = %s,
                 discount_percent = %s,
+                discount_type = %s,
+                discount_amount = %s,
                 barcode = %s,
                 gtin = %s,
                 ntin = %s,
@@ -680,7 +718,9 @@ def edit_item(item_id):
             0.0 if item_type == "ingredient" else float(request.form.get("retail_price") or 0),
             float(request.form.get("wholesale_price") or 0),
             float(request.form.get("purchase_price") or 0),
-            _catalog_discount_percent(request.form.get("discount_percent")),
+            discount_percent,
+            discount_type,
+            discount_amount,
             barcode,
             request.form.get("gtin"),
             request.form.get("ntin") if item_type == "product" else "",
