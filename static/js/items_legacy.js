@@ -116,14 +116,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
-            var discountInput = document.getElementById('itemDiscountPercent');
-            var rawDiscount = discountInput ? String(discountInput.value || '0').trim() : '0';
-            var percent = Number(rawDiscount);
-            if (!/^(?:0|[1-9][0-9]?|100)$/.test(rawDiscount) ||
-                    !Number.isInteger(percent) || percent < 0 || percent > 100) {
+            var isAmount = document.getElementById('itemDiscountType')?.value === 'amount';
+            var discountInput = document.getElementById(isAmount ? 'itemDiscountAmount' : 'itemDiscountPercent');
+            var rawDiscount = discountInput ? String(discountInput.value || '0').trim().replace(',', '.') : '0';
+            var entered = Number(rawDiscount);
+            var retailPrice = Number(document.getElementById('itemRetailPrice')?.value || 0);
+            var valid = rawDiscount !== '' && Number.isFinite(entered) && entered >= 0 &&
+                (isAmount
+                    ? Math.round(entered * 100) / 100 === entered && entered <= retailPrice
+                    : Number.isInteger(entered) && entered <= 100);
+            if (!valid) {
                 event.preventDefault();
                 if (discountInput) {
-                    discountInput.setCustomValidity('Введите целый процент от 0 до 100');
+                    discountInput.setCustomValidity(isAmount
+                        ? 'Скидка в тенге не должна превышать цену единицы'
+                        : 'Введите целый процент от 0 до 100');
                     discountInput.reportValidity();
                     discountInput.focus();
                     discountInput.addEventListener('input', function () {
@@ -212,6 +219,14 @@ function escapeCatalogHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+function updateCatalogDiscountType() {
+    var isMoney = document.getElementById('itemDiscountType')?.value === 'amount';
+    var percentField = document.getElementById('itemDiscountPercentField');
+    var amountField = document.getElementById('itemDiscountAmountField');
+    if (percentField) { percentField.hidden = isMoney; percentField.style.display = isMoney ? 'none' : ''; }
+    if (amountField) { amountField.hidden = !isMoney; amountField.style.display = isMoney ? '' : 'none'; }
+}
+
 function formatCatalogPrice(value) {
     return Math.round(Number(value) || 0).toLocaleString('ru-RU') + ' ₸';
 }
@@ -219,14 +234,18 @@ function formatCatalogPrice(value) {
 function catalogDiscountPriceHtml(item) {
     var original = Number(item.retail_price) || 0;
     var percent = Number(item.discount_percent) || 0;
-    if (!Number.isInteger(percent) || percent <= 0 || percent > 100) {
+    var isMoney = item.discount_type === 'amount';
+    var amount = Math.max(0, Number(item.discount_amount) || 0);
+    if (isMoney ? amount <= 0 : (!Number.isInteger(percent) || percent <= 0 || percent > 100)) {
         return '<span class="catalog-price">' + formatCatalogPrice(original) + '</span>';
     }
-    var discounted = Math.round(Math.round(original * 100) * (100 - percent) / 100) / 100;
+    var discounted = isMoney ? Math.max(0, original - amount)
+        : Math.round(Math.round(original * 100) * (100 - percent) / 100) / 100;
     return '<small style="display:block;color:#8491a5;text-decoration:line-through">' +
         formatCatalogPrice(original) + '</small>' +
         '<span class="catalog-price">' + discounted.toLocaleString('ru-RU', {maximumFractionDigits: 2}) + ' ₸</span>' +
-        '<small style="display:block;color:#15966c;font-weight:800">−' + percent + '%</small>';
+        '<small style="display:block;color:#15966c;font-weight:800">−' +
+            (isMoney ? amount.toLocaleString('ru-RU', {maximumFractionDigits: 2}) + ' ₸' : percent + '%') + '</small>';
 }
 
 function catalogItemData(item) {
@@ -241,6 +260,8 @@ function catalogItemData(item) {
         ntin: item.ntin || '',
         retail_price: item.retail_price || 0,
         discount_percent: item.discount_percent || 0,
+        discount_type: item.discount_type || 'percent',
+        discount_amount: item.discount_amount || 0,
         purchase_price: item.purchase_price || 0,
         unit: item.unit || 'шт',
         is_marked: Boolean(item.is_marked),
@@ -848,6 +869,9 @@ function openAddItemModal() {
     setRecipeEditorVisible(false);
     var form = document.getElementById('itemForm');
     form.reset();
+    setValue('itemDiscountType', 'percent');
+    setValue('itemDiscountAmount', 0);
+    updateCatalogDiscountType();
     resetItemMedia();
     form.action = '/items/add';
     document.getElementById('itemModalTitle').textContent = 'Новая позиция';
@@ -1313,6 +1337,9 @@ function openEditItemModal(item) {
     setValue('itemPurchasePrice', item.purchase_price);
     setValue('itemRetailPrice', item.retail_price);
     setValue('itemDiscountPercent', item.discount_percent || 0);
+    setValue('itemDiscountType', item.discount_type || 'percent');
+    setValue('itemDiscountAmount', item.discount_amount || 0);
+    updateCatalogDiscountType();
     setValue('itemUnit', item.unit || 'шт');
     document.getElementById('itemIsMarked').checked = Boolean(item.is_marked);
     updateMarkedBadge();
