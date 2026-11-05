@@ -5,7 +5,7 @@ from flask import current_app, jsonify, request, session
 from models import get_db, pool
 from services.fiscal_service import fiscalize_sale, provider_context
 from utils.timezone import now_kz, now_kz_for_timestamp
-from utils.sale_amounts import normalize_sale_line
+from utils.sale_amounts import normalize_sale_line, discount_sale_rows
 from utils.offline_operations import lock_and_load_offline_operation, save_offline_operation, offline_operation_age_seconds
 from routes.rekassa import rekassa_bp
 
@@ -376,20 +376,31 @@ def pay_sale_comrun():
                 # Dish sales must retain their type so process_sale consumes recipe
                 # ingredients, not the dish item itself.
                 item_type = raw_item_type if raw_item_type in ("service", "dish") else "product"
-                price, qty, line_total = normalize_sale_line(item, unit)
+                # Food tickets use their existing separate price/modifier pipeline.
+                # Retail snapshots preserve the real discount charged at checkout.
+                try:
+                    if food_mode:
+                        price, qty, line_total = normalize_sale_line(item, unit)
+                        priced_rows = [{"price": price, "qty": qty, "total": line_total,
+                                        "base_price": None, "discount_amount": 0,
+                                        "discount_percent": None, "discount_type": None}]
+                    else:
+                        priced_rows = discount_sale_rows(item, unit)
+                except ValueError as exc:
+                    conn.rollback()
+                    return jsonify({"success": False, "error": str(exc)}), 400
                 removed_ingredients = normalize_excluded_ingredients(
                     cur, company_id, int(item_id), item_type, item.get("excluded_ingredients")
                 )
-                normalized_cart.append({
-                    "source": item,
-                    "item_id": item_id,
-                    "unit": unit,
-                    "item_type": item_type,
-                    "excluded_ingredients": removed_ingredients,
-                    "price": price,
-                    "qty": qty,
-                    "total": line_total,
-                })
+                for price_row in priced_rows:
+                    normalized_cart.append({
+                        "source": item,
+                        "item_id": item_id,
+                        "unit": unit,
+                        "item_type": item_type,
+                        "excluded_ingredients": removed_ingredients,
+                        **price_row,
+                    })
 
             if not normalized_cart:
                 return jsonify({"success": False, "error": "В корзине нет доступных товаров"}), 400
@@ -444,14 +455,17 @@ def pay_sale_comrun():
                 item_id = normalized["item_id"]
                 cur.execute("""
                     INSERT INTO sale_items (
-                        sale_id,item_id,name,price,quantity,total,unit,gtin,ntin,excise_stamp,item_type,modifiers,excluded_ingredients
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        sale_id,item_id,name,price,quantity,total,unit,gtin,ntin,excise_stamp,item_type,modifiers,excluded_ingredients,
+                        base_price,discount_amount,discount_percent,discount_type
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """, (
                     sale_id, item_id, item.get("name") or f"Товар #{item_id}",
                     normalized["price"], normalized["qty"], normalized["total"], normalized["unit"],
                     item.get("gtin"), item.get("ntin"), item.get("excise_stamp"), normalized["item_type"],
                     json.dumps(item.get("modifiers") or [], ensure_ascii=False),
                     json.dumps(normalized["excluded_ingredients"], ensure_ascii=False),
+                    normalized["base_price"], normalized["discount_amount"],
+                    normalized["discount_percent"], normalized["discount_type"],
                 ))
         finally:
             cur.close()
