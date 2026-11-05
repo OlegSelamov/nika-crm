@@ -745,6 +745,10 @@ def get_sale(sale_id):
 
             "price":
                 i["price"],
+            "base_price": i.get("base_price"),
+            "discount_amount": i.get("discount_amount") or 0,
+            "discount_percent": i.get("discount_percent"),
+            "discount_type": i.get("discount_type"),
 
             "unit":
                 i["unit"] if i["unit"] else "шт",
@@ -1803,6 +1807,10 @@ def check(sale_id):
             "quantity": i["quantity"],
             "price": i["price"],
             "total": i["total"],
+            "base_price": i.get("base_price"),
+            "discount_amount": i.get("discount_amount") or 0,
+            "discount_percent": i.get("discount_percent"),
+            "discount_type": i.get("discount_type"),
 
             "unit":
                 db_item["unit"]
@@ -1826,6 +1834,7 @@ def check(sale_id):
         items=new_items,
         client=client,
         company=company,
+        receipt_discount_total=sum((i.get("discount_amount") or 0) for i in new_items),
         check_date=check_date,
         **receipt_context(session.get("company_id")),
         # Legacy cash receipts have no explicit tender amount. Preserve their
@@ -1954,6 +1963,7 @@ def refund_check(sale_id):
             items=items,
             client=client,
             company=company,
+            receipt_discount_total=sum((i.get("discount_amount") or 0) for i in items),
             refund=refund,
             **receipt_context(session.get("company_id")),
             refund_date=refunded_at.strftime("%d.%m.%Y %H:%M"),
