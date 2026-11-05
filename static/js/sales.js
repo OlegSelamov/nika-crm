@@ -179,13 +179,15 @@ function cartItemTotal(item) {
     return isVariableQuantityUnit(item.unit) ? Math.round(raw) : raw;
 }
 
-function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "", exciseStamp = "", discountPercent = null) {
+function selectItemForSale(id, name, price, unit = "шт", gtin = "", ntin = "", exciseStamp = "", discountPercent = null, discountAmount = 0, discountType = "percent") {
+    const moneyOffer = discountType === 'amount' && Number(discountAmount) > 0;
+    const netPrice = moneyOffer ? Math.max(0, Number(price) - Number(discountAmount))
+        : discountPercent === null ? Number(price) : nikaSaleDiscountedPrice(price, discountPercent);
     if (isVariableQuantityUnit(unit)) {
-        const netPrice = discountPercent === null ? Number(price) : nikaSaleDiscountedPrice(price, discountPercent);
-        openQuantityModal({ id, name, price: netPrice, basePrice: price, discountPercent, unit, gtin, ntin, exciseStamp });
+        openQuantityModal({id, name, price: netPrice, basePrice: price, discountPercent, discountAmount, discountType, unit, gtin, ntin, exciseStamp});
         return;
     }
-    addToCart(id, name, price, 1, gtin, ntin, unit, exciseStamp, null, discountPercent);
+    addToCart(id, name, price, 1, gtin, ntin, unit, exciseStamp, null, discountPercent, discountAmount, discountType);
 }
 
 function openQuantityModal(item) {
@@ -330,18 +332,20 @@ function confirmQuantity() {
             return;
         }
     }
-    addToCart(item.id, item.name, item.basePrice ?? item.price, qty, item.gtin, item.ntin, item.unit, item.exciseStamp, lineTotal, item.discountPercent);
+    addToCart(item.id, item.name, item.basePrice ?? item.price, qty, item.gtin, item.ntin, item.unit, item.exciseStamp, lineTotal, item.discountPercent, item.discountAmount, item.discountType);
     closeQuantityModal();
 }
 
 // добавление в корзину
-function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт", exciseStamp = "", lineTotal = null, discountPercent = null) {
+function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт", exciseStamp = "", lineTotal = null, discountPercent = null, discountAmount = 0, discountType = "percent") {
 
     // Every marked unit keeps its own DataMatrix code. Ordinary products can
     // still be merged into one cart row by quantity.
-    const percent = discountPercent === null ? null : nikaSaleDiscountPercent(discountPercent);
-    const salePrice = percent === null ? Number(price) : nikaSaleDiscountedPrice(price, percent);
-    const existing = exciseStamp || lineTotal !== null
+    const moneyOffer = discountType === 'amount' && Number(discountAmount) > 0;
+    const percent = moneyOffer ? null : discountPercent === null ? null : nikaSaleDiscountPercent(discountPercent);
+    const salePrice = moneyOffer ? Math.max(0, Number(price) - Number(discountAmount))
+        : percent === null ? Number(price) : nikaSaleDiscountedPrice(price, percent);
+    const existing = exciseStamp || lineTotal !== null || moneyOffer
         ? null
         : cart.find(i => i.id === id && !i.excise_stamp && i.line_total === undefined && i.discount_type !== 'amount' &&
             Math.abs(Number(i.price) - salePrice) < 0.001 &&
@@ -361,6 +365,22 @@ function addToCart(id, name, price, qty = 1, gtin = "", ntin = "", unit = "шт"
             unit,
             excise_stamp: exciseStamp || null
 		};
+        if (moneyOffer) {
+            const grossCents = nikaDiscountGross({base_price: Number(price), price: Number(price), qty, unit});
+            const net = lineTotal !== null ? Number(lineTotal)
+                : isVariableQuantityUnit(unit) ? Math.round(salePrice * qty)
+                : Math.round(salePrice * qty * 100) / 100;
+            cartItem.base_price = Number(price);
+            cartItem.discount_type = 'amount';
+            cartItem.discount_percent = null;
+            cartItem.discount_amount = Math.max(0, grossCents - Math.round(net * 100)) / 100;
+            cartItem.catalog_discount_per_unit = Number(discountAmount);
+            cartItem.line_total = net;
+        } else if (percent !== null) {
+            cartItem.base_price = Number(price);
+            cartItem.discount_type = 'percent';
+            cartItem.discount_percent = percent;
+        }
         if (lineTotal !== null) cartItem.line_total = Number(lineTotal);
         cart.push(cartItem);
     }
