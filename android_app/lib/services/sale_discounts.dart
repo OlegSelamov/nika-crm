@@ -45,6 +45,7 @@ void applySaleFixedDiscount(Map<String, dynamic> item, int discountCents) {
   final applied = discountCents.clamp(0, grossCents).toInt();
   final qty = double.tryParse('${item['qty'] ?? 1}') ?? 1;
   item['base_price'] = item['base_price'] ?? item['price'];
+  item.remove('catalog_discount_per_unit');
   item['discount_type'] = 'amount';
   item['discount_percent'] = null;
   item['discount_amount'] = applied / 100;
@@ -94,6 +95,7 @@ void applySaleCartDiscount(
     final base = double.tryParse('${item['base_price'] ?? item['price'] ?? 0}') ?? 0;
     item.remove('line_total');
     item.remove('discount_amount');
+    item.remove('catalog_discount_per_unit');
     item['base_price'] = base;
     item['discount_type'] = 'percent';
     item['discount_percent'] = value.toInt();
