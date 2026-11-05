@@ -50,6 +50,15 @@ class _CheckScreenState extends State<CheckScreen> {
     }
   }
 
+  double get receiptDiscount {
+    final rows = sale?['items'];
+    if (rows is! List) return 0;
+    return rows.fold<double>(0, (sum, raw) {
+      if (raw is! Map) return sum;
+      return sum + (double.tryParse('${raw['discount_amount'] ?? 0}') ?? 0);
+    });
+  }
+
   String paymentName() {
     if (sale == null) return "";
 
@@ -278,7 +287,14 @@ class _CheckScreenState extends State<CheckScreen> {
 
 							const SizedBox(height: 4),
 
-							if ((item["gtin"] ?? "")
+							if ((double.tryParse('${item["discount_amount"] ?? 0}') ?? 0) > 0)
+                              Text(
+                                'Без скидки: ${item["base_price"] ?? item["price"]} ₸ · '
+                                'Скидка: −${item["discount_amount"]} ₸',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+
+                            if ((item["gtin"] ?? "")
 								.toString()
 								.isNotEmpty)
 							  Text(
@@ -306,7 +322,17 @@ class _CheckScreenState extends State<CheckScreen> {
 
                 const Divider(),
 
-				Row(
+				if (receiptDiscount > 0) ...[
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Без скидки'),
+                    Text('${((double.tryParse('${sale!["total_amount"] ?? 0}') ?? 0) + receiptDiscount).toStringAsFixed(2)} ₸'),
+                  ]),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Экономия'),
+                    Text('−${receiptDiscount.toStringAsFixed(2)} ₸'),
+                  ]),
+                ],
+                Row(
 				  mainAxisAlignment:
 					  MainAxisAlignment.spaceBetween,
 				  children: [
@@ -520,13 +546,18 @@ class _CheckScreenState extends State<CheckScreen> {
 		"${item["quantity"]} ${item["unit"] ?? "шт"} x ${item["price"]} = ${item["total"]} ₸",
 	  );
 
+      final discount = double.tryParse('${item["discount_amount"] ?? 0}') ?? 0;
+      if (discount > 0) {
+        buffer.writeln("Без скидки: ${item["base_price"] ?? item["price"]} ₸");
+        buffer.writeln("Скидка: −${discount.toStringAsFixed(2)} ₸");
+      }
 	  buffer.writeln("");
 	}
 
     buffer.writeln("");
 
     buffer.writeln(
-      "ИТОГО: ${sale!["total_amount"]} ₸",
+      "${receiptDiscount > 0 ? 'Без скидки: ${((double.tryParse('${sale!["total_amount"] ?? 0}') ?? 0) + receiptDiscount).toStringAsFixed(2)} ₸\\nЭкономия: −${receiptDiscount.toStringAsFixed(2)} ₸\\n' : ''}ИТОГО: ${sale!["total_amount"]} ₸",
     );
 
     buffer.writeln("");
