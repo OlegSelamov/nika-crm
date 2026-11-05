@@ -142,6 +142,29 @@ finally:
     if _banks_module_conn is not None:
         pool.putconn(_banks_module_conn)
 
+# Persist sale discount snapshots for receipts, PDF, thermal printers and refunds.
+# All existing paid sales retain their original values; this does not touch
+# catalog retail prices or fiscalized transactions.
+_sale_discount_conn = None
+try:
+    _sale_discount_conn = get_db()
+    _sale_discount_cur = _sale_discount_conn.cursor()
+    _sale_discount_cur.execute("""
+        ALTER TABLE sale_items
+        ADD COLUMN IF NOT EXISTS base_price NUMERIC(12,2),
+        ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS discount_percent NUMERIC(5,2),
+        ADD COLUMN IF NOT EXISTS discount_type TEXT
+    """)
+    _sale_discount_conn.commit()
+except Exception as _sale_discount_schema_error:
+    if _sale_discount_conn is not None:
+        _sale_discount_conn.rollback()
+    logging.warning("Sale discount schema update failed: %s", _sale_discount_schema_error)
+finally:
+    if _sale_discount_conn is not None:
+        pool.putconn(_sale_discount_conn)
+
 # Add receipt tender/change fields without touching previously paid sales.
 # Safe additive migration, also executed by Gunicorn on test startup.
 try:
