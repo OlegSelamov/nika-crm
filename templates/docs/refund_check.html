@@ -60,18 +60,12 @@
                 <span>{{ item.quantity }} {{ item.unit or "шт" }} × {{ "%.2f"|format(item.price or 0) }}</span>
                 <span>{{ "%.2f"|format(item.total or 0) }} ₸</span>
             </div>
-            {% if item.discount_amount|float > 0 %}
-            <div class="row" style="font-size:11px">
-                <span>{{ receipt_label('before_discount') }}: {{ "%.2f"|format(item.base_price|float) }} ₸</span>
-                <span>{{ receipt_label('discount') }}{% if item.discount_type == 'percent' and item.discount_percent is not none %} {{ item.discount_percent|int }}%{% endif %}: −{{ "%.2f"|format(item.discount_amount|float) }} ₸</span>
-            </div>
-            {% endif %}
         </section>
     {% endfor %}
 
     <div class="divider"></div>
     {% if receipt_discount_total|float > 0 %}
-    <div class="row"><span>{{ receipt_label('customer_savings') }} ({{ receipt_label('sale')|lower }})</span><span>−{{ "%.2f"|format(receipt_discount_total|float) }} ₸</span></div>
+    <div class="row"><span>{{ receipt_label('discount') }}</span><span>−{{ "%.2f"|format(receipt_discount_total|float) }} ₸</span></div>
     {% endif %}
     <div class="row total"><span>{{ receipt_label('refund') }}</span><span>{{ "%.2f"|format(sale.total_amount or 0) }} ₸</span></div>
     <div class="row">
