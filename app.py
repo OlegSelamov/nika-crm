@@ -156,6 +156,11 @@ try:
         ADD COLUMN IF NOT EXISTS discount_percent NUMERIC(5,2),
         ADD COLUMN IF NOT EXISTS discount_type TEXT
     """)
+    _sale_discount_cur.execute("""
+        ALTER TABLE items
+        ADD COLUMN IF NOT EXISTS discount_type TEXT NOT NULL DEFAULT 'percent',
+        ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0
+    """)
     _sale_discount_conn.commit()
 except Exception as _sale_discount_schema_error:
     if _sale_discount_conn is not None:
