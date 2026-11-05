@@ -33,6 +33,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final ntinController = TextEditingController();
 
   String itemType = 'product';
+  String discountType = 'percent';
   String unit = 'шт';
   String category = '';
   double categoryMarkup = 0;
@@ -64,7 +65,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
       purchaseController.text = _number(item['purchase_price']);
       wholesaleController.text = _number(item['wholesale_price']);
       retailController.text = _number(item['retail_price']);
-      discountController.text = _number(item['discount_percent']);
+      discountType = item['discount_type'] == 'amount' ? 'amount' : 'percent';
+      discountController.text = _number(discountType == 'amount'
+          ? item['discount_amount'] : item['discount_percent']);
       qtyController.text = _number(item['quantity']);
       descriptionController.text = '${item['description'] ?? ''}';
       gtinController.text = '${item['gtin'] ?? ''}';
@@ -85,7 +88,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
     }
     purchaseController.addListener(_onPurchaseChanged);
     retailController.addListener(_onRetailChanged);
+    discountController.addListener(_refreshDiscountPreview);
     _loadCategories();
+  }
+
+  void _refreshDiscountPreview() {
+    if (mounted) setState(() {});
   }
 
   static String _number(dynamic value) {
@@ -100,6 +108,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     purchaseController.dispose();
     wholesaleController.dispose();
     retailController.dispose();
+    discountController.removeListener(_refreshDiscountPreview);
     discountController.dispose();
     qtyController.dispose();
     descriptionController.dispose();
@@ -338,7 +347,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
         'purchase_price': _double(purchaseController),
         'wholesale_price': _double(wholesaleController),
         'retail_price': _double(retailController),
-        'discount_percent': _double(discountController).round(),
+        'discount_percent': discountType == 'percent' ? _double(discountController).round() : 0,
+        'discount_type': discountType,
+        'discount_amount': discountType == 'amount' ? _double(discountController) : 0,
         'quantity': _double(qtyController),
         'category': category,
         'unit': unit,
@@ -363,7 +374,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
           purchasePrice: _double(purchaseController),
           wholesalePrice: _double(wholesaleController),
           retailPrice: _double(retailController),
-          discountPercent: _double(discountController).round(),
+          discountPercent: discountType == 'percent' ? _double(discountController).round() : 0,
+          discountType: discountType,
+          discountAmount: discountType == 'amount' ? _double(discountController) : 0,
           quantity: _double(qtyController),
           category: category,
           unit: unit,
@@ -608,24 +621,49 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     )
                   : _priceField('Розничная цена, ₸ *', retailController, 'retail'),
               const SizedBox(height: 16),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'percent', label: Text('Скидка %')),
+                  ButtonSegment(value: 'amount', label: Text('Скидка ₸')),
+                ],
+                selected: {discountType},
+                onSelectionChanged: (value) => setState(() {
+                  discountType = value.first;
+                  discountController.text = '0';
+                }),
+              ),
+              const SizedBox(height: 10),
               _field(
-                'Скидка в каталоге, %',
+                discountType == 'amount'
+                    ? 'Скидка в тенге за единицу'
+                    : 'Скидка в каталоге, %',
                 discountController,
-                type: TextInputType.number,
+                type: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
-                  final raw = (value ?? '').trim();
+                  final raw = (value ?? '').trim().replaceAll(',', '.');
                   if (raw.isEmpty) return null;
-                  final percent = int.tryParse(raw);
-                  return percent == null || percent < 0 || percent > 100
-                      ? 'Введите целый процент от 0 до 100'
-                      : null;
+                  final number = double.tryParse(raw);
+                  if (number == null || !number.isFinite || number < 0) {
+                    return 'Введите положительную скидку';
+                  }
+                  if (discountType == 'percent') {
+                    if (number > 100 || number != number.roundToDouble()) {
+                      return 'Введите целый процент от 0 до 100';
+                    }
+                  } else if (number > _double(retailController) ||
+                      (number * 100 - (number * 100).round()).abs() > .000001) {
+                    return 'Не больше цены товара, с точностью до тиына';
+                  }
+                  return null;
                 },
               ),
-              if (_double(discountController) > 0 && _double(discountController) <= 100)
+              if (_double(discountController) > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Цена со скидкой: ${(_double(retailController) * (100 - _double(discountController)) / 100).toStringAsFixed(2)} ₸',
+                    'Цена со скидкой: ${(discountType == 'amount'
+                        ? (_double(retailController) - _double(discountController)).clamp(0, double.infinity)
+                        : (_double(retailController) * (100 - _double(discountController)) / 100)).toStringAsFixed(2)} ₸',
                     style: const TextStyle(color: AppColors.success),
                   ),
                 ),
