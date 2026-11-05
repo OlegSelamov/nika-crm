@@ -293,6 +293,8 @@ class OfflineStore {
       'price': item['price'] ?? item['retail_price'],
       'retail_price': item['retail_price'] ?? item['price'],
       'discount_percent': item['discount_percent'] ?? 0,
+      'discount_type': item['discount_type'] ?? 'percent',
+      'discount_amount': item['discount_amount'] ?? 0,
       'purchase_price': item['purchase_price'],
       'unit': item['unit'],
       'category': item['category'],
