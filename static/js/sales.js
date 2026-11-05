@@ -392,10 +392,10 @@ function updateCartDiscount(index = null) {
     document.querySelectorAll('input[name="salesDiscountKind"]').forEach(radio => {
         radio.checked = radio.value === kind;
     });
+    changeCartDiscountKind();
     field.value = kind === 'amount'
         ? Number(selected?.discount_amount || 0)
         : (selected ? nikaSaleDiscountPercent(selected.discount_percent) : 0);
-    changeCartDiscountKind();
     popup.hidden = false;
     popup.style.display = "flex";
     popup.setAttribute("aria-hidden", "false");
