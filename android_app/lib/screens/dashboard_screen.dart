@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
@@ -6,8 +8,22 @@ import '../widgets/app_widgets.dart';
 
 class DashboardScreen extends StatefulWidget {
   final ValueChanged<int>? onOpenSection;
+  final int refreshToken;
 
-  const DashboardScreen({super.key, this.onOpenSection});
+  // Optional loaders allow a deterministic refresh regression test without
+  // talking to the network, fiscal provider or a real customer account.
+  final Future<Map<String, dynamic>?> Function()? readCachedDashboard;
+  final Future<Map<String, dynamic>> Function()? fetchDashboard;
+  final Future<Map<String, dynamic>> Function()? fetchShift;
+
+  const DashboardScreen({
+    super.key,
+    this.onOpenSection,
+    this.refreshToken = 0,
+    this.readCachedDashboard,
+    this.fetchDashboard,
+    this.fetchShift,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -15,34 +31,99 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   bool loading = true;
+  bool refreshing = false;
+  bool showingCached = false;
   String? error;
   Map<String, dynamic> dashboard = {};
   Map<String, dynamic> shift = {};
+  int _requestGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    loadData();
+    unawaited(loadData());
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshToken != oldWidget.refreshToken) {
+      unawaited(loadData());
+    }
+  }
+
+  @override
+  void dispose() {
+    _requestGeneration++;
+    super.dispose();
+  }
+
+  // The remote reKassa status may be delayed by the provider or unavailable
+  // for a company. It must NEVER hold back the revenue dashboard.
+  Future<void> _loadShift(int generation) async {
+    try {
+      final status = await (widget.fetchShift?.call() ??
+          ApiService.shiftStatus(timeout: const Duration(seconds: 5)));
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => shift = status['success'] == true ? status : {});
+    } catch (_) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => shift = {});
+    }
   }
 
   Future<void> loadData() async {
-    if (mounted) setState(() => error = null);
+    final generation = ++_requestGeneration;
+    if (!mounted) return;
+    setState(() {
+      error = null;
+      refreshing = true;
+      if (dashboard.isEmpty) loading = true;
+    });
+
+    // Read the company-scoped, same-day snapshot first so even on a slow
+    // connection the home screen shows the last real values immediately.
+    // Every entry/refresh still starts a real server request below.
+    unawaited(_loadShift(generation));
+    if (dashboard.isEmpty) {
+      try {
+        final cached = await (widget.readCachedDashboard?.call() ??
+            ApiService.cachedDashboard());
+        if (!mounted || generation != _requestGeneration) return;
+        if (cached != null && cached['success'] == true) {
+          setState(() {
+            dashboard = cached;
+            loading = false;
+            showingCached = true;
+          });
+        }
+      } catch (_) {
+        // A corrupt/unavailable local snapshot should never stop the network.
+      }
+    }
+    if (!mounted || generation != _requestGeneration) return;
+
     try {
-      final results = await Future.wait<dynamic>([
-        ApiService.dashboard(),
-        ApiService.shiftStatus().catchError((_) => <String, dynamic>{}),
-      ]);
-      if (!mounted) return;
+      final fresh = await (widget.fetchDashboard?.call() ??
+          ApiService.dashboard(forceRemote: true, allowCachedOnFailure: false));
+      if (!mounted || generation != _requestGeneration) return;
+      if (fresh['success'] != true) {
+        throw const ApiException('Сервер не вернул актуальные показатели');
+      }
       setState(() {
-        dashboard = Map<String, dynamic>.from(results[0]);
-        shift = Map<String, dynamic>.from(results[1]);
+        dashboard = fresh;
         loading = false;
+        refreshing = false;
+        showingCached = false;
+        error = null;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || generation != _requestGeneration) return;
       setState(() {
         error = readableError(e);
         loading = false;
+        refreshing = false;
+        showingCached = dashboard.isNotEmpty;
       });
     }
   }
@@ -50,7 +131,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
-    if (error != null) {
+    if (error != null && dashboard.isEmpty) {
       return ScreenStateView(
         icon: Icons.cloud_off_rounded,
         title: 'Не удалось загрузить главную',
@@ -70,6 +151,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
         children: [
+          if (refreshing || showingCached) ...[
+            Row(children: [
+              if (refreshing)
+                const SizedBox(
+                  width: 13, height: 13,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const Icon(Icons.cloud_off_outlined,
+                    size: 16, color: AppColors.warning),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                refreshing
+                    ? 'Обновляем показатели…'
+                    : 'Показаны сохранённые данные · нет связи с сервером',
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              )),
+            ]),
+            const SizedBox(height: 10),
+          ],
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
@@ -99,9 +200,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     StatusPill(
-                      shiftOpen
-                          ? 'Смена №${shift['shift_number'] ?? '—'} открыта'
-                          : 'Смена закрыта',
+                      shift['success'] != true
+                          ? 'Смена: —'
+                          : shiftOpen
+                              ? 'Смена №${shift['shift_number'] ?? '—'} открыта'
+                              : 'Смена закрыта',
                       color: shiftOpen ? const Color(0xFF73E2B8) : Colors.white70,
                     ),
                   ],
