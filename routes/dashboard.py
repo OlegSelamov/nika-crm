@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, redirect, session
+from flask import Blueprint, jsonify, make_response, redirect, session
 
 from models import get_db, pool
 from routes.reports import _get_summary
@@ -67,7 +67,7 @@ def api_dashboard():
         operating_expenses = float(summary.get("operating_expenses") or 0)
         net_profit = float(summary.get("net_profit") or 0)
 
-        return jsonify({
+        response = make_response(jsonify({
             "success": True,
             "period": "today",
             "date": today.isoformat(),
@@ -89,7 +89,11 @@ def api_dashboard():
             "kaspi": float(summary.get("kaspi") or 0),
             "clients": int(clients),
             "items": int(items),
-        })
+        }))
+        # Dashboard values can change after every sale. Reverse proxies,
+        # WebViews and the mobile app must never reuse an old HTTP response.
+        response.headers["Cache-Control"] = "private, no-store, max-age=0"
+        return response
     finally:
         cur.close()
         pool.putconn(conn)
