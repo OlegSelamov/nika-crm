@@ -163,6 +163,7 @@ class ApiService {
     Map<String, String?>? query,
     Object? body,
     Duration timeout = _timeout,
+    bool affectsServerAvailability = true,
   }) async {
     final uri = _uri(path, query);
     late http.Response response;
@@ -193,14 +194,16 @@ class ApiService {
           response = await http.get(uri, headers: _headers).timeout(timeout);
       }
     } catch (_) {
-      _serverUnavailable = true;
+      if (affectsServerAvailability) _serverUnavailable = true;
       throw const ApiException('Сервер недоступен. Продолжайте работать локально');
     }
 
-    if (response.statusCode >= 500) {
-      _serverUnavailable = true;
-    } else if (response.statusCode >= 200 && response.statusCode < 300) {
-      _serverUnavailable = false;
+    if (affectsServerAvailability) {
+      if (response.statusCode >= 500) {
+        _serverUnavailable = true;
+      } else if (response.statusCode >= 200 && response.statusCode < 300) {
+        _serverUnavailable = false;
+      }
     }
 
     dynamic decoded;
@@ -1270,7 +1273,13 @@ class ApiService {
     Duration timeout = _timeout,
   }) async =>
       Map<String, dynamic>.from(
-        await _request('GET', '/api/rekassa/shift/status', timeout: timeout),
+        await _request(
+          'GET', '/api/rekassa/shift/status',
+          timeout: timeout,
+          // reKassa is an external service. A slow register must not
+          // make unrelated Nika sales and dashboard look offline.
+          affectsServerAvailability: false,
+        ),
       );
 
   static Future<Map<String, dynamic>> xReport() async =>
