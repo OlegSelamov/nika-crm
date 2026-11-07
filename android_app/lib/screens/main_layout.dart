@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/catalog_display_preferences.dart';
 import '../services/nika_assistant_controller.dart';
 import '../services/offline_sync_service.dart';
+import '../services/offline_store.dart';
 import '../services/organization_mode.dart';
 import '../services/scanner_feedback_service.dart';
 import '../services/sales_voice_bridge.dart';
@@ -97,7 +98,10 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       const Duration(seconds: 30),
       (_) => unawaited(OfflineSyncService.instance.syncNow()),
     );
-    _loadModules();
+    // Restore the active user's last configuration without network delay.
+    // Permissions and company identity are independently revalidated below.
+    unawaited(_restoreCachedModules());
+    unawaited(_loadModules());
     companyConfigTimer = Timer.periodic(
       const Duration(minutes: 1),
       (_) => unawaited(_loadModules()),
@@ -118,6 +122,38 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
 
   bool _sameModules(Set<String>? a, Set<String> b) =>
       a != null && a.length == b.length && a.containsAll(b);
+
+  Future<void> _restoreCachedModules() async {
+    try {
+      final store = OfflineStore.instance;
+      final cached = await store.snapshot('business_configuration');
+      final savedModules = await store.snapshot('modules');
+      final cid = await store.companyId;
+      final uid = await store.userId;
+      final role = await AuthService.getRole();
+      if (!mounted || businessMode != null ||
+          cached is! Map || savedModules is! List ||
+          cached['success'] != true || cid == null || uid == null ||
+          int.tryParse('${cached['company_id']}') != cid ||
+          int.tryParse('${cached['user_id']}') != uid) {
+        return;
+      }
+      final modules = savedModules.map((value) => value.toString()).toSet();
+      final mode = (cached['business_mode'] ?? 'retail').toString();
+      setState(() {
+        businessMode = mode;
+        activeCompanyId = cid;
+        currentRole = role.toLowerCase();
+        enabledModules = modules;
+        companyConfigError = null;
+        if (!modules.contains('dashboard') && selectedIndex == 0) {
+          selectedIndex = 3;
+        }
+      });
+    } catch (_) {
+      // No valid cache on first installation: the remote startup still works.
+    }
+  }
 
   Future<void> _loadModules() async {
     if (loadingCompanyConfig) return;
