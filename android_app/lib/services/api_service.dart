@@ -498,17 +498,40 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> dashboard({bool forceRemote = false}) async {
+  /// Show the latest locally stored figures immediately, but never mistake
+  /// yesterday's totals for today's revenue. Snapshots are company-scoped.
+  static Future<Map<String, dynamic>?> cachedDashboard() async {
     final cached = await OfflineStore.instance.snapshot('dashboard');
-    if (!forceRemote && cached is Map) return Map<String, dynamic>.from(cached);
+    if (cached is! Map || cached['success'] != true) return null;
+    final todayKz = DateTime.now().toUtc().add(const Duration(hours: 5));
+    final today = '${todayKz.year.toString().padLeft(4, '0')}-'
+        '${todayKz.month.toString().padLeft(2, '0')}-'
+        '${todayKz.day.toString().padLeft(2, '0')}';
+    if (cached['date'] != today) return null;
+    return Map<String, dynamic>.from(cached);
+  }
+
+  /// A refresh always reaches the server. The dashboard screen decides whether
+  /// to keep showing previous values when the network is unavailable.
+  static Future<Map<String, dynamic>> dashboard({
+    bool forceRemote = false,
+    bool allowCachedOnFailure = true,
+  }) async {
+    final cached = await cachedDashboard();
+    if (!forceRemote && cached != null) return cached;
     try {
       final result = Map<String, dynamic>.from(await _request(
-        'GET', '/api/dashboard', timeout: const Duration(seconds: 8),
+        'GET', '/api/dashboard',
+        query: {'fresh': DateTime.now().millisecondsSinceEpoch.toString()},
+        timeout: const Duration(seconds: 12),
       ));
+      if (result['success'] != true) {
+        throw const ApiException('Не удалось получить актуальные показатели');
+      }
       await OfflineStore.instance.cacheSnapshot('dashboard', result);
       return result;
     } on ApiException {
-      if (cached is Map) return Map<String, dynamic>.from(cached);
+      if (allowCachedOnFailure && cached != null) return cached;
       rethrow;
     }
   }
@@ -1243,9 +1266,11 @@ class ApiService {
         },
       ));
 
-  static Future<Map<String, dynamic>> shiftStatus() async =>
+  static Future<Map<String, dynamic>> shiftStatus({
+    Duration timeout = _timeout,
+  }) async =>
       Map<String, dynamic>.from(
-        await _request('GET', '/api/rekassa/shift/status'),
+        await _request('GET', '/api/rekassa/shift/status', timeout: timeout),
       );
 
   static Future<Map<String, dynamic>> xReport() async =>
