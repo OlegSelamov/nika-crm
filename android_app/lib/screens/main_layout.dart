@@ -74,6 +74,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   Timer? offlineSyncTimer;
   Set<String>? enabledModules;
   String currentRole = 'employee';
+  int dashboardRefreshToken = 0;
 
   bool hasModule(String code) => enabledModules?.contains(code) ?? true;
 
@@ -109,6 +110,9 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       unawaited(OfflineSyncService.instance.syncNow());
       unawaited(_loadModules());
+      if (mounted && selectedIndex == 0) {
+        setState(() => dashboardRefreshToken++);
+      }
     }
   }
 
@@ -196,7 +200,14 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     if (next == 0 && !hasModule('dashboard')) { _moduleDenied(); return; }
     if ((next == 1 || next == 2) && !hasModule('sales')) { _moduleDenied(); return; }
     SalesVoiceBridge.instance.setSalesVisible(next == 1 && !foodBusiness);
-    setState(() => selectedIndex = next);
+    setState(() {
+      if (next == 0 && selectedIndex != 0) {
+        // IndexedStack keeps the dashboard alive while the cashier sells.
+        // Returning home must fetch revenue after those sales.
+        dashboardRefreshToken++;
+      }
+      selectedIndex = next;
+    });
     if (next == 2 && foodBusiness) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) foodHistoryKey.currentState?.loadOrders();
@@ -429,6 +440,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     final screens = [
       DashboardScreen(
         key: ValueKey('dashboard-$activeCompanyId'),
+        refreshToken: dashboardRefreshToken,
         onOpenSection: openCore,
       ),
       foodBusiness
